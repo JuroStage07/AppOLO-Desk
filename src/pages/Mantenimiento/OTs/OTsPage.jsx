@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Search,
   ChevronRight,
+  Eye,
 } from "lucide-react";
 
 import { auth, db } from "../../../firebase";
@@ -189,9 +190,11 @@ function PendingCard({
   totalColumns,
   onDelete,
   onMoveNext,
+  onOpenDetail,
   openMenuId,
   setOpenMenuId,
 }) {
+  
   const menuOpen = openMenuId === item.id;
 
   return (
@@ -199,14 +202,14 @@ function PendingCard({
       <div style={ui.cardTopAccent} />
 
       <div style={ui.pendingHead}>
-        <div
-          style={{
-            ...ui.checkbox,
-            ...(item.checked ? ui.checkboxChecked : {}),
-          }}
+        <button
+          type="button"
+          style={ui.pendingCodeBtn}
+          onClick={() => onOpenDetail(item.id)}
+          title="Ver detalle de la solicitud"
         >
-          {item.checked ? <CircleCheck size={14} /> : null}
-        </div>
+          {item.nroSolicitud || "Sin número"}
+        </button>
 
         <PriorityChip text={item.priority || "PENDIENTE"} />
       </div>
@@ -271,6 +274,16 @@ function PendingCard({
 
         <div style={ui.actionGroup}>
           <button
+            type="button"
+            style={ui.iconBtn}
+            onClick={() => onOpenDetail(item.id)}
+            title="Ver detalle"
+          >
+            <Eye size={17} />
+          </button>
+
+          <button
+            type="button"
             style={ui.iconBtn}
             onClick={() => onMoveNext(item.id, columnIndex)}
           >
@@ -278,6 +291,7 @@ function PendingCard({
           </button>
 
           <button
+            type="button"
             style={ui.iconBtn}
             onClick={() => onDelete(item.id, columnIndex)}
           >
@@ -286,6 +300,7 @@ function PendingCard({
 
           <div style={{ position: "relative" }}>
             <button
+              type="button"
               style={ui.iconBtn}
               onClick={() => setOpenMenuId(menuOpen ? null : item.id)}
             >
@@ -404,6 +419,7 @@ function Column({
   totalColumns,
   onDelete,
   onMoveNext,
+  onOpenDetail,
   openMenuId,
   setOpenMenuId,
   loading = false,
@@ -448,6 +464,7 @@ function Column({
                 totalColumns={totalColumns}
                 onDelete={onDelete}
                 onMoveNext={onMoveNext}
+                onOpenDetail={onOpenDetail}
                 openMenuId={openMenuId}
                 setOpenMenuId={setOpenMenuId}
               />
@@ -1150,6 +1167,11 @@ export default function OTsPage() {
     );
   };
 
+  const openSolicitudDetalle = (solicitudId) => {
+    if (!solicitudId) return;
+    nav(`/mantenimiento/ots-solicitud/${solicitudId}`);
+  };
+
   return (
     <div style={ui.shell}>
       <div style={ui.topbar}>
@@ -1238,6 +1260,7 @@ export default function OTsPage() {
                   totalColumns={columns.length}
                   onDelete={deleteCard}
                   onMoveNext={moveCardToNextColumn}
+                  onOpenDetail={openSolicitudDetalle}
                   openMenuId={openMenuId}
                   setOpenMenuId={setOpenMenuId}
                   loading={column.id === "pendientes" ? loadingPendientes : false}
@@ -1926,6 +1949,18 @@ const ui = {
     fontWeight: 700,
     color: "#475467",
     lineHeight: 1.45,
+  },
+
+  pendingCodeBtn: {
+    background: "transparent",
+    border: "none",
+    padding: 0,
+    margin: 0,
+    color: "#4F46E5",
+    fontWeight: 950,
+    fontSize: 16,
+    cursor: "pointer",
+    textAlign: "left",
   },
 };
 

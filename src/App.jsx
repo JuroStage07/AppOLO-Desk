@@ -27,7 +27,7 @@ import PanelEquiposMantenimiento from "./pages/Mantenimiento/PanelEquiposManteni
 import EquipoInfoPage from "./pages/Mantenimiento/EquipoInfoPage";
 import Mantenimiento from "./pages/Mantenimiento/Mantenimiento";
 import OTsPage from "./pages/Mantenimiento/OTs/OTsPage";
-import OTsDetallePage from "./pages/Mantenimiento/OTs/OTsDetallePage";
+import OTsSolDetallePage from "./pages/Mantenimiento/OTs/OTsSolDetallePage";
 
 //Recepcion
 import Recepcion from "./pages/Recepcion/Recepcion";
@@ -244,10 +244,10 @@ export default function App() {
           />
 
           <Route
-            path="/mantenimiento/OTsPageDetalle"
+            path="/mantenimiento/ots-solicitud/:id"
             element={
               <RequireAuth>
-                <OTsDetallePage />
+                <OTsSolDetallePage />
               </RequireAuth>
             }
           />

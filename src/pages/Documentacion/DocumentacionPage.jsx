@@ -337,21 +337,6 @@ export default function DocumentacionPage() {
                                 <b> reglamentos</b> y documentos clave de la empresa en una sola experiencia elegante y profesional.
                             </p>
                         </div>
-
-                        <div style={ui.heroStats}>
-                            <div style={ui.statCard}>
-                                <div style={ui.statLabel}>Total documental</div>
-                                <div style={ui.statValue}>{stats.total}</div>
-                            </div>
-                            <div style={ui.statCard}>
-                                <div style={ui.statLabel}>Categorías</div>
-                                <div style={ui.statValue}>{stats.cats}</div>
-                            </div>
-                            <div style={ui.statCard}>
-                                <div style={ui.statLabel}>Peso acumulado</div>
-                                <div style={ui.statValue}>{stats.totalSize}</div>
-                            </div>
-                        </div>
                     </div>
 
                     <div style={ui.contentGrid}>
@@ -374,32 +359,12 @@ export default function DocumentacionPage() {
                                         <span>Nuevo documento</span>
                                     </button>
                                 </div>
-
-                                <div style={ui.quickInfoGrid}>
-                                    <div style={ui.quickInfoCard}>
-                                        <div style={ui.quickInfoLabel}>Carga segura</div>
-                                        <div style={ui.quickInfoValue}>PDF corporativo</div>
-                                    </div>
-
-                                    <div style={ui.quickInfoCard}>
-                                        <div style={ui.quickInfoLabel}>Control</div>
-                                        <div style={ui.quickInfoValue}>Multiempresa</div>
-                                    </div>
-
-                                    <div style={ui.quickInfoCard}>
-                                        <div style={ui.quickInfoLabel}>Disponibilidad</div>
-                                        <div style={ui.quickInfoValue}>Visor integrado</div>
-                                    </div>
-                                </div>
                             </div>
 
                             <div style={ui.panel}>
                                 <div style={ui.panelHead}>
                                     <div>
                                         <div style={ui.panelTitle}>Biblioteca documental</div>
-                                        <div style={ui.panelText}>
-                                            Explorá las normas, procesos y reglas internas disponibles.
-                                        </div>
                                     </div>
                                 </div>
 
