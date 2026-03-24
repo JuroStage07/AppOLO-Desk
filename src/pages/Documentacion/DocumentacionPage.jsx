@@ -53,6 +53,9 @@ export default function DocumentacionPage() {
     const nav = useNavigate();
     const [showUploadModal, setShowUploadModal] = useState(false);
 
+    //Buscar sction
+    const [showDocSearch, setShowDocSearch] = useState(false);
+
     const [showViewerHelp, setShowViewerHelp] = useState(false);
     const [showViewerModal, setShowViewerModal] = useState(false);
     const [profile, setProfile] = useState(null);
@@ -350,95 +353,111 @@ export default function DocumentacionPage() {
                                         </div>
                                     </div>
 
-                                    <button
-                                        type="button"
-                                        onClick={openUploadModal}
-                                        style={ui.heroActionBtn}
-                                    >
-                                        <span style={ui.heroActionIcon}>＋</span>
-                                        <span>Nuevo documento</span>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div style={ui.panel}>
-                                <div style={ui.panelHead}>
-                                    <div>
-                                        <div style={ui.panelTitle}>Biblioteca documental</div>
-                                    </div>
-                                </div>
-
-                                <div style={ui.searchWrap}>
-                                    <span style={ui.searchIcon}>⌁</span>
-                                    <input
-                                        value={qText}
-                                        onChange={(e) => setQText(e.target.value)}
-                                        placeholder="Buscar por título, categoría o archivo…"
-                                        style={ui.searchInput}
-                                        disabled={busy}
-                                    />
-                                    {!!qText && (
-                                        <button type="button" onClick={() => setQText("")} style={ui.clearBtn}>
-                                            ✕
+                                    <div style={ui.panelActions}>
+                                        <button
+                                            type="button"
+                                            onClick={openUploadModal}
+                                            style={ui.heroActionBtn}
+                                        >
+                                            <span style={ui.heroActionIcon}>＋</span>
+                                            <span>Nuevo documento</span>
                                         </button>
-                                    )}
-                                </div>
 
-                                {categories.length > 0 && (
-                                    <div style={ui.categoryRow}>
-                                        {categories.map((cat) => (
-                                            <button
-                                                key={cat}
-                                                type="button"
-                                                onClick={() => setQText(cat)}
-                                                style={ui.categoryChip}
-                                            >
-                                                {cat}
-                                            </button>
-                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowDocSearch((prev) => !prev)}
+                                            style={{
+                                                ...ui.searchToggleBtn,
+                                                ...(showDocSearch ? ui.searchToggleBtnActive : {}),
+                                            }}
+                                        >
+                                            <span style={ui.searchToggleIcon}>⌕</span>
+                                            <span>{showDocSearch ? "Ocultar búsqueda" : "Buscar documento"}</span>
+                                        </button>
                                     </div>
-                                )}
-
-                                {err && <div style={ui.errBox}>{err}</div>}
-
-                                <div style={ui.docList}>
-                                    {loadingDocs ? (
-                                        <div style={ui.empty}>Cargando documentos…</div>
-                                    ) : filteredDocs.length === 0 ? (
-                                        <div style={ui.empty}>No hay documentos que coincidan con la búsqueda.</div>
-                                    ) : (
-                                        filteredDocs.map((doc) => {
-                                            const active = viewerDoc?.id === doc.id;
-
-                                            return (
-                                                <button
-                                                    key={doc.id}
-                                                    type="button"
-                                                    onClick={() => setViewerDoc(doc)}
-                                                    style={{
-                                                        ...ui.docRow,
-                                                        ...(active ? ui.docRowActive : {}),
-                                                    }}
-                                                >
-                                                    <div style={ui.docIcon}>{doc.ext || "PDF"}</div>
-
-                                                    <div style={ui.docInfo}>
-                                                        <div style={ui.docTitle}>{safe(doc.title) || "Documento sin título"}</div>
-                                                        <div style={ui.docMeta}>
-                                                            <span style={ui.docChip}>{safe(doc.category) || "General"}</span>
-                                                            <span style={ui.docMetaText}>{formatBytes(doc.size)}</span>
-                                                            <span style={ui.docMetaText}>{fmtDateTime(doc.createdAt)}</span>
-                                                        </div>
-                                                        {!!safe(doc.description) && (
-                                                            <div style={ui.docDesc}>{safe(doc.description)}</div>
-                                                        )}
-                                                    </div>
-                                                </button>
-                                            );
-                                        })
-                                    )}
                                 </div>
                             </div>
+
+                            {showDocSearch && (
+                                <div style={ui.panel}>
+                                    <div style={ui.panelHead}>
+                                        <div>
+                                            <div style={ui.panelTitle}>Biblioteca documental</div>
+                                        </div>
+                                    </div>
+
+                                    <div style={ui.searchWrap}>
+                                        <span style={ui.searchIcon}>⌁</span>
+                                        <input
+                                            value={qText}
+                                            onChange={(e) => setQText(e.target.value)}
+                                            placeholder="Buscar por título, categoría o archivo…"
+                                            style={ui.searchInput}
+                                            disabled={busy}
+                                        />
+                                        {!!qText && (
+                                            <button type="button" onClick={() => setQText("")} style={ui.clearBtn}>
+                                                ✕
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {categories.length > 0 && (
+                                        <div style={ui.categoryRow}>
+                                            {categories.map((cat) => (
+                                                <button
+                                                    key={cat}
+                                                    type="button"
+                                                    onClick={() => setQText(cat)}
+                                                    style={ui.categoryChip}
+                                                >
+                                                    {cat}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {err && <div style={ui.errBox}>{err}</div>}
+
+                                    <div style={ui.docList}>
+                                        {loadingDocs ? (
+                                            <div style={ui.empty}>Cargando documentos…</div>
+                                        ) : filteredDocs.length === 0 ? (
+                                            <div style={ui.empty}>No hay documentos que coincidan con la búsqueda.</div>
+                                        ) : (
+                                            filteredDocs.map((doc) => {
+                                                const active = viewerDoc?.id === doc.id;
+
+                                                return (
+                                                    <button
+                                                        key={doc.id}
+                                                        type="button"
+                                                        onClick={() => setViewerDoc(doc)}
+                                                        style={{
+                                                            ...ui.docRow,
+                                                            ...(active ? ui.docRowActive : {}),
+                                                        }}
+                                                    >
+                                                        <div style={ui.docIcon}>{doc.ext || "PDF"}</div>
+
+                                                        <div style={ui.docInfo}>
+                                                            <div style={ui.docTitle}>{safe(doc.title) || "Documento sin título"}</div>
+                                                            <div style={ui.docMeta}>
+                                                                <span style={ui.docChip}>{safe(doc.category) || "General"}</span>
+                                                                <span style={ui.docMetaText}>{formatBytes(doc.size)}</span>
+                                                                <span style={ui.docMetaText}>{fmtDateTime(doc.createdAt)}</span>
+                                                            </div>
+                                                            {!!safe(doc.description) && (
+                                                                <div style={ui.docDesc}>{safe(doc.description)}</div>
+                                                            )}
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div style={ui.rightCol}>
@@ -1507,5 +1526,45 @@ const ui = {
         fontWeight: 980,
         cursor: "pointer",
         boxShadow: "0 14px 28px rgba(8,159,138,0.18)",
+    },
+
+    panelActions: {
+        display: "grid",
+        gap: 10,
+        justifyItems: "end",
+    },
+
+    searchToggleBtn: {
+        border: "1px solid #E7E9F2",
+        background: "#fff",
+        color: "#0F172A",
+        borderRadius: 16,
+        padding: "12px 16px",
+        minHeight: 46,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 10,
+        fontWeight: 950,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    },
+
+    searchToggleBtnActive: {
+        border: "1px solid rgba(8,159,138,0.30)",
+        background: "#F3FBF9",
+        color: ACCENT,
+    },
+
+    searchToggleIcon: {
+        width: 22,
+        height: 22,
+        borderRadius: 999,
+        background: "rgba(8,159,138,0.10)",
+        display: "grid",
+        placeItems: "center",
+        fontWeight: 980,
+        lineHeight: 1,
     },
 };

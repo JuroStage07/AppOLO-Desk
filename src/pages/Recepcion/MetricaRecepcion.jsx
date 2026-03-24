@@ -88,6 +88,94 @@ function sum(arr, getter) {
   return arr.reduce((acc, item) => acc + Number(getter(item) || 0), 0);
 }
 
+function fmtInt(value) {
+  return new Intl.NumberFormat("es-CR").format(Number(value || 0));
+}
+
+function fmtOneDecimal(value) {
+  return new Intl.NumberFormat("es-CR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(Number(value || 0));
+}
+
+function getComplianceTone(value) {
+  const n = Number(value || 0);
+  if (n >= 85) return "good";
+  if (n >= 70) return "warn";
+  return "danger";
+}
+
+function buildAlertsFromDocs({
+  compliance = 0,
+  tiempoPromedioMs = 0,
+  docs = [],
+}) {
+  const pendingUsers = new Set();
+
+  for (const d of docs) {
+    const starters = Array.isArray(d?.starters) ? d.starters : [];
+    for (const s of starters) {
+      const iniciadas = Number(s?.iniciadasDia || 0);
+      const finalizadas = Number(s?.finalizadasDia || 0);
+      if (iniciadas > finalizadas) {
+        pendingUsers.add(String(s?.starterUid || s?.starter || "Operador"));
+      }
+    }
+  }
+
+  const alerts = [];
+
+  if (compliance < 70) {
+    alerts.push({
+      tone: "danger",
+      title: "Cumplimiento bajo",
+      description: `El cierre operativo se encuentra en ${compliance}% para el período actual.`,
+    });
+  } else if (compliance < 85) {
+    alerts.push({
+      tone: "warn",
+      title: "Cumplimiento en observación",
+      description: `El cumplimiento actual es de ${compliance}% y todavía puede mejorar.`,
+    });
+  } else {
+    alerts.push({
+      tone: "good",
+      title: "Cumplimiento saludable",
+      description: `La operación mantiene un cumplimiento de ${compliance}% en el período.`,
+    });
+  }
+
+  if (pendingUsers.size > 0) {
+    alerts.push({
+      tone: "warn",
+      title: "Usuarios con acciones pendientes",
+      description: `${pendingUsers.size} operador(es) tienen iniciadas sin cierre registrado.`,
+    });
+  }
+
+  if (tiempoPromedioMs >= 12 * 60 * 60 * 1000) {
+    alerts.push({
+      tone: "danger",
+      title: "Tiempo promedio elevado",
+      description: `El tiempo promedio actual es de ${fmtMinutesFromMs(tiempoPromedioMs)}.`,
+    });
+  }
+
+  if (!alerts.length) {
+    alerts.push({
+      tone: "good",
+      title: "Operación estable",
+      description: "No se identifican alertas relevantes para el período seleccionado.",
+    });
+  }
+
+  return {
+    alerts: alerts.slice(0, 4),
+    pendingUsers: pendingUsers.size,
+  };
+}
+
 function groupStarters(docs = []) {
   const map = new Map();
 
@@ -121,6 +209,55 @@ function groupStarters(docs = []) {
       label: x.label,
       value: x.finalizadas,
     }));
+}
+
+function buildTeamProductivity(docs = []) {
+  const map = new Map();
+
+  for (const d of docs) {
+    const starters = Array.isArray(d?.starters) ? d.starters : [];
+
+    for (const s of starters) {
+      const key = String(s?.starterUid || s?.starter || "—");
+
+      if (!map.has(key)) {
+        map.set(key, {
+          label: s?.starter || "—",
+          starterUid: s?.starterUid || null,
+          iniciadas: 0,
+          finalizadas: 0,
+          bultos: 0,
+          tiempoTotalMs: 0,
+          tiempoPromedioMs: 0,
+        });
+      }
+
+      const row = map.get(key);
+      row.iniciadas += Number(s?.iniciadasDia || 0);
+      row.finalizadas += Number(s?.finalizadasDia || 0);
+      row.bultos += Number(s?.bultosTotalesDia || 0);
+      row.tiempoTotalMs += Number(s?.tiempoTotalMsDia || 0);
+    }
+  }
+
+  const arr = Array.from(map.values()).map((x) => ({
+    ...x,
+    tiempoPromedioMs:
+      x.finalizadas > 0 ? Math.round(x.tiempoTotalMs / x.finalizadas) : 0,
+  }));
+
+  return arr.sort((a, b) => b.finalizadas - a.finalizadas);
+}
+
+function buildTeamTimes(docs = []) {
+  return buildTeamProductivity(docs)
+    .map((x) => ({
+      label: x.label,
+      finalizadas: x.finalizadas,
+      tiempoPromedioMs: x.tiempoPromedioMs,
+      tiempoTotalMs: x.tiempoTotalMs,
+    }))
+    .sort((a, b) => b.tiempoPromedioMs - a.tiempoPromedioMs);
 }
 
 function countActiveUsers(docs = []) {
@@ -236,6 +373,61 @@ function buildLineData(filterKey, docs = []) {
   return rows;
 }
 
+function buildTypeMix(docs = []) {
+  const map = new Map();
+
+  for (const d of docs) {
+    const tipos = d?.accionesPorTipo || {};
+    for (const key of Object.keys(tipos)) {
+      const val = Number(tipos[key] || 0);
+      if (!map.has(key)) {
+        map.set(key, 0);
+      }
+      map.set(key, map.get(key) + val);
+    }
+  }
+
+  const arr = Array.from(map.entries()).map(([label, value]) => ({
+    label: label || "—",
+    value,
+  }));
+
+  const total = arr.reduce((acc, x) => acc + x.value, 0);
+
+  return arr
+    .map((x) => ({
+      ...x,
+      percent: total > 0 ? Math.round((x.value / total) * 100) : 0,
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
+function buildAndenesData(docs = []) {
+  const map = new Map();
+
+  for (const d of docs) {
+    const andenes = Array.isArray(d?.andenes) ? d.andenes : [];
+
+    for (const a of andenes) {
+      const key = String(a?.idAnden || "—");
+
+      if (!map.has(key)) {
+        map.set(key, {
+          label: `Andén ${key}`,
+          acciones: 0,
+          finalizadas: 0,
+        });
+      }
+
+      const row = map.get(key);
+      row.acciones += Number(a?.accionesDia || 0);
+      row.finalizadas += Number(a?.finalizadasDia || 0);
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.acciones - a.acciones);
+}
+
 function buildDashboardFromDailyDocs(filterKey, docs = []) {
   const labelMap = {
     hoy: "Hoy",
@@ -254,21 +446,34 @@ function buildDashboardFromDailyDocs(filterKey, docs = []) {
   const accionesFinalizadas = sum(docs, (d) => d.accionesFinalizadas);
   const accionesIniciadas = sum(docs, (d) => d.accionesIniciadas);
   const tiempoTotalMs = sum(docs, (d) => d.accionesTiempoTotalMs);
-  const aperturasCreadas = sum(docs, (d) => d.aperturasCreadas);
 
   const tiempoPromedioMs =
     accionesFinalizadas > 0 ? Math.round(tiempoTotalMs / accionesFinalizadas) : 0;
 
-  const usuariosActivos = countActiveUsers(docs);
   const andenesEnUso = countAndenesInUse(docs);
-  const topUsers = groupStarters(docs);
-
-  const latestOpen = docs.length
-    ? Number(docs[docs.length - 1]?.aperturasAbiertasFinDia || 0)
-    : 0;
 
   const compliance =
     accionesIniciadas > 0 ? Math.round((accionesFinalizadas / accionesIniciadas) * 100) : 0;
+
+  const { alerts } = buildAlertsFromDocs({
+    compliance,
+    tiempoPromedioMs,
+    docs,
+  });
+
+  const bultosTotales = sum(docs, (d) => d.accionesBultosTotales);
+  const bultosPorDescarga =
+    accionesFinalizadas > 0 ? Math.round(bultosTotales / accionesFinalizadas) : 0;
+
+  const horasTotales = tiempoTotalMs > 0 ? tiempoTotalMs / 3600000 : 0;
+  const bultosPorHora =
+    horasTotales > 0 ? Math.round(bultosTotales / horasTotales) : 0;
+
+  const typeMix = buildTypeMix(docs);
+  const andenesData = buildAndenesData(docs);
+
+  const teamProductivity = buildTeamProductivity(docs).slice(0, 6);
+  const teamTimes = buildTeamTimes(docs).slice(0, 6);
 
   return {
     label: labelMap[filterKey] || "Semana actual",
@@ -277,46 +482,70 @@ function buildDashboardFromDailyDocs(filterKey, docs = []) {
     kpis: [
       {
         label: "Descargas completadas",
-        value: String(accionesFinalizadas),
+        value: fmtInt(accionesFinalizadas),
         hint: "Acciones cerradas en el período",
-        comparison: `${accionesIniciadas} iniciadas`,
+        comparison: `${fmtInt(accionesIniciadas)} iniciadas`,
+        tone: "default",
       },
       {
         label: "Tiempo promedio",
         value: fmtMinutesFromMs(tiempoPromedioMs),
         hint: "Promedio desde inicio hasta cierre",
-        comparison: `${accionesFinalizadas} finalizadas`,
+        comparison: `${fmtInt(accionesFinalizadas)} finalizadas`,
+        tone: "default",
       },
       {
-        label: "Usuarios activos",
-        value: String(usuariosActivos),
-        hint: "Operadores con actividad registrada",
-        comparison: `${topUsers.length} en ranking`,
+        label: "Cumplimiento",
+        value: `${compliance}%`,
+        hint: "Relación entre acciones iniciadas y finalizadas",
+        comparison: "Contra objetivo operativo",
+        tone: compliance >= 85 ? "good" : compliance >= 70 ? "warn" : "danger",
+      },
+      {
+        label: "Bultos procesados",
+        value: fmtInt(bultosTotales),
+        hint: "Volumen total registrado en el período",
+        comparison: `${fmtInt(bultosPorDescarga)} por descarga`,
+        tone: "default",
+      },
+      {
+        label: "Bultos por hora",
+        value: fmtInt(bultosPorHora),
+        hint: "Eficiencia estimada sobre tiempo acumulado",
+        comparison: horasTotales > 0
+          ? `${fmtOneDecimal(horasTotales)} h trabajadas`
+          : "Sin horas registradas",
+        tone: "default",
       },
       {
         label: "Andenes en uso",
-        value: `${andenesEnUso}/7`,
-        hint: "Andenes con actividad registrada",
-        comparison: `${latestOpen} aperturas abiertas`,
+        value: `${fmtInt(andenesEnUso)}/9`,
+        hint: "Posiciones con actividad registrada",
+        comparison: `${fmtInt(accionesIniciadas)} acciones iniciadas`,
+        tone: "default",
       },
     ],
     barData: buildBarData(filterKey, docs),
     lineData: buildLineData(filterKey, docs),
-    userData: topUsers,
+    alerts,
+    typeMix,
+    andenesData,
+    teamProductivity,
+    teamTimes,
     notes: [
-      `Aperturas creadas en el período: ${aperturasCreadas}.`,
-      `Cumplimiento operativo actual: ${compliance}%.`,
-      `Tiempo promedio de descarga: ${fmtMinutesFromMs(tiempoPromedioMs)}.`,
+      `Se registran ${fmtInt(accionesFinalizadas)} descargas completadas durante ${labelMap[filterKey] || "el período seleccionado"}.`,
+      `El cumplimiento operativo actual se ubica en ${compliance}% sobre ${fmtInt(accionesIniciadas)} acciones iniciadas.`,
+      `El tiempo promedio de descarga es de ${fmtMinutesFromMs(tiempoPromedioMs)} y el volumen procesado alcanza ${fmtInt(bultosTotales)} bultos.`,
     ],
   };
 }
 
 function FilterTabs({ active, onChange }) {
   const filters = [
-    { key: "hoy", label: "Hoy" },
-    { key: "semana", label: "Semana" },
-    { key: "mes", label: "Mes" },
-    { key: "rango", label: "Rango personalizado" },
+    { key: "hoy", label: "Hoy", hint: "Corte diario" },
+    { key: "semana", label: "Semana", hint: "Vista semanal" },
+    { key: "mes", label: "Mes", hint: "Vista mensual" },
+    { key: "rango", label: "Rango personalizado", hint: "Últimos cortes" },
   ];
 
   return (
@@ -335,16 +564,26 @@ function FilterTabs({ active, onChange }) {
                 ...(selected ? ui.filterBtnActive : {}),
               }}
             >
-              {filter.label}
+              <span style={ui.filterBtnLabel}>{filter.label}</span>
+              <span
+                style={{
+                  ...ui.filterBtnHint,
+                  ...(selected ? ui.filterBtnHintActive : {}),
+                }}
+              >
+                {filter.hint}
+              </span>
             </button>
           );
         })}
       </div>
 
-      <button type="button" style={ui.exportBtn} title="Exportar reporte">
-        <span style={ui.exportIcon}>📈</span>
-        Exportar reporte
-      </button>
+      <div style={ui.filtersActions}>
+        <button type="button" style={ui.exportBtn} title="Exportar reporte">
+          <span style={ui.exportIcon}>📈</span>
+          Exportar reporte
+        </button>
+      </div>
     </div>
   );
 }
@@ -530,6 +769,213 @@ function MiniUserChart({ data = [], periodLabel = "Semana actual" }) {
   );
 }
 
+function MixTypeChart({ data = [], periodLabel = "" }) {
+  const max = Math.max(...data.map((d) => d.value), 1);
+
+  return (
+    <div style={ui.chartCard}>
+      <div style={ui.chartHeader}>
+        <div>
+          <div style={ui.chartTitle}>Mix de operación</div>
+          <div style={ui.chartSubtitle}>
+            Distribución de descargas por tipo · {periodLabel}
+          </div>
+        </div>
+        <span style={ui.chartBadge}>Tipo</span>
+      </div>
+
+      <div style={ui.mixList}>
+        {data.length === 0 ? (
+          <div style={ui.emptyMiniText}>Sin datos disponibles.</div>
+        ) : (
+          data.map((item) => (
+            <div key={item.label} style={ui.mixRow}>
+              <div style={ui.mixRowTop}>
+                <div style={ui.mixLabel}>{item.label}</div>
+                <div style={ui.mixValue}>
+                  {item.value} · {item.percent}%
+                </div>
+              </div>
+
+              <div style={ui.mixTrack}>
+                <div
+                  style={{
+                    ...ui.mixFill,
+                    width: `${Math.max((item.value / max) * 100, 6)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AndenesChart({ data = [], periodLabel = "" }) {
+  const max = Math.max(...data.map((d) => d.acciones), 1);
+
+  return (
+    <div style={ui.chartCard}>
+      <div style={ui.chartHeader}>
+        <div>
+          <div style={ui.chartTitle}>Uso de andenes</div>
+          <div style={ui.chartSubtitle}>
+            Actividad operativa por posición · {periodLabel}
+          </div>
+        </div>
+        <span style={ui.chartBadge}>Infraestructura</span>
+      </div>
+
+      <div style={ui.mixList}>
+        {data.length === 0 ? (
+          <div style={ui.emptyMiniText}>Sin datos disponibles.</div>
+        ) : (
+          data.map((item) => (
+            <div key={item.label} style={ui.mixRow}>
+              <div style={ui.mixRowTop}>
+                <div style={ui.mixLabel}>{item.label}</div>
+                <div style={ui.mixValue}>
+                  {item.acciones} acc · {item.finalizadas} fin
+                </div>
+              </div>
+
+              <div style={ui.mixTrack}>
+                <div
+                  style={{
+                    ...ui.mixFill,
+                    width: `${Math.max((item.acciones / max) * 100, 6)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TeamProductivityCard({ data = [], periodLabel = "" }) {
+  const max = Math.max(...data.map((d) => d.finalizadas), 1);
+
+  return (
+    <div style={ui.teamCard}>
+      <div style={ui.chartHeader}>
+        <div>
+          <div style={ui.chartTitle}>Productividad por usuario</div>
+          <div style={ui.chartSubtitle}>
+            Cierres, volumen y ritmo de ejecución · {periodLabel}
+          </div>
+        </div>
+        <span style={ui.chartBadge}>Equipo</span>
+      </div>
+
+      <div style={ui.teamList}>
+        {data.length === 0 ? (
+          <div style={ui.emptyMiniText}>Sin datos de usuarios para el período.</div>
+        ) : (
+          data.map((item) => (
+            <div key={item.label} style={ui.teamRow}>
+              <div style={ui.teamRowTop}>
+                <div>
+                  <div style={ui.teamName}>{item.label}</div>
+                  <div style={ui.teamMeta}>
+                    {fmtInt(item.finalizadas)} cerradas · {fmtInt(item.iniciadas)} iniciadas
+                  </div>
+                </div>
+
+                <div style={ui.teamValueBox}>
+                  <div style={ui.teamValue}>{fmtInt(item.bultos)}</div>
+                  <div style={ui.teamValueLabel}>bultos</div>
+                </div>
+              </div>
+
+              <div style={ui.teamTrack}>
+                <div
+                  style={{
+                    ...ui.teamFill,
+                    width: `${Math.max((item.finalizadas / max) * 100, 6)}%`,
+                  }}
+                />
+              </div>
+
+              <div style={ui.teamFoot}>
+                <span>Tiempo promedio: {fmtMinutesFromMs(item.tiempoPromedioMs)}</span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TeamTimesCard({ data = [], periodLabel = "" }) {
+  const valid = data.filter((d) => Number(d.tiempoPromedioMs || 0) > 0);
+  const max = Math.max(...valid.map((d) => d.tiempoPromedioMs), 1);
+
+  return (
+    <div style={ui.teamCard}>
+      <div style={ui.chartHeader}>
+        <div>
+          <div style={ui.chartTitle}>Tiempos por usuario</div>
+          <div style={ui.chartSubtitle}>
+            Comparativo de duración promedio por operador · {periodLabel}
+          </div>
+        </div>
+        <span style={ui.chartBadge}>Tiempo</span>
+      </div>
+
+      <div style={ui.teamList}>
+        {data.length === 0 ? (
+          <div style={ui.emptyMiniText}>Sin tiempos registrados para el período.</div>
+        ) : (
+          data.map((item) => {
+            const width =
+              item.tiempoPromedioMs > 0
+                ? `${Math.max((item.tiempoPromedioMs / max) * 100, 6)}%`
+                : "6%";
+
+            return (
+              <div key={item.label} style={ui.teamRow}>
+                <div style={ui.teamRowTop}>
+                  <div>
+                    <div style={ui.teamName}>{item.label}</div>
+                    <div style={ui.teamMeta}>
+                      {fmtInt(item.finalizadas)} cerradas
+                    </div>
+                  </div>
+
+                  <div style={ui.teamTimeValue}>
+                    {item.tiempoPromedioMs > 0
+                      ? fmtMinutesFromMs(item.tiempoPromedioMs)
+                      : "—"}
+                  </div>
+                </div>
+
+                <div style={ui.teamTrack}>
+                  <div
+                    style={{
+                      ...ui.teamFillSoft,
+                      width,
+                    }}
+                  />
+                </div>
+
+                <div style={ui.teamFoot}>
+                  <span>Total acumulado: {fmtMinutesFromMs(item.tiempoTotalMs)}</span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function MetricaRecepcion() {
   const nav = useNavigate();
   const user = auth.currentUser;
@@ -544,7 +990,8 @@ export default function MetricaRecepcion() {
     const prevBg = document.body.style.background;
     const prevMargin = document.body.style.margin;
 
-    document.body.style.overflow = "hidden";
+    document.body.style.background = "#F6F7FB";
+    document.body.style.margin = "0";
     document.body.style.background = "#F6F7FB";
     document.body.style.margin = "0";
 
@@ -567,30 +1014,61 @@ export default function MetricaRecepcion() {
             value: "0",
             hint: "Acciones cerradas en el período",
             comparison: "—",
+            tone: "default",
           },
           {
             label: "Tiempo promedio",
             value: "0 min",
             hint: "Promedio desde inicio hasta cierre",
             comparison: "—",
+            tone: "default",
           },
           {
-            label: "Usuarios activos",
-            value: "0",
-            hint: "Operadores con actividad registrada",
+            label: "Cumplimiento",
+            value: "0%",
+            hint: "Relación entre acciones iniciadas y finalizadas",
             comparison: "—",
+            tone: "default",
+          },
+          {
+            label: "Bultos procesados",
+            value: "0",
+            hint: "Volumen total registrado en el período",
+            comparison: "—",
+            tone: "default",
+          },
+          {
+            label: "Bultos por hora",
+            value: "0",
+            hint: "Eficiencia estimada sobre tiempo acumulado",
+            comparison: "—",
+            tone: "default",
           },
           {
             label: "Andenes en uso",
-            value: "0/7",
-            hint: "Andenes con actividad registrada",
-            comparison: "—",
+            value: "0/9",
+            hint: "Posiciones con actividad registrada",
+            comparison: "0 acciones iniciadas",
+            tone: "default",
           },
         ],
         barData: [],
         lineData: [],
         userData: [],
-        notes: loadError ? [loadError] : ["Sin información disponible para el período."],
+        alerts: [
+          {
+            tone: "default",
+            title: "Sin alertas",
+            description: "No hay información suficiente para evaluar el estado operativo.",
+          },
+        ],
+        typeMix: [],
+        andenesData: [],
+        teamProductivity: [],
+        teamTimes: [],
+        notes: loadError
+          ? [loadError]
+          : ["Todavía no hay información disponible para el período seleccionado."],
       }
     );
   }, [dashboardData, loadError]);
@@ -728,107 +1206,271 @@ export default function MetricaRecepcion() {
             </div>
           )}
           <div style={ui.hero}>
-            <div style={{ display: "grid", gap: 10 }}>
+            <div style={ui.heroMain}>
               <div style={ui.kickerRow}>
                 <span style={ui.kickerDot} />
-                <div style={ui.kicker}>Analítica</div>
+                <div style={ui.kicker}>Analítica operativa</div>
                 <span style={ui.badge}>{currentData.heroBadge}</span>
               </div>
 
-              <h1 style={ui.title}>Estadísticas de Recepción</h1>
+              <h1 style={ui.title}>Panel de Recepción</h1>
+
               <p style={ui.subtitle}>
-                Panel ejecutivo para monitorear descargas, tiempos operativos,
-                ocupación de andenes y desempeño de usuarios. Esta base queda
-                lista para conectarse con datos reales de acciones de descarga.
+                Visualiza el desempeño de la operación en un solo lugar: volumen procesado,
+                tiempos de ejecución, ocupación de andenes y productividad del equipo.
               </p>
+
+              <div style={ui.heroChips}>
+                <div style={ui.heroChip}>Seguimiento diario</div>
+                <div style={ui.heroChip}>Indicadores por período</div>
+                <div style={ui.heroChip}>Enfoque operativo</div>
+              </div>
             </div>
 
             <div style={ui.heroNote}>
-              <div style={ui.heroNoteTitle}>Corte seleccionado</div>
+              <div style={ui.heroNoteTop}>
+                <div>
+                  <div style={ui.heroNoteEyebrow}>Corte seleccionado</div>
+                  <div style={ui.heroNoteTitle}>{currentData.label}</div>
+                </div>
+                <div style={ui.heroNoteBadge}>{currentData.heroBadge}</div>
+              </div>
+
               <div style={ui.heroNoteText}>
-                Mostrando indicadores para: <b>{currentData.label}</b>.
+                Revisa el estado general de la operación para el período activo.
               </div>
 
               <div style={ui.heroMiniList}>
                 <div style={ui.heroMiniItem}>
                   <span style={ui.heroMiniDot} />
-                  Descargas = acciones completadas
+                  Descargas cerradas = acciones finalizadas
                 </div>
                 <div style={ui.heroMiniItem}>
                   <span style={ui.heroMiniDot} />
-                  Tiempo promedio = inicio a cierre
+                  Tiempo promedio = duración desde inicio hasta cierre
                 </div>
                 <div style={ui.heroMiniItem}>
                   <span style={ui.heroMiniDot} />
-                  Usuarios activos = operadores con actividad
+                  Usuarios activos = operadores con movimiento registrado
                 </div>
                 <div style={ui.heroMiniItem}>
                   <span style={ui.heroMiniDot} />
-                  Andenes en uso = ocupación operativa
+                  Andenes en uso = posiciones con actividad operativa
                 </div>
               </div>
             </div>
           </div>
 
           <div style={ui.sectionHeaderBlock}>
+            <div style={ui.sectionOverline}>Control</div>
             <div style={ui.sectionTitle}>Filtros de visualización</div>
             <div style={ui.sectionText}>
-              Cambiá el período para revisar el comportamiento operativo.
+              Selecciona el período de análisis para actualizar los indicadores y las gráficas del panel.
             </div>
           </div>
 
           <div style={ui.stickyFiltersOnly}>
-            <FilterTabs active={activeFilter} onChange={setActiveFilter} />
+            <div style={ui.filtersPanel}>
+              <div style={ui.filtersPanelTop}>
+                <div style={ui.filtersPanelInfo}>
+                  <div style={ui.filtersPanelTitle}>Período de análisis</div>
+                  <div style={ui.filtersPanelText}>
+                    Cambia la vista para revisar el comportamiento operativo por día, semana o mes.
+                  </div>
+                </div>
+
+                <div style={ui.filtersPanelMeta}>
+                  Vista activa: <b>{currentData.label}</b>
+                </div>
+              </div>
+
+              <FilterTabs active={activeFilter} onChange={setActiveFilter} />
+            </div>
           </div>
 
           <div style={ui.sectionHeaderBlock}>
+            <div style={ui.sectionOverline}>Resumen</div>
             <div style={ui.sectionTitle}>Indicadores clave</div>
             <div style={ui.sectionText}>
-              Resumen general de recepción según el período seleccionado.
+              Vista rápida del desempeño operativo, el volumen procesado y la capacidad utilizada en el período activo.
             </div>
           </div>
 
           <div style={ui.stickyKpisOnly}>
-            <div style={ui.kpiGrid}>
-              {currentData.kpis.map((item) => (
-                <div key={item.label} style={ui.kpiCard}>
-                  <div style={ui.kpiLabel}>{item.label}</div>
-                  <div style={ui.kpiValue}>{item.value}</div>
-                  <div style={ui.kpiMeta}>{item.hint}</div>
-                  <div style={ui.kpiHint}>{item.comparison}</div>
+            <div style={ui.kpiPanel}>
+              <div style={ui.kpiPanelTop}>
+                <div style={ui.kpiPanelInfo}>
+                  <div style={ui.kpiPanelTitle}>Resumen ejecutivo</div>
+                  <div style={ui.kpiPanelText}>
+                    Métricas principales para evaluar ritmo operativo, cumplimiento y uso de capacidad.
+                  </div>
                 </div>
-              ))}
+
+                <div style={ui.kpiPanelMeta}>
+                  Corte activo: <b>{currentData.label}</b>
+                </div>
+              </div>
+
+              <div style={ui.kpiGrid}>
+                {currentData.kpis.map((item) => (
+                  <div
+                    key={item.label}
+                    style={{
+                      ...ui.kpiCard,
+                      ...(item.tone === "good"
+                        ? ui.kpiCardGood
+                        : item.tone === "warn"
+                          ? ui.kpiCardWarn
+                          : item.tone === "danger"
+                            ? ui.kpiCardDanger
+                            : {}),
+                    }}
+                  >
+                    <div style={ui.kpiCardTop}>
+                      <div style={ui.kpiLabel}>{item.label}</div>
+                      <div
+                        style={{
+                          ...ui.kpiToneDot,
+                          ...(item.tone === "good"
+                            ? ui.kpiToneDotGood
+                            : item.tone === "warn"
+                              ? ui.kpiToneDotWarn
+                              : item.tone === "danger"
+                                ? ui.kpiToneDotDanger
+                                : {}),
+                        }}
+                      />
+                    </div>
+
+                    <div style={ui.kpiValue}>{item.value}</div>
+                    <div style={ui.kpiMeta}>{item.hint}</div>
+                    <div
+                      style={{
+                        ...ui.kpiHint,
+                        ...(item.tone === "good"
+                          ? ui.kpiHintGood
+                          : item.tone === "warn"
+                            ? ui.kpiHintWarn
+                            : item.tone === "danger"
+                              ? ui.kpiHintDanger
+                              : {}),
+                      }}
+                    >
+                      {item.comparison}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
           <div style={ui.sectionHeaderBlock}>
+            <div style={ui.sectionOverline}>Monitoreo</div>
+            <div style={ui.sectionTitle}>Alertas y estado operativo</div>
+            <div style={ui.sectionText}>
+              Señales rápidas para detectar desvíos, pendientes y estado general del flujo operativo.
+            </div>
+          </div>
+
+          <div style={ui.alertsGrid}>
+            <div style={ui.alertCard}>
+              <div style={ui.alertCardHeader}>
+                <div>
+                  <div style={ui.alertCardTitle}>Alertas operativas</div>
+                  <div style={ui.alertCardSubtitle}>
+                    Indicadores que requieren seguimiento o validación.
+                  </div>
+                </div>
+                <span style={ui.alertCardBadge}>Monitoreo</span>
+              </div>
+
+              <div style={ui.alertList}>
+                {currentData.alerts.map((alert, idx) => (
+                  <div
+                    key={`${alert.title}-${idx}`}
+                    style={{
+                      ...ui.alertItem,
+                      ...(alert.tone === "good"
+                        ? ui.alertItemGood
+                        : alert.tone === "warn"
+                          ? ui.alertItemWarn
+                          : alert.tone === "danger"
+                            ? ui.alertItemDanger
+                            : {}),
+                    }}
+                  >
+                    <div
+                      style={{
+                        ...ui.alertIcon,
+                        ...(alert.tone === "good"
+                          ? ui.alertIconGood
+                          : alert.tone === "warn"
+                            ? ui.alertIconWarn
+                            : alert.tone === "danger"
+                              ? ui.alertIconDanger
+                              : {}),
+                      }}
+                    >
+                      {alert.tone === "good" ? "✓" : alert.tone === "warn" ? "!" : "⚠"}
+                    </div>
+
+                    <div style={ui.alertBody}>
+                      <div style={ui.alertTitle}>{alert.title}</div>
+                      <div style={ui.alertDescription}>{alert.description}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={ui.sectionHeaderBlock}>
+            <div style={ui.sectionOverline}>Analítica</div>
             <div style={ui.sectionTitle}>Visualización general</div>
             <div style={ui.sectionText}>
-              Gráficas para seguimiento de volumen, cumplimiento de tiempo y
-              productividad del equipo.
+              Gráficas para revisar volumen, tendencia de cumplimiento y desempeño operativo del período.
             </div>
           </div>
 
           <div style={ui.chartGrid}>
             <MiniBarChart data={currentData.barData} periodLabel={currentData.label} />
             <MiniLineChart data={currentData.lineData} periodLabel={currentData.label} />
-            <DonutPlaceholder
-              value={currentData.compliance}
-              label="Cumplimiento operativo"
-              subtitle="Descargas dentro del tiempo objetivo"
+            <MixTypeChart data={currentData.typeMix} periodLabel={currentData.label} />
+            <AndenesChart data={currentData.andenesData} periodLabel={currentData.label} />
+          </div>
+
+          <div style={ui.sectionHeaderBlock}>
+            <div style={ui.sectionOverline}>Equipo</div>
+            <div style={ui.sectionTitle}>Desempeño del equipo</div>
+            <div style={ui.sectionText}>
+              Comparativo de productividad y tiempos promedio por operador para el período seleccionado.
+            </div>
+          </div>
+
+          <div style={ui.teamGrid}>
+            <TeamProductivityCard
+              data={currentData.teamProductivity}
+              periodLabel={currentData.label}
             />
-            <MiniUserChart data={currentData.userData} periodLabel={currentData.label} />
+
+            <TeamTimesCard
+              data={currentData.teamTimes}
+              periodLabel={currentData.label}
+            />
           </div>
 
           <div style={ui.bottomCard}>
-            <div style={ui.bottomTitle}>Observación</div>
+            <div style={ui.bottomTop}>
+              <div>
+                <div style={ui.bottomEyebrow}>Cierre ejecutivo</div>
+                <div style={ui.bottomTitle}>Observaciones del período</div>
+              </div>
+
+              <div style={ui.bottomBadge}>{currentData.label}</div>
+            </div>
+
             <div style={ui.bottomText}>
-              Esta pantalla ya deja definida la estructura visual para conectar
-              con Firestore y calcular métricas reales como promedio de
-              <b> totalTimeTxt</b>, acciones por usuario, ocupación por
-              <b> idAnden</b>, estados de proceso y cumplimiento por fecha. En
-              la siguiente etapa podés reemplazar el mock por consultas reales
-              desde <b>accion_descarga</b>.
+              Resumen automático de los principales indicadores registrados para el período seleccionado.
             </div>
 
             <div style={ui.noteList}>
@@ -848,14 +1490,11 @@ export default function MetricaRecepcion() {
 
 const ui = {
   shell: {
-    height: "100vh",
-    width: "100vw",
+    minHeight: "100vh",
+    width: "100%",
     background: "#F6F7FB",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
     color: "#0F172A",
-    overflow: "hidden",
-    display: "grid",
-    gridTemplateRows: "auto 1fr",
   },
 
   topbar: {
@@ -868,8 +1507,7 @@ const ui = {
     borderBottom: "1px solid #E7E9F2",
     background:
       "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(246,247,251,0.98) 100%)",
-    backdropFilter: "blur(10px)",
-    position: "relative",
+    backdropFilter: "none",
     zIndex: 100,
   },
 
@@ -915,7 +1553,7 @@ const ui = {
   },
 
   main: {
-    overflow: "auto",
+    overflow: "visible",
     padding: "0 16px 16px",
     display: "grid",
     placeItems: "start center",
@@ -930,10 +1568,10 @@ const ui = {
 
   hero: {
     display: "grid",
-    gridTemplateColumns: "1.45fr 1fr",
-    gap: 14,
+    gridTemplateColumns: "1.5fr 1fr",
+    gap: 16,
     alignItems: "stretch",
-    paddingTop: 14,
+    paddingTop: 16,
   },
 
   kickerRow: {
@@ -968,46 +1606,53 @@ const ui = {
 
   title: {
     margin: 0,
-    fontSize: 28,
-    fontWeight: 980,
-    letterSpacing: -0.4,
+    fontSize: 34,
+    fontWeight: 990,
+    letterSpacing: -0.8,
+    lineHeight: 1.02,
     color: "#0F172A",
   },
+
   subtitle: {
     margin: 0,
     color: "#64748B",
     fontWeight: 800,
-    lineHeight: 1.45,
-    maxWidth: 780,
+    lineHeight: 1.55,
+    fontSize: 14,
+    maxWidth: 760,
   },
 
   heroNote: {
-    background: "#fff",
+    background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
     border: "1px solid #E7E9F2",
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: 24,
+    padding: 18,
     boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
     display: "grid",
     alignContent: "start",
-    gap: 10,
+    gap: 12,
   },
+
   heroNoteTitle: {
     fontWeight: 980,
-    marginBottom: 2,
+    fontSize: 22,
+    lineHeight: 1.1,
     color: "#0F172A",
   },
+
   heroNoteText: {
     color: "#64748B",
     fontWeight: 800,
     fontSize: 13,
-    lineHeight: 1.4,
+    lineHeight: 1.5,
   },
 
   heroMiniList: {
     display: "grid",
-    gap: 8,
-    marginTop: 4,
+    gap: 10,
+    marginTop: 2,
   },
+
   heroMiniItem: {
     display: "flex",
     alignItems: "center",
@@ -1015,7 +1660,9 @@ const ui = {
     color: "#475569",
     fontWeight: 800,
     fontSize: 12,
+    lineHeight: 1.35,
   },
+
   heroMiniDot: {
     width: 8,
     height: 8,
@@ -1046,67 +1693,72 @@ const ui = {
   },
 
   stickyFiltersOnly: {
-    position: "sticky",
-    top: 0,
+    position: "relative",
     zIndex: 90,
     background: "#F6F7FB",
-    paddingTop: 0,
-    paddingBottom: 8,
+    paddingTop: 2,
+    paddingBottom: 10,
   },
 
   stickyKpisOnly: {
-    position: "sticky",
-    top: 62,
+    position: "relative",
     zIndex: 80,
     background: "#F6F7FB",
-    paddingBottom: 8,
+    paddingBottom: 10,
   },
 
   filtersBar: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
+    gap: 14,
     flexWrap: "wrap",
   },
 
   filtersWrap: {
     display: "flex",
-    alignItems: "center",
+    alignItems: "stretch",
     gap: 10,
     flexWrap: "wrap",
-    padding: "0",
-    background: "#F6F7FB",
+    padding: 0,
+    background: "transparent",
     border: "none",
     borderRadius: 0,
     boxShadow: "none",
+    flex: 1,
   },
 
   filterBtn: {
     border: "1px solid #DDE3EE",
     background: "#FFFFFF",
     color: "#334155",
-    borderRadius: 999,
-    padding: "10px 14px",
+    borderRadius: 18,
+    padding: "12px 14px",
     fontWeight: 900,
     fontSize: 12,
     cursor: "pointer",
     boxShadow: "0 8px 18px rgba(15,23,42,0.04)",
     transition: "all 120ms ease",
+    display: "grid",
+    gap: 4,
+    minWidth: 132,
+    textAlign: "left",
   },
+
   filterBtnActive: {
     background: "#F1FBF8",
     color: ACCENT,
     border: "1px solid rgba(8,159,138,0.35)",
     boxShadow: "0 10px 24px rgba(8,159,138,0.10)",
+    transform: "translateY(-1px)",
   },
 
   exportBtn: {
     border: "1px solid rgba(8,159,138,0.24)",
     background: "#F1FBF8",
     color: ACCENT,
-    borderRadius: 999,
-    padding: "10px 14px",
+    borderRadius: 16,
+    padding: "12px 14px",
     fontWeight: 950,
     fontSize: 12,
     cursor: "pointer",
@@ -1124,51 +1776,160 @@ const ui = {
 
   kpiGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 12,
-    padding: "0",
+    padding: 0,
   },
 
   kpiCard: {
     background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
     border: "1px solid #E7E9F2",
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 16,
     boxShadow: "0 10px 22px rgba(15, 23, 42, 0.05)",
-    minHeight: 104,
+    minHeight: 124,
     display: "grid",
     alignContent: "start",
   },
+
   kpiLabel: {
     color: "#64748B",
     fontWeight: 900,
     fontSize: 13,
-    marginBottom: 8,
   },
+
   kpiValue: {
     color: "#0F172A",
-    fontWeight: 980,
-    fontSize: 28,
-    lineHeight: 1.1,
-    marginBottom: 8,
+    fontWeight: 990,
+    fontSize: 30,
+    lineHeight: 1.05,
+    marginBottom: 10,
+    letterSpacing: -0.6,
   },
+
   kpiMeta: {
     color: "#64748B",
     fontWeight: 800,
     fontSize: 12,
-    lineHeight: 1.3,
+    lineHeight: 1.4,
     marginBottom: 8,
   },
+
   kpiHint: {
     color: ACCENT,
     fontWeight: 900,
     fontSize: 12,
-    lineHeight: 1.3,
+    lineHeight: 1.35,
+  },
+
+  kpiPanel: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    borderRadius: 24,
+    border: "1px solid #E7E9F2",
+    background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
+    boxShadow: "0 12px 28px rgba(15,23,42,0.05)",
+  },
+
+  kpiPanelTop: {
+    display: "flex",
+    alignItems: "start",
+    justifyContent: "space-between",
+    gap: 16,
+    flexWrap: "wrap",
+  },
+
+  kpiPanelInfo: {
+    display: "grid",
+    gap: 4,
+  },
+
+  kpiPanelTitle: {
+    fontWeight: 980,
+    fontSize: 15,
+    color: "#0F172A",
+  },
+
+  kpiPanelText: {
+    color: "#64748B",
+    fontWeight: 800,
+    fontSize: 12,
+    lineHeight: 1.45,
+  },
+
+  kpiPanelMeta: {
+    padding: "10px 12px",
+    borderRadius: 14,
+    background: "#F8FAFC",
+    border: "1px solid #E7E9F2",
+    color: "#475569",
+    fontWeight: 800,
+    fontSize: 12,
+    whiteSpace: "nowrap",
+  },
+
+  kpiCardTop: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 8,
+  },
+
+  kpiToneDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    background: "#CBD5E1",
+    flexShrink: 0,
+  },
+
+  kpiToneDotGood: {
+    background: "#16A34A",
+    boxShadow: "0 0 0 4px rgba(22,163,74,0.10)",
+  },
+
+  kpiToneDotWarn: {
+    background: "#D97706",
+    boxShadow: "0 0 0 4px rgba(217,119,6,0.10)",
+  },
+
+  kpiToneDotDanger: {
+    background: "#DC2626",
+    boxShadow: "0 0 0 4px rgba(220,38,38,0.10)",
+  },
+
+  kpiCardGood: {
+    border: "1px solid rgba(22,163,74,0.18)",
+    background: "linear-gradient(180deg, #FFFFFF 0%, #F7FEF9 100%)",
+  },
+
+  kpiCardWarn: {
+    border: "1px solid rgba(217,119,6,0.18)",
+    background: "linear-gradient(180deg, #FFFFFF 0%, #FFFAF5 100%)",
+  },
+
+  kpiCardDanger: {
+    border: "1px solid rgba(220,38,38,0.18)",
+    background: "linear-gradient(180deg, #FFFFFF 0%, #FFF7F7 100%)",
+  },
+
+  kpiHintGood: {
+    color: "#15803D",
+  },
+
+  kpiHintWarn: {
+    color: "#B45309",
+  },
+
+  kpiHintDanger: {
+    color: "#B91C1C",
   },
 
   chartGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
     alignItems: "stretch",
   },
@@ -1264,6 +2025,117 @@ const ui = {
     display: "grid",
     alignItems: "center",
     marginTop: 6,
+  },
+
+  teamGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 12,
+    alignItems: "stretch",
+  },
+
+  teamCard: {
+    background: "#fff",
+    border: "1px solid #E7E9F2",
+    borderRadius: 24,
+    padding: 16,
+    boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)",
+    minHeight: 320,
+    display: "grid",
+    alignContent: "start",
+  },
+
+  teamList: {
+    display: "grid",
+    gap: 12,
+    marginTop: 10,
+  },
+
+  teamRow: {
+    display: "grid",
+    gap: 8,
+    padding: 12,
+    borderRadius: 18,
+    border: "1px solid #E7E9F2",
+    background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
+  },
+
+  teamRowTop: {
+    display: "flex",
+    alignItems: "start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  teamName: {
+    fontSize: 13,
+    fontWeight: 950,
+    color: "#0F172A",
+    lineHeight: 1.2,
+  },
+
+  teamMeta: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: "#64748B",
+    marginTop: 4,
+    lineHeight: 1.35,
+  },
+
+  teamValueBox: {
+    display: "grid",
+    justifyItems: "end",
+    gap: 2,
+    flexShrink: 0,
+  },
+
+  teamValue: {
+    fontSize: 18,
+    fontWeight: 980,
+    color: ACCENT,
+    lineHeight: 1,
+  },
+
+  teamValueLabel: {
+    fontSize: 11,
+    fontWeight: 900,
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+
+  teamTimeValue: {
+    fontSize: 14,
+    fontWeight: 950,
+    color: "#0F172A",
+    flexShrink: 0,
+  },
+
+  teamTrack: {
+    height: 10,
+    borderRadius: 999,
+    background: "#EEF2F7",
+    overflow: "hidden",
+    border: "1px solid #E7E9F2",
+  },
+
+  teamFill: {
+    height: "100%",
+    borderRadius: 999,
+    background: "linear-gradient(90deg, #18D1BB 0%, #089F8A 100%)",
+  },
+
+  teamFillSoft: {
+    height: "100%",
+    borderRadius: 999,
+    background: "linear-gradient(90deg, rgba(24,209,187,0.65) 0%, rgba(8,159,138,0.95) 100%)",
+  },
+
+  teamFoot: {
+    color: "#64748B",
+    fontWeight: 800,
+    fontSize: 12,
+    lineHeight: 1.35,
   },
 
   lineSvg: {
@@ -1386,35 +2258,42 @@ const ui = {
   bottomCard: {
     borderRadius: 24,
     border: "1px solid #E7E9F2",
-    background: "#FFFFFF",
-    padding: 16,
+    background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
+    padding: 18,
     boxShadow: "0 12px 26px rgba(15, 23, 42, 0.06)",
   },
+
   bottomTitle: {
     fontWeight: 980,
+    fontSize: 18,
     color: "#0F172A",
-    marginBottom: 6,
+    lineHeight: 1.15,
   },
+
   bottomText: {
     color: "#64748B",
     fontWeight: 800,
     fontSize: 13,
     lineHeight: 1.5,
+    marginBottom: 14,
   },
 
   noteList: {
     display: "grid",
-    gap: 8,
-    marginTop: 14,
+    gap: 10,
+    marginTop: 4,
   },
 
   noteItem: {
     display: "flex",
-    alignItems: "center",
-    gap: 8,
+    alignItems: "start",
+    gap: 10,
     color: "#475569",
     fontWeight: 800,
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 1.45,
+    padding: "10px 0",
+    borderTop: "1px dashed #E7E9F2",
   },
 
   noteDot: {
@@ -1423,6 +2302,7 @@ const ui = {
     borderRadius: 999,
     background: ACCENT,
     flexShrink: 0,
+    marginTop: 6,
   },
 
   userBox: {
@@ -1499,5 +2379,437 @@ const ui = {
     width: "100%",
     minHeight: 120,
     textAlign: "center",
+  },
+
+  heroMain: {
+    display: "grid",
+    gap: 12,
+    alignContent: "center",
+  },
+
+  heroChips: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 4,
+  },
+
+  heroChip: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#FFFFFF",
+    border: "1px solid #E7E9F2",
+    color: "#475569",
+    fontWeight: 900,
+    fontSize: 12,
+    boxShadow: "0 8px 18px rgba(15,23,42,0.04)",
+  },
+
+  heroNoteTop: {
+    display: "flex",
+    alignItems: "start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  heroNoteEyebrow: {
+    color: "#64748B",
+    fontWeight: 900,
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+
+  heroNoteBadge: {
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#F1FBF8",
+    border: "1px solid rgba(8,159,138,0.22)",
+    color: ACCENT,
+    fontWeight: 950,
+    fontSize: 11,
+    whiteSpace: "nowrap",
+  },
+
+  sectionOverline: {
+    color: ACCENT,
+    fontWeight: 950,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+
+  filtersPanel: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    borderRadius: 24,
+    border: "1px solid #E7E9F2",
+    background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
+    boxShadow: "0 12px 28px rgba(15,23,42,0.05)",
+  },
+
+  filtersPanelTop: {
+    display: "flex",
+    alignItems: "start",
+    justifyContent: "space-between",
+    gap: 16,
+    flexWrap: "wrap",
+  },
+
+  filtersPanelInfo: {
+    display: "grid",
+    gap: 4,
+  },
+
+  filtersPanelTitle: {
+    fontWeight: 980,
+    fontSize: 15,
+    color: "#0F172A",
+  },
+
+  filtersPanelText: {
+    color: "#64748B",
+    fontWeight: 800,
+    fontSize: 12,
+    lineHeight: 1.45,
+  },
+
+  filtersPanelMeta: {
+    padding: "10px 12px",
+    borderRadius: 14,
+    background: "#F8FAFC",
+    border: "1px solid #E7E9F2",
+    color: "#475569",
+    fontWeight: 800,
+    fontSize: 12,
+    whiteSpace: "nowrap",
+  },
+
+  filtersActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexShrink: 0,
+  },
+
+  filterBtnLabel: {
+    fontWeight: 950,
+    fontSize: 12,
+    lineHeight: 1.1,
+  },
+
+  filterBtnHint: {
+    fontWeight: 800,
+    fontSize: 11,
+    color: "#64748B",
+    lineHeight: 1.1,
+  },
+
+  filterBtnHintActive: {
+    color: ACCENT,
+  },
+
+  alertsGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 12,
+  },
+
+  alertCard: {
+    background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
+    border: "1px solid #E7E9F2",
+    borderRadius: 24,
+    padding: 16,
+    boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)",
+    display: "grid",
+    alignContent: "center",
+    gap: 14,
+  },
+
+  statusCard: {
+    background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
+    border: "1px solid #E7E9F2",
+    borderRadius: 24,
+    padding: 16,
+    boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)",
+    display: "grid",
+    alignContent: "start",
+    gap: 14,
+  },
+
+  alertCardHeader: {
+    display: "flex",
+    alignItems: "start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  alertCardTitle: {
+    fontWeight: 980,
+    fontSize: 16,
+    color: "#0F172A",
+  },
+
+  alertCardSubtitle: {
+    color: "#64748B",
+    fontWeight: 800,
+    fontSize: 12,
+    marginTop: 4,
+    lineHeight: 1.4,
+  },
+
+  alertCardBadge: {
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#F8FAFC",
+    border: "1px solid #E7E9F2",
+    color: "#475569",
+    fontWeight: 900,
+    fontSize: 11,
+    whiteSpace: "nowrap",
+  },
+
+  alertList: {
+    display: "grid",
+    gap: 10,
+  },
+
+  alertItem: {
+    display: "grid",
+    gridTemplateColumns: "36px 1fr",
+    gap: 12,
+    alignItems: "start",
+    padding: 12,
+    borderRadius: 18,
+    border: "1px solid #E7E9F2",
+    background: "#FFFFFF",
+  },
+
+  alertItemGood: {
+    background: "#F7FEF9",
+    border: "1px solid rgba(22,163,74,0.16)",
+  },
+
+  alertItemWarn: {
+    background: "#FFFAF5",
+    border: "1px solid rgba(217,119,6,0.16)",
+  },
+
+  alertItemDanger: {
+    background: "#FFF7F7",
+    border: "1px solid rgba(220,38,38,0.16)",
+  },
+
+  alertIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    display: "grid",
+    placeItems: "center",
+    fontWeight: 980,
+    fontSize: 15,
+    background: "#E2E8F0",
+    color: "#475569",
+  },
+
+  alertIconGood: {
+    background: "rgba(22,163,74,0.12)",
+    color: "#15803D",
+  },
+
+  alertIconWarn: {
+    background: "rgba(217,119,6,0.12)",
+    color: "#B45309",
+  },
+
+  alertIconDanger: {
+    background: "rgba(220,38,38,0.12)",
+    color: "#B91C1C",
+  },
+
+  alertBody: {
+    display: "grid",
+    gap: 4,
+  },
+
+  alertTitle: {
+    color: "#0F172A",
+    fontWeight: 950,
+    fontSize: 13,
+    lineHeight: 1.2,
+  },
+
+  alertDescription: {
+    color: "#64748B",
+    fontWeight: 800,
+    fontSize: 12,
+    lineHeight: 1.45,
+  },
+
+  statusHero: {
+    display: "grid",
+    gap: 6,
+    padding: 14,
+    borderRadius: 20,
+    background: "linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%)",
+    border: "1px solid #E7E9F2",
+  },
+
+  statusHeroLabel: {
+    color: "#64748B",
+    fontWeight: 900,
+    fontSize: 12,
+  },
+
+  statusHeroValue: {
+    color: "#0F172A",
+    fontWeight: 990,
+    fontSize: 34,
+    lineHeight: 1,
+    letterSpacing: -0.8,
+  },
+
+  statusHeroText: {
+    color: "#64748B",
+    fontWeight: 800,
+    fontSize: 12,
+    lineHeight: 1.4,
+  },
+
+  statusMiniGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  statusMiniCard: {
+    padding: 12,
+    borderRadius: 18,
+    border: "1px solid #E7E9F2",
+    background: "#FFFFFF",
+    display: "grid",
+    gap: 6,
+    alignContent: "start",
+  },
+
+  statusMiniLabel: {
+    color: "#64748B",
+    fontWeight: 900,
+    fontSize: 11,
+    lineHeight: 1.3,
+  },
+
+  statusMiniValue: {
+    color: "#0F172A",
+    fontWeight: 980,
+    fontSize: 20,
+    lineHeight: 1.1,
+  },
+
+  statusTonePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    padding: "7px 10px",
+    borderRadius: 999,
+    fontWeight: 950,
+    fontSize: 11,
+    border: "1px solid #E7E9F2",
+    background: "#F8FAFC",
+    color: "#475569",
+  },
+
+  statusTonePillGood: {
+    background: "rgba(22,163,74,0.10)",
+    border: "1px solid rgba(22,163,74,0.18)",
+    color: "#15803D",
+  },
+
+  statusTonePillWarn: {
+    background: "rgba(217,119,6,0.10)",
+    border: "1px solid rgba(217,119,6,0.18)",
+    color: "#B45309",
+  },
+
+  statusTonePillDanger: {
+    background: "rgba(220,38,38,0.10)",
+    border: "1px solid rgba(220,38,38,0.18)",
+    color: "#B91C1C",
+  },
+
+  mixList: {
+    display: "grid",
+    gap: 12,
+    marginTop: 8,
+  },
+
+  mixRow: {
+    display: "grid",
+    gap: 6,
+  },
+
+  mixRowTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  mixLabel: {
+    fontSize: 12,
+    fontWeight: 900,
+    color: "#0F172A",
+  },
+
+  mixValue: {
+    fontSize: 12,
+    fontWeight: 900,
+    color: "#64748B",
+  },
+
+  mixTrack: {
+    height: 10,
+    borderRadius: 999,
+    background: "#EEF2F7",
+    border: "1px solid #E7E9F2",
+    overflow: "hidden",
+  },
+
+  mixFill: {
+    height: "100%",
+    borderRadius: 999,
+    background: "linear-gradient(90deg, #18D1BB 0%, #089F8A 100%)",
+  },
+
+  bottomTop: {
+    display: "flex",
+    alignItems: "start",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    marginBottom: 6,
+  },
+
+  bottomEyebrow: {
+    color: ACCENT,
+    fontWeight: 950,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+
+  bottomBadge: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#F8FAFC",
+    border: "1px solid #E7E9F2",
+    color: "#475569",
+    fontWeight: 900,
+    fontSize: 12,
+    whiteSpace: "nowrap",
   },
 };
