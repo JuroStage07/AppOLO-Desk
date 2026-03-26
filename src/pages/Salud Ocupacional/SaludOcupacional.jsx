@@ -8,6 +8,7 @@ import imgEquipos from "../../assets/revisionEquipos.png";
 import imgTerceros from "../../assets/ingresoTerceros.png";
 import imgVisados from "../../assets/visados.png";
 import imgEstadisticas from "../../assets/visados.png";
+import imgDocumentacion from "../../assets/documentacion.png";
 
 const ACCENT = "#089F8A";
 
@@ -24,6 +25,7 @@ export default function SaludOcupacional() {
     terceros: { status: "LISTO", tone: "accent" },
     visado: { status: "LISTO", tone: "accent" },
     estadisticas: { status: "LISTO", tone: "accent" },
+    documentacion: { status: "LISTO", tone: "neutral" },
   };
 
   const statusLabel = (s) => {
@@ -106,6 +108,15 @@ export default function SaludOcupacional() {
         tone: "accent",
         img: imgEstadisticas,
         tag: "Analítica",
+      },
+      {
+        key: "documentacion",
+        title: "Documentación",
+        desc: "Biblioteca de normas, políticas y documentos internos de la empresa",
+        path: "/documentacion",
+        tone: "neutral",
+        img: imgDocumentacion,
+        tag: "Biblioteca",
       },
     ],
     []

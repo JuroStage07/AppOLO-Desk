@@ -8,7 +8,7 @@ import imgSalud from "../assets/saludOcupacional.png";
 import imgDespacho from "../assets/despacho.png";
 import imgMantenimiento from "../assets/mantenimiento.png";
 import imgRecepcion from "../assets/recepcion.png";
-import imgDocumentacion from "../assets/documentacion.png";
+
 
 const ACCENT = "#089F8A";
 
@@ -78,14 +78,6 @@ export default function Home() {
         path: "/mantenimiento",
         img: imgMantenimiento,
         tag: "Mantenimiento",
-      },
-      {
-        key: "documentacion",
-        title: "Documentación",
-        desc: "Biblioteca de normas, políticas y documentos internos de la empresa.",
-        path: "/documentacion",
-        img: imgDocumentacion,
-        tag: "Biblioteca",
       },
     ],
     []
