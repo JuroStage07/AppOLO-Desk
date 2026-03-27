@@ -16,6 +16,9 @@ import {
   Plus,
   Pencil,
   Trash2,
+  CircleCheck,
+  Clock3,
+  Timer,
 } from "lucide-react";
 
 import {
@@ -32,8 +35,11 @@ import {
 } from "firebase/firestore";
 
 import { db, auth } from "../../../firebase";
+import { OT_STATE_FINALIZADA } from "./OTsFinalizadasPage";
 
 const ACCENT = "#089F8A";
+const OT_STATE_EN_PROCESO = "En proceso";
+const OT_STATE_REVISION = "En revisión";
 const BLUE = "#2563EB";
 const RED = "#FF4D73";
 
@@ -53,6 +59,123 @@ function formatDate(value) {
   }
 }
 
+function chronoTsToMillis(ts) {
+  if (ts == null) return null;
+  if (typeof ts.toMillis === "function") return ts.toMillis();
+  if (typeof ts.seconds === "number") {
+    return ts.seconds * 1000 + Math.floor((ts.nanoseconds || 0) / 1e6);
+  }
+  return null;
+}
+
+function formatChronoMs(ms) {
+  const v = Math.max(0, Math.floor(Number(ms) || 0));
+  const s = Math.floor(v / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  }
+  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+/** Alineado a subtareas en Firestore (misma lógica que el tablero). */
+function isSubtaskFirestoreCompleted(data) {
+  if (!data || typeof data !== "object") return false;
+  if (data.completed === true || data.done === true) return true;
+  const raw = data.status ?? data.estado;
+  if (raw == null || raw === "") return false;
+  const s = String(raw).trim().toLowerCase();
+  return (
+    s === "completada" ||
+    s === "completado" ||
+    s === "finalizada" ||
+    s === "finalizado" ||
+    s === "terminada" ||
+    s === "terminado" ||
+    s === "done" ||
+    s === "listo" ||
+    s === "lista"
+  );
+}
+
+function chronoWorkElapsedMs(row, nowMs) {
+  const acc = Number(row.chronoWorkAccumMs) || 0;
+  const t0 = chronoTsToMillis(row.chronoWorkStartedAt);
+  if (t0 != null) return acc + (nowMs - t0);
+  return acc;
+}
+
+function chronoDeadElapsedMs(row, nowMs) {
+  const acc = Number(row.chronoDeadAccumMs) || 0;
+  const t0 = chronoTsToMillis(row.chronoDeadStartedAt);
+  if (t0 != null) return acc + (nowMs - t0);
+  return acc;
+}
+
+function chronoWorkRunning(row) {
+  return row.chronoWorkStartedAt != null;
+}
+
+function chronoDeadRunning(row) {
+  return row.chronoDeadStartedAt != null;
+}
+
+function subtaskCreatedAtMillis(s) {
+  return chronoTsToMillis(s?.createdAt);
+}
+
+function subtaskStatusLabel(s) {
+  if (isSubtaskFirestoreCompleted(s)) return "Completada";
+  const raw = s?.status ?? s?.estado;
+  if (raw == null || String(raw).trim() === "") return "Pendiente";
+  return String(raw);
+}
+
+/**
+ * Totales de cronómetro y promedio de intervalo entre altas consecutivas de subtareas.
+ */
+function buildSubtasksChronoSummary(subtasks, nowMs) {
+  const ordered = [...subtasks].sort(
+    (a, b) =>
+      (subtaskCreatedAtMillis(a) ?? 0) - (subtaskCreatedAtMillis(b) ?? 0)
+  );
+
+  let totalWork = 0;
+  let totalDead = 0;
+  const perId = {};
+
+  for (const row of ordered) {
+    const wMs = chronoWorkElapsedMs(row, nowMs);
+    const dMs = chronoDeadElapsedMs(row, nowMs);
+    totalWork += wMs;
+    totalDead += dMs;
+    if (row?.id) {
+      perId[row.id] = {
+        wMs,
+        dMs,
+        workRun: chronoWorkRunning(row),
+        deadRun: chronoDeadRunning(row),
+      };
+    }
+  }
+
+  let avgBetweenTasksMs = null;
+  if (ordered.length >= 2) {
+    const stamps = ordered.map((s) => subtaskCreatedAtMillis(s));
+    if (stamps.every((t) => t != null && !Number.isNaN(t))) {
+      let gapSum = 0;
+      for (let i = 1; i < stamps.length; i++) {
+        gapSum += stamps[i] - stamps[i - 1];
+      }
+      avgBetweenTasksMs = gapSum / (stamps.length - 1);
+    }
+  }
+
+  return { totalWork, totalDead, avgBetweenTasksMs, perId, ordered, nowMs };
+}
+
 function normalizeTask(docId, data) {
   const attachments = Array.isArray(data?.adjuntos)
     ? data.adjuntos
@@ -64,7 +187,11 @@ function normalizeTask(docId, data) {
     id: docId,
     code: data?.NroSolicitud || `SOL-${docId}`,
     estado: data?.OTState || "Solicitada",
+    solicitanteNombre: data?.solicitanteNombre || "",
+    solicitanteFicha: data?.solicitanteFicha || "",
+    responsableMantenimiento: data?.responsableNombre || "",
     responsable:
+      data?.responsableNombre ||
       data?.solicitanteNombre ||
       data?.createdByName ||
       "Sin responsable",
@@ -154,6 +281,8 @@ export default function OTsDetallePage() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [finalizingOt, setFinalizingOt] = useState(false);
+  const [chronoTick, setChronoTick] = useState(0);
 
   useEffect(() => {
     const loadOT = async () => {
@@ -195,10 +324,32 @@ export default function OTsDetallePage() {
     if (id) loadOT();
   }, [id]);
 
+  const anySubtaskChronoRunning = useMemo(
+    () =>
+      subtasks.some(
+        (s) => chronoWorkRunning(s) || chronoDeadRunning(s)
+      ),
+    [subtasks]
+  );
+
+  useEffect(() => {
+    if (subtasks.length === 0 || !anySubtaskChronoRunning) return;
+    const timerId = window.setInterval(
+      () => setChronoTick((n) => n + 1),
+      1000
+    );
+    return () => window.clearInterval(timerId);
+  }, [subtasks.length, anySubtaskChronoRunning]);
+
   const totalAttachments = useMemo(
     () => tasks.reduce((acc, t) => acc + Number(t.attachmentsCount || 0), 0),
     [tasks]
   );
+
+  const chronoSummary = useMemo(() => {
+    const nowMs = Date.now();
+    return buildSubtasksChronoSummary(subtasks, nowMs);
+  }, [subtasks, chronoTick]);
 
   const toggleTask = (taskId) => {
     setTasks((prev) =>
@@ -213,7 +364,59 @@ export default function OTsDetallePage() {
     // Acá después podés hacer updateDoc(...)
   };
 
+  const readOnlyOt = ot?.estado === OT_STATE_FINALIZADA;
+  const canAddSubtasks = ot?.estado === OT_STATE_EN_PROCESO;
+  const canFinalizeOt = ot?.estado === OT_STATE_REVISION;
+
+  const handleFinalizeOt = async () => {
+    if (!id?.trim()) return;
+    if (ot?.estado !== OT_STATE_REVISION) {
+      window.alert(
+        "Solo podés finalizar la OT cuando está en revisión. Antes no se puede cerrar: tiene que pasar por revisión."
+      );
+      return;
+    }
+    const ok = window.confirm(
+      "¿Finalizar esta OT? Quedará cerrada (Finalizada): no se podrán editar tiempos ni subtareas."
+    );
+    if (!ok) return;
+    try {
+      setFinalizingOt(true);
+      const ref = doc(db, "solicitudesOT", id);
+      await updateDoc(ref, {
+        OTState: OT_STATE_FINALIZADA,
+        updatedAt: serverTimestamp(),
+      });
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const normalized = normalizeTask(snap.id, snap.data());
+        setOt(normalized);
+        setTasks(normalized?.tasks || []);
+      }
+      const subtareasRef = collection(db, "solicitudesOT", id, "subtareas");
+      const subtareasSnap = await getDocs(
+        query(subtareasRef, orderBy("createdAt", "asc"))
+      );
+      setSubtasks(
+        subtareasSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      );
+    } catch (err) {
+      console.error(err);
+      window.alert(
+        "No se pudo finalizar la OT. Revisá que en Firestore exista el estado «Finalizada» en validOTState y que las reglas permitan actualizar OTState."
+      );
+    } finally {
+      setFinalizingOt(false);
+    }
+  };
+
   const handleOpenSubtaskModal = (subtask = null) => {
+    if (!subtask && !canAddSubtasks) {
+      window.alert(
+        "Solo podés agregar subtareas mientras la OT está en proceso."
+      );
+      return;
+    }
     if (subtask) {
       setEditingSubtaskId(subtask.id);
       setSubtaskForm({
@@ -236,6 +439,15 @@ export default function OTsDetallePage() {
   };
 
   const handleCreateSubtask = async () => {
+    if (readOnlyOt) {
+      alert("La OT está finalizada. Solo lectura.");
+      return;
+    }
+    if (!editingSubtaskId && !canAddSubtasks) {
+      alert("Solo podés agregar subtareas mientras la OT está en proceso.");
+      return;
+    }
+
     const title = subtaskForm.title.trim();
     const description = subtaskForm.description.trim();
 
@@ -321,6 +533,10 @@ export default function OTsDetallePage() {
 
   const handleDeleteSubtask = async (subtaskId) => {
     if (!subtaskId) return;
+    if (readOnlyOt) {
+      alert("La OT está finalizada. Solo lectura.");
+      return;
+    }
 
     const confirmed = window.confirm("¿Eliminar esta subtarea?");
     if (!confirmed) return;
@@ -374,7 +590,15 @@ export default function OTsDetallePage() {
             Volver
           </button>
 
-          <button type="button" onClick={handleSave} style={ui.btnPrimary}>
+          <button
+            type="button"
+            onClick={handleSave}
+            style={{
+              ...ui.btnPrimary,
+              ...(readOnlyOt ? ui.btnPrimaryDisabled : {}),
+            }}
+            disabled={readOnlyOt}
+          >
             <Save size={16} />
             Guardar
           </button>
@@ -419,6 +643,20 @@ export default function OTsDetallePage() {
                   <div style={ui.personNameRow}>
                     <div style={ui.personName}>{ot.responsable}</div>
                   </div>
+                  {ot.responsableMantenimiento && ot.solicitanteNombre ? (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "#64748B",
+                      }}
+                    >
+                      Solicitó: {ot.solicitanteNombre}
+                      {ot.solicitanteFicha
+                        ? ` · Ficha ${ot.solicitanteFicha}`
+                        : ""}
+                    </div>
+                  ) : null}
 
                   <div style={ui.metaRow}>
                     <SoftChip
@@ -458,8 +696,12 @@ export default function OTsDetallePage() {
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                style={ui.noteInput}
+                style={{
+                  ...ui.noteInput,
+                  ...(readOnlyOt ? ui.noteInputReadOnly : {}),
+                }}
                 rows={4}
+                readOnly={readOnlyOt}
               />
             </div>
           </div>
@@ -544,6 +786,40 @@ export default function OTsDetallePage() {
                             label="Fecha solicitud"
                             value={formatDate(task.scheduledDate)}
                           />
+                          {readOnlyOt && subtasks.length > 0 ? (
+                            <div style={ui.chronoSummaryBlock}>
+                              <div style={ui.chronoSummaryHead}>
+                                <Clock3 size={16} color={ACCENT} />
+                                <span>Tiempos (todas las subtareas)</span>
+                              </div>
+                              <DetailRow
+                                label="Total trabajo"
+                                value={formatChronoMs(chronoSummary.totalWork)}
+                              />
+                              <DetailRow
+                                label="Total tiempo muerto"
+                                value={formatChronoMs(chronoSummary.totalDead)}
+                              />
+                              <DetailRow
+                                label="Promedio entre subtareas"
+                                value={
+                                  chronoSummary.avgBetweenTasksMs != null
+                                    ? formatChronoMs(
+                                        chronoSummary.avgBetweenTasksMs
+                                      )
+                                    : "—"
+                                }
+                              />
+                              <div style={ui.chronoSummaryHint}>
+                                El promedio entre subtareas es el intervalo
+                                promedio entre la fecha en que se dio de alta cada
+                                subtarea y la siguiente (en orden de creación).
+                                {subtasks.length < 2
+                                  ? " Hace falta al menos dos subtareas para calcularlo."
+                                  : ""}
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                       )}
                     </div>
@@ -575,16 +851,37 @@ export default function OTsDetallePage() {
                 <div style={ui.topAccent} />
 
                 <div style={ui.subtasksHeader}>
-                  <div style={ui.subtasksTitle}>Lista de subtareas</div>
+                  <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                    <div style={ui.subtasksTitle}>Lista de subtareas</div>
+                    {subtasks.length > 0 ? (
+                      <div style={ui.subtasksChronoLegend}>
+                        <Timer size={13} color="#64748B" />
+                        Trabajo y tiempo muerto por subtarea (como en gestión de
+                        OT).
+                      </div>
+                    ) : null}
+                  </div>
 
                   <div style={ui.subtasksHeaderRight}>
                     <div style={ui.subtasksCount}>Total: {subtasks.length}</div>
 
                     <button
                       type="button"
-                      style={ui.addMiniCircleBtn}
-                      onClick={handleOpenSubtaskModal}
-                      title="Agregar subtarea"
+                      style={{
+                        ...ui.addMiniCircleBtn,
+                        ...(!canAddSubtasks || readOnlyOt
+                          ? ui.addMiniCircleBtnDisabled
+                          : {}),
+                      }}
+                      onClick={() => handleOpenSubtaskModal()}
+                      title={
+                        readOnlyOt
+                          ? "OT finalizada · solo lectura"
+                          : canAddSubtasks
+                            ? "Agregar subtarea"
+                            : "Solo podés agregar subtareas con la OT en proceso"
+                      }
+                      disabled={readOnlyOt || !canAddSubtasks}
                     >
                       <Plus size={18} />
                     </button>
@@ -593,7 +890,24 @@ export default function OTsDetallePage() {
 
                 {subtasks.length ? (
                   <div style={ui.subtasksList}>
-                    {subtasks.map((subtask, index) => (
+                    {subtasks.map((subtask, index) => {
+                      const cm =
+                        subtask?.id && chronoSummary.perId[subtask.id]
+                          ? chronoSummary.perId[subtask.id]
+                          : {
+                              wMs: chronoWorkElapsedMs(
+                                subtask,
+                                chronoSummary.nowMs
+                              ),
+                              dMs: chronoDeadElapsedMs(
+                                subtask,
+                                chronoSummary.nowMs
+                              ),
+                              workRun: chronoWorkRunning(subtask),
+                              deadRun: chronoDeadRunning(subtask),
+                            };
+                      const stLabel = subtaskStatusLabel(subtask);
+                      return (
                       <div key={subtask?.id || index} style={ui.subtaskItem}>
                         <div style={ui.subtaskBullet}>{index + 1}</div>
 
@@ -606,9 +920,17 @@ export default function OTsDetallePage() {
                             <div style={ui.subtaskActions}>
                               <button
                                 type="button"
-                                style={ui.subtaskIconBtn}
+                                style={{
+                                  ...ui.subtaskIconBtn,
+                                  ...(readOnlyOt ? ui.subtaskIconBtnDisabled : {}),
+                                }}
                                 onClick={() => handleOpenSubtaskModal(subtask)}
-                                title="Editar subtarea"
+                                title={
+                                  readOnlyOt
+                                    ? "OT finalizada · solo lectura"
+                                    : "Editar subtarea"
+                                }
+                                disabled={readOnlyOt}
                               >
                                 <Pencil size={15} />
                               </button>
@@ -617,11 +939,17 @@ export default function OTsDetallePage() {
                                 type="button"
                                 style={{
                                   ...ui.subtaskIconBtn,
-                                  ...(deletingSubtaskId === subtask.id ? ui.subtaskIconBtnDisabled : {}),
+                                  ...(readOnlyOt || deletingSubtaskId === subtask.id
+                                    ? ui.subtaskIconBtnDisabled
+                                    : {}),
                                 }}
                                 onClick={() => handleDeleteSubtask(subtask.id)}
-                                title="Eliminar subtarea"
-                                disabled={deletingSubtaskId === subtask.id}
+                                title={
+                                  readOnlyOt
+                                    ? "OT finalizada · solo lectura"
+                                    : "Eliminar subtarea"
+                                }
+                                disabled={readOnlyOt || deletingSubtaskId === subtask.id}
                               >
                                 <Trash2 size={15} />
                               </button>
@@ -631,9 +959,41 @@ export default function OTsDetallePage() {
                           <div style={ui.subtaskMeta}>
                             {subtask?.description || subtask?.descripcion || "Sin descripción"}
                           </div>
+
+                          <div style={ui.subtaskChronoRow}>
+                            <span style={ui.subtaskChronoPill}>
+                              Estado: <b>{stLabel}</b>
+                            </span>
+                            <span style={ui.subtaskChronoMetric}>
+                              Trabajo:{" "}
+                              <b style={{ color: cm.workRun ? ACCENT : "#334155" }}>
+                                {formatChronoMs(cm.wMs)}
+                              </b>
+                              {cm.workRun ? (
+                                <span style={ui.subtaskChronoLive}> · en curso</span>
+                              ) : null}
+                            </span>
+                            <span style={ui.subtaskChronoMetric}>
+                              T. muerto:{" "}
+                              <b
+                                style={{
+                                  color: cm.deadRun ? "#B45309" : "#334155",
+                                }}
+                              >
+                                {formatChronoMs(cm.dMs)}
+                              </b>
+                              {cm.deadRun ? (
+                                <span style={ui.subtaskChronoLiveDead}>
+                                  {" "}
+                                  · en curso
+                                </span>
+                              ) : null}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
                 ) : (
                   <div style={ui.emptySubtasksBox}>
@@ -643,9 +1003,21 @@ export default function OTsDetallePage() {
 
                     <button
                       type="button"
-                      style={ui.addCircleBtn}
-                      onClick={handleOpenSubtaskModal}
-                      title="Agregar subtarea"
+                      style={{
+                        ...ui.addCircleBtn,
+                        ...(!canAddSubtasks || readOnlyOt
+                          ? ui.addCircleBtnDisabled
+                          : {}),
+                      }}
+                      onClick={() => handleOpenSubtaskModal()}
+                      title={
+                        readOnlyOt
+                          ? "OT finalizada · solo lectura"
+                          : canAddSubtasks
+                            ? "Agregar subtarea"
+                            : "Solo podés agregar subtareas con la OT en proceso"
+                      }
+                      disabled={readOnlyOt || !canAddSubtasks}
                     >
                       <Plus size={24} />
                     </button>
@@ -656,36 +1028,72 @@ export default function OTsDetallePage() {
           </div>
 
           <div style={ui.bottomSummary}>
-            <div style={ui.summaryItem}>
-              <div style={ui.summaryIcon}>
-                <Paperclip size={16} />
+            <div style={ui.bottomSummaryMain}>
+              <div style={ui.summaryItem}>
+                <div style={ui.summaryIcon}>
+                  <Paperclip size={16} />
+                </div>
+                <div>
+                  <div style={ui.summaryLabel}>Adjuntos totales</div>
+                  <div style={ui.summaryValue}>{totalAttachments}</div>
+                </div>
               </div>
-              <div>
-                <div style={ui.summaryLabel}>Adjuntos totales</div>
-                <div style={ui.summaryValue}>{totalAttachments}</div>
-              </div>
-            </div>
 
-            <div style={ui.summaryItem}>
-              <div style={ui.summaryIcon}>
-                <UserCircle2 size={16} />
+              <div style={ui.summaryItem}>
+                <div style={ui.summaryIcon}>
+                  <UserCircle2 size={16} />
+                </div>
+                <div>
+                  <div style={ui.summaryLabel}>Solicitante</div>
+                  <div style={ui.summaryValue}>
+                    {ot.solicitanteNombre || ot.responsable} ·{" "}
+                    {ot.solicitanteFicha || ot.ficha}
+                  </div>
+                </div>
               </div>
-              <div>
-                <div style={ui.summaryLabel}>Solicitante</div>
-                <div style={ui.summaryValue}>
-                  {ot.responsable} · {ot.ficha}
+
+              <div style={ui.summaryItem}>
+                <div style={ui.summaryIcon}>
+                  <CalendarDays size={16} />
+                </div>
+                <div>
+                  <div style={ui.summaryLabel}>Fecha solicitud</div>
+                  <div style={ui.summaryValue}>
+                    {formatDate(ot.fechaSolicitud)}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div style={ui.summaryItem}>
-              <div style={ui.summaryIcon}>
-                <CalendarDays size={16} />
-              </div>
-              <div>
-                <div style={ui.summaryLabel}>Fecha solicitud</div>
-                <div style={ui.summaryValue}>{formatDate(ot.fechaSolicitud)}</div>
-              </div>
+            <div style={ui.bottomSummaryAction}>
+              <button
+                type="button"
+                style={{
+                  ...ui.btnFinalizeOt,
+                  ...(canFinalizeOt && !readOnlyOt ? {} : ui.btnFinalizeOtMuted),
+                }}
+                disabled={finalizingOt || readOnlyOt}
+                onClick={() => {
+                  if (finalizingOt || readOnlyOt) return;
+                  if (!canFinalizeOt) {
+                    window.alert(
+                      "Solo podés finalizar la OT cuando está en revisión. Antes no se puede cerrar: tiene que pasar por revisión."
+                    );
+                    return;
+                  }
+                  void handleFinalizeOt();
+                }}
+                title={
+                  readOnlyOt
+                    ? "OT ya finalizada"
+                    : canFinalizeOt
+                      ? "Cerrar la OT (solo lectura después)"
+                      : "Disponible cuando la OT esté en revisión"
+                }
+              >
+                <CircleCheck size={18} strokeWidth={2.25} />
+                {finalizingOt ? "Finalizando…" : "Finalizar OT"}
+              </button>
             </div>
           </div>
         </div>
@@ -1178,6 +1586,29 @@ const ui = {
   },
   detailLabel: { color: BLUE, fontWeight: 800, fontSize: 14 },
   detailValue: { color: "#667085", fontWeight: 800, fontSize: 14 },
+  chronoSummaryBlock: {
+    marginTop: 12,
+    paddingTop: 14,
+    borderTop: "1px solid #E7E9F2",
+    display: "grid",
+    gap: 8,
+  },
+  chronoSummaryHead: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    fontWeight: 900,
+    fontSize: 14,
+    color: "#0F172A",
+    marginBottom: 4,
+  },
+  chronoSummaryHint: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#94A3B8",
+    lineHeight: 1.45,
+    maxWidth: 560,
+  },
   chevronWrap: { display: "grid", alignItems: "center", color: "#0F172A" },
   taskFooter: {
     display: "flex",
@@ -1213,8 +1644,57 @@ const ui = {
   },
   bottomSummary: {
     display: "flex",
+    flexWrap: "wrap",
+    alignItems: "stretch",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  bottomSummaryMain: {
+    display: "flex",
     gap: 12,
     flexWrap: "wrap",
+    flex: "1 1 auto",
+    alignItems: "stretch",
+  },
+  bottomSummaryAction: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flex: "1 1 220px",
+    minWidth: 0,
+  },
+  btnFinalizeOt: {
+    width: "100%",
+    maxWidth: 280,
+    marginLeft: "auto",
+    borderRadius: 16,
+    border: `1px solid ${ACCENT}`,
+    background: ACCENT,
+    color: "#fff",
+    padding: "12px 18px",
+    fontWeight: 950,
+    fontSize: 14,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    boxShadow: "0 10px 28px rgba(8,159,138,0.22)",
+  },
+  btnFinalizeOtMuted: {
+    background: "#F1F5F9",
+    color: "#94A3B8",
+    border: "1px solid #E2E8F0",
+    boxShadow: "none",
+    cursor: "pointer",
+  },
+  btnPrimaryDisabled: {
+    opacity: 0.5,
+    cursor: "not-allowed",
+  },
+  noteInputReadOnly: {
+    background: "#F8FAFC",
+    color: "#64748B",
   },
   summaryItem: {
     background: "#fff",
@@ -1285,6 +1765,17 @@ const ui = {
     fontWeight: 900,
     color: "#0F172A",
   },
+  subtasksChronoLegend: {
+    marginTop: 6,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#64748B",
+    lineHeight: 1.35,
+    maxWidth: 420,
+  },
 
   subtasksCount: {
     fontSize: 13,
@@ -1336,6 +1827,34 @@ const ui = {
     fontSize: 13,
     lineHeight: 1.4,
   },
+  subtaskChronoRow: {
+    marginTop: 10,
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px 14px",
+    alignItems: "center",
+    fontSize: 12,
+    fontWeight: 700,
+    fontVariantNumeric: "tabular-nums",
+  },
+  subtaskChronoPill: {
+    color: "#475569",
+    background: "#F1F5F9",
+    padding: "4px 10px",
+    borderRadius: 8,
+    border: "1px solid #E2E8F0",
+  },
+  subtaskChronoMetric: {
+    color: "#64748B",
+  },
+  subtaskChronoLive: {
+    color: ACCENT,
+    fontWeight: 800,
+  },
+  subtaskChronoLiveDead: {
+    color: "#B45309",
+    fontWeight: 800,
+  },
 
   emptySubtasksBox: {
     minHeight: 220,
@@ -1370,6 +1889,14 @@ const ui = {
     cursor: "pointer",
     boxShadow: "0 12px 30px rgba(8,159,138,0.22)",
   },
+  addCircleBtnDisabled: {
+    opacity: 0.45,
+    cursor: "not-allowed",
+    boxShadow: "none",
+    background: "#E2E8F0",
+    border: "1px solid #CBD5E1",
+    color: "#94A3B8",
+  },
 
   subtasksHeaderRight: {
     display: "flex",
@@ -1387,6 +1914,12 @@ const ui = {
     display: "grid",
     placeItems: "center",
     cursor: "pointer",
+  },
+  addMiniCircleBtnDisabled: {
+    opacity: 0.45,
+    cursor: "not-allowed",
+    border: "1px solid #CBD5E1",
+    color: "#94A3B8",
   },
 
   modalOverlay: {

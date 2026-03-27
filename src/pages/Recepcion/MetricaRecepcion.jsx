@@ -2,6 +2,16 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../../firebase";
 import {
+  AlertTriangle,
+  ArrowLeft,
+  BarChart3,
+  CheckCircle2,
+  Info,
+  Loader2,
+  TrendingUp,
+  User,
+} from "lucide-react";
+import {
   collection,
   doc,
   getDoc,
@@ -13,6 +23,8 @@ import {
 } from "firebase/firestore";
 
 const ACCENT = "#089F8A";
+const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
+const SLATE = "#64748B";
 
 function fmtMinutesFromMs(ms) {
   const n = Number(ms || 0);
@@ -580,8 +592,10 @@ function FilterTabs({ active, onChange }) {
 
       <div style={ui.filtersActions}>
         <button type="button" style={ui.exportBtn} title="Exportar reporte">
-          <span style={ui.exportIcon}>📈</span>
-          Exportar reporte
+          <span style={ui.btnInlineIcon}>
+            <TrendingUp size={16} strokeWidth={2.2} />
+            Exportar reporte
+          </span>
         </button>
       </div>
     </div>
@@ -986,17 +1000,16 @@ export default function MetricaRecepcion() {
   const [noDataMessage, setNoDataMessage] = useState("");
 
   useEffect(() => {
-    const prev = document.body.style.overflow;
+    const prevOverflow = document.body.style.overflow;
     const prevBg = document.body.style.background;
     const prevMargin = document.body.style.margin;
 
-    document.body.style.background = "#F6F7FB";
-    document.body.style.margin = "0";
+    document.body.style.overflow = "auto";
     document.body.style.background = "#F6F7FB";
     document.body.style.margin = "0";
 
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow;
       document.body.style.background = prevBg;
       document.body.style.margin = prevMargin;
     };
@@ -1155,43 +1168,63 @@ export default function MetricaRecepcion() {
 
   return (
     <div style={ui.shell}>
-      <div style={ui.topbar}>
-        <div
-          style={ui.brand}
-          role="button"
-          tabIndex={0}
-          onClick={() => nav("/recepcion")}
-          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && nav("/recepcion")}
-        >
-          <div style={ui.brandMark}>RC</div>
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>Recepción</div>
-            <div style={ui.brandSub}>Panel de métricas</div>
-          </div>
-        </div>
+      <style>{`
+        @keyframes metricaRecepcionSpin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
 
-        <div style={ui.topbarRight}>
-          <div style={ui.userBox}>
-            <div style={ui.userAvatar}>
-              {(user?.displayName || user?.email || "U")[0]?.toUpperCase?.()}
+      <header style={ui.topbar}>
+        <div style={ui.topbarInner}>
+          <div
+            style={ui.brand}
+            role="button"
+            tabIndex={0}
+            onClick={() => nav("/recepcion")}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && nav("/recepcion")}
+          >
+            <div style={ui.brandMark}>
+              <BarChart3 size={20} strokeWidth={2.25} color="#fff" />
             </div>
-            <div style={{ display: "grid", gap: 2 }}>
-              <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-              <div style={ui.userMail}>{user?.email || "—"}</div>
+            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+              <div style={ui.brandTitle}>Recepción</div>
+              <div style={ui.brandSub}>Panel de métricas</div>
             </div>
           </div>
 
-          <button type="button" onClick={() => nav("/recepcion")} style={ui.btnGhost}>
-            ← Volver a recepción
-          </button>
-        </div>
-      </div>
+          <div style={ui.topbarRight}>
+            <div style={ui.userBox}>
+              <div style={ui.userAvatar}>
+                <User size={16} strokeWidth={2.2} />
+              </div>
+              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
+                <div style={ui.userMail}>{user?.email || "—"}</div>
+              </div>
+            </div>
 
-      <div style={ui.main}>
+            <button type="button" onClick={() => nav("/recepcion")} style={ui.btnGhost}>
+              <span style={ui.btnInlineIcon}>
+                <ArrowLeft size={16} strokeWidth={2.2} />
+                Volver a recepción
+              </span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main style={ui.main}>
         <div style={ui.container}>
           {loadingData && (
             <div style={ui.infoBanner}>
-              Cargando métricas...
+              <span style={ui.btnInlineIcon}>
+                <Loader2
+                  size={18}
+                  strokeWidth={2.2}
+                  style={{ animation: "metricaRecepcionSpin 0.7s linear infinite" }}
+                />
+                Cargando métricas…
+              </span>
             </div>
           )}
 
@@ -1210,7 +1243,10 @@ export default function MetricaRecepcion() {
               <div style={ui.kickerRow}>
                 <span style={ui.kickerDot} />
                 <div style={ui.kicker}>Analítica operativa</div>
-                <span style={ui.badge}>{currentData.heroBadge}</span>
+                <span style={{ ...ui.badge, ...ui.badgeInline }}>
+                  <BarChart3 size={12} strokeWidth={2.5} style={{ marginRight: 5, flexShrink: 0 }} />
+                  {currentData.heroBadge}
+                </span>
               </div>
 
               <h1 style={ui.title}>Panel de Recepción</h1>
@@ -1411,7 +1447,15 @@ export default function MetricaRecepcion() {
                               : {}),
                       }}
                     >
-                      {alert.tone === "good" ? "✓" : alert.tone === "warn" ? "!" : "⚠"}
+                      {alert.tone === "good" ? (
+                        <CheckCircle2 size={18} strokeWidth={2.25} />
+                      ) : alert.tone === "warn" ? (
+                        <AlertTriangle size={18} strokeWidth={2.25} />
+                      ) : alert.tone === "danger" ? (
+                        <AlertTriangle size={18} strokeWidth={2.25} />
+                      ) : (
+                        <Info size={18} strokeWidth={2.25} />
+                      )}
                     </div>
 
                     <div style={ui.alertBody}>
@@ -1483,7 +1527,7 @@ export default function MetricaRecepcion() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
@@ -1492,23 +1536,37 @@ const ui = {
   shell: {
     minHeight: "100vh",
     width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     background: "#F6F7FB",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
     color: "#0F172A",
+    display: "grid",
+    gridTemplateRows: "auto 1fr",
   },
 
   topbar: {
-    height: 64,
+    width: "100%",
+    boxSizing: "border-box",
+    borderBottom: "1px solid #E7E9F2",
+    background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
+    backdropFilter: "blur(8px)",
+    zIndex: 100,
+  },
+
+  topbarInner: {
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
+    padding: "12px 18px",
     minHeight: 64,
-    padding: "10px 16px",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottom: "1px solid #E7E9F2",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(246,247,251,0.98) 100%)",
-    backdropFilter: "none",
-    zIndex: 100,
+    gap: 12,
+    flexWrap: "wrap",
   },
 
   brand: {
@@ -1517,61 +1575,75 @@ const ui = {
     gap: 12,
     cursor: "pointer",
     userSelect: "none",
+    outline: "none",
   },
   brandMark: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     background: ACCENT,
     color: "#fff",
     display: "grid",
     placeItems: "center",
-    fontWeight: 950,
-    letterSpacing: 0.4,
-    boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
+    flexShrink: 0,
+    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
   },
-  brandTitle: { fontWeight: 950, fontSize: 14 },
-  brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B" },
+  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
+  brandSub: { fontWeight: 800, fontSize: 12, color: SLATE },
 
   topbarRight: {
     display: "flex",
     alignItems: "center",
-    gap: 12,
-    flexShrink: 0,
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
   },
 
   btnGhost: {
     border: "1px solid #E7E9F2",
     background: "#fff",
-    borderRadius: 14,
-    padding: "10px 12px",
+    borderRadius: 12,
+    padding: "9px 14px",
     cursor: "pointer",
-    fontWeight: 950,
+    fontWeight: 800,
+    fontSize: 13,
     color: "#0F172A",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
     whiteSpace: "nowrap",
+    fontFamily: "inherit",
+  },
+
+  btnInlineIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
   },
 
   main: {
-    overflow: "visible",
-    padding: "0 16px 16px",
-    display: "grid",
-    placeItems: "start center",
+    width: "100%",
+    boxSizing: "border-box",
+    overflow: "auto",
+    padding: "18px 16px 28px",
+    WebkitOverflowScrolling: "touch",
   },
 
   container: {
-    width: "min(1220px, 100%)",
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
     display: "grid",
-    gap: 10,
-    paddingBottom: 18,
+    gap: 16,
+    paddingBottom: 8,
   },
 
   hero: {
     display: "grid",
-    gridTemplateColumns: "1.5fr 1fr",
-    gap: 16,
-    alignItems: "stretch",
-    paddingTop: 16,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 18,
+    alignItems: "start",
+    paddingTop: 4,
   },
 
   kickerRow: {
@@ -1581,45 +1653,49 @@ const ui = {
     flexWrap: "wrap",
   },
   kickerDot: {
-    width: 10,
-    height: 10,
+    width: 8,
+    height: 8,
     borderRadius: 999,
     background: ACCENT,
-    boxShadow: "0 0 0 4px rgba(8,159,138,0.14)",
+    boxShadow: "0 0 0 3px rgba(8,159,138,0.2)",
   },
   kicker: {
-    fontSize: 12,
-    fontWeight: 950,
-    letterSpacing: 0.6,
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.08,
     textTransform: "uppercase",
     color: ACCENT,
   },
   badge: {
     fontSize: 12,
-    fontWeight: 950,
-    padding: "6px 10px",
+    fontWeight: 800,
+    padding: "5px 11px",
     borderRadius: 999,
     background: "#FFFFFF",
     border: "1px solid #E7E9F2",
     color: "#334155",
   },
+  badgeInline: {
+    display: "inline-flex",
+    alignItems: "center",
+  },
 
   title: {
     margin: 0,
-    fontSize: 34,
-    fontWeight: 990,
-    letterSpacing: -0.8,
-    lineHeight: 1.02,
+    fontSize: "clamp(22px, 4vw, 30px)",
+    fontWeight: 950,
+    letterSpacing: -0.4,
+    lineHeight: 1.12,
     color: "#0F172A",
   },
 
   subtitle: {
     margin: 0,
-    color: "#64748B",
-    fontWeight: 800,
-    lineHeight: 1.55,
+    color: SLATE,
+    fontWeight: 650,
+    lineHeight: 1.5,
     fontSize: 14,
-    maxWidth: 760,
+    maxWidth: 560,
   },
 
   heroNote: {
@@ -1757,26 +1833,21 @@ const ui = {
     border: "1px solid rgba(8,159,138,0.24)",
     background: "#F1FBF8",
     color: ACCENT,
-    borderRadius: 16,
-    padding: "12px 14px",
-    fontWeight: 950,
-    fontSize: 12,
+    borderRadius: 12,
+    padding: "9px 14px",
+    fontWeight: 800,
+    fontSize: 13,
     cursor: "pointer",
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
-    gap: 8,
-    boxShadow: "0 8px 18px rgba(8,159,138,0.08)",
+    boxShadow: "0 4px 14px rgba(8,159,138,0.10)",
     whiteSpace: "nowrap",
-  },
-
-  exportIcon: {
-    fontSize: 14,
-    lineHeight: 1,
+    fontFamily: "inherit",
   },
 
   kpiGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))",
     gap: 12,
     padding: 0,
   },
@@ -1929,20 +2000,21 @@ const ui = {
 
   chartGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+    gap: 14,
     alignItems: "stretch",
   },
 
   chartCard: {
     background: "#fff",
     border: "1px solid #E7E9F2",
-    borderRadius: 22,
+    borderRadius: 18,
     padding: 16,
-    boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)",
+    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
     minHeight: 270,
     display: "grid",
     alignContent: "start",
+    borderTop: `3px solid ${ACCENT_SOFT}`,
   },
 
   chartHeader: {
@@ -2029,20 +2101,21 @@ const ui = {
 
   teamGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
+    gap: 14,
     alignItems: "stretch",
   },
 
   teamCard: {
     background: "#fff",
     border: "1px solid #E7E9F2",
-    borderRadius: 24,
+    borderRadius: 18,
     padding: 16,
-    boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)",
+    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
     minHeight: 320,
     display: "grid",
     alignContent: "start",
+    borderTop: `3px solid ${ACCENT_SOFT}`,
   },
 
   teamList: {
@@ -2309,45 +2382,54 @@ const ui = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "8px 10px",
-    borderRadius: 14,
+    padding: "6px 12px 6px 6px",
+    borderRadius: 12,
     border: "1px solid #E7E9F2",
     background: "#fff",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
+    maxWidth: 220,
     minWidth: 0,
   },
   userAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 14,
-    background: "rgba(8,159,138,0.12)",
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    background: ACCENT_SOFT,
     color: ACCENT,
     display: "grid",
     placeItems: "center",
-    fontWeight: 980,
     flexShrink: 0,
   },
   userName: {
-    fontWeight: 980,
+    fontWeight: 800,
     fontSize: 12,
     color: "#0F172A",
-    lineHeight: 1.1,
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   userMail: {
-    fontWeight: 850,
-    fontSize: 12,
-    color: "#64748B",
-    lineHeight: 1.1,
+    fontWeight: 650,
+    fontSize: 11,
+    color: SLATE,
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 
   infoBanner: {
     border: "1px solid #E7E9F2",
     background: "#FFFFFF",
-    color: "#64748B",
-    borderRadius: 16,
-    padding: "12px 14px",
-    fontWeight: 800,
-    fontSize: 13,
+    color: SLATE,
+    borderRadius: 14,
+    padding: "12px 16px",
+    fontWeight: 650,
+    fontSize: 14,
+    display: "flex",
+    alignItems: "center",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
   },
 
   errorBanner: {
@@ -2521,12 +2603,13 @@ const ui = {
   alertCard: {
     background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
     border: "1px solid #E7E9F2",
-    borderRadius: 24,
+    borderRadius: 18,
     padding: 16,
-    boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)",
+    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
     display: "grid",
     alignContent: "center",
     gap: 14,
+    borderTop: `3px solid ${ACCENT_SOFT}`,
   },
 
   statusCard: {
@@ -2609,8 +2692,6 @@ const ui = {
     borderRadius: 12,
     display: "grid",
     placeItems: "center",
-    fontWeight: 980,
-    fontSize: 15,
     background: "#E2E8F0",
     color: "#475569",
   },

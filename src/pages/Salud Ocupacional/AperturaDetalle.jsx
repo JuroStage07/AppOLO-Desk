@@ -4,11 +4,32 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { doc, updateDoc, deleteDoc, serverTimestamp, addDoc, collection } from "firebase/firestore";
 import { createPortal } from "react-dom";
+import {
+  ArrowLeft,
+  Ban,
+  Camera,
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  Copy,
+  FileText,
+  HelpCircle,
+  Loader2,
+  LogOut,
+  MoreHorizontal,
+  Play,
+  Receipt,
+  Shield,
+  User,
+  X,
+} from "lucide-react";
 
 import { auth, db } from "../../firebase";
 import { listenApertura } from "../../services/aperturas";
 
 const ACCENT = "#089F8A";
+const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
+const SLATE = "#64748B";
 
 /* ===================== Helpers RS (igual RN) ===================== */
 const RS_KEY_BY_FORM = {
@@ -151,7 +172,7 @@ function Modal({ open, onClose, title, subtitle, children, maxWidth = 420, foote
           </div>
 
           <button type="button" onClick={onClose} style={ui.iconBtn} title="Cerrar (ESC)">
-            ✕
+            <X size={18} strokeWidth={2.25} />
           </button>
         </div>
 
@@ -468,6 +489,9 @@ export default function AperturaDetalle() {
 
   const fotoFacturaUrl = apertura?.fotoFacturaUrl || null;
 
+  const aperturaCollection =
+    apertura?.__sourceCollection === "aperturasRecepcion" ? "aperturasRecepcion" : "aperturas";
+
   // page body styling
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -531,7 +555,7 @@ export default function AperturaDetalle() {
     if (!ok) return;
 
     try {
-      const ref = doc(db, "aperturas", apertura.id);
+      const ref = doc(db, aperturaCollection, apertura.id);
       await updateDoc(ref, {
         receptionStarted: true,
         tiempoIniciada: serverTimestamp(),
@@ -556,7 +580,7 @@ export default function AperturaDetalle() {
     if (!ok) return;
 
     try {
-      const apRef = doc(db, "aperturas", apertura.id);
+      const apRef = doc(db, aperturaCollection, apertura.id);
 
       await updateDoc(apRef, {
         estado: "finalizada",
@@ -608,7 +632,7 @@ export default function AperturaDetalle() {
     if (!ok) return;
 
     try {
-      const ref = doc(db, "aperturas", apertura.id);
+      const ref = doc(db, aperturaCollection, apertura.id);
       await updateDoc(ref, { estado: "en_proceso" });
       alert("🔓 Reabierta");
     } catch (e) {
@@ -623,7 +647,7 @@ export default function AperturaDetalle() {
     if (!ok) return;
 
     try {
-      await deleteDoc(doc(db, "aperturas", apertura.id));
+      await deleteDoc(doc(db, aperturaCollection, apertura.id));
       alert("🗑️ Eliminada");
       go("/salud/aperturas");
     } catch (e) {
@@ -648,7 +672,7 @@ export default function AperturaDetalle() {
 
     try {
       setRejectSaving(true);
-      const ref = doc(db, "aperturas", apertura.id);
+      const ref = doc(db, aperturaCollection, apertura.id);
 
       await updateDoc(ref, {
         estado: "rechazada",
@@ -708,54 +732,85 @@ export default function AperturaDetalle() {
 
   return (
     <div style={ui.shell}>
-      {/* Topbar */}
-      <div style={ui.topbar}>
-        <div style={ui.brand} role="button" tabIndex={0} onClick={() => go("/salud/aperturas")}>
-          <div style={ui.brandMark}>AP</div>
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>Aperturas</div>
-            <div style={ui.brandSub}>Detalle</div>
-          </div>
-        </div>
+      <style>{`
+        @keyframes aperturaDetalleSpin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
 
-        <div style={ui.topbarRight}>
-          <div style={ui.userBox}>
-            <div style={ui.userAvatar}>{(user?.displayName || user?.email || "U")[0]?.toUpperCase?.()}</div>
+      <header style={ui.topbar}>
+        <div style={ui.topbarInner}>
+          <div
+            style={ui.brand}
+            role="button"
+            tabIndex={0}
+            onClick={() => go("/salud/aperturas")}
+            onKeyDown={(e) =>
+              (e.key === "Enter" || e.key === " ") && go("/salud/aperturas")
+            }
+          >
+            <div style={ui.brandMark}>
+              <ClipboardList size={20} strokeWidth={2.25} color="#fff" />
+            </div>
             <div style={{ display: "grid", gap: 2 }}>
-              <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-              <div style={ui.userMail}>{user?.email || "—"}</div>
+              <div style={ui.brandTitle}>Salud ocupacional</div>
+              <div style={ui.brandSub}>Detalle de apertura</div>
             </div>
           </div>
 
-          <button type="button" onClick={() => go("/salud/aperturas")} style={ui.btnGhost} disabled={busyLogout}>
-            ← Administrar
-          </button>
+          <div style={ui.topbarRight}>
+            <div style={ui.userBox}>
+              <div style={ui.userAvatar}>
+                <User size={16} strokeWidth={2.2} />
+              </div>
+              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
+                <div style={ui.userMail}>{user?.email || "—"}</div>
+              </div>
+            </div>
 
-          <button
-            type="button"
-            onClick={logout}
-            style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
-            disabled={busyLogout}
-          >
-            {busyLogout ? "Cerrando…" : "Cerrar sesión"}
-          </button>
+            <button type="button" onClick={() => go("/salud/aperturas")} style={ui.btnGhost} disabled={busyLogout}>
+              Administrar
+            </button>
+
+            <button
+              type="button"
+              onClick={logout}
+              style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
+              disabled={busyLogout}
+              title="Cerrar sesión"
+            >
+              <span style={ui.btnInlineIcon}>
+                <LogOut size={16} strokeWidth={2.2} />
+                {busyLogout ? "Cerrando…" : "Salir"}
+              </span>
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Content */}
-      <div style={ui.main}>
+      <main style={ui.main}>
         <div style={ui.container}>
           {isLoading ? (
             <div style={ui.emptyWrap}>
-              <div style={ui.emptyIcon}>⏳</div>
-              <div style={ui.emptyTitle}>Cargando…</div>
-              <div style={ui.emptyText}>Un momento, por favor.</div>
+              <div style={ui.emptyIcon}>
+                <Loader2
+                  size={22}
+                  color={ACCENT}
+                  strokeWidth={2.2}
+                  style={{ animation: "aperturaDetalleSpin 0.85s linear infinite" }}
+                />
+              </div>
+              <div style={ui.emptyTitle}>Cargando apertura…</div>
+              <div style={ui.emptyText}>Sincronizando datos.</div>
             </div>
           ) : !apertura ? (
             <div style={ui.emptyWrap}>
-              <div style={ui.emptyIcon}>❓</div>
+              <div style={ui.emptyIconMuted}>
+                <HelpCircle size={24} color={SLATE} strokeWidth={2} />
+              </div>
               <div style={ui.emptyTitle}>No encontrada</div>
-              <div style={ui.emptyText}>No se encontró la apertura.</div>
+              <div style={ui.emptyText}>No se encontró la apertura o no tenés permiso para verla.</div>
             </div>
           ) : (
             <>
@@ -801,10 +856,16 @@ export default function AperturaDetalle() {
 
                   <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
                     <button type="button" onClick={() => nav(-1)} style={ui.btnGhost}>
-                      ← Volver
+                      <span style={ui.btnInlineIcon}>
+                        <ArrowLeft size={16} strokeWidth={2.2} />
+                        Volver
+                      </span>
                     </button>
                     <button type="button" onClick={() => setOptionsOpen(true)} style={ui.btnGhost} title="Opciones">
-                      ⋯ Opciones
+                      <span style={ui.btnInlineIcon}>
+                        <MoreHorizontal size={18} strokeWidth={2.2} />
+                        Opciones
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -813,12 +874,16 @@ export default function AperturaDetalle() {
               {/* Recepción lock */}
               {!receptionUnlocked ? (
                 <div style={ui.card}>
+                  <div style={ui.cardAccent} aria-hidden />
                   <div style={ui.cardTitle}>Recepción</div>
                   <div style={ui.cardSub}>Esta apertura viene desde recepción</div>
                   <div style={ui.cardBody}>
                     <div style={ui.helperText}>Para habilitar acciones, inicia la tarea.</div>
                     <button type="button" onClick={iniciarApertura} style={ui.btnPrimary}>
-                      ▶ Iniciar apertura
+                      <span style={ui.btnInlineIcon}>
+                        <Play size={17} strokeWidth={2.25} />
+                        Iniciar apertura
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -826,6 +891,7 @@ export default function AperturaDetalle() {
                 <>
                   {/* Info */}
                   <div style={ui.card}>
+                    <div style={ui.cardAccent} aria-hidden />
                     <div style={ui.cardTitle}>Información</div>
                     <div style={ui.cardBody}>
                       <div style={ui.kvRow}>
@@ -845,6 +911,7 @@ export default function AperturaDetalle() {
 
                   {/* Factura */}
                   <div style={ui.card}>
+                    <div style={ui.cardAccent} aria-hidden />
                     <div style={ui.cardTitle}>Factura</div>
                     <div style={ui.cardSub}>Adjunta una foto para completar el registro</div>
                     <div style={ui.cardBody}>
@@ -861,7 +928,7 @@ export default function AperturaDetalle() {
                             <div style={ui.fotoTitle}>Foto de factura</div>
                             <div style={ui.fotoSubtitle}>Toca para ver en pantalla completa.</div>
                           </div>
-                          <div style={ui.chevron}>›</div>
+                          <ChevronRight size={22} color="#94A3B8" strokeWidth={2.2} style={{ flexShrink: 0 }} />
                         </div>
                       ) : (
                         <div style={ui.emptyMini}>
@@ -884,26 +951,37 @@ export default function AperturaDetalle() {
               {/* Taskbar */}
               {receptionUnlocked ? (
                 <div style={ui.taskbar}>
-                  <button type="button" onClick={() => setFormOpen(true)} style={ui.tbBtnPrimary} title="Ver formulario">
-                    📄 Ver Form
-                  </button>
+                  <div style={ui.taskbarInner}>
+                    <button type="button" onClick={() => setFormOpen(true)} style={ui.tbBtnPrimary} title="Ver formulario">
+                      <span style={ui.btnInlineIcon}>
+                        <FileText size={17} strokeWidth={2.2} />
+                        Ver formulario
+                      </span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isReadOnly && !isFormCompleted) return alert("Debes completar el formulario para abrir RS.");
-                      setRsOpen(true);
-                    }}
-                    style={{ ...ui.tbBtnSoft, ...(!isReadOnly && !isFormCompleted ? ui.tbBtnDisabled : {}) }}
-                    disabled={!isReadOnly && !isFormCompleted}
-                    title="Ver RS"
-                  >
-                    🛡️ Ver RS
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isReadOnly && !isFormCompleted) return alert("Debes completar el formulario para abrir RS.");
+                        setRsOpen(true);
+                      }}
+                      style={{ ...ui.tbBtnSoft, ...(!isReadOnly && !isFormCompleted ? ui.tbBtnDisabled : {}) }}
+                      disabled={!isReadOnly && !isFormCompleted}
+                      title="Ver RS"
+                    >
+                      <span style={ui.btnInlineIcon}>
+                        <Shield size={17} strokeWidth={2.2} />
+                        Ver RS
+                      </span>
+                    </button>
 
-                  <button type="button" onClick={() => setRfOpen(true)} style={ui.tbBtnSoft} title="Ver RF">
-                    📸 Ver RF
-                  </button>
+                    <button type="button" onClick={() => setRfOpen(true)} style={ui.tbBtnSoft} title="Ver RF">
+                      <span style={ui.btnInlineIcon}>
+                        <Camera size={17} strokeWidth={2.2} />
+                        Ver RF
+                      </span>
+                    </button>
+                  </div>
                 </div>
               ) : null}
 
@@ -946,7 +1024,10 @@ export default function AperturaDetalle() {
                   }}
                   style={ui.btnGhost}
                 >
-                  ⏱️ Tiempos
+                  <span style={ui.btnInlineIcon}>
+                    <Clock size={16} strokeWidth={2.2} />
+                    Tiempos
+                  </span>
                 </button>
 
                 {!isReadOnly ? (
@@ -958,7 +1039,10 @@ export default function AperturaDetalle() {
                     }}
                     style={{ ...ui.btnGhost, ...ui.btnGhostDanger }}
                   >
-                    ⛔ Rechazar apertura
+                    <span style={ui.btnInlineIcon}>
+                      <Ban size={16} strokeWidth={2.2} />
+                      Rechazar apertura
+                    </span>
                   </button>
                 ) : null}
 
@@ -1032,7 +1116,9 @@ export default function AperturaDetalle() {
                   </div>
                 ) : (
                   <div style={ui.emptyWrap}>
-                    <div style={ui.emptyIcon}>🧾</div>
+                    <div style={ui.emptyIconMuted}>
+                      <Receipt size={24} color={SLATE} strokeWidth={2} />
+                    </div>
                     <div style={ui.emptyTitle}>No hay imagen</div>
                     <div style={ui.emptyText}>Esta apertura no tiene foto de factura.</div>
                   </div>
@@ -1049,7 +1135,10 @@ export default function AperturaDetalle() {
                 footer={
                   <div style={{ display: "flex", gap: 10 }}>
                     <button type="button" onClick={copiarId} style={ui.btnGhost}>
-                      📋 Copiar ID
+                      <span style={ui.btnInlineIcon}>
+                        <Copy size={16} strokeWidth={2.2} />
+                        Copiar ID
+                      </span>
                     </button>
                     <button type="button" onClick={() => setFormOpen(false)} style={ui.btnPrimary}>
                       Cerrar
@@ -1163,7 +1252,7 @@ export default function AperturaDetalle() {
             </>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
@@ -1171,8 +1260,11 @@ export default function AperturaDetalle() {
 /* ===================== Styles ===================== */
 const ui = {
   shell: {
+    minHeight: "100vh",
     height: "100vh",
-    width: "100vw",
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     background: "#F6F7FB",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
     color: "#0F172A",
@@ -1182,44 +1274,77 @@ const ui = {
   },
 
   topbar: {
-    height: 64,
-    padding: "10px 16px",
+    width: "100%",
+    boxSizing: "border-box",
+    borderBottom: "1px solid #E7E9F2",
+    background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
+    backdropFilter: "blur(8px)",
+  },
+  topbarInner: {
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
+    padding: "12px 18px",
+    minHeight: 64,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottom: "1px solid #E7E9F2",
-    background: "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(246,247,251,0.95) 100%)",
-    backdropFilter: "blur(6px)",
+    gap: 12,
+    flexWrap: "wrap",
   },
 
-  brand: { display: "flex", alignItems: "center", gap: 12, cursor: "pointer", userSelect: "none" },
+  brand: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    cursor: "pointer",
+    userSelect: "none",
+    outline: "none",
+  },
   brandMark: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     background: ACCENT,
-    color: "#fff",
     display: "grid",
     placeItems: "center",
-    fontWeight: 950,
-    letterSpacing: 0.4,
-    boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
+    flexShrink: 0,
+    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
   },
-  brandTitle: { fontWeight: 950, fontSize: 14 },
-  brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B" },
+  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
+  brandSub: { fontWeight: 800, fontSize: 12, color: SLATE },
 
-  topbarRight: { display: "flex", alignItems: "center", gap: 12 },
+  topbarRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+
+  btnInlineIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+  },
 
   btnGhost: {
     border: "1px solid #E7E9F2",
     background: "#fff",
-    borderRadius: 14,
-    padding: "10px 12px",
+    borderRadius: 12,
+    padding: "9px 14px",
     cursor: "pointer",
-    fontWeight: 950,
+    fontWeight: 800,
+    fontSize: 13,
     color: "#0F172A",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
     whiteSpace: "nowrap",
+    fontFamily: "inherit",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   btnGhostDanger: {
     borderColor: "rgba(183,28,28,0.25)",
@@ -1227,15 +1352,19 @@ const ui = {
     color: "#9A1D1D",
   },
   btnPrimary: {
-    border: "1px solid #0F172A",
-    background: "#0F172A",
-    borderRadius: 14,
-    padding: "12px 14px",
+    border: `1px solid ${ACCENT}`,
+    background: ACCENT,
+    borderRadius: 12,
+    padding: "11px 16px",
     cursor: "pointer",
-    fontWeight: 980,
+    fontWeight: 850,
     color: "#fff",
-    boxShadow: "0 16px 40px rgba(15,23,42,0.14)",
+    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
     whiteSpace: "nowrap",
+    fontFamily: "inherit",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   btnDanger: {
     border: "1px solid #B71C1C",
@@ -1251,18 +1380,39 @@ const ui = {
   btnDisabled: { opacity: 0.6, cursor: "not-allowed", boxShadow: "none" },
   btnDisabledSolid: { opacity: 0.55, cursor: "not-allowed", boxShadow: "none" },
 
-  main: { overflow: "auto", padding: 16, display: "grid", placeItems: "start center" },
-  container: { width: "min(1100px, 100%)", display: "grid", gap: 14, paddingBottom: 90 },
+  main: {
+    width: "100%",
+    boxSizing: "border-box",
+    overflow: "auto",
+    padding: "18px 16px 100px",
+    WebkitOverflowScrolling: "touch",
+  },
+  container: {
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
+    display: "grid",
+    gap: 16,
+    paddingBottom: 8,
+  },
 
   kickerRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
   kickerDot: {
-    width: 10,
-    height: 10,
+    width: 8,
+    height: 8,
     borderRadius: 999,
     background: ACCENT,
-    boxShadow: "0 0 0 4px rgba(8,159,138,0.14)",
+    boxShadow: "0 0 0 3px rgba(8,159,138,0.2)",
   },
-  kicker: { fontSize: 12, fontWeight: 950, letterSpacing: 0.6, textTransform: "uppercase", color: ACCENT },
+  kicker: {
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.08,
+    textTransform: "uppercase",
+    color: ACCENT,
+  },
   badge: {
     fontSize: 12,
     fontWeight: 950,
@@ -1273,22 +1423,22 @@ const ui = {
     color: "#334155",
   },
 
-  title: { margin: 0, fontSize: 26, fontWeight: 980, letterSpacing: -0.3 },
-  subtitle: { margin: 0, color: "#64748B", fontWeight: 800, lineHeight: 1.4 },
+  title: { margin: 0, fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 950, letterSpacing: -0.4 },
+  subtitle: { margin: 0, color: SLATE, fontWeight: 650, lineHeight: 1.5, fontSize: 14 },
 
   detailHero: {
     display: "grid",
-    gridTemplateColumns: "1.35fr 1fr",
-    gap: 12,
-    alignItems: "stretch",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 18,
+    alignItems: "start",
   },
 
   quickCard: {
     background: "#fff",
     border: "1px solid #E7E9F2",
-    borderRadius: 20,
-    padding: 14,
-    boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
+    borderRadius: 18,
+    padding: "16px 18px",
+    boxShadow: "0 12px 32px rgba(15,23,42,0.07)",
     display: "grid",
     alignContent: "start",
   },
@@ -1305,7 +1455,7 @@ const ui = {
     display: "grid",
     gap: 8,
   },
-  progressLabel: { color: "#64748B", fontWeight: 850, fontSize: 12 },
+  progressLabel: { color: SLATE, fontWeight: 800, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.04 },
 
   idPill: {
     marginTop: 8,
@@ -1316,7 +1466,7 @@ const ui = {
     cursor: "pointer",
     userSelect: "none",
   },
-  idPillLabel: { fontSize: 12, color: "#64748B", fontWeight: 850 },
+  idPillLabel: { fontSize: 11, color: SLATE, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.05 },
   idPillValue: {
     marginTop: 4,
     fontSize: 12,
@@ -1325,19 +1475,30 @@ const ui = {
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
-  idPillHint: { marginTop: 6, fontSize: 12, color: "#64748B", fontWeight: 850 },
+  idPillHint: { marginTop: 6, fontSize: 12, color: SLATE, fontWeight: 700 },
 
   card: {
+    position: "relative",
+    overflow: "hidden",
     background: "#fff",
     border: "1px solid #E7E9F2",
-    borderRadius: 20,
-    padding: 14,
-    boxShadow: "0 12px 26px rgba(15,23,42,0.06)",
+    borderRadius: 18,
+    padding: "16px 18px",
+    boxShadow: "0 10px 28px rgba(15,23,42,0.06)",
     display: "grid",
     gap: 8,
   },
-  cardTitle: { fontWeight: 980, color: "#0F172A" },
-  cardSub: { color: "#64748B", fontWeight: 850, marginTop: -4 },
+  cardAccent: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    right: 0,
+    height: 3,
+    background: `linear-gradient(90deg, ${ACCENT} 0%, rgba(8,159,138,0.2) 55%, transparent 100%)`,
+    pointerEvents: "none",
+  },
+  cardTitle: { fontWeight: 950, fontSize: 16, color: "#0F172A" },
+  cardSub: { color: SLATE, fontWeight: 650, fontSize: 13, marginTop: -4 },
   cardBody: { display: "grid", gap: 10, marginTop: 4 },
 
   kvRow: {
@@ -1347,11 +1508,11 @@ const ui = {
     padding: "6px 0",
     borderBottom: "1px dashed rgba(231,233,242,0.9)",
   },
-  kvLabel: { color: "#64748B", fontWeight: 850, width: 170 },
+  kvLabel: { color: SLATE, fontWeight: 750, fontSize: 13, width: 170 },
   kvValue: { color: "#0F172A", fontWeight: 900, textAlign: "right", flex: 1 },
 
   helperText: { color: "#0F172A", opacity: 0.85, fontWeight: 850, lineHeight: 1.35 },
-  helperTextMuted: { color: "#64748B", fontWeight: 850, lineHeight: 1.35 },
+  helperTextMuted: { color: SLATE, fontWeight: 650, lineHeight: 1.45, fontSize: 13 },
 
   pillBase: {
     fontSize: 12,
@@ -1369,28 +1530,38 @@ const ui = {
   pillDanger: { background: "#FDEAEA", borderColor: "#F6C2C2", color: "#9A1D1D" },
 
   emptyWrap: {
-    padding: 16,
-    borderRadius: 20,
+    padding: "36px 24px",
+    borderRadius: 18,
     border: "1px solid #E7E9F2",
-    background: "#FBFCFF",
+    background: "linear-gradient(180deg, #fff 0%, #F8FAFC 100%)",
     display: "grid",
     placeItems: "center",
-    gap: 6,
-    boxShadow: "0 12px 26px rgba(15,23,42,0.06)",
+    gap: 8,
+    boxShadow: "0 10px 28px rgba(15,23,42,0.05)",
+    textAlign: "center",
   },
   emptyIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    border: "1px solid #E7E9F2",
-    background: "#fff",
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    border: `1px solid rgba(8,159,138,0.2)`,
+    background: ACCENT_SOFT,
     display: "grid",
     placeItems: "center",
-    fontSize: 18,
     marginBottom: 4,
   },
-  emptyTitle: { fontWeight: 980, color: "#0F172A" },
-  emptyText: { color: "#64748B", fontWeight: 850, textAlign: "center" },
+  emptyIconMuted: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    border: "1px solid #E2E8F0",
+    background: "#F8FAFC",
+    display: "grid",
+    placeItems: "center",
+    marginBottom: 4,
+  },
+  emptyTitle: { fontWeight: 950, fontSize: 17, color: "#0F172A" },
+  emptyText: { color: SLATE, fontWeight: 650, fontSize: 14, lineHeight: 1.5, maxWidth: 400 },
 
   emptyMini: {
     padding: 14,
@@ -1399,7 +1570,7 @@ const ui = {
     background: "#FBFCFF",
   },
   emptyMiniTitle: { fontWeight: 980, color: "#0F172A" },
-  emptyMiniText: { color: "#64748B", fontWeight: 850, marginTop: 6 },
+  emptyMiniText: { color: SLATE, fontWeight: 650, marginTop: 6, fontSize: 13 },
 
   fotoPreview: {
     display: "flex",
@@ -1421,8 +1592,7 @@ const ui = {
     border: "1px solid #E7E9F2",
   },
   fotoTitle: { fontWeight: 980, color: "#0F172A" },
-  fotoSubtitle: { marginTop: 6, color: "#64748B", fontWeight: 850, fontSize: 12 },
-  chevron: { fontSize: 26, fontWeight: 980, color: "#9AA1B3", paddingLeft: 10 },
+  fotoSubtitle: { marginTop: 6, color: SLATE, fontWeight: 650, fontSize: 12 },
 
   // modal base
   backdropBase: {
@@ -1458,16 +1628,18 @@ const ui = {
     gap: 10,
   },
   modalTitle: { fontSize: 16, fontWeight: 980, color: "#0F172A" },
-  modalSubtitle: { fontSize: 12, fontWeight: 850, color: "#64748B" },
+  modalSubtitle: { fontSize: 12, fontWeight: 700, color: SLATE },
   iconBtn: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     borderRadius: 12,
     border: "1px solid #E7E9F2",
-    background: "#F2F4FB",
+    background: "#F8FAFC",
     cursor: "pointer",
-    fontWeight: 980,
-    color: "#334155",
+    color: "#475569",
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
   },
 
   modalBody: {
@@ -1485,7 +1657,7 @@ const ui = {
     gap: 10,
   },
 
-  sheetHint: { marginTop: 6, color: "#64748B", fontWeight: 850, fontSize: 13 },
+  sheetHint: { marginTop: 6, color: SLATE, fontWeight: 650, fontSize: 13 },
 
   sheetList: {
     borderRadius: 14,
@@ -1501,7 +1673,7 @@ const ui = {
     padding: "12px 14px",
     gap: 12,
   },
-  sheetLabel: { color: "#64748B", fontWeight: 850, fontSize: 13 },
+  sheetLabel: { color: SLATE, fontWeight: 700, fontSize: 12 },
   sheetValue: { color: "#0F172A", fontWeight: 980, fontSize: 13, textAlign: "right" },
   sep: { height: 1, background: "#E7E9F2" },
 
@@ -1513,8 +1685,8 @@ const ui = {
     padding: "10px 12px",
     cursor: "pointer",
   },
-  rejectChipSelected: { background: "#0F172A", borderColor: "#0F172A" },
-  rejectChipTxt: { color: "#0F172A", fontWeight: 950, fontSize: 13 },
+  rejectChipSelected: { background: ACCENT, borderColor: ACCENT },
+  rejectChipTxt: { color: "#0F172A", fontWeight: 800, fontSize: 13 },
   rejectChipTxtSelected: { color: "#fff" },
 
   textarea: {
@@ -1546,35 +1718,54 @@ const ui = {
     left: 0,
     right: 0,
     bottom: 0,
-    background: "#fff",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, #fff 100%)",
     borderTop: "1px solid #E7E9F2",
-    padding: "10px 12px",
+    padding: "12px 16px",
+    zIndex: 20,
+    boxShadow: "0 -8px 32px rgba(15,23,42,0.06)",
+  },
+  taskbarInner: {
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
     display: "flex",
     gap: 10,
     justifyContent: "center",
-    zIndex: 20,
+    flexWrap: "wrap",
   },
   tbBtnPrimary: {
-    flex: 1,
+    flex: "1 1 160px",
     maxWidth: 320,
-    borderRadius: 14,
-    border: "1px solid #0F172A",
-    background: "#0F172A",
+    borderRadius: 12,
+    border: `1px solid ${ACCENT}`,
+    background: ACCENT,
     color: "#fff",
     padding: "12px 14px",
     cursor: "pointer",
-    fontWeight: 980,
+    fontWeight: 850,
+    fontSize: 13,
+    fontFamily: "inherit",
+    boxShadow: "0 8px 20px rgba(8,159,138,0.22)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   tbBtnSoft: {
-    flex: 1,
+    flex: "1 1 160px",
     maxWidth: 320,
-    borderRadius: 14,
-    border: "1px solid #E7E9F2",
-    background: "#FBFCFF",
+    borderRadius: 12,
+    border: "1px solid #E2E8F0",
+    background: "#F8FAFC",
     color: "#0F172A",
     padding: "12px 14px",
     cursor: "pointer",
-    fontWeight: 980,
+    fontWeight: 800,
+    fontSize: 13,
+    fontFamily: "inherit",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   tbBtnDisabled: { opacity: 0.55, cursor: "not-allowed" },
 
@@ -1582,24 +1773,41 @@ const ui = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "8px 10px",
-    borderRadius: 14,
+    padding: "6px 12px 6px 6px",
+    borderRadius: 12,
     border: "1px solid #E7E9F2",
     background: "#fff",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
+    maxWidth: 220,
   },
   userAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 14,
-    background: "rgba(8,159,138,0.12)",
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    background: ACCENT_SOFT,
     color: ACCENT,
     display: "grid",
     placeItems: "center",
-    fontWeight: 980,
+    flexShrink: 0,
   },
-  userName: { fontWeight: 980, fontSize: 12, color: "#0F172A", lineHeight: 1.1 },
-  userMail: { fontWeight: 850, fontSize: 12, color: "#64748B", lineHeight: 1.1 },
+  userName: {
+    fontWeight: 800,
+    fontSize: 12,
+    color: "#0F172A",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  userMail: {
+    fontWeight: 650,
+    fontSize: 11,
+    color: SLATE,
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
 
   photoGrid: {
     display: "grid",
@@ -1651,14 +1859,15 @@ const ui = {
   },
   formValue: {
     borderRadius: 12,
-    border: "1px solid #CBD5E1",
-    background: "#E5E7EB",
+    border: "1px solid #E2E8F0",
+    background: "#F1F5F9",
     padding: "12px 12px",
-    fontWeight: 900,
+    fontWeight: 650,
     color: "#0F172A",
     minHeight: 44,
     display: "flex",
     alignItems: "center",
     wordBreak: "break-word",
+    fontSize: 14,
   },
 };

@@ -1,0 +1,4 @@
+// ===== REEMPLAZAR en match /profiles/{uid} las dos líneas allow get y allow list por: =====
+
+  allow get: if isSelfLocal() || (!isSelfLocal() && isAdminDev()) || canMantenimientoOT();
+  allow list: if isAdminDev() || canMantenimientoOT();

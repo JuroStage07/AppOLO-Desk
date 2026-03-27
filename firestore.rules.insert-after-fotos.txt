@@ -1,0 +1,7 @@
+// ===== PEGAR justo DESPUÉS del bloque match /{path=**}/fotos/{fotoId} (después de su cierre `}`) =====
+// Refuerza lecturas para collectionGroup("subtareas") en el cliente (OTsPage).
+// Si en el futuro tenés otra subcolección llamada "subtareas" fuera de solicitudesOT, acotá esta regla.
+
+    match /{path=**}/subtareas/{subtareaId} {
+      allow read: if canMantenimientoOT();
+    }

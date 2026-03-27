@@ -25,10 +25,9 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  width: 100%;
   background: #F6F7FB;
 }
 
@@ -73,11 +72,13 @@ button:focus-visible {
   }
 }
 
-/*html, body #root*/
+/* Pantalla completa: evitar flex en body (rompía el ancho de rutas con layout propio). */
 html,
 body,
 #root {
   height: 100%;
+  width: 100%;
+  max-width: 100%;
 }
 
 * {

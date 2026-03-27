@@ -2,11 +2,34 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
+import {
+  ArrowRight,
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  ClipboardList,
+  FileText,
+  Filter,
+  Hash,
+  LayoutList,
+  Loader2,
+  Lock,
+  LogOut,
+  RotateCcw,
+  Search,
+  SlidersHorizontal,
+  User,
+} from "lucide-react";
 import { auth } from "../../firebase";
 
 import { listenAperturasFinalizadasGlobal } from "../../services/aperturas";
 
 const ACCENT = "#089F8A";
+const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
+const SLATE = "#64748B";
+
+/** Tope en cliente tras ordenar por fecha (evita congelar la UI si hay muchísimas finalizadas). */
+const MAX_FINALIZADAS_EN_VISTA = 3000;
 
 const TIPOS = [
   "Todos",
@@ -38,20 +61,123 @@ const MESES = [
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
+/** Misma clave en distintos niveles según tipo de apertura / versión del doc. */
+function aperturaNumeroExpedienteMatches(a, termLower) {
+  if (!termLower) return true;
+  const candidates = [
+    a?.numeroExpediente,
+    a?.formulario?.values?.numeroExpediente,
+    a?.values?.numeroExpediente,
+  ];
+  return candidates.some((v) =>
+    String(v ?? "").toLowerCase().includes(termLower)
+  );
+}
+
+function getNumeroExpedienteDisplay(a) {
+  return (
+    a?.numeroExpediente ??
+    a?.formulario?.values?.numeroExpediente ??
+    a?.values?.numeroExpediente ??
+    ""
+  );
+}
+
+const FORMULARIO_SKIP_KEYS = new Set([
+  "values",
+  "metadata",
+  "tipo",
+  "completed",
+  "completedAt",
+  "updatedAt",
+  "version",
+  "type",
+]);
+
+/** Rutas habituales de numeroDua según tipo de formulario / versión del doc. */
+function collectNumeroDuaCandidates(a) {
+  const out = [];
+  const form = a?.formulario;
+
+  const add = (v) => {
+    if (v !== undefined && v !== null) out.push(v);
+  };
+
+  add(a?.numeroDua);
+  add(a?.values?.numeroDua);
+
+  if (form && typeof form === "object") {
+    add(form.values?.numeroDua);
+    const tipo = form.tipo;
+    if (tipo && typeof tipo === "string") add(form[tipo]?.values?.numeroDua);
+
+    for (const k of Object.keys(form)) {
+      if (FORMULARIO_SKIP_KEYS.has(k)) continue;
+      const block = form[k];
+      if (block && typeof block === "object" && block.values && typeof block.values === "object") {
+        add(block.values.numeroDua);
+      }
+    }
+  }
+
+  return out;
+}
+
+function aperturaNumeroDuaMatches(a, termLower) {
+  if (!termLower) return true;
+  return collectNumeroDuaCandidates(a).some((v) =>
+    String(v ?? "").toLowerCase().includes(termLower)
+  );
+}
+
+function getNumeroDuaDisplay(a) {
+  for (const v of collectNumeroDuaCandidates(a)) {
+    const s = String(v ?? "").trim();
+    if (s) return s;
+  }
+  return "";
+}
+
+/**
+ * Fecha representativa para filtros por mes/año y orden. Incluye campos en raíz y dentro de
+ * formulario (p. ej. proveedor_nacional.completedAt), como guarda el app móvil.
+ */
 const getDateFromApertura = (a) => {
-  const raw = a?.completedAt || a?.fecha || a?.createdAt;
-  if (!raw) return null;
+  const candidates = [];
+  const add = (v) => {
+    if (v !== undefined && v !== null) candidates.push(v);
+  };
 
-  if (typeof raw === "string" || typeof raw === "number") {
-    const d = new Date(raw);
-    return Number.isNaN(d.getTime()) ? null : d;
+  add(a?.completedAt);
+  add(a?.fecha);
+  add(a?.createdAt);
+  add(a?.tiempoCerrada);
+  add(a?.updatedAt);
+  add(a?.formulario?.completedAt);
+  add(a?.formulario?.metadata?.completedAt);
+
+  const form = a?.formulario;
+  if (form && typeof form === "object") {
+    for (const k of Object.keys(form)) {
+      if (FORMULARIO_SKIP_KEYS.has(k)) continue;
+      const block = form[k];
+      if (block && typeof block === "object") {
+        add(block.completedAt);
+        add(block.metadata?.completedAt);
+      }
+    }
   }
 
-  if (raw?.toDate) {
-    const d = raw.toDate();
-    return Number.isNaN(d.getTime()) ? null : d;
+  for (const raw of candidates) {
+    if (typeof raw === "string" || typeof raw === "number") {
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+    if (raw?.toDate) {
+      const d = raw.toDate();
+      if (!Number.isNaN(d.getTime())) return d;
+    }
   }
-
   return null;
 };
 
@@ -143,46 +269,36 @@ export default function AperturasFinalizadas() {
     const term = query.trim().toLowerCase();
 
     const getTime = (a) => {
-      if (a?.completedAt) {
-        const t = new Date(a.completedAt).getTime();
-        if (!Number.isNaN(t)) return t;
-      }
-      if (a?.fecha) {
-        const t = new Date(a.fecha).getTime();
-        if (!Number.isNaN(t)) return t;
-      }
-      const ca = a?.createdAt;
-      if (ca?.toDate) return ca.toDate().getTime();
-      if (typeof ca === "number") return ca;
-      return 0;
+      const d = getDateFromApertura(a);
+      return d ? d.getTime() : 0;
     };
 
-    const completas = (aperturasFinalizadas || []).filter((a) => {
-      const completed =
-        a?.completed === true ||
-        a?.formulario?.completed === true ||
-        a?.metadata?.completed === true;
+    // El listener ya trae solo estado === "finalizada". No exijamos completed en raíz:
+    // en el mobile a veces solo queda en formulario.<tipo>.completed.
+    const completas = (aperturasFinalizadas || []).filter(
+      (a) => (a?.estado || "").toLowerCase() === "finalizada"
+    );
 
-      const finalizada = (a?.estado || "").toLowerCase() === "finalizada";
-      return completed && finalizada;
-    });
-
-    const top1000 = [...completas].sort((a, b) => getTime(b) - getTime(a)).slice(0, 1000);
+    const baseSlice = [...completas]
+      .sort((a, b) => getTime(b) - getTime(a))
+      .slice(0, MAX_FINALIZADAS_EN_VISTA);
 
     const years = Array.from(
       new Set(
-        top1000
+        baseSlice
           .map((a) => getDateFromApertura(a)?.getFullYear())
           .filter((y) => typeof y === "number")
       )
     ).sort((a, b) => b - a);
 
-    const filtradas = top1000.filter((a) => {
+    const filtradas = baseSlice.filter((a) => {
       const coincideTexto =
         !term ||
         (a.nombre || "").toLowerCase().includes(term) ||
         (a.tipo || "").toLowerCase().includes(term) ||
-        String(a.numeroMarchamo || "").toLowerCase().includes(term);
+        String(a.numeroMarchamo || "").toLowerCase().includes(term) ||
+        aperturaNumeroExpedienteMatches(a, term) ||
+        aperturaNumeroDuaMatches(a, term);
 
       const coincideTipo = tipoSeleccionado === "Todos" || a.tipo === tipoSeleccionado;
 
@@ -204,7 +320,7 @@ export default function AperturasFinalizadas() {
     });
 
     const items = ordenadas.slice(0, visibleCount);
-    return { items, total: ordenadas.length, baseTotal: top1000.length, years };
+    return { items, total: ordenadas.length, baseTotal: baseSlice.length, years };
   }, [
     aperturasFinalizadas,
     query,
@@ -223,201 +339,291 @@ export default function AperturasFinalizadas() {
 
   return (
     <div style={ui.shell}>
-      {/* Topbar */}
-      <div style={ui.topbar}>
-        <div style={ui.brand} role="button" tabIndex={0} onClick={() => go("/salud/aperturas")}>
-          <div style={ui.brandMark}>AP</div>
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>Aperturas</div>
-            <div style={ui.brandSub}>Finalizadas</div>
-          </div>
-        </div>
+      <style>{`
+        @keyframes aperturasFinalizadasSpin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
 
-        <div style={ui.topbarRight}>
-          <div style={ui.userBox}>
-            <div style={ui.userAvatar}>
-              {(user?.displayName || user?.email || "U")[0]?.toUpperCase?.()}
+      <header style={ui.topbar}>
+        <div style={ui.topbarInner}>
+          <div
+            style={ui.brand}
+            role="button"
+            tabIndex={0}
+            onClick={() => go("/salud/aperturas")}
+            onKeyDown={(e) =>
+              (e.key === "Enter" || e.key === " ") && go("/salud/aperturas")
+            }
+          >
+            <div style={ui.brandMark}>
+              <ClipboardList size={20} strokeWidth={2.25} color="#fff" />
             </div>
             <div style={{ display: "grid", gap: 2 }}>
-              <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-              <div style={ui.userMail}>{user?.email || "—"}</div>
+              <div style={ui.brandTitle}>Salud ocupacional</div>
+              <div style={ui.brandSub}>Aperturas finalizadas</div>
             </div>
           </div>
 
-          <button type="button" onClick={() => go("/salud/aperturas")} style={ui.btnGhost} disabled={busyLogout}>
-            ← Administrar
-          </button>
+          <div style={ui.topbarRight}>
+            <div style={ui.userBox}>
+              <div style={ui.userAvatar}>
+                <User size={16} strokeWidth={2.2} />
+              </div>
+              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
+                <div style={ui.userMail}>{user?.email || "—"}</div>
+              </div>
+            </div>
 
-          <button
-            type="button"
-            onClick={logout}
-            style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
-            disabled={busyLogout}
-            title="Cerrar sesión"
-          >
-            {busyLogout ? "Cerrando…" : "Cerrar sesión"}
-          </button>
+            <button
+              type="button"
+              onClick={() => go("/salud/aperturas")}
+              style={ui.btnGhost}
+              disabled={busyLogout}
+            >
+              Administrar
+            </button>
+
+            <button
+              type="button"
+              onClick={logout}
+              style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
+              disabled={busyLogout}
+              title="Cerrar sesión"
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <LogOut size={16} strokeWidth={2.2} />
+                {busyLogout ? "Cerrando…" : "Salir"}
+              </span>
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Content */}
-      <div style={ui.main}>
+      <main style={ui.main}>
         <div style={ui.container}>
-          {/* Hero */}
-          <div style={ui.hero}>
-            <div style={{ display: "grid", gap: 8 }}>
+          <section style={ui.hero}>
+            <div style={{ display: "grid", gap: 10, minWidth: 0 }}>
               <div style={ui.kickerRow}>
                 <span style={ui.kickerDot} />
-                <div style={ui.kicker}>Historial</div>
-                <span style={ui.badge}>Finalizadas</span>
+                <span style={ui.kicker}>Historial</span>
+                <span style={ui.badge}>
+                  <Lock size={12} strokeWidth={2.5} style={{ marginRight: 5, verticalAlign: "middle" }} />
+                  Finalizadas
+                </span>
               </div>
-
               <h1 style={ui.title}>Aperturas finalizadas</h1>
               <p style={ui.subtitle}>
-                Buscá, filtrá por tipo/mes/año y ordená por fecha o nombre.
+                Consultá el historial cerrado. La búsqueda incluye nombre, tipo, marchamo, número de
+                expediente y número DUA.
               </p>
             </div>
 
-            <div style={ui.heroSide}>
-              <div style={ui.quickCard}>
-                <div style={ui.quickLabel}>Resumen</div>
-                <div style={ui.quickMetaRow}>
-                  <span style={ui.chipSoft}>
-                    🔒 {isLoading ? "Cargando…" : `Mostrando ${data.items.length} de ${data.total}`}
+            <div style={ui.statsRow}>
+              <div style={ui.statCard}>
+                <div style={ui.statCardLabel}>En pantalla</div>
+                <div style={ui.statCardValue}>
+                  {isLoading ? "—" : `${data.items.length}`}
+                  <span style={ui.statCardSuffix}>
+                    / {isLoading ? "…" : data.total}
                   </span>
-                  <span style={ui.chipSoft}>🗄️ Base: {data.baseTotal}</span>
-                  <span style={ui.chipSoft}>🎛️ {filtrosLabel}</span>
-                </div>
-
-                <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowFilters((v) => !v)}
-                    style={ui.btnGhost}
-                    disabled={busyLogout}
-                    title="Mostrar/ocultar filtros"
-                  >
-                    {showFilters ? "Ocultar filtros" : "Mostrar filtros"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setVisibleCount(10)}
-                    style={ui.btnGhost}
-                    disabled={busyLogout || isLoading}
-                    title="Volver al inicio"
-                  >
-                    Reiniciar lista
-                  </button>
                 </div>
               </div>
+              <div style={ui.statCard}>
+                <div style={ui.statCardLabel}>
+                  En base (últ. {MAX_FINALIZADAS_EN_VISTA.toLocaleString("es-CR")})
+                </div>
+                <div style={ui.statCardValue}>{isLoading ? "—" : data.baseTotal}</div>
+              </div>
+              <div style={{ ...ui.statCard, ...ui.statCardWide }}>
+                <div style={ui.statCardLabel}>Filtros activos</div>
+                <div style={ui.statCardMeta}>{filtrosLabel}</div>
+              </div>
+            </div>
+          </section>
+
+          <div style={ui.searchCard}>
+            <div style={ui.searchInner}>
+              <Search size={18} color={SLATE} strokeWidth={2.2} style={{ flexShrink: 0 }} />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar por nombre, tipo, marchamo, n.º expediente o DUA…"
+                style={ui.searchInput}
+                aria-label="Buscar aperturas"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  style={ui.searchClear}
+                  onClick={() => setQuery("")}
+                  title="Limpiar búsqueda"
+                >
+                  Limpiar
+                </button>
+              ) : null}
+            </div>
+            <div style={ui.searchActions}>
+              <button
+                type="button"
+                onClick={() => setShowFilters((v) => !v)}
+                style={showFilters ? ui.btnFilterActive : ui.btnGhost}
+                disabled={busyLogout}
+              >
+                <span style={ui.btnInlineIcon}>
+                  <SlidersHorizontal size={16} strokeWidth={2.2} />
+                  Filtros
+                  {showFilters ? (
+                    <ChevronUp size={16} strokeWidth={2.2} />
+                  ) : (
+                    <ChevronDown size={16} strokeWidth={2.2} />
+                  )}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisibleCount(10)}
+                style={ui.btnGhost}
+                disabled={busyLogout || isLoading}
+                title="Volver al inicio de la lista"
+              >
+                <span style={ui.btnInlineIcon}>
+                  <RotateCcw size={16} strokeWidth={2.2} />
+                  Lista al inicio
+                </span>
+              </button>
             </div>
           </div>
 
-          {/* Filters */}
           {showFilters ? (
-            <div style={ui.filterCard}>
+            <section style={ui.filterCard} aria-label="Filtros avanzados">
+              <div style={ui.filterCardHead}>
+                <Filter size={18} color={ACCENT} strokeWidth={2.2} />
+                <span style={ui.filterCardTitle}>Refinar resultados</span>
+              </div>
               <div style={ui.filterGrid}>
-                <div style={ui.inputWrap}>
-                  <span style={ui.inputIcon}>🔎</span>
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Buscar por nombre, tipo o número de marchamo…"
-                    style={ui.input}
-                  />
-                </div>
+                <label style={ui.fieldLabel}>
+                  Tipo
+                  <div style={ui.selectWrap}>
+                    <LayoutList size={16} color={SLATE} strokeWidth={2.2} />
+                    <select
+                      value={tipoSeleccionado}
+                      onChange={(e) => setTipoSeleccionado(e.target.value)}
+                      style={ui.select}
+                    >
+                      {TIPOS.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </label>
 
-                <div style={ui.selectWrap}>
-                  <span style={ui.selectIcon}>⬚</span>
-                  <select
-                    value={tipoSeleccionado}
-                    onChange={(e) => setTipoSeleccionado(e.target.value)}
-                    style={ui.select}
-                  >
-                    {TIPOS.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <label style={ui.fieldLabel}>
+                  Mes
+                  <div style={ui.selectWrap}>
+                    <CalendarDays size={16} color={SLATE} strokeWidth={2.2} />
+                    <select
+                      value={mesSeleccionado}
+                      onChange={(e) => setMesSeleccionado(e.target.value)}
+                      style={ui.select}
+                    >
+                      {MESES.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </label>
 
-                <div style={ui.selectWrap}>
-                  <span style={ui.selectIcon}>📅</span>
-                  <select
-                    value={mesSeleccionado}
-                    onChange={(e) => setMesSeleccionado(e.target.value)}
-                    style={ui.select}
-                  >
-                    {MESES.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <label style={ui.fieldLabel}>
+                  Año
+                  <div style={ui.selectWrap}>
+                    <CalendarDays size={16} color={SLATE} strokeWidth={2.2} />
+                    <select
+                      value={anioSeleccionado}
+                      onChange={(e) => setAnioSeleccionado(e.target.value)}
+                      style={ui.select}
+                    >
+                      <option value="Todos">Todos</option>
+                      {(data.years || []).map((y) => (
+                        <option key={String(y)} value={String(y)}>
+                          {String(y)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </label>
 
-                <div style={ui.selectWrap}>
-                  <span style={ui.selectIcon}>🗓️</span>
-                  <select
-                    value={anioSeleccionado}
-                    onChange={(e) => setAnioSeleccionado(e.target.value)}
-                    style={ui.select}
-                  >
-                    <option value="Todos">Todos</option>
-                    {(data.years || []).map((y) => (
-                      <option key={String(y)} value={String(y)}>
-                        {String(y)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={ui.sortRow}>
-                  <button
-                    type="button"
-                    onClick={() => setSortKey("fecha")}
-                    style={{
-                      ...ui.sortBtn,
-                      ...(sortKey === "fecha" ? ui.sortBtnActive : {}),
-                    }}
-                  >
-                    Recientes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSortKey("nombre")}
-                    style={{
-                      ...ui.sortBtn,
-                      ...(sortKey === "nombre" ? ui.sortBtnActive : {}),
-                    }}
-                  >
-                    Nombre A→Z
-                  </button>
+                <div style={ui.fieldLabel}>
+                  Orden
+                  <div style={ui.sortRow}>
+                    <button
+                      type="button"
+                      onClick={() => setSortKey("fecha")}
+                      style={{
+                        ...ui.sortBtn,
+                        ...(sortKey === "fecha" ? ui.sortBtnActive : {}),
+                      }}
+                    >
+                      Más recientes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSortKey("nombre")}
+                      style={{
+                        ...ui.sortBtn,
+                        ...(sortKey === "nombre" ? ui.sortBtnActive : {}),
+                      }}
+                    >
+                      Nombre A→Z
+                    </button>
+                  </div>
                 </div>
               </div>
 
               <div style={ui.filterFooter}>
-                <button type="button" onClick={limpiarFiltros} style={ui.btnGhost} disabled={busyLogout}>
-                  🧹 Limpiar filtros
+                <button
+                  type="button"
+                  onClick={limpiarFiltros}
+                  style={ui.btnGhost}
+                  disabled={busyLogout}
+                >
+                  <span style={ui.btnInlineIcon}>
+                    <RotateCcw size={16} strokeWidth={2.2} />
+                    Restablecer filtros
+                  </span>
                 </button>
               </div>
-            </div>
+            </section>
           ) : null}
 
-          {/* List */}
           {isLoading ? (
             <div style={ui.emptyWrap}>
-              <div style={ui.emptyIcon}>⏳</div>
-              <div style={ui.emptyTitle}>Cargando…</div>
-              <div style={ui.emptyText}>Un momento, por favor.</div>
+              <div style={ui.emptyIcon}>
+                <Loader2
+                  size={22}
+                  color={ACCENT}
+                  strokeWidth={2.2}
+                  style={{ animation: "aperturasFinalizadasSpin 0.85s linear infinite" }}
+                />
+              </div>
+              <div style={ui.emptyTitle}>Cargando aperturas…</div>
+              <div style={ui.emptyText}>Sincronizando con el servidor.</div>
             </div>
           ) : data.items.length === 0 ? (
             <div style={ui.emptyWrap}>
-              <div style={ui.emptyIcon}>🔒</div>
-              <div style={ui.emptyTitle}>No hay aperturas finalizadas</div>
-              <div style={ui.emptyText}>No se encontraron aperturas con esos filtros.</div>
+              <div style={ui.emptyIconMuted}>
+                <FileText size={22} color={SLATE} strokeWidth={2} />
+              </div>
+              <div style={ui.emptyTitle}>Sin resultados</div>
+              <div style={ui.emptyText}>
+                No hay aperturas que coincidan con la búsqueda o los filtros. Probá ampliar criterios o
+                limpiar filtros.
+              </div>
             </div>
           ) : (
             <>
@@ -425,9 +631,16 @@ export default function AperturasFinalizadas() {
                 {data.items.map((item, idx) => {
                   const cuando = item?.completedAt || item?.fecha || item?.createdAt;
                   const isHover = hovered === (item.id ?? idx);
+                  const expediente = getNumeroExpedienteDisplay(item);
+                  const numeroDua = getNumeroDuaDisplay(item);
+                  const marchamo =
+                    item.numeroMarchamo ||
+                    item?.formulario?.values?.numeroMarchamo ||
+                    item?.values?.numeroMarchamo ||
+                    "";
 
                   return (
-                    <div
+                    <article
                       key={String(item.id ?? idx)}
                       role="button"
                       tabIndex={0}
@@ -444,72 +657,108 @@ export default function AperturasFinalizadas() {
                         ...ui.itemCard,
                         ...(isHover ? ui.itemCardHover : {}),
                       }}
-                      title="Ver detalle"
+                      aria-label={`Ver detalle de ${item.nombre || "apertura"}`}
                     >
+                      <div style={ui.itemCardAccent} aria-hidden />
                       <div style={ui.itemTop}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={ui.itemTitle}>{item.nombre || "(Sin nombre)"}</div>
                           <div style={ui.itemSub}>
-                            <span>{item.tipo || "—"}</span>
+                            <span style={ui.tipoPill}>{item.tipo || "—"}</span>
                             <span style={ui.dot}>·</span>
                             <span style={ui.muted}>{item.tipoFormulario || "Sin formulario"}</span>
                           </div>
                         </div>
-
-                        <span style={ui.statePill}>🔒 Finalizada</span>
+                        <span style={ui.statePill}>
+                          <Lock size={13} strokeWidth={2.5} style={{ marginRight: 5 }} />
+                          Finalizada
+                        </span>
                       </div>
 
                       <div style={ui.itemChips}>
                         <span style={{ ...ui.smallPill, ...ui.smallPillOk }}>Completa</span>
                         <span style={ui.smallPill}>
-                          👤 <b>{item.creadoPorNombre || "—"}</b>
+                          <User size={13} strokeWidth={2.2} style={{ marginRight: 5 }} />
+                          {item.creadoPorNombre || "—"}
                         </span>
                       </div>
 
-                      <div style={ui.detailsBox}>
-                        <div style={ui.detailLine}>
-                          Fecha: <span style={ui.detailStrong}>{formatFecha(cuando)}</span>
+                      <dl style={ui.detailsGrid}>
+                        <div style={ui.detailCell}>
+                          <dt style={ui.detailDt}>
+                            <CalendarDays size={14} strokeWidth={2.2} style={ui.detailDtIcon} />
+                            Cierre
+                          </dt>
+                          <dd style={ui.detailDd}>{formatFecha(cuando) || "—"}</dd>
                         </div>
-                        <div style={ui.detailLine}>
-                          Marchamo: <span style={ui.detailStrong}>{item.numeroMarchamo || "—"}</span>
+                        <div style={ui.detailCell}>
+                          <dt style={ui.detailDt}>
+                            <Hash size={14} strokeWidth={2.2} style={ui.detailDtIcon} />
+                            Marchamo
+                          </dt>
+                          <dd style={ui.detailDd}>{marchamo || "—"}</dd>
                         </div>
-                      </div>
+                        <div style={ui.detailCell}>
+                          <dt style={ui.detailDt}>
+                            <FileText size={14} strokeWidth={2.2} style={ui.detailDtIcon} />
+                            N.º DUA
+                          </dt>
+                          <dd style={{ ...ui.detailDd, ...ui.detailDdMono }}>{numeroDua || "—"}</dd>
+                        </div>
+                        <div style={ui.detailCell}>
+                          <dt style={ui.detailDt}>
+                            <FileText size={14} strokeWidth={2.2} style={ui.detailDtIcon} />
+                            N.º expediente
+                          </dt>
+                          <dd style={{ ...ui.detailDd, ...ui.detailDdMono }}>
+                            {expediente || "—"}
+                          </dd>
+                        </div>
+                      </dl>
 
                       <div style={ui.itemFooter}>
-                        <span style={ui.link}>Ver detalle →</span>
-                        <span style={ui.metaHint}>ID: {String(item.id ?? idx)}</span>
+                        <span style={ui.link}>
+                          Ver detalle
+                          <ArrowRight size={14} strokeWidth={2.5} style={{ marginLeft: 6 }} />
+                        </span>
+                        <span style={ui.metaHint} title="Identificador en base de datos">
+                          {String(item.id ?? idx).slice(0, 12)}
+                          {(String(item.id ?? idx).length > 12 ? "…" : "")}
+                        </span>
                       </div>
-                    </div>
+                    </article>
                   );
                 })}
               </div>
 
-              {/* Footer */}
-              <div style={{ display: "grid", placeItems: "center", paddingBottom: 18 }}>
+              <div style={ui.listFooter}>
                 {hayMas ? (
                   <button
                     type="button"
                     onClick={() => setVisibleCount((c) => c + 10)}
                     style={ui.loadMoreBtn}
                   >
-                    ＋ Cargar 10 más
+                    Cargar 10 más
                   </button>
                 ) : (
-                  <span style={ui.endPill}>✅ No hay más resultados</span>
+                  <span style={ui.endPill}>Fin de resultados</span>
                 )}
               </div>
             </>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
 const ui = {
   shell: {
+    minHeight: "100vh",
     height: "100vh",
-    width: "100vw",
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     background: "#F6F7FB",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
     color: "#0F172A",
@@ -519,296 +768,576 @@ const ui = {
   },
 
   topbar: {
-    height: 64,
-    padding: "10px 16px",
+    width: "100%",
+    boxSizing: "border-box",
+    borderBottom: "1px solid #E7E9F2",
+    background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
+    backdropFilter: "blur(8px)",
+  },
+  topbarInner: {
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
+    padding: "12px 18px",
+    minHeight: 64,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottom: "1px solid #E7E9F2",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(246,247,251,0.95) 100%)",
-    backdropFilter: "blur(6px)",
+    gap: 12,
+    flexWrap: "wrap",
   },
 
-  brand: { display: "flex", alignItems: "center", gap: 12, cursor: "pointer", userSelect: "none" },
+  brand: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    cursor: "pointer",
+    userSelect: "none",
+    outline: "none",
+  },
   brandMark: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     background: ACCENT,
-    color: "#fff",
     display: "grid",
     placeItems: "center",
-    fontWeight: 950,
-    letterSpacing: 0.4,
-    boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
+    flexShrink: 0,
+    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
   },
-  brandTitle: { fontWeight: 950, fontSize: 14 },
-  brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B" },
+  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
+  brandSub: { fontWeight: 800, fontSize: 12, color: SLATE },
 
-  topbarRight: { display: "flex", alignItems: "center", gap: 12 },
+  topbarRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
 
   btnGhost: {
     border: "1px solid #E7E9F2",
     background: "#fff",
-    borderRadius: 14,
-    padding: "10px 12px",
+    borderRadius: 12,
+    padding: "9px 14px",
     cursor: "pointer",
-    fontWeight: 950,
+    fontWeight: 800,
+    fontSize: 13,
     color: "#0F172A",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
     whiteSpace: "nowrap",
+    fontFamily: "inherit",
   },
-  btnDisabled: { opacity: 0.6, cursor: "not-allowed", boxShadow: "none" },
+  btnFilterActive: {
+    border: `1px solid ${ACCENT}`,
+    background: ACCENT_SOFT,
+    color: "#0F172A",
+    borderRadius: 12,
+    padding: "9px 14px",
+    cursor: "pointer",
+    fontWeight: 800,
+    fontSize: 13,
+    boxShadow: "0 4px 14px rgba(8,159,138,0.12)",
+    whiteSpace: "nowrap",
+    fontFamily: "inherit",
+  },
+  btnInlineIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  btnDisabled: { opacity: 0.55, cursor: "not-allowed", boxShadow: "none" },
 
-  main: { overflow: "auto", padding: 16, display: "grid", placeItems: "start center" },
-  container: { width: "min(1100px, 100%)", display: "grid", gap: 14 },
+  main: {
+    width: "100%",
+    boxSizing: "border-box",
+    overflow: "auto",
+    padding: "18px 16px 28px",
+    WebkitOverflowScrolling: "touch",
+  },
+  container: {
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
+    display: "grid",
+    gap: 16,
+  },
 
   hero: {
     display: "grid",
-    gridTemplateColumns: "1.35fr 1fr",
-    gap: 12,
-    alignItems: "stretch",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 18,
+    alignItems: "start",
+  },
+
+  statsRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: 10,
+    alignContent: "start",
+  },
+  statCard: {
+    background: "#fff",
+    border: "1px solid #E7E9F2",
+    borderRadius: 16,
+    padding: "14px 16px",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+  },
+  statCardWide: {
+    gridColumn: "span 1",
+    minWidth: 0,
+  },
+  statCardLabel: {
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: 0.04,
+    textTransform: "uppercase",
+    color: SLATE,
+    marginBottom: 6,
+  },
+  statCardValue: {
+    fontSize: 22,
+    fontWeight: 950,
+    color: "#0F172A",
+    letterSpacing: -0.5,
+    lineHeight: 1.1,
+  },
+  statCardSuffix: {
+    fontSize: 15,
+    fontWeight: 800,
+    color: SLATE,
+    marginLeft: 4,
+  },
+  statCardMeta: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#334155",
+    lineHeight: 1.35,
+    wordBreak: "break-word",
   },
 
   kickerRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
   kickerDot: {
-    width: 10,
-    height: 10,
+    width: 8,
+    height: 8,
     borderRadius: 999,
     background: ACCENT,
-    boxShadow: "0 0 0 4px rgba(8,159,138,0.14)",
+    boxShadow: "0 0 0 3px rgba(8,159,138,0.2)",
   },
-  kicker: { fontSize: 12, fontWeight: 950, letterSpacing: 0.6, textTransform: "uppercase", color: ACCENT },
+  kicker: {
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.08,
+    textTransform: "uppercase",
+    color: ACCENT,
+  },
   badge: {
     fontSize: 12,
-    fontWeight: 950,
-    padding: "6px 10px",
+    fontWeight: 800,
+    padding: "5px 11px",
     borderRadius: 999,
-    background: "#FFFFFF",
+    background: "#fff",
     border: "1px solid #E7E9F2",
     color: "#334155",
+    display: "inline-flex",
+    alignItems: "center",
   },
 
-  title: { margin: 0, fontSize: 26, fontWeight: 980, letterSpacing: -0.3 },
-  subtitle: { margin: 0, color: "#64748B", fontWeight: 800, lineHeight: 1.4 },
-
-  heroSide: { display: "grid" },
-  quickCard: {
-    background: "#fff",
-    border: "1px solid #E7E9F2",
-    borderRadius: 20,
-    padding: 14,
-    boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
+  title: { margin: 0, fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 950, letterSpacing: -0.4 },
+  subtitle: {
+    margin: 0,
+    color: SLATE,
+    fontWeight: 650,
+    lineHeight: 1.5,
+    fontSize: 14,
+    maxWidth: 520,
   },
-  quickLabel: { fontWeight: 980, color: "#0F172A", marginBottom: 10 },
-  quickMetaRow: { display: "grid", gap: 10 },
 
-  chipSoft: {
-    fontSize: 12,
-    fontWeight: 900,
-    padding: "8px 10px",
-    borderRadius: 14,
+  searchCard: {
     background: "#fff",
     border: "1px solid #E7E9F2",
+    borderRadius: 18,
+    padding: "14px 16px",
+    boxShadow: "0 12px 32px rgba(15,23,42,0.07)",
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  searchInner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    flex: "1 1 240px",
+    minWidth: 0,
+    borderRadius: 12,
+    border: "1px solid #E2E8F0",
+    background: "#F8FAFC",
+    padding: "10px 14px",
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    border: "none",
+    outline: "none",
+    fontWeight: 600,
+    fontSize: 14,
     color: "#0F172A",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.04)",
+    background: "transparent",
+    fontFamily: "inherit",
   },
+  searchClear: {
+    border: "none",
+    background: "transparent",
+    color: ACCENT,
+    fontWeight: 800,
+    fontSize: 12,
+    cursor: "pointer",
+    padding: "4px 6px",
+    fontFamily: "inherit",
+    flexShrink: 0,
+  },
+  searchActions: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" },
 
   filterCard: {
     background: "#fff",
     border: "1px solid #E7E9F2",
-    borderRadius: 20,
-    padding: 12,
-    boxShadow: "0 12px 26px rgba(15,23,42,0.06)",
+    borderRadius: 18,
+    padding: "16px 18px",
+    boxShadow: "0 8px 24px rgba(15,23,42,0.05)",
   },
-  filterGrid: {
-    display: "grid",
-    gap: 10,
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    alignItems: "center",
-  },
-
-  inputWrap: {
+  filterCardHead: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    borderRadius: 14,
-    border: "1px solid #E7E9F2",
-    background: "#fff",
-    padding: "10px 12px",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.04)",
+    marginBottom: 14,
+    paddingBottom: 12,
+    borderBottom: "1px solid #F1F5F9",
   },
-  inputIcon: { fontSize: 14, opacity: 0.9 },
-  input: {
-    width: "100%",
-    border: "none",
-    outline: "none",
-    fontWeight: 850,
-    color: "#0F172A",
-    background: "transparent",
+  filterCardTitle: { fontWeight: 900, fontSize: 15, color: "#0F172A" },
+  filterGrid: {
+    display: "grid",
+    gap: 14,
+    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+    alignItems: "end",
+  },
+  fieldLabel: {
+    display: "grid",
+    gap: 6,
+    fontSize: 11,
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: 0.05,
+    color: SLATE,
   },
 
   selectWrap: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    borderRadius: 14,
-    border: "1px solid #E7E9F2",
-    background: "#FBFCFF",
+    borderRadius: 12,
+    border: "1px solid #E2E8F0",
+    background: "#fff",
     padding: "10px 12px",
   },
-  selectIcon: { fontSize: 14, opacity: 0.9 },
   select: {
     width: "100%",
     border: "none",
     outline: "none",
     background: "transparent",
-    fontWeight: 900,
+    fontWeight: 700,
+    fontSize: 14,
     color: "#0F172A",
     cursor: "pointer",
+    fontFamily: "inherit",
   },
 
-  sortRow: { display: "flex", gap: 10, flexWrap: "wrap" },
+  sortRow: { display: "flex", gap: 8, flexWrap: "wrap" },
   sortBtn: {
     flex: 1,
-    minWidth: 160,
-    borderRadius: 14,
-    border: "1px solid #E7E9F2",
-    background: "#FBFCFF",
+    minWidth: 130,
+    borderRadius: 12,
+    border: "1px solid #E2E8F0",
+    background: "#F8FAFC",
     padding: "10px 12px",
     cursor: "pointer",
-    fontWeight: 950,
-    color: "#0F172A",
+    fontWeight: 800,
+    fontSize: 13,
+    color: "#334155",
+    fontFamily: "inherit",
   },
-  sortBtnActive: { background: "#0F172A", color: "#fff", borderColor: "#0F172A" },
+  sortBtnActive: {
+    background: ACCENT,
+    color: "#fff",
+    borderColor: ACCENT,
+    boxShadow: "0 6px 18px rgba(8,159,138,0.25)",
+  },
 
   filterFooter: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTop: "1px solid #E7E9F2",
+    marginTop: 16,
+    paddingTop: 14,
+    borderTop: "1px solid #F1F5F9",
     display: "flex",
     justifyContent: "flex-end",
   },
 
   listGrid: {
     display: "grid",
-    gap: 12,
-    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gap: 14,
+    gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 340px), 1fr))",
   },
 
   itemCard: {
+    position: "relative",
     background: "#fff",
     border: "1px solid #E7E9F2",
-    borderRadius: 20,
-    padding: 14,
+    borderRadius: 18,
+    padding: "16px 16px 14px",
     cursor: "pointer",
     userSelect: "none",
-    transition: "transform 120ms ease, box-shadow 120ms ease",
-    boxShadow: "0 12px 26px rgba(15,23,42,0.06)",
+    transition: "transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease",
+    boxShadow: "0 10px 28px rgba(15,23,42,0.06)",
+    overflow: "hidden",
   },
-  itemCardHover: { transform: "translateY(-2px)", boxShadow: "0 16px 36px rgba(15,23,42,0.12)" },
+  itemCardAccent: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    right: 0,
+    height: 3,
+    background: `linear-gradient(90deg, ${ACCENT} 0%, rgba(8,159,138,0.2) 55%, transparent 100%)`,
+    pointerEvents: "none",
+  },
+  itemCardHover: {
+    transform: "translateY(-3px)",
+    boxShadow: "0 20px 44px rgba(15,23,42,0.1)",
+    borderColor: "rgba(8,159,138,0.35)",
+  },
 
-  itemTop: { display: "flex", gap: 10, alignItems: "flex-start" },
-  itemTitle: { fontWeight: 980, fontSize: 15, color: "#0F172A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
-  itemSub: { marginTop: 4, color: "#334155", fontWeight: 850, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
-  dot: { margin: "0 6px", color: "#94A3B8" },
-  muted: { color: "#94A3B8", fontWeight: 850 },
+  itemTop: { display: "flex", gap: 12, alignItems: "flex-start" },
+  itemTitle: {
+    fontWeight: 950,
+    fontSize: 16,
+    color: "#0F172A",
+    lineHeight: 1.25,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  },
+  itemSub: {
+    marginTop: 6,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+    fontSize: 12,
+    fontWeight: 650,
+    color: "#475569",
+  },
+  tipoPill: {
+    background: ACCENT_SOFT,
+    color: "#0F766E",
+    fontWeight: 800,
+    padding: "2px 8px",
+    borderRadius: 6,
+    fontSize: 11,
+  },
+  dot: { color: "#CBD5E1" },
+  muted: { color: SLATE, fontWeight: 650 },
 
   statePill: {
-    padding: "8px 10px",
+    padding: "6px 11px",
     borderRadius: 999,
-    border: "1px solid #E7E9F2",
-    background: "#F2F4FB",
-    fontWeight: 950,
-    color: "#0F172A",
+    border: "1px solid rgba(8,159,138,0.25)",
+    background: ACCENT_SOFT,
+    fontWeight: 800,
+    fontSize: 11,
+    color: "#0F766E",
     whiteSpace: "nowrap",
+    display: "inline-flex",
+    alignItems: "center",
+    flexShrink: 0,
   },
 
-  itemChips: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 },
+  itemChips: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 },
   smallPill: {
-    padding: "8px 10px",
+    padding: "6px 11px",
     borderRadius: 999,
     border: "1px solid #E7E9F2",
-    background: "#FBFCFF",
-    fontWeight: 900,
+    background: "#F8FAFC",
+    fontWeight: 700,
     fontSize: 12,
-    color: "#0F172A",
+    color: "#334155",
+    display: "inline-flex",
+    alignItems: "center",
   },
-  smallPillOk: { background: "#EAF7EE", borderColor: "rgba(34,197,94,0.25)" },
+  smallPillOk: {
+    background: "#ECFDF5",
+    borderColor: "rgba(16,185,129,0.35)",
+    color: "#047857",
+  },
 
-  detailsBox: { marginTop: 10, paddingTop: 10, borderTop: "1px solid #E7E9F2" },
-  detailLine: { color: "#64748B", fontWeight: 850, fontSize: 13 },
-  detailStrong: { color: "#0F172A", fontWeight: 980 },
+  detailsGrid: {
+    margin: 0,
+    marginTop: 14,
+    paddingTop: 14,
+    borderTop: "1px solid #F1F5F9",
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "12px 16px",
+  },
+  detailCell: { margin: 0, minWidth: 0 },
+  detailDt: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 10,
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: 0.06,
+    color: SLATE,
+    margin: 0,
+    marginBottom: 4,
+  },
+  detailDtIcon: { flexShrink: 0, opacity: 0.85 },
+  detailDd: { margin: 0, fontSize: 13, fontWeight: 750, color: "#0F172A", lineHeight: 1.35 },
+  detailDdMono: { fontVariantNumeric: "tabular-nums", letterSpacing: 0.02 },
 
-  itemFooter: { marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 },
-  link: { color: "#0F172A", fontWeight: 980, fontSize: 12 },
-  metaHint: { color: "#94A3B8", fontWeight: 850, fontSize: 12 },
+  itemFooter: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTop: "1px solid #F1F5F9",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+  },
+  link: {
+    color: ACCENT,
+    fontWeight: 850,
+    fontSize: 13,
+    display: "inline-flex",
+    alignItems: "center",
+  },
+  metaHint: {
+    color: "#94A3B8",
+    fontWeight: 700,
+    fontSize: 11,
+    fontFamily: "ui-monospace, monospace",
+  },
 
+  listFooter: {
+    display: "grid",
+    placeItems: "center",
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
   loadMoreBtn: {
-    borderRadius: 14,
-    border: "1px solid #0F172A",
-    background: "#0F172A",
-    padding: "12px 14px",
+    borderRadius: 12,
+    border: `1px solid ${ACCENT}`,
+    background: ACCENT,
+    padding: "12px 22px",
     cursor: "pointer",
-    fontWeight: 980,
+    fontWeight: 850,
+    fontSize: 14,
     color: "#fff",
-    boxShadow: "0 16px 40px rgba(15,23,42,0.14)",
+    boxShadow: "0 12px 28px rgba(8,159,138,0.3)",
+    fontFamily: "inherit",
   },
   endPill: {
-    padding: "10px 12px",
+    padding: "10px 16px",
     borderRadius: 999,
     border: "1px solid #E7E9F2",
     background: "#fff",
-    fontWeight: 950,
-    color: "#0F172A",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.04)",
+    fontWeight: 750,
+    fontSize: 13,
+    color: SLATE,
   },
 
   emptyWrap: {
-    padding: 16,
-    borderRadius: 20,
+    padding: "36px 24px",
+    borderRadius: 18,
     border: "1px solid #E7E9F2",
-    background: "#FBFCFF",
+    background: "linear-gradient(180deg, #fff 0%, #F8FAFC 100%)",
     display: "grid",
     placeItems: "center",
-    gap: 6,
-    boxShadow: "0 12px 26px rgba(15,23,42,0.06)",
+    gap: 8,
+    boxShadow: "0 10px 28px rgba(15,23,42,0.05)",
+    textAlign: "center",
   },
   emptyIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    border: "1px solid #E7E9F2",
-    background: "#fff",
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    border: `1px solid rgba(8,159,138,0.2)`,
+    background: ACCENT_SOFT,
     display: "grid",
     placeItems: "center",
-    fontSize: 18,
     marginBottom: 4,
   },
-  emptyTitle: { fontWeight: 980, color: "#0F172A" },
-  emptyText: { color: "#64748B", fontWeight: 850, textAlign: "center" },
+  emptyIconMuted: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    border: "1px solid #E2E8F0",
+    background: "#F8FAFC",
+    display: "grid",
+    placeItems: "center",
+    marginBottom: 4,
+  },
+  emptyTitle: { fontWeight: 950, fontSize: 17, color: "#0F172A" },
+  emptyText: {
+    color: SLATE,
+    fontWeight: 650,
+    fontSize: 14,
+    lineHeight: 1.5,
+    maxWidth: 400,
+  },
 
   userBox: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "8px 10px",
-    borderRadius: 14,
+    padding: "6px 12px 6px 6px",
+    borderRadius: 12,
     border: "1px solid #E7E9F2",
     background: "#fff",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
+    maxWidth: 220,
   },
   userAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 14,
-    background: "rgba(8,159,138,0.12)",
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    background: ACCENT_SOFT,
     color: ACCENT,
     display: "grid",
     placeItems: "center",
-    fontWeight: 980,
+    flexShrink: 0,
   },
-  userName: { fontWeight: 980, fontSize: 12, color: "#0F172A", lineHeight: 1.1 },
-  userMail: { fontWeight: 850, fontSize: 12, color: "#64748B", lineHeight: 1.1 },
+  userName: {
+    fontWeight: 800,
+    fontSize: 12,
+    color: "#0F172A",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  userMail: {
+    fontWeight: 650,
+    fontSize: 11,
+    color: SLATE,
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
 };

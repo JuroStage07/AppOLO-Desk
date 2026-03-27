@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
+import {
+  ArrowRight,
+  LayoutDashboard,
+  Loader2,
+  Lock,
+  LogOut,
+  User,
+} from "lucide-react";
 import { auth } from "../firebase";
 
 // ✅ poné tus imágenes aquí:
@@ -9,11 +17,13 @@ import imgDespacho from "../assets/despacho.png";
 import imgMantenimiento from "../assets/mantenimiento.png";
 import imgRecepcion from "../assets/recepcion.png";
 
-
 const ACCENT = "#089F8A";
+const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
+const SLATE = "#64748B";
 
 export default function Home() {
   const nav = useNavigate();
+  const user = auth.currentUser;
   const [hovered, setHovered] = useState(null);
   const [busyLogout, setBusyLogout] = useState(false);
 
@@ -81,52 +91,106 @@ export default function Home() {
       },
     ],
     []
-  ); 
+  );
 
   return (
     <div style={ui.shell}>
-      {/* Topbar */}
-      <div style={ui.topbar}>
-        <div style={ui.brand} role="button" tabIndex={0} onClick={() => go("/")}>
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>AppoloDesk</div>
-            <div style={ui.brandSub}>Panel principal</div>
+      <style>{`
+        @keyframes homeSpin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      <header style={ui.topbar}>
+        <div style={ui.topbarInner}>
+          <div
+            style={ui.brand}
+            role="button"
+            tabIndex={0}
+            onClick={() => go("/")}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && go("/")}
+          >
+            <div style={ui.brandMark}>
+              <LayoutDashboard size={20} strokeWidth={2.25} color="#fff" />
+            </div>
+            <div style={{ display: "grid", gap: 2 }}>
+              <div style={ui.brandTitle}>AppoloDesk</div>
+              <div style={ui.brandSub}>Panel principal</div>
+            </div>
+          </div>
+
+          <div style={ui.topbarRight}>
+            <div style={ui.userBox}>
+              <div style={ui.userAvatar}>
+                <User size={16} strokeWidth={2.2} />
+              </div>
+              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
+                <div style={ui.userMail}>{user?.email || "—"}</div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={logout}
+              disabled={busyLogout}
+              style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
+              title="Cerrar sesión"
+            >
+              <span style={ui.btnInlineIcon}>
+                {busyLogout ? (
+                  <Loader2
+                    size={16}
+                    strokeWidth={2.2}
+                    style={{ animation: "homeSpin 0.7s linear infinite" }}
+                  />
+                ) : (
+                  <LogOut size={16} strokeWidth={2.2} />
+                )}
+                {busyLogout ? "Cerrando…" : "Salir"}
+              </span>
+            </button>
           </div>
         </div>
+      </header>
 
-        <div style={ui.topbarRight}>
-          <button
-            type="button"
-            onClick={logout}
-            disabled={busyLogout}
-            style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
-            title="Cerrar sesión"
-          >
-            {busyLogout ? "Cerrando…" : "Cerrar sesión"}
-          </button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div style={ui.main}>
+      <main style={ui.main}>
         <div style={ui.container}>
-          {/* Hero */}
-          <div style={ui.hero}>
-            <div style={{ display: "grid", gap: 10 }}>
+          <section style={ui.hero}>
+            <div style={{ display: "grid", gap: 10, minWidth: 0 }}>
               <div style={ui.kickerRow}>
                 <span style={ui.kickerDot} />
-                <div style={ui.kicker}>Centro de control</div>
-                <span style={ui.badge}>Operación</span>
+                <span style={ui.kicker}>Centro de control</span>
+                <span style={ui.badge}>
+                  <Lock size={12} strokeWidth={2.5} style={{ marginRight: 5 }} />
+                  Operación
+                </span>
               </div>
 
               <h1 style={ui.title}>Áreas de trabajo</h1>
               <p style={ui.subtitle}>
-                Seleccioná un área para continuar. Acceso basado en permisos del usuario.
+                Seleccioná un área para continuar. El acceso depende de los permisos de tu cuenta.
               </p>
             </div>
-          </div>
 
-          {/* Grid */}
+            <div style={ui.statsRow}>
+              <div style={ui.statCard}>
+                <div style={ui.statCardLabel}>Módulos</div>
+                <div style={ui.statCardValue}>{areas.length}</div>
+                <div style={ui.statCardMeta}>áreas en el panel</div>
+              </div>
+              <div style={ui.statCard}>
+                <div style={ui.statCardLabel}>Sesión</div>
+                <div style={ui.statCardValue} title={user?.email || ""}>
+                  {user?.email ? "Activa" : "—"}
+                </div>
+                <div style={ui.statCardMeta}>
+                  {user?.email ? "Firebase Auth" : "Sin correo"}
+                </div>
+              </div>
+            </div>
+          </section>
+
           <div style={ui.grid}>
             {areas.map((a) => {
               const isHover = hovered === a.key;
@@ -147,7 +211,6 @@ export default function Home() {
                     ...(isHover ? ui.cardHover : {}),
                   }}
                 >
-                  {/* Imagen */}
                   <div
                     style={{
                       ...ui.media,
@@ -160,13 +223,17 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Contenido */}
                   <div style={ui.cardBody}>
                     <div style={ui.cardTitle}>{a.title}</div>
                     <div style={ui.cardDesc}>{a.desc}</div>
 
                     <div style={ui.cardFooter}>
-                      <span style={{ ...ui.link, ...(accent ? ui.linkAccent : {}) }}>Entrar →</span>
+                      <span style={{ ...ui.link, ...(accent ? ui.linkAccent : {}) }}>
+                        <span style={ui.btnInlineIcon}>
+                          Entrar
+                          <ArrowRight size={14} strokeWidth={2.5} />
+                        </span>
+                      </span>
                       <span style={ui.metaHint}>{a.path}</span>
                     </div>
                   </div>
@@ -174,24 +241,19 @@ export default function Home() {
               );
             })}
           </div>
-
-          {/* Footer */}
-          {/*<div style={ui.footerNote}>
-            <div style={ui.footerTitle}>Nota</div>
-            <div style={ui.footerText}>
-              Si no ves un módulo, revisá tus permisos en tu perfil.
-            </div>
-          </div>*/}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
 const ui = {
   shell: {
+    minHeight: "100vh",
     height: "100vh",
-    width: "100vw",
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     background: "#F6F7FB",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
     color: "#0F172A",
@@ -201,130 +263,224 @@ const ui = {
   },
 
   topbar: {
-    height: 64,
-    padding: "10px 16px",
+    width: "100%",
+    boxSizing: "border-box",
+    borderBottom: "1px solid #E7E9F2",
+    background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
+    backdropFilter: "blur(8px)",
+  },
+  topbarInner: {
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
+    padding: "12px 18px",
+    minHeight: 64,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottom: "1px solid #E7E9F2",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(246,247,251,0.95) 100%)",
-    backdropFilter: "blur(6px)",
+    gap: 12,
+    flexWrap: "wrap",
   },
 
-  brand: { display: "flex", alignItems: "center", gap: 12, cursor: "pointer", userSelect: "none" },
+  brand: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    cursor: "pointer",
+    userSelect: "none",
+    outline: "none",
+  },
   brandMark: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     background: ACCENT,
-    color: "#fff",
     display: "grid",
     placeItems: "center",
-    fontWeight: 950,
-    letterSpacing: 0.4,
-    boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
+    flexShrink: 0,
+    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
   },
-  brandTitle: { fontWeight: 950, fontSize: 14 },
-  brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B" },
+  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
+  brandSub: { fontWeight: 800, fontSize: 12, color: SLATE },
 
-  topbarRight: { display: "flex", alignItems: "center", gap: 12 },
+  topbarRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+
+  userBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "6px 12px 6px 6px",
+    borderRadius: 12,
+    border: "1px solid #E7E9F2",
+    background: "#fff",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
+    maxWidth: 220,
+  },
+  userAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    background: ACCENT_SOFT,
+    color: ACCENT,
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+  },
+  userName: {
+    fontWeight: 800,
+    fontSize: 12,
+    color: "#0F172A",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  userMail: {
+    fontWeight: 650,
+    fontSize: 11,
+    color: SLATE,
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
 
   btnGhost: {
     border: "1px solid #E7E9F2",
     background: "#fff",
-    borderRadius: 14,
-    padding: "10px 12px",
+    borderRadius: 12,
+    padding: "9px 14px",
     cursor: "pointer",
-    fontWeight: 950,
+    fontWeight: 800,
+    fontSize: 13,
     color: "#0F172A",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
     whiteSpace: "nowrap",
+    fontFamily: "inherit",
   },
-  btnDisabled: { opacity: 0.6, cursor: "not-allowed", boxShadow: "none" },
+  btnInlineIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  btnDisabled: { opacity: 0.55, cursor: "not-allowed", boxShadow: "none" },
 
   main: {
+    width: "100%",
+    boxSizing: "border-box",
     overflow: "auto",
-    padding: 16,
-    display: "grid",
-    placeItems: "start center",
+    padding: "18px 16px 28px",
+    WebkitOverflowScrolling: "touch",
   },
   container: {
-    width: "min(1100px, 100%)",
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
     display: "grid",
-    gap: 14,
+    gap: 16,
   },
 
   hero: {
     display: "grid",
-    gridTemplateColumns: "1.4fr 1fr",
-    gap: 12,
-    alignItems: "stretch",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 18,
+    alignItems: "start",
+  },
+
+  statsRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: 10,
+    alignContent: "start",
+  },
+  statCard: {
+    background: "#fff",
+    border: "1px solid #E7E9F2",
+    borderRadius: 16,
+    padding: "14px 16px",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+  },
+  statCardLabel: {
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: 0.04,
+    textTransform: "uppercase",
+    color: SLATE,
+    marginBottom: 6,
+  },
+  statCardValue: {
+    fontSize: 22,
+    fontWeight: 950,
+    color: "#0F172A",
+    letterSpacing: -0.5,
+    lineHeight: 1.1,
+  },
+  statCardMeta: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#334155",
+    lineHeight: 1.35,
+    marginTop: 6,
+    wordBreak: "break-word",
   },
 
   kickerRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
   kickerDot: {
-    width: 10,
-    height: 10,
+    width: 8,
+    height: 8,
     borderRadius: 999,
     background: ACCENT,
-    boxShadow: "0 0 0 4px rgba(8,159,138,0.14)",
+    boxShadow: "0 0 0 3px rgba(8,159,138,0.2)",
   },
   kicker: {
-    fontSize: 12,
-    fontWeight: 950,
-    letterSpacing: 0.6,
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.08,
     textTransform: "uppercase",
     color: ACCENT,
   },
   badge: {
     fontSize: 12,
-    fontWeight: 950,
-    padding: "6px 10px",
+    fontWeight: 800,
+    padding: "5px 11px",
     borderRadius: 999,
-    background: "#FFFFFF",
-    border: "1px solid #E7E9F2",
-    color: "#334155",
-  },
-
-  title: { margin: 0, fontSize: 26, fontWeight: 980, letterSpacing: -0.3 },
-  subtitle: { margin: 0, color: "#64748B", fontWeight: 800, lineHeight: 1.4 },
-
-  heroSide: { display: "grid" },
-  quickCard: {
     background: "#fff",
     border: "1px solid #E7E9F2",
-    borderRadius: 20,
-    padding: 14,
-    boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
+    color: "#334155",
+    display: "inline-flex",
+    alignItems: "center",
   },
-  quickLabel: { fontWeight: 980, color: "#0F172A", marginBottom: 10 },
-  quickBtns: { display: "grid", gap: 10 },
-  quickBtn: {
-    borderRadius: 16,
-    border: "1px solid #E7E9F2",
-    background: "#FBFCFF",
-    padding: "12px 12px",
-    cursor: "pointer",
-    fontWeight: 950,
-    color: "#0F172A",
-    textAlign: "left",
-  },
-  quickBtnAccent: {
-    borderColor: "rgba(8,159,138,0.35)",
-    background: "#F3FBF9",
+
+  title: { margin: 0, fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 950, letterSpacing: -0.4 },
+  subtitle: {
+    margin: 0,
+    color: SLATE,
+    fontWeight: 650,
+    lineHeight: 1.5,
+    fontSize: 14,
+    maxWidth: 520,
   },
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 250px), 1fr))",
     gap: 14,
   },
 
   card: {
     background: "#fff",
     border: "1px solid #E7E9F2",
-    borderRadius: 20,
+    borderRadius: 18,
     overflow: "hidden",
     cursor: "pointer",
     userSelect: "none",
@@ -341,7 +497,7 @@ const ui = {
   },
 
   media: {
-    height: 120,
+    height: 124,
     backgroundSize: "cover",
     backgroundPosition: "center",
     position: "relative",
@@ -380,21 +536,17 @@ const ui = {
 
   cardBody: { padding: 16 },
 
-  cardTitle: { fontWeight: 980, fontSize: 16, color: "#0F172A", marginBottom: 6 },
-  cardDesc: { color: "#64748B", fontWeight: 800, fontSize: 13, lineHeight: 1.35, minHeight: 38 },
+  cardTitle: { fontWeight: 950, fontSize: 16, color: "#0F172A", marginBottom: 6 },
+  cardDesc: { color: SLATE, fontWeight: 650, fontSize: 13, lineHeight: 1.45, minHeight: 40 },
 
-  cardFooter: { marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 },
-  link: { color: "#0F172A", fontWeight: 980, fontSize: 12 },
-  linkAccent: { color: ACCENT },
-  metaHint: { color: "#94A3B8", fontWeight: 800, fontSize: 12 },
-
-  footerNote: {
-    borderRadius: 20,
-    border: "1px solid #E7E9F2",
-    background: "#FFFFFF",
-    padding: 14,
-    boxShadow: "0 12px 26px rgba(15, 23, 42, 0.06)",
+  cardFooter: {
+    marginTop: 12,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
   },
-  footerTitle: { fontWeight: 980, color: "#0F172A", marginBottom: 6 },
-  footerText: { color: "#64748B", fontWeight: 800, fontSize: 13, lineHeight: 1.4 },
+  link: { color: "#0F172A", fontWeight: 850, fontSize: 13, display: "inline-flex", alignItems: "center" },
+  linkAccent: { color: ACCENT },
+  metaHint: { color: "#94A3B8", fontWeight: 700, fontSize: 12 },
 };
