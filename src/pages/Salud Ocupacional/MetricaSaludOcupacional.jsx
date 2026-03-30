@@ -1018,7 +1018,6 @@ function MiniBarChart({ data = [], periodLabel = "Semana actual" }) {
         </div>
     );
 }
-
 function MiniLineChart({ data = [], periodLabel = "Últimos cortes" }) {
     const width = 100;
     const height = 36;

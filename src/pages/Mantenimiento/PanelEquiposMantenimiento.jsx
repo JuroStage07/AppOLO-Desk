@@ -82,7 +82,7 @@ export default function PanelEquiposMantenimiento() {
             })
             // ✅ filtro por revisión diaria (checklistD === false => pendiente)
             .filter((e) => {
-                const pendiente = e.checklistD === false;
+                const pendiente = e.checklistD !== true;
                 if (revisionFiltro === "Todas") return true;
                 if (revisionFiltro === "Pendientes") return pendiente;
                 if (revisionFiltro === "Al día") return !pendiente;
@@ -107,11 +107,11 @@ export default function PanelEquiposMantenimiento() {
     }, [equipos, estadoFiltro, revisionFiltro, familiaActiva]);
 
     const pendientesEnVista = useMemo(
-        () => equiposFiltrados.filter((e) => e.checklistD === false).length,
+        () => equiposFiltrados.filter((e) => e.checklistD !== true).length,
         [equiposFiltrados]
     );
     const alDiaEnVista = useMemo(
-        () => equiposFiltrados.filter((e) => e.checklistD !== false).length,
+        () => equiposFiltrados.filter((e) => e.checklistD === true).length,
         [equiposFiltrados]
     );
 
@@ -254,7 +254,7 @@ export default function PanelEquiposMantenimiento() {
 
                         {equiposFiltrados.map((e) => {
                             const fallaActiva = e.fallaActiva === true;
-                            const pendiente = e.checklistD === false;
+                            const pendiente = e.checklistD !== true;
 
                             const estadoRaw = safe(e.estado);
                             const estado = estadoRaw.toLowerCase();

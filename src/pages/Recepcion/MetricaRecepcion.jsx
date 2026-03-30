@@ -79,6 +79,28 @@ function formatDateTimeShort(ts) {
   });
 }
 
+function parseYMD(s) {
+  if (!s || !String(s).trim()) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s).trim());
+  if (!m) return null;
+  const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+function startOfDayDate(date) {
+  if (!date) return null;
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfDayDate(date) {
+  if (!date) return null;
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
 function startOfWeekMonday(date = new Date()) {
   const d = new Date(date);
   const day = d.getDay();
@@ -572,7 +594,7 @@ function buildDashboardFromDailyDocs(filterKey, docs = []) {
       },
       {
         kpiKind: "aperturasCreadas",
-        label: "Aperturas creadas",
+        label: "Descargas creadas",
         value: fmtInt(accionesCreadas),
         hint: "Acciones de descarga dadas de alta en el período",
         comparison: "Ver listado y estado",
@@ -1044,6 +1066,46 @@ export default function MetricaRecepcion() {
   const [aperturasModalLoading, setAperturasModalLoading] = useState(false);
   const [aperturasModalItems, setAperturasModalItems] = useState([]);
   const [aperturasModalError, setAperturasModalError] = useState("");
+  const [aperturasFilterEstado, setAperturasFilterEstado] = useState("Todos");
+  const [aperturasFilterAnden, setAperturasFilterAnden] = useState("");
+  const [aperturasFilterDesde, setAperturasFilterDesde] = useState("");
+  const [aperturasFilterHasta, setAperturasFilterHasta] = useState("");
+
+  useEffect(() => {
+    if (!aperturasModalOpen) return;
+    setAperturasFilterEstado("Todos");
+    setAperturasFilterAnden("");
+    setAperturasFilterDesde("");
+    setAperturasFilterHasta("");
+  }, [aperturasModalOpen]);
+
+  const aperturasModalFiltered = useMemo(() => {
+    const desde = startOfDayDate(parseYMD(aperturasFilterDesde));
+    const hasta = endOfDayDate(parseYMD(aperturasFilterHasta));
+    const anden = String(aperturasFilterAnden || "").trim();
+    const estFilter = aperturasFilterEstado;
+
+    return aperturasModalItems.filter((row) => {
+      if (estFilter !== "Todos") {
+        if (getAccionEstadoRecepcion(row) !== estFilter) return false;
+      }
+      if (anden) {
+        const a = String(row?.idAnden ?? "").trim();
+        if (a !== anden) return false;
+      }
+      const d = toDateSafe(row?.creadoAt);
+      if (!d) return false;
+      if (desde && d < desde) return false;
+      if (hasta && d > hasta) return false;
+      return true;
+    });
+  }, [
+    aperturasModalItems,
+    aperturasFilterEstado,
+    aperturasFilterAnden,
+    aperturasFilterDesde,
+    aperturasFilterHasta,
+  ]);
 
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
@@ -1646,7 +1708,7 @@ export default function MetricaRecepcion() {
 
           <div style={ui.aperturasSheet}>
             <div style={ui.aperturasSheetHeader}>
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <div id="aperturas-modal-title" style={ui.aperturasSheetTitle}>
                   Aperturas creadas
                 </div>
@@ -1673,47 +1735,126 @@ export default function MetricaRecepcion() {
             ) : aperturasModalItems.length === 0 ? (
               <div style={ui.aperturasModalEmpty}>No hay acciones de descarga en este período.</div>
             ) : (
-              <div style={ui.aperturasList}>
-                {aperturasModalItems.map((row) => {
-                  const est = getAccionEstadoRecepcion(row);
-                  const title =
-                    String(row?.nombreAccion || "").trim() ||
-                    [row?.proveedorNombre, row?.idAnden ? `Andén ${row.idAnden}` : ""]
-                      .filter(Boolean)
-                      .join(" · ") ||
-                    row?.id;
-                  const estStyle =
-                    est === "Completa"
-                      ? ui.estadoPillCompleta
-                      : est === "En proceso"
-                        ? ui.estadoPillProceso
-                        : ui.estadoPillCreada;
-                  return (
-                    <div key={row.id} style={ui.aperturasRow}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={ui.aperturasRowTitle}>{title}</div>
-                        <div style={ui.aperturasRowMeta}>
-                          Alta {formatDateTimeShort(row?.creadoAt)}
-                          {row?.aperturaId ? ` · Apertura ${row.aperturaId}` : ""}
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                        <span style={{ ...ui.estadoPill, ...estStyle }}>{est}</span>
-                        <button
-                          type="button"
-                          style={ui.aperturasRowLink}
-                          onClick={() => {
-                            setAperturasModalOpen(false);
-                            nav(`/recepcion/accion-descarga/${encodeURIComponent(row.id)}`);
-                          }}
-                        >
-                          Abrir
-                        </button>
-                      </div>
+              <>
+                <div style={ui.aperturasFiltersWrap}>
+                  <div style={ui.aperturasFiltersRow}>
+                    <label style={ui.aperturasFilterField}>
+                      <span style={ui.aperturasFilterLabel}>Desde</span>
+                      <input
+                        type="date"
+                        value={aperturasFilterDesde}
+                        onChange={(e) => setAperturasFilterDesde(e.target.value)}
+                        style={ui.aperturasFilterInput}
+                      />
+                    </label>
+                    <label style={ui.aperturasFilterField}>
+                      <span style={ui.aperturasFilterLabel}>Hasta</span>
+                      <input
+                        type="date"
+                        value={aperturasFilterHasta}
+                        onChange={(e) => setAperturasFilterHasta(e.target.value)}
+                        style={ui.aperturasFilterInput}
+                      />
+                    </label>
+                  </div>
+                  <div style={ui.aperturasFiltersRow}>
+                    <label style={ui.aperturasFilterField}>
+                      <span style={ui.aperturasFilterLabel}>Estado</span>
+                      <select
+                        value={aperturasFilterEstado}
+                        onChange={(e) => setAperturasFilterEstado(e.target.value)}
+                        style={ui.aperturasFilterSelect}
+                      >
+                        <option value="Todos">Todos</option>
+                        <option value="Creada">Creada</option>
+                        <option value="En proceso">En proceso</option>
+                        <option value="Completa">Completa</option>
+                      </select>
+                    </label>
+                    <label style={ui.aperturasFilterField}>
+                      <span style={ui.aperturasFilterLabel}>Andén</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={aperturasFilterAnden}
+                        onChange={(e) => setAperturasFilterAnden(e.target.value.replace(/[^\d]/g, ""))}
+                        placeholder="Ej. 3"
+                        style={ui.aperturasFilterInput}
+                      />
+                    </label>
+                  </div>
+                  {(aperturasFilterEstado !== "Todos" ||
+                    aperturasFilterAnden.trim() ||
+                    aperturasFilterDesde ||
+                    aperturasFilterHasta) && (
+                    <button
+                      type="button"
+                      style={ui.aperturasFilterClear}
+                      onClick={() => {
+                        setAperturasFilterEstado("Todos");
+                        setAperturasFilterAnden("");
+                        setAperturasFilterDesde("");
+                        setAperturasFilterHasta("");
+                      }}
+                    >
+                      Limpiar filtros
+                    </button>
+                  )}
+                  <div style={ui.aperturasFilterHint}>
+                    Mostrando {aperturasModalFiltered.length} de {aperturasModalItems.length}
+                  </div>
+                </div>
+
+                <div style={ui.aperturasListWrap}>
+                  {aperturasModalFiltered.length === 0 ? (
+                    <div style={ui.aperturasModalEmpty}>
+                      Ningún resultado con los filtros aplicados.
                     </div>
-                  );
-                })}
-              </div>
+                  ) : (
+                    <div style={ui.aperturasList}>
+                      {aperturasModalFiltered.map((row) => {
+                        const est = getAccionEstadoRecepcion(row);
+                        const title =
+                          String(row?.nombreAccion || "").trim() ||
+                          [row?.proveedorNombre, row?.idAnden ? `Andén ${row.idAnden}` : ""]
+                            .filter(Boolean)
+                            .join(" · ") ||
+                          row?.id;
+                        const estStyle =
+                          est === "Completa"
+                            ? ui.estadoPillCompleta
+                            : est === "En proceso"
+                              ? ui.estadoPillProceso
+                              : ui.estadoPillCreada;
+                        return (
+                          <div key={row.id} style={ui.aperturasRow}>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={ui.aperturasRowTitle}>{title}</div>
+                              <div style={ui.aperturasRowMeta}>
+                                Alta {formatDateTimeShort(row?.creadoAt)}
+                                {row?.aperturaId ? ` · Apertura ${row.aperturaId}` : ""}
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                              <span style={{ ...ui.estadoPill, ...estStyle }}>{est}</span>
+                              <button
+                                type="button"
+                                style={ui.aperturasRowLink}
+                                onClick={() => {
+                                  setAperturasModalOpen(false);
+                                  nav(`/recepcion/accion-descarga/${encodeURIComponent(row.id)}`);
+                                }}
+                              >
+                                Abrir
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -3100,11 +3241,14 @@ const ui = {
     position: "fixed",
     inset: 0,
     zIndex: 200,
-    display: "grid",
-    placeItems: "end center",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    boxSizing: "border-box",
   },
   aperturasModalBackdrop: {
-    position: "fixed",
+    position: "absolute",
     inset: 0,
     background: "rgba(15,23,42,0.35)",
     border: "none",
@@ -3112,20 +3256,19 @@ const ui = {
   },
   aperturasSheet: {
     position: "relative",
-    width: "min(640px, 100%)",
-    maxHeight: "min(78vh, 640px)",
-    background: "#fff",
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    border: "1px solid #E7E9F2",
-    boxShadow: "0 -18px 60px rgba(15,23,42,0.22)",
-    padding: 16,
-    margin: 12,
-    boxSizing: "border-box",
-    display: "grid",
-    gridTemplateRows: "auto 1fr",
-    gap: 12,
     zIndex: 1,
+    width: "min(640px, calc(100vw - 32px))",
+    maxHeight: "min(calc(100vh - 32px), 720px)",
+    background: "#fff",
+    borderRadius: 22,
+    border: "1px solid #E7E9F2",
+    boxShadow: "0 24px 64px rgba(15,23,42,0.2)",
+    padding: 16,
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+    overflow: "hidden",
   },
   aperturasSheetHeader: {
     display: "flex",
@@ -3171,12 +3314,85 @@ const ui = {
     padding: "20px 8px",
     textAlign: "center",
   },
+  aperturasFiltersWrap: {
+    display: "grid",
+    gap: 10,
+    flexShrink: 0,
+  },
+  aperturasFiltersRow: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+  },
+  aperturasFilterField: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+  aperturasFilterLabel: {
+    color: "#64748B",
+    fontWeight: 900,
+    fontSize: 11,
+  },
+  aperturasFilterInput: {
+    borderRadius: 12,
+    border: "1px solid #E7E9F2",
+    background: "#FBFCFF",
+    padding: "10px 12px",
+    fontSize: 13,
+    fontWeight: 800,
+    color: "#0F172A",
+    outline: "none",
+    fontFamily: "inherit",
+    width: "100%",
+    boxSizing: "border-box",
+  },
+  aperturasFilterSelect: {
+    borderRadius: 12,
+    border: "1px solid #E7E9F2",
+    background: "#FBFCFF",
+    padding: "10px 12px",
+    fontSize: 13,
+    fontWeight: 800,
+    color: "#0F172A",
+    outline: "none",
+    fontFamily: "inherit",
+    width: "100%",
+    boxSizing: "border-box",
+    cursor: "pointer",
+  },
+  aperturasFilterClear: {
+    justifySelf: "start",
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid #E7E9F2",
+    background: "#F8FAFC",
+    color: "#475569",
+    fontWeight: 900,
+    fontSize: 12,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  aperturasFilterHint: {
+    color: "#94A3B8",
+    fontWeight: 800,
+    fontSize: 11,
+  },
+  aperturasListWrap: {
+    flex: 1,
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
   aperturasList: {
     overflow: "auto",
-    maxHeight: "min(52vh, 420px)",
+    flex: 1,
+    minHeight: 0,
     display: "grid",
     gap: 8,
     paddingRight: 4,
+    WebkitOverflowScrolling: "touch",
   },
   aperturasRow: {
     display: "flex",
