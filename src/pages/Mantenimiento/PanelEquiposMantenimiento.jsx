@@ -329,8 +329,6 @@ const ui = {
         width: "98.78vw",
         minHeight: "100vh",
         background: "#F6F7FB",
-        minHeight: "100vh",
-        background: "#F6F7FB",
         fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
         color: "#0F172A",
         display: "grid",

@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { auth, db } from "../../firebase"; // Asegúrate de tener la conexión a Firestore configurada correctamente.
+import { ArrowLeft, BarChart3, TrendingUp, User } from "lucide-react";
+import { auth, db } from "../../firebase";
 import {
     collection,
     doc,
+    getDoc,
     getDocs,
     query,
     where,
@@ -26,8 +28,16 @@ function fmtMinutesFromMs(ms) {
     return `${h} h ${m} min`;
 }
 
+function startOfWeekMonday(d) {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    date.setDate(date.getDate() + diff);
+    date.setHours(0, 0, 0, 0);
+    return date;
+}
+
 function buildDayKeysForFilter(filterKey) {
-    // Utiliza la misma lógica que tenías en el primer código para crear las claves del día.
     const now = new Date();
     if (filterKey === "hoy") return [ymd(now)];
     if (filterKey === "semana") {
@@ -40,7 +50,25 @@ function buildDayKeysForFilter(filterKey) {
         }
         return out;
     }
-    // Agrega el resto de las condiciones según tu lógica anterior.
+    if (filterKey === "mes") {
+        const y = now.getFullYear();
+        const m = now.getMonth();
+        const last = new Date(y, m + 1, 0).getDate();
+        const out = [];
+        for (let d = 1; d <= last; d++) {
+            out.push(ymd(new Date(y, m, d)));
+        }
+        return out;
+    }
+    if (filterKey === "rango") {
+        const out = [];
+        for (let i = 13; i >= 0; i--) {
+            const dt = new Date(now);
+            dt.setDate(dt.getDate() - i);
+            out.push(ymd(dt));
+        }
+        return out;
+    }
     return [];
 }
 
@@ -119,7 +147,7 @@ export default function MetricaSaludOcupacional() {
                     setLoadError("No hay datos para el período seleccionado.");
                 }
 
-                const builtDashboard = buildDashboardFromDocs(filteredDocs);
+                const builtDashboard = buildDashboardFromDocs(filteredDocs, activeFilter);
                 setDashboardData(builtDashboard);
                 setLoadingData(false);
             } catch (error) {
@@ -132,84 +160,61 @@ export default function MetricaSaludOcupacional() {
         loadDashboardData();
     }, [activeFilter, user]);
 
-    // Transformar los datos en el formato que utilizas para mostrar KPIs
-    const buildDashboardFromDocs = (docs) => {
-        const totalVisados = docs.reduce((acc, doc) => acc + (doc.visadosActivos || 0), 0);
-        const totalIngresos = docs.reduce((acc, doc) => acc + (doc.ingresos || 0), 0);
-        const totalEquipos = docs.reduce((acc, doc) => acc + (doc.equiposRevisados || 0), 0);
-
-        const compliance = Math.round((totalIngresos / totalVisados) * 100);
-
-        return {
-            label: "Semana actual", // O el nombre basado en `activeFilter`
-            compliance,
-            kpis: [
-                {
-                    label: "Visados activos",
-                    value: totalVisados.toString(),
-                    hint: "Visados válidos y no vencidos",
-                    comparison: `${totalIngresos} ingresados`,
-                },
-                {
-                    label: "Ingresos",
-                    value: totalIngresos.toString(),
-                    hint: "Ingresos por terceros",
-                    comparison: `${totalVisados} visados activos`,
-                },
-                {
-                    label: "Equipos revisados",
-                    value: totalEquipos.toString(),
-                    hint: "Revisiones realizadas",
-                    comparison: `${totalIngresos} ingresos`,
-                },
-                {
-                    label: "Cumplimiento operativo",
-                    value: `${compliance}%`,
-                    hint: "Tasa de cumplimiento en ingresos",
-                    comparison: "Total de visados",
-                },
-            ],
-        };
-    };
-
-    // Datos actuales para visualización (utilizando datos ya procesados)
-    const currentData = useMemo(() => dashboardData || { kpis: [] }, [dashboardData]);
+    const currentData = useMemo(
+        () =>
+            dashboardData || {
+                kpis: [],
+                label: "—",
+                heroBadge: "Salud",
+                compliance: 0,
+                barData: [],
+                lineData: [],
+            },
+        [dashboardData]
+    );
 
     return (
         <div style={ui.shell}>
-            <div style={ui.topbar}>
-                <div
-                    style={ui.brand}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => nav("/salud")}
-                    onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && nav("/salud")}
-                >
-                    <div style={ui.brandMark}>SO</div>
-                    <div style={{ display: "grid", gap: 2 }}>
-                        <div style={ui.brandTitle}>Salud Ocupacional</div>
-                        <div style={ui.brandSub}>Panel de métricas</div>
-                    </div>
-                </div>
-
-                <div style={ui.topbarRight}>
-                    <div style={ui.userBox}>
-                        <div style={ui.userAvatar}>
-                            {(user?.displayName || user?.email || "U")[0]?.toUpperCase?.()}
+            <header style={ui.topbar}>
+                <div style={ui.topbarInner}>
+                    <div
+                        style={ui.brand}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => nav("/salud")}
+                        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && nav("/salud")}
+                    >
+                        <div style={ui.brandMark}>
+                            <BarChart3 size={20} strokeWidth={2.25} color="#fff" />
                         </div>
-                        <div style={{ display: "grid", gap: 2 }}>
-                            <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-                            <div style={ui.userMail}>{user?.email || "—"}</div>
+                        <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                            <div style={ui.brandTitle}>Salud Ocupacional</div>
+                            <div style={ui.brandSub}>Panel de métricas</div>
                         </div>
                     </div>
 
-                    <button type="button" onClick={() => nav("/salud")} style={ui.btnGhost}>
-                        ← Volver a módulos
-                    </button>
-                </div>
-            </div>
+                    <div style={ui.topbarRight}>
+                        <div style={ui.userBox}>
+                            <div style={ui.userAvatar}>
+                                <User size={16} strokeWidth={2.2} />
+                            </div>
+                            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
+                                <div style={ui.userMail}>{user?.email || "—"}</div>
+                            </div>
+                        </div>
 
-            <div style={ui.main}>
+                        <button type="button" onClick={() => nav("/salud")} style={ui.btnGhost}>
+                            <span style={ui.btnInlineIcon}>
+                                <ArrowLeft size={16} strokeWidth={2.2} />
+                                Menú Salud
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main style={ui.main}>
                 <div style={ui.container}>
                     <div style={ui.hero}>
                         <div style={{ display: "grid", gap: 10 }}>
@@ -312,15 +317,18 @@ export default function MetricaSaludOcupacional() {
                         </div>
                     </div>*/}
                 </div>
-            </div>
+            </main>
         </div>
     );
 }
 
 const ui = {
     shell: {
+        minHeight: "100vh",
         height: "100vh",
-        width: "100vw",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
         background: "#F6F7FB",
         fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
         color: "#0F172A",
@@ -330,18 +338,26 @@ const ui = {
     },
 
     topbar: {
-        height: 64,
+        width: "100%",
+        boxSizing: "border-box",
+        borderBottom: "1px solid #E7E9F2",
+        background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
+        backdropFilter: "blur(8px)",
+        zIndex: 100,
+    },
+    topbarInner: {
+        width: "100%",
+        maxWidth: 1120,
+        marginLeft: "auto",
+        marginRight: "auto",
+        boxSizing: "border-box",
+        padding: "12px 18px",
         minHeight: 64,
-        padding: "10px 16px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        borderBottom: "1px solid #E7E9F2",
-        background:
-            "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(246,247,251,0.98) 100%)",
-        backdropFilter: "blur(10px)",
-        position: "relative",
-        zIndex: 100,
+        gap: 12,
+        flexWrap: "wrap",
     },
 
     brand: {
@@ -350,50 +366,64 @@ const ui = {
         gap: 12,
         cursor: "pointer",
         userSelect: "none",
+        outline: "none",
     },
     brandMark: {
-        width: 42,
-        height: 42,
+        width: 44,
+        height: 44,
         borderRadius: 14,
         background: ACCENT,
-        color: "#fff",
         display: "grid",
         placeItems: "center",
-        fontWeight: 950,
-        letterSpacing: 0.4,
-        boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
+        flexShrink: 0,
+        boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
     },
-    brandTitle: { fontWeight: 950, fontSize: 14 },
+    brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
     brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B" },
 
     topbarRight: {
         display: "flex",
         alignItems: "center",
-        gap: 12,
-        flexShrink: 0,
+        gap: 10,
+        flexWrap: "wrap",
+        justifyContent: "flex-end",
     },
 
     btnGhost: {
         border: "1px solid #E7E9F2",
         background: "#fff",
-        borderRadius: 14,
-        padding: "10px 12px",
+        borderRadius: 12,
+        padding: "9px 14px",
         cursor: "pointer",
-        fontWeight: 950,
+        fontWeight: 800,
+        fontSize: 13,
         color: "#0F172A",
-        boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+        boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
         whiteSpace: "nowrap",
+        fontFamily: "inherit",
+    },
+    btnInlineIcon: {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
     },
 
     main: {
+        width: "100%",
+        boxSizing: "border-box",
         overflow: "auto",
-        padding: "0 16px 16px",
+        padding: "18px 16px 28px",
         display: "grid",
         placeItems: "start center",
+        WebkitOverflowScrolling: "touch",
     },
 
     container: {
-        width: "min(1220px, 100%)",
+        width: "100%",
+        maxWidth: 1120,
+        marginLeft: "auto",
+        marginRight: "auto",
+        boxSizing: "border-box",
         display: "grid",
         gap: 10,
         paddingBottom: 18,
@@ -495,59 +525,55 @@ const ui = {
         flexShrink: 0,
     },
 
-    stickyFiltersOnly: {
-        position: "sticky",
-        top: 2,
-        zIndex: 90,
-        background: "#F6F7FB",
-        paddingTop: 0,
-        paddingBottom: 8,
-    },
-
-    stickyKpisOnly: {
-        position: "sticky",
-        top: 62,
-        zIndex: 80,
-        background: "#F6F7FB",
-        paddingBottom: 8,
-    },
-
-    stickyChartsOnly: {
-        position: "sticky",
-        top: 220,
-        zIndex: 70,
-        background: "#F6F7FB",
-        paddingBottom: 10,
-    },
-
-    filtersWrap: {
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        flexWrap: "wrap",
-        padding: "0",
-        background: "#F6F7FB",
-        border: "none",
-        borderRadius: 0,
-        boxShadow: "none",
-    },
     filterBtn: {
         border: "1px solid #DDE3EE",
         background: "#FFFFFF",
         color: "#334155",
-        borderRadius: 999,
-        padding: "10px 14px",
+        borderRadius: 18,
+        padding: "12px 14px",
         fontWeight: 900,
         fontSize: 12,
         cursor: "pointer",
         boxShadow: "0 8px 18px rgba(15,23,42,0.04)",
         transition: "all 120ms ease",
+        display: "grid",
+        gap: 4,
+        minWidth: 132,
+        textAlign: "left",
     },
     filterBtnActive: {
         background: "#F1FBF8",
         color: ACCENT,
         border: "1px solid rgba(8,159,138,0.35)",
         boxShadow: "0 10px 24px rgba(8,159,138,0.10)",
+        transform: "translateY(-1px)",
+    },
+    filterBtnLabel: {
+        fontWeight: 950,
+        fontSize: 12,
+        lineHeight: 1.1,
+    },
+    filterBtnHint: {
+        fontWeight: 800,
+        fontSize: 11,
+        color: "#64748B",
+        lineHeight: 1.1,
+    },
+    filterBtnHintActive: {
+        color: ACCENT,
+    },
+    filtersActions: {
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        flexShrink: 0,
+    },
+    emptyMiniText: {
+        color: "#64748B",
+        fontWeight: 800,
+        fontSize: 13,
+        textAlign: "center",
+        padding: "24px 8px",
     },
 
     kpiGrid: {
@@ -639,14 +665,6 @@ const ui = {
         fontSize: 12,
         color: "#64748B",
         lineHeight: 1.1,
-    },
-
-    stickyChartsOnly: {
-        position: "sticky",
-        top: 228,
-        zIndex: 70,
-        background: "#F6F7FB",
-        paddingBottom: 10,
     },
 
     chartGrid: {
@@ -914,11 +932,189 @@ const ui = {
         lineHeight: 1.3,
         marginBottom: 8,
     },
-
-    kpiHint: {
-        color: ACCENT,
-        fontWeight: 900,
-        fontSize: 12,
-        lineHeight: 1.3,
-    },
 };
+
+function FilterTabs({ active, onChange }) {
+    const filters = [
+        { key: "hoy", label: "Hoy", hint: "Corte diario" },
+        { key: "semana", label: "Semana", hint: "Vista semanal" },
+        { key: "mes", label: "Mes", hint: "Vista mensual" },
+        { key: "rango", label: "Rango personalizado", hint: "Últimos 14 días" },
+    ];
+
+    return (
+        <div style={ui.filtersBar}>
+            <div style={ui.filtersWrap}>
+                {filters.map((filter) => {
+                    const selected = active === filter.key;
+                    return (
+                        <button
+                            key={filter.key}
+                            type="button"
+                            onClick={() => onChange(filter.key)}
+                            style={{
+                                ...ui.filterBtn,
+                                ...(selected ? ui.filterBtnActive : {}),
+                            }}
+                        >
+                            <span style={ui.filterBtnLabel}>{filter.label}</span>
+                            <span
+                                style={{
+                                    ...ui.filterBtnHint,
+                                    ...(selected ? ui.filterBtnHintActive : {}),
+                                }}
+                            >
+                                {filter.hint}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+
+            <div style={ui.filtersActions}>
+                <button type="button" style={ui.exportBtn} title="Exportar reporte">
+                    <span style={ui.btnInlineIcon}>
+                        <TrendingUp size={16} strokeWidth={2.2} />
+                        Exportar reporte
+                    </span>
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function MiniBarChart({ data = [], periodLabel = "Semana actual" }) {
+    const max = Math.max(...data.map((d) => d.value), 1);
+
+    return (
+        <div style={ui.chartCard}>
+            <div style={ui.chartHeader}>
+                <div>
+                    <div style={ui.chartTitle}>Ingresos por día</div>
+                    <div style={ui.chartSubtitle}>Terceros registrados · {periodLabel}</div>
+                </div>
+                <span style={ui.chartBadge}>Salud</span>
+            </div>
+
+            <div style={ui.barChartWrap}>
+                {data.length === 0 ? (
+                    <div style={ui.emptyMiniText}>Sin datos para graficar.</div>
+                ) : (
+                    data.map((item) => (
+                        <div key={`${item.label}-${item.value}`} style={ui.barItem}>
+                            <div
+                                style={{
+                                    ...ui.bar,
+                                    height: `${Math.max((item.value / max) * 118, 10)}px`,
+                                }}
+                                title={`${item.label}: ${item.value}`}
+                            />
+                            <div style={ui.barValue}>{item.value}</div>
+                            <div style={ui.barLabel}>{item.label}</div>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    );
+}
+
+function MiniLineChart({ data = [], periodLabel = "Últimos cortes" }) {
+    const width = 100;
+    const height = 36;
+    const max = Math.max(...data.map((d) => d.value), 1);
+    const min = Math.min(...data.map((d) => d.value), 0);
+
+    const points = data
+        .map((d, i) => {
+            const x = (i / Math.max(data.length - 1, 1)) * width;
+            const normalized = (d.value - min) / Math.max(max - min, 1);
+            const y = height - normalized * height;
+            return `${x},${y}`;
+        })
+        .join(" ");
+
+    return (
+        <div style={ui.chartCard}>
+            <div style={ui.chartHeader}>
+                <div>
+                    <div style={ui.chartTitle}>Cumplimiento diario</div>
+                    <div style={ui.chartSubtitle}>
+                        Ingresos respecto a visados activos · {periodLabel}
+                    </div>
+                </div>
+                <span style={ui.chartBadge}>Tendencia</span>
+            </div>
+
+            <div style={ui.lineChartWrap}>
+                {data.length === 0 ? (
+                    <div style={ui.emptyMiniText}>Sin tendencia disponible.</div>
+                ) : (
+                    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={ui.lineSvg}>
+                        <polyline
+                            fill="none"
+                            stroke="rgba(8,159,138,0.12)"
+                            strokeWidth="5.5"
+                            points={points}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                        <polyline
+                            fill="none"
+                            stroke={ACCENT}
+                            strokeWidth="2.25"
+                            points={points}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    </svg>
+                )}
+            </div>
+
+            <div style={ui.lineLegend}>
+                {data.map((d) => (
+                    <div key={`${d.label}-${d.value}`} style={ui.legendItem}>
+                        <span style={ui.legendDot} />
+                        <span style={ui.legendText}>
+                            {d.label}: {d.value}%
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function DonutPlaceholder({
+    value = 0,
+    label = "Cumplimiento documental",
+    subtitle = "Nivel estimado actual",
+}) {
+    const angle = Math.max(0, Math.min(360, (value / 100) * 360));
+
+    return (
+        <div style={ui.chartCard}>
+            <div style={ui.chartHeader}>
+                <div>
+                    <div style={ui.chartTitle}>{label}</div>
+                    <div style={ui.chartSubtitle}>{subtitle}</div>
+                </div>
+                <span style={ui.chartBadge}>Control</span>
+            </div>
+
+            <div style={ui.donutWrap}>
+                <div
+                    style={{
+                        ...ui.donut,
+                        background: `conic-gradient(${ACCENT} 0deg ${angle}deg, #E7E9F2 ${angle}deg 360deg)`,
+                    }}
+                >
+                    <div style={ui.donutInner}>
+                        <div style={ui.donutValue}>{value}%</div>
+                        <div style={ui.donutText}>Actual</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

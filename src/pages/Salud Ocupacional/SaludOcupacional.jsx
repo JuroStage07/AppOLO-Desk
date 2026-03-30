@@ -1,6 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
+import {
+  ArrowLeft,
+  ArrowRight,
+  HeartPulse,
+  Loader2,
+  Lock,
+  LogOut,
+  User,
+} from "lucide-react";
 import { auth } from "../../firebase";
 
 import imgAperturas from "../../assets/aperturas.png";
@@ -11,12 +20,13 @@ import imgEstadisticas from "../../assets/visados.png";
 import imgDocumentacion from "../../assets/documentacion.png";
 
 const ACCENT = "#089F8A";
+const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
+const SLATE = "#64748B";
 
 export default function SaludOcupacional() {
   const nav = useNavigate();
   const [busyLogout, setBusyLogout] = useState(false);
   const [hovered, setHovered] = useState(null);
-
   const user = auth.currentUser;
 
   const moduleMeta = {
@@ -85,7 +95,7 @@ export default function SaludOcupacional() {
       {
         key: "terceros",
         title: "Ingreso de terceros",
-        desc: "Registrar entradas/salidas por cédula",
+        desc: "Registrar entradas y salidas por cédula",
         path: "/salud/terceros",
         tone: "accent",
         img: imgTerceros,
@@ -112,7 +122,7 @@ export default function SaludOcupacional() {
       {
         key: "documentacion",
         title: "Documentación",
-        desc: "Biblioteca de normas, políticas y documentos internos de la empresa",
+        desc: "Normas, políticas y documentos internos",
         path: "/documentacion",
         tone: "neutral",
         img: imgDocumentacion,
@@ -124,62 +134,97 @@ export default function SaludOcupacional() {
 
   return (
     <div style={ui.shell}>
-      {/* Topbar */}
-      <div style={ui.topbar}>
-        <div style={ui.brand} role="button" tabIndex={0} onClick={() => go("/salud")}>
-          <div style={ui.brandMark}>SO</div>
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>Salud Ocupacional</div>
-            <div style={ui.brandSub}>Panel de módulos</div>
-          </div>
-        </div>
+      <style>{`
+        @keyframes saludHubSpin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
 
-        <div style={ui.topbarRight}>
-          <div style={ui.userBox}>
-            <div style={ui.userAvatar}>
-              {(user?.displayName || user?.email || "U")[0]?.toUpperCase?.()}
-            </div>
-            <div style={{ display: "grid", gap: 2 }}>
-              <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-              <div style={ui.userMail}>{user?.email || "—"}</div>
-            </div>
-          </div>
-
-          <button type="button" onClick={() => go("/")} style={ui.btnGhost} disabled={busyLogout}>
-            ← Volver
-          </button>
-
-          <button
-            type="button"
-            onClick={logout}
-            style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
-            disabled={busyLogout}
-            title="Cerrar sesión"
+      <header style={ui.topbar}>
+        <div style={ui.topbarInner}>
+          <div
+            style={ui.brand}
+            role="button"
+            tabIndex={0}
+            onClick={() => go("/salud")}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && go("/salud")}
           >
-            {busyLogout ? "Cerrando…" : "Cerrar sesión"}
-          </button>
-        </div>
-      </div>
+            <div style={ui.brandMark}>
+              <HeartPulse size={20} strokeWidth={2.25} color="#fff" />
+            </div>
+            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+              <div style={ui.brandTitle}>Salud ocupacional</div>
+              <div style={ui.brandSub}>Panel de módulos</div>
+            </div>
+          </div>
 
-      {/* Content */}
-      <div style={ui.main}>
+          <div style={ui.topbarRight}>
+            <div style={ui.userBox}>
+              <div style={ui.userAvatar}>
+                <User size={16} strokeWidth={2.2} />
+              </div>
+              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
+                <div style={ui.userMail}>{user?.email || "—"}</div>
+              </div>
+            </div>
+
+            <button type="button" onClick={() => go("/")} style={ui.btnGhost} disabled={busyLogout}>
+              <span style={ui.btnInlineIcon}>
+                <ArrowLeft size={16} strokeWidth={2.2} />
+                Inicio
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={logout}
+              disabled={busyLogout}
+              style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
+              title="Cerrar sesión"
+            >
+              <span style={ui.btnInlineIcon}>
+                {busyLogout ? (
+                  <Loader2
+                    size={16}
+                    strokeWidth={2.2}
+                    style={{ animation: "saludHubSpin 0.7s linear infinite" }}
+                  />
+                ) : (
+                  <LogOut size={16} strokeWidth={2.2} />
+                )}
+                {busyLogout ? "Cerrando…" : "Salir"}
+              </span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main style={ui.main}>
         <div style={ui.container}>
-          {/* Hero */}
-          <div style={ui.hero}>
-            <div style={{ display: "grid", gap: 8 }}>
+          <section style={ui.hero}>
+            <div style={{ display: "grid", gap: 10, minWidth: 0 }}>
               <div style={ui.kickerRow}>
                 <span style={ui.kickerDot} />
-                <div style={ui.kicker}>Centro de control</div>
-                <span style={ui.badge}>Operación</span>
+                <span style={ui.kicker}>Centro de control</span>
+                <span style={{ ...ui.badge, ...ui.badgeInline }}>
+                  <Lock size={12} strokeWidth={2.5} style={{ marginRight: 5 }} />
+                  Operación
+                </span>
               </div>
 
               <h1 style={ui.title}>Módulos</h1>
               <p style={ui.subtitle}>
-                Seleccioná un módulo para ingresar. Todo queda auditado por usuario.
+                Seleccioná un módulo para ingresar. Las acciones quedan asociadas a tu usuario.
               </p>
             </div>
 
-            <div style={ui.heroSide}>
+            <div style={ui.statsRow}>
+              <div style={ui.statCard}>
+                <div style={ui.statCardLabel}>Módulos</div>
+                <div style={ui.statCardValue}>{modules.length}</div>
+                <div style={ui.statCardMeta}>disponibles en el área</div>
+              </div>
               <div style={ui.quickCard}>
                 <div style={ui.quickLabel}>Acceso rápido</div>
                 <div style={ui.quickBtns}>
@@ -202,13 +247,13 @@ export default function SaludOcupacional() {
                 </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Grid */}
           <div style={ui.grid}>
             {modules.map((m) => {
               const isHover = hovered === m.key;
               const accent = m.tone === "accent";
+              const meta = moduleMeta[m.key];
 
               return (
                 <div
@@ -220,39 +265,40 @@ export default function SaludOcupacional() {
                   onMouseEnter={() => setHovered(m.key)}
                   onMouseLeave={() => setHovered(null)}
                   style={{
-                    ...ui.moduleCard,
-                    ...(isHover ? ui.moduleCardHover : {}),
-                    ...(accent ? ui.moduleCardAccent : {}),
+                    ...ui.card,
+                    ...(accent ? ui.cardAccent : {}),
+                    ...(isHover ? ui.cardHover : {}),
                   }}
                 >
-                  {/* Imagen */}
                   <div style={{ ...ui.media, backgroundImage: `url(${m.img})` }}>
                     <div style={ui.mediaOverlay} />
-
                     <div style={ui.mediaTop}>
                       <span style={{ ...ui.pill, ...(accent ? ui.pillAccent : {}) }}>
-                        {m.tag || (accent ? "Prioritario" : "Módulo")}
+                        {m.tag || "Módulo"}
                       </span>
-
                       <span
                         style={{
                           ...ui.statusPill,
-                          ...(moduleMeta[m.key]?.status === "LISTO" ? ui.statusOk : ui.statusProx),
+                          ...(meta?.status === "LISTO" ? ui.statusOk : ui.statusProx),
                         }}
                       >
-                        {statusLabel(moduleMeta[m.key]?.status)}
+                        {statusLabel(meta?.status)}
                       </span>
                     </div>
                   </div>
 
-                  {/* Contenido */}
                   <div style={ui.cardBody}>
                     <div style={ui.cardTitle}>{m.title}</div>
                     <div style={ui.cardDesc}>{m.desc}</div>
 
                     <div style={ui.cardFooter}>
-                      <span style={{ ...ui.link, ...(accent ? ui.linkAccent : {}) }}>Entrar →</span>
-                      <span style={ui.metaHint}>Ruta: {m.path}</span>
+                      <span style={{ ...ui.link, ...(accent ? ui.linkAccent : {}) }}>
+                        <span style={ui.btnInlineIcon}>
+                          Entrar
+                          <ArrowRight size={14} strokeWidth={2.5} />
+                        </span>
+                      </span>
+                      <span style={ui.metaHint}>{m.path}</span>
                     </div>
                   </div>
                 </div>
@@ -263,20 +309,23 @@ export default function SaludOcupacional() {
           <div style={ui.footerNote}>
             <div style={ui.footerTitle}>Tip</div>
             <div style={ui.footerText}>
-              Si un módulo no abre, verificá que la ruta exista y que el usuario tenga permisos
-              (por ejemplo <b>permisos.saludOcupacional</b>).
+              Si un módulo no abre, verificá la ruta y que el perfil tenga{" "}
+              <b>permisos.saludOcupacional</b> u otros permisos requeridos.
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
 const ui = {
   shell: {
+    minHeight: "100vh",
     height: "100vh",
-    width: "100vw",
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     background: "#F6F7FB",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
     color: "#0F172A",
@@ -286,135 +335,262 @@ const ui = {
   },
 
   topbar: {
-    height: 64,
-    padding: "10px 16px",
+    width: "100%",
+    boxSizing: "border-box",
+    borderBottom: "1px solid #E7E9F2",
+    background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
+    backdropFilter: "blur(8px)",
+  },
+  topbarInner: {
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
+    padding: "12px 18px",
+    minHeight: 64,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottom: "1px solid #E7E9F2",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(246,247,251,0.95) 100%)",
-    backdropFilter: "blur(6px)",
+    gap: 12,
+    flexWrap: "wrap",
   },
 
-  brand: { display: "flex", alignItems: "center", gap: 12, cursor: "pointer", userSelect: "none" },
+  brand: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    cursor: "pointer",
+    userSelect: "none",
+    outline: "none",
+  },
   brandMark: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     background: ACCENT,
-    color: "#fff",
     display: "grid",
     placeItems: "center",
-    fontWeight: 950,
-    letterSpacing: 0.4,
-    boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
+    flexShrink: 0,
+    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
   },
-  brandTitle: { fontWeight: 950, fontSize: 14 },
-  brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B" },
+  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
+  brandSub: { fontWeight: 800, fontSize: 12, color: SLATE },
 
-  topbarRight: { display: "flex", alignItems: "center", gap: 12 },
+  topbarRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+
+  userBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "6px 12px 6px 6px",
+    borderRadius: 12,
+    border: "1px solid #E7E9F2",
+    background: "#fff",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
+    maxWidth: 220,
+    minWidth: 0,
+  },
+  userAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    background: ACCENT_SOFT,
+    color: ACCENT,
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+  },
+  userName: {
+    fontWeight: 800,
+    fontSize: 12,
+    color: "#0F172A",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  userMail: {
+    fontWeight: 650,
+    fontSize: 11,
+    color: SLATE,
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
 
   btnGhost: {
     border: "1px solid #E7E9F2",
     background: "#fff",
-    borderRadius: 14,
-    padding: "10px 12px",
+    borderRadius: 12,
+    padding: "9px 14px",
     cursor: "pointer",
-    fontWeight: 950,
+    fontWeight: 800,
+    fontSize: 13,
     color: "#0F172A",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
     whiteSpace: "nowrap",
+    fontFamily: "inherit",
   },
-  btnDisabled: { opacity: 0.6, cursor: "not-allowed", boxShadow: "none" },
+  btnInlineIcon: { display: "inline-flex", alignItems: "center", gap: 8 },
+  btnDisabled: { opacity: 0.55, cursor: "not-allowed", boxShadow: "none" },
 
   main: {
+    width: "100%",
+    boxSizing: "border-box",
     overflow: "auto",
-    padding: 16,
-    display: "grid",
-    placeItems: "start center",
+    padding: "18px 16px 28px",
+    WebkitOverflowScrolling: "touch",
   },
   container: {
-    width: "min(1100px, 100%)",
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
     display: "grid",
-    gap: 14,
+    gap: 16,
   },
 
   hero: {
     display: "grid",
-    gridTemplateColumns: "1.4fr 1fr",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+    gap: 18,
+    alignItems: "start",
+  },
+
+  statsRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))",
     gap: 12,
-    alignItems: "stretch",
+    alignContent: "start",
   },
-
-  kickerRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
-  kickerDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    background: ACCENT,
-    boxShadow: "0 0 0 4px rgba(8,159,138,0.14)",
-  },
-  kicker: { fontSize: 12, fontWeight: 950, letterSpacing: 0.6, textTransform: "uppercase", color: ACCENT },
-  badge: {
-    fontSize: 12,
-    fontWeight: 950,
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#FFFFFF",
+  statCard: {
+    background: "#fff",
     border: "1px solid #E7E9F2",
+    borderRadius: 16,
+    padding: "14px 16px",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+  },
+  statCardLabel: {
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: 0.04,
+    textTransform: "uppercase",
+    color: SLATE,
+    marginBottom: 6,
+  },
+  statCardValue: {
+    fontSize: 22,
+    fontWeight: 950,
+    color: "#0F172A",
+    letterSpacing: -0.5,
+    lineHeight: 1.1,
+  },
+  statCardMeta: {
+    fontSize: 13,
+    fontWeight: 700,
     color: "#334155",
+    lineHeight: 1.35,
+    marginTop: 6,
   },
 
-  title: { margin: 0, fontSize: 26, fontWeight: 980, letterSpacing: -0.3 },
-  subtitle: { margin: 0, color: "#64748B", fontWeight: 800, lineHeight: 1.4 },
-
-  heroSide: { display: "grid" },
   quickCard: {
     background: "#fff",
     border: "1px solid #E7E9F2",
-    borderRadius: 20,
-    padding: 14,
-    boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
-  },
-  quickLabel: { fontWeight: 980, color: "#0F172A", marginBottom: 10 },
-  quickBtns: { display: "grid", gap: 10 },
-  quickBtn: {
     borderRadius: 16,
+    padding: "14px 16px",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+    display: "grid",
+    gap: 10,
+    alignContent: "start",
+  },
+  quickLabel: { fontWeight: 900, fontSize: 13, color: "#0F172A" },
+  quickBtns: { display: "grid", gap: 8 },
+  quickBtn: {
+    borderRadius: 12,
     border: "1px solid #E7E9F2",
     background: "#FBFCFF",
-    padding: "12px 12px",
+    padding: "10px 12px",
     cursor: "pointer",
-    fontWeight: 950,
+    fontWeight: 800,
+    fontSize: 13,
     color: "#0F172A",
     textAlign: "left",
+    fontFamily: "inherit",
   },
   quickBtnAccent: { borderColor: "rgba(8,159,138,0.35)", background: "#F3FBF9" },
 
+  kickerRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  kickerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    background: ACCENT,
+    boxShadow: "0 0 0 3px rgba(8,159,138,0.2)",
+  },
+  kicker: {
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.08,
+    textTransform: "uppercase",
+    color: ACCENT,
+  },
+  badge: {
+    fontSize: 12,
+    fontWeight: 800,
+    padding: "5px 11px",
+    borderRadius: 999,
+    background: "#fff",
+    border: "1px solid #E7E9F2",
+    color: "#334155",
+  },
+  badgeInline: { display: "inline-flex", alignItems: "center" },
+
+  title: { margin: 0, fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 950, letterSpacing: -0.4 },
+  subtitle: {
+    margin: 0,
+    color: SLATE,
+    fontWeight: 650,
+    lineHeight: 1.5,
+    fontSize: 14,
+    maxWidth: 520,
+  },
+
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 250px), 1fr))",
     gap: 14,
   },
 
-  moduleCard: {
+  card: {
     background: "#fff",
     border: "1px solid #E7E9F2",
-    borderRadius: 20,
+    borderRadius: 18,
     overflow: "hidden",
     cursor: "pointer",
     userSelect: "none",
     transition: "transform 120ms ease, box-shadow 120ms ease",
     boxShadow: "0 12px 26px rgba(15, 23, 42, 0.06)",
   },
-  moduleCardAccent: {
+  cardAccent: {
     borderColor: "rgba(8,159,138,0.35)",
     boxShadow: "0 12px 26px rgba(8, 159, 138, 0.10)",
   },
-  moduleCardHover: { transform: "translateY(-2px)", boxShadow: "0 16px 36px rgba(15, 23, 42, 0.12)" },
+  cardHover: {
+    transform: "translateY(-2px)",
+    boxShadow: "0 16px 36px rgba(15, 23, 42, 0.12)",
+  },
 
   media: {
-    height: 120,
+    height: 124,
     backgroundSize: "cover",
     backgroundPosition: "center",
     position: "relative",
@@ -434,15 +610,6 @@ const ui = {
     alignItems: "center",
     gap: 10,
   },
-
-  cardBody: { padding: 16 },
-  cardTitle: { fontWeight: 980, fontSize: 16, color: "#0F172A", marginBottom: 6 },
-  cardDesc: { color: "#64748B", fontWeight: 800, fontSize: 13, lineHeight: 1.35, minHeight: 36 },
-
-  cardFooter: { marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 },
-  link: { color: "#0F172A", fontWeight: 980, fontSize: 12 },
-  linkAccent: { color: ACCENT },
-  metaHint: { color: "#94A3B8", fontWeight: 800, fontSize: 12 },
 
   pill: {
     padding: "6px 10px",
@@ -472,36 +639,29 @@ const ui = {
   statusOk: { background: "rgba(8,159,138,0.30)" },
   statusProx: { background: "rgba(148,163,184,0.26)" },
 
-  footerNote: {
-    borderRadius: 20,
-    border: "1px solid #E7E9F2",
-    background: "#FFFFFF",
-    padding: 14,
-    boxShadow: "0 12px 26px rgba(15, 23, 42, 0.06)",
-  },
-  footerTitle: { fontWeight: 980, color: "#0F172A", marginBottom: 6 },
-  footerText: { color: "#64748B", fontWeight: 800, fontSize: 13, lineHeight: 1.4 },
+  cardBody: { padding: 16 },
+  cardTitle: { fontWeight: 950, fontSize: 16, color: "#0F172A", marginBottom: 6 },
+  cardDesc: { color: SLATE, fontWeight: 650, fontSize: 13, lineHeight: 1.45, minHeight: 40 },
 
-  userBox: {
+  cardFooter: {
+    marginTop: 12,
     display: "flex",
+    justifyContent: "space-between",
     alignItems: "center",
     gap: 10,
-    padding: "8px 10px",
-    borderRadius: 14,
+  },
+  link: { color: "#0F172A", fontWeight: 850, fontSize: 13, display: "inline-flex", alignItems: "center" },
+  linkAccent: { color: ACCENT },
+  metaHint: { color: "#94A3B8", fontWeight: 700, fontSize: 12 },
+
+  footerNote: {
+    borderRadius: 18,
     border: "1px solid #E7E9F2",
-    background: "#fff",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    background: "#FFFFFF",
+    padding: 16,
+    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
+    borderTop: `3px solid ${ACCENT_SOFT}`,
   },
-  userAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 14,
-    background: "rgba(8,159,138,0.12)",
-    color: ACCENT,
-    display: "grid",
-    placeItems: "center",
-    fontWeight: 980,
-  },
-  userName: { fontWeight: 980, fontSize: 12, color: "#0F172A", lineHeight: 1.1 },
-  userMail: { fontWeight: 850, fontSize: 12, color: "#64748B", lineHeight: 1.1 },
+  footerTitle: { fontWeight: 950, color: "#0F172A", marginBottom: 6, fontSize: 14 },
+  footerText: { color: SLATE, fontWeight: 650, fontSize: 14, lineHeight: 1.5 },
 };

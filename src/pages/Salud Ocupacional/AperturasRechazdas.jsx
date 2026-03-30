@@ -11,9 +11,22 @@ import {
   limit,
 } from "firebase/firestore";
 
+import {
+  ArrowLeft,
+  ArrowRight,
+  Ban,
+  ClipboardList,
+  Filter,
+  Loader2,
+  LogOut,
+  User,
+} from "lucide-react";
+
 import { auth, db } from "../../firebase";
 
 const ACCENT = "#089F8A";
+const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
+const SLATE = "#64748B";
 
 /* ===================== Date helpers ===================== */
 const toDateSafe = (value) => {
@@ -116,58 +129,78 @@ export default function AperturasRechazadas() {
 
   return (
     <div style={ui.shell}>
-      {/* Topbar */}
-      <div style={ui.topbar}>
-        <div
-          style={ui.brand}
-          role="button"
-          tabIndex={0}
-          onClick={() => nav("/salud/aperturas")}
-        >
-          <div style={ui.brandMark}>AP</div>
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>Aperturas</div>
-            <div style={ui.brandSub}>Rechazadas</div>
-          </div>
-        </div>
+      <style>{`
+        @keyframes rechazadasSpin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
 
-        <div style={ui.topbarRight}>
-          <div style={ui.userBox}>
-            <div style={ui.userAvatar}>
-              {(user?.displayName || user?.email || "U")[0]?.toUpperCase?.()}
-            </div>
-            <div style={{ display: "grid", gap: 2 }}>
-              <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-              <div style={ui.userMail}>{user?.email || "—"}</div>
-            </div>
-          </div>
-
-          <button
-            type="button"
+      <header style={ui.topbar}>
+        <div style={ui.topbarInner}>
+          <div
+            style={ui.brand}
+            role="button"
+            tabIndex={0}
             onClick={() => nav("/salud/aperturas")}
-            style={ui.btnGhost}
-            disabled={busyLogout}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && nav("/salud/aperturas")}
           >
-            ← Administrar
-          </button>
+            <div style={ui.brandMark}>
+              <ClipboardList size={20} strokeWidth={2.25} color="#fff" />
+            </div>
+            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+              <div style={ui.brandTitle}>Aperturas</div>
+              <div style={ui.brandSub}>Rechazadas</div>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={logout}
-            style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
-            disabled={busyLogout}
-          >
-            {busyLogout ? "Cerrando…" : "Cerrar sesión"}
-          </button>
+          <div style={ui.topbarRight}>
+            <div style={ui.userBox}>
+              <div style={ui.userAvatar}>
+                <User size={16} strokeWidth={2.2} />
+              </div>
+              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
+                <div style={ui.userMail}>{user?.email || "—"}</div>
+              </div>
+            </div>
+
+            <button type="button" onClick={() => nav("/salud/aperturas")} style={ui.btnGhost} disabled={busyLogout}>
+              <span style={ui.btnInlineIcon}>
+                <ArrowLeft size={16} strokeWidth={2.2} />
+                Administrar
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={logout}
+              style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
+              disabled={busyLogout}
+            >
+              <span style={ui.btnInlineIcon}>
+                {busyLogout ? (
+                  <Loader2
+                    size={16}
+                    strokeWidth={2.2}
+                    style={{ animation: "rechazadasSpin 0.7s linear infinite" }}
+                  />
+                ) : (
+                  <LogOut size={16} strokeWidth={2.2} />
+                )}
+                {busyLogout ? "Cerrando…" : "Salir"}
+              </span>
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Content */}
-      <div style={ui.main}>
+      <main style={ui.main}>
         <div style={ui.container}>
-          {/* Filtros */}
           <div style={ui.filtersCard}>
-            <div style={ui.filtersTitle}>Filtrar por motivo</div>
+            <div style={ui.filtersHead}>
+              <Filter size={18} color={ACCENT} strokeWidth={2.2} />
+              <div style={ui.filtersTitle}>Filtrar por motivo</div>
+            </div>
             <div style={ui.chipsRow}>
               {MOTIVOS.map((m) => {
                 const active = motivoFiltro === m;
@@ -178,25 +211,24 @@ export default function AperturasRechazadas() {
                     onClick={() => setMotivoFiltro(m)}
                     style={{ ...ui.chip, ...(active ? ui.chipActive : {}) }}
                   >
-                    <span style={{ ...ui.chipTxt, ...(active ? ui.chipTxtActive : {}) }}>
-                      {m}
-                    </span>
+                    {m}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Lista */}
           {filtered.length === 0 ? (
             <div style={ui.emptyWrap}>
-              <div style={ui.emptyIcon}>🚫</div>
+              <div style={ui.emptyIconWrap}>
+                <Ban size={26} strokeWidth={2} color={SLATE} />
+              </div>
               <div style={ui.emptyTitle}>
                 {motivoFiltro === "Todos"
                   ? "No hay aperturas rechazadas."
-                  : `No hay rechazadas con motivo "${motivoFiltro}".`}
+                  : `No hay rechazadas con motivo «${motivoFiltro}».`}
               </div>
-              <div style={ui.emptyText}>Probá cambiando el filtro.</div>
+              <div style={ui.emptyText}>Probá cambiando el filtro de motivo.</div>
             </div>
           ) : (
             <div style={ui.listGrid}>
@@ -219,9 +251,10 @@ export default function AperturasRechazadas() {
                     style={ui.cardBtn}
                     title="Ver detalle"
                   >
+                    <div style={ui.cardAccentBar} aria-hidden />
                     <div style={ui.cardTop}>
-                      <div style={ui.badge}>
-                        <span style={ui.badgeTxt}>🚫</span>
+                      <div style={ui.badgeIcon}>
+                        <Ban size={20} strokeWidth={2.2} color="#B91C1C" />
                       </div>
 
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -237,30 +270,35 @@ export default function AperturasRechazadas() {
                     </div>
 
                     <div style={ui.metaRow}>
-                      <div style={ui.metaLabel}>Motivo:</div>
+                      <div style={ui.metaLabel}>Motivo</div>
                       <div style={ui.metaValue}>{motivo}</div>
                     </div>
 
                     {motivo === "Otro" && detalle ? (
                       <div style={ui.metaRow}>
-                        <div style={ui.metaLabel}>Detalle:</div>
+                        <div style={ui.metaLabel}>Detalle</div>
                         <div style={ui.metaValue}>{detalle}</div>
                       </div>
                     ) : null}
 
                     <div style={ui.metaRow}>
-                      <div style={ui.metaLabel}>Rechazado por:</div>
+                      <div style={ui.metaLabel}>Rechazado por</div>
                       <div style={ui.metaValue}>{rechazadoPor}</div>
                     </div>
 
-                    <div style={ui.cta}>Ver detalle →</div>
+                    <div style={ui.cta}>
+                      <span style={ui.btnInlineIcon}>
+                        Ver detalle
+                        <ArrowRight size={14} strokeWidth={2.5} />
+                      </span>
+                    </div>
                   </button>
                 );
               })}
             </div>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
@@ -268,8 +306,11 @@ export default function AperturasRechazadas() {
 /* ===================== Styles ===================== */
 const ui = {
   shell: {
+    minHeight: "100vh",
     height: "100vh",
-    width: "100vw",
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     background: "#F6F7FB",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
     color: "#0F172A",
@@ -279,169 +320,261 @@ const ui = {
   },
 
   topbar: {
-    height: 64,
-    padding: "10px 16px",
+    width: "100%",
+    boxSizing: "border-box",
+    borderBottom: "1px solid #E7E9F2",
+    background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
+    backdropFilter: "blur(8px)",
+  },
+  topbarInner: {
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
+    padding: "12px 18px",
+    minHeight: 64,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottom: "1px solid #E7E9F2",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(246,247,251,0.95) 100%)",
-    backdropFilter: "blur(6px)",
+    gap: 12,
+    flexWrap: "wrap",
   },
 
-  brand: { display: "flex", alignItems: "center", gap: 12, cursor: "pointer", userSelect: "none" },
+  brand: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    cursor: "pointer",
+    userSelect: "none",
+    outline: "none",
+  },
   brandMark: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     background: ACCENT,
-    color: "#fff",
     display: "grid",
     placeItems: "center",
-    fontWeight: 950,
-    letterSpacing: 0.4,
-    boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
+    flexShrink: 0,
+    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
   },
-  brandTitle: { fontWeight: 950, fontSize: 14 },
-  brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B" },
+  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
+  brandSub: { fontWeight: 800, fontSize: 12, color: SLATE },
 
-  topbarRight: { display: "flex", alignItems: "center", gap: 12 },
+  topbarRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
 
   userBox: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "8px 10px",
-    borderRadius: 14,
+    padding: "6px 12px 6px 6px",
+    borderRadius: 12,
     border: "1px solid #E7E9F2",
     background: "#fff",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
+    maxWidth: 220,
+    minWidth: 0,
   },
   userAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 14,
-    background: "rgba(8,159,138,0.12)",
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    background: ACCENT_SOFT,
     color: ACCENT,
     display: "grid",
     placeItems: "center",
-    fontWeight: 980,
+    flexShrink: 0,
   },
-  userName: { fontWeight: 980, fontSize: 12, color: "#0F172A", lineHeight: 1.1 },
-  userMail: { fontWeight: 850, fontSize: 12, color: "#64748B", lineHeight: 1.1 },
+  userName: {
+    fontWeight: 800,
+    fontSize: 12,
+    color: "#0F172A",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  userMail: {
+    fontWeight: 650,
+    fontSize: 11,
+    color: SLATE,
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
 
   btnGhost: {
     border: "1px solid #E7E9F2",
     background: "#fff",
-    borderRadius: 14,
-    padding: "10px 12px",
+    borderRadius: 12,
+    padding: "9px 14px",
     cursor: "pointer",
-    fontWeight: 950,
+    fontWeight: 800,
+    fontSize: 13,
     color: "#0F172A",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
     whiteSpace: "nowrap",
+    fontFamily: "inherit",
   },
-  btnDisabled: { opacity: 0.6, cursor: "not-allowed", boxShadow: "none" },
+  btnInlineIcon: { display: "inline-flex", alignItems: "center", gap: 8 },
+  btnDisabled: { opacity: 0.55, cursor: "not-allowed", boxShadow: "none" },
 
-  main: { overflow: "auto", padding: 16, display: "grid", placeItems: "start center" },
-  container: { width: "min(1100px, 100%)", display: "grid", gap: 14, paddingBottom: 24 },
+  main: {
+    width: "100%",
+    boxSizing: "border-box",
+    overflow: "auto",
+    padding: "18px 16px 28px",
+    WebkitOverflowScrolling: "touch",
+  },
+  container: {
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
+    display: "grid",
+    gap: 16,
+    paddingBottom: 8,
+  },
 
   filtersCard: {
     background: "#fff",
     border: "1px solid #E7E9F2",
-    borderRadius: 20,
-    padding: 14,
-    boxShadow: "0 12px 26px rgba(15,23,42,0.06)",
+    borderRadius: 18,
+    padding: 16,
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+    borderTop: `3px solid ${ACCENT_SOFT}`,
     display: "grid",
-    gap: 10,
+    gap: 12,
   },
-  filtersTitle: { fontWeight: 980, color: "#0F172A" },
+  filtersHead: { display: "flex", alignItems: "center", gap: 10 },
+  filtersTitle: { fontWeight: 950, color: "#0F172A", fontSize: 15 },
 
   chipsRow: { display: "flex", flexWrap: "wrap", gap: 8 },
   chip: {
     borderRadius: 999,
     border: "1px solid #E7E9F2",
-    background: "#F2F4FB",
-    padding: "10px 12px",
+    background: "#F8FAFC",
+    padding: "8px 14px",
     cursor: "pointer",
+    fontWeight: 800,
+    fontSize: 13,
+    color: "#334155",
+    fontFamily: "inherit",
   },
-  chipActive: { background: "#12131a", borderColor: "#12131a" },
-  chipTxt: { color: "#12131a", fontWeight: 950, fontSize: 12 },
-  chipTxtActive: { color: "#fff" },
+  chipActive: {
+    background: ACCENT_SOFT,
+    borderColor: "rgba(8,159,138,0.45)",
+    color: "#0F172A",
+    boxShadow: "0 4px 14px rgba(8,159,138,0.12)",
+  },
 
   emptyWrap: {
-    padding: 16,
-    borderRadius: 20,
-    border: "1px solid #E7E9F2",
-    background: "#FBFCFF",
-    display: "grid",
-    placeItems: "center",
-    gap: 6,
-    boxShadow: "0 12px 26px rgba(15,23,42,0.06)",
-  },
-  emptyIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    padding: 24,
+    borderRadius: 18,
     border: "1px solid #E7E9F2",
     background: "#fff",
     display: "grid",
     placeItems: "center",
-    fontSize: 18,
+    gap: 8,
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+    borderTop: `3px solid ${ACCENT_SOFT}`,
+  },
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    border: "1px solid #E7E9F2",
+    background: "#F8FAFC",
+    display: "grid",
+    placeItems: "center",
     marginBottom: 4,
   },
-  emptyTitle: { fontWeight: 980, color: "#0F172A", textAlign: "center" },
-  emptyText: { color: "#64748B", fontWeight: 850, textAlign: "center" },
+  emptyTitle: { fontWeight: 950, color: "#0F172A", textAlign: "center", fontSize: 16 },
+  emptyText: { color: SLATE, fontWeight: 650, textAlign: "center", fontSize: 14 },
 
-  listGrid: { display: "grid", gap: 10 },
+  listGrid: { display: "grid", gap: 12 },
 
   cardBtn: {
+    position: "relative",
     textAlign: "left",
     border: "1px solid #E7E9F2",
     background: "#fff",
     borderRadius: 18,
-    padding: 14,
+    padding: 16,
+    paddingTop: 18,
     cursor: "pointer",
-    boxShadow: "0 12px 26px rgba(15,23,42,0.06)",
+    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+    overflow: "hidden",
+    fontFamily: "inherit",
+  },
+  cardAccentBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    background: "rgba(220, 38, 38, 0.35)",
   },
 
-  cardTop: { display: "flex", alignItems: "center", gap: 10 },
+  cardTop: { display: "flex", alignItems: "center", gap: 12 },
 
-  badge: {
-    width: 40,
-    height: 40,
+  badgeIcon: {
+    width: 44,
+    height: 44,
     borderRadius: 14,
-    background: "#FDEAEA",
-    border: "1px solid #F6C2C2",
+    background: "#FEF2F2",
+    border: "1px solid #FECACA",
     display: "grid",
     placeItems: "center",
     flex: "0 0 auto",
   },
-  badgeTxt: { fontSize: 18 },
 
   cardTitle: {
-    fontWeight: 980,
-    color: "#111",
+    fontWeight: 950,
+    color: "#0F172A",
     fontSize: 15,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
   cardSub: {
-    marginTop: 2,
-    color: "#555",
-    fontWeight: 850,
+    marginTop: 4,
+    color: SLATE,
+    fontWeight: 650,
+    fontSize: 13,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
 
-  dateTxt: { color: "#777", fontSize: 12, fontWeight: 900, whiteSpace: "nowrap" },
+  dateTxt: { color: SLATE, fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" },
 
-  metaRow: { display: "flex", gap: 6, marginTop: 10 },
-  metaLabel: { color: "#5a6072", fontWeight: 950, whiteSpace: "nowrap" },
-  metaValue: { color: "#12131a", fontWeight: 850, flex: 1, minWidth: 0 },
+  metaRow: { display: "flex", gap: 10, marginTop: 10, alignItems: "baseline" },
+  metaLabel: {
+    color: SLATE,
+    fontWeight: 800,
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.04,
+    whiteSpace: "nowrap",
+  },
+  metaValue: { color: "#0F172A", fontWeight: 650, flex: 1, minWidth: 0, fontSize: 14 },
 
-  cta: { marginTop: 12, fontWeight: 980, color: "#B71C1C" },
+  cta: {
+    marginTop: 14,
+    fontWeight: 850,
+    fontSize: 13,
+    color: ACCENT,
+    display: "flex",
+    alignItems: "center",
+  },
 };

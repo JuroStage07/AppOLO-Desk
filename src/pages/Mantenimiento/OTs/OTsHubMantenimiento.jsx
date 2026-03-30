@@ -1,12 +1,22 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Loader2,
+  LogOut,
+  User,
+  Wrench,
+} from "lucide-react";
 import { auth } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 
 import imgEquipos from "../../../assets/revisionEquipos.png";
 
 const ACCENT = "#089F8A";
+const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
+const SLATE = "#64748B";
 
 /**
  * Hub intermedio: desde Mantenimiento → Ordenes de trabajo.
@@ -84,62 +94,67 @@ export default function OTsHubMantenimiento() {
 
   return (
     <div style={ui.shell}>
-      <div style={ui.topbar}>
-        <div
-          style={ui.brand}
-          role="button"
-          tabIndex={0}
-          onClick={() => go("/mantenimiento")}
-        >
-          <div style={ui.brandMark}>M</div>
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>Mantenimiento</div>
-            <div style={ui.brandSub}>Órdenes de trabajo</div>
-          </div>
-        </div>
-
-        <div style={ui.topbarRight}>
-          <div style={ui.userBox}>
-            <div style={ui.userAvatar}>
-              {(user?.displayName || user?.email || "U")[0]?.toUpperCase?.()}
-            </div>
-            <div style={{ display: "grid", gap: 2 }}>
-              <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-              <div style={ui.userMail}>{user?.email || "—"}</div>
-            </div>
-          </div>
-
-          <button
-            type="button"
+      <header style={ui.topbar}>
+        <div style={ui.topbarInner}>
+          <div
+            style={ui.brand}
+            role="button"
+            tabIndex={0}
             onClick={() => go("/mantenimiento")}
-            style={ui.btnGhost}
-            disabled={busyLogout}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && go("/mantenimiento")}
           >
-            ← Mantenimiento
-          </button>
+            <div style={ui.brandMark}>
+              <Wrench size={20} strokeWidth={2.25} color="#fff" />
+            </div>
+            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+              <div style={ui.brandTitle}>Mantenimiento</div>
+              <div style={ui.brandSub}>Órdenes de trabajo</div>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => go("/")}
-            style={ui.btnGhost}
-            disabled={busyLogout}
-          >
-            Inicio
-          </button>
+          <div style={ui.topbarRight}>
+            <div style={ui.userBox}>
+              <div style={ui.userAvatar}>
+                <User size={16} strokeWidth={2.2} />
+              </div>
+              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
+                <div style={ui.userMail}>{user?.email || "—"}</div>
+              </div>
+            </div>
 
-          <button
-            type="button"
-            onClick={logout}
-            style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
-            disabled={busyLogout}
-            title="Cerrar sesión"
-          >
-            {busyLogout ? "Cerrando…" : "Cerrar sesión"}
-          </button>
+            <button type="button" onClick={() => go("/mantenimiento")} style={ui.btnGhost} disabled={busyLogout}>
+              <span style={ui.btnInlineIcon}>
+                <ArrowLeft size={16} strokeWidth={2.2} />
+                Mantenimiento
+              </span>
+            </button>
+
+            <button type="button" onClick={() => go("/")} style={ui.btnGhost} disabled={busyLogout}>
+              Inicio
+            </button>
+
+            <button
+              type="button"
+              onClick={logout}
+              style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
+              disabled={busyLogout}
+              title="Cerrar sesión"
+            >
+              <span style={ui.btnInlineIcon}>
+                {busyLogout ? (
+                  <Loader2 size={16} strokeWidth={2.2} style={{ animation: "otsHubSpin 0.7s linear infinite" }} />
+                ) : (
+                  <LogOut size={16} strokeWidth={2.2} />
+                )}
+                {busyLogout ? "Cerrando…" : "Salir"}
+              </span>
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
-      <div style={ui.main}>
+      <main style={ui.main}>
         <div style={ui.container}>
           <div style={ui.hero}>
             <div style={{ display: "grid", gap: 10 }}>
@@ -237,7 +252,10 @@ export default function OTsHubMantenimiento() {
                           ...(accent ? ui.linkAccent : {}),
                         }}
                       >
-                        Entrar →
+                        <span style={ui.btnInlineIcon}>
+                          Entrar
+                          <ArrowRight size={14} strokeWidth={2.5} />
+                        </span>
                       </span>
                       <span style={ui.metaHint}>Ruta: {m.path}</span>
                     </div>
@@ -256,15 +274,22 @@ export default function OTsHubMantenimiento() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
+
+      <style>{`
+        @keyframes otsHubSpin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }
 
 const ui = {
   shell: {
+    minHeight: "100vh",
     height: "100vh",
-    width: "100vw",
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     background: "#F6F7FB",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
     color: "#0F172A",
@@ -274,15 +299,25 @@ const ui = {
   },
 
   topbar: {
-    height: 64,
-    padding: "10px 16px",
+    width: "100%",
+    boxSizing: "border-box",
+    borderBottom: "1px solid #E7E9F2",
+    background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
+    backdropFilter: "blur(8px)",
+  },
+  topbarInner: {
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
+    padding: "12px 18px",
+    minHeight: 64,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottom: "1px solid #E7E9F2",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(246,247,251,0.95) 100%)",
-    backdropFilter: "blur(6px)",
+    gap: 12,
+    flexWrap: "wrap",
   },
 
   brand: {
@@ -291,45 +326,64 @@ const ui = {
     gap: 12,
     cursor: "pointer",
     userSelect: "none",
+    outline: "none",
   },
   brandMark: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     background: ACCENT,
-    color: "#fff",
     display: "grid",
     placeItems: "center",
-    fontWeight: 950,
-    letterSpacing: 0.4,
-    boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
+    flexShrink: 0,
+    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
   },
-  brandTitle: { fontWeight: 950, fontSize: 14 },
-  brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B" },
+  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
+  brandSub: { fontWeight: 800, fontSize: 12, color: SLATE },
 
-  topbarRight: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" },
+  topbarRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
 
   btnGhost: {
     border: "1px solid #E7E9F2",
     background: "#fff",
-    borderRadius: 14,
-    padding: "10px 12px",
+    borderRadius: 12,
+    padding: "9px 14px",
     cursor: "pointer",
-    fontWeight: 950,
+    fontWeight: 800,
+    fontSize: 13,
     color: "#0F172A",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
     whiteSpace: "nowrap",
+    fontFamily: "inherit",
   },
-  btnDisabled: { opacity: 0.6, cursor: "not-allowed", boxShadow: "none" },
+  btnInlineIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  btnDisabled: { opacity: 0.55, cursor: "not-allowed", boxShadow: "none" },
 
   main: {
+    width: "100%",
+    boxSizing: "border-box",
     overflow: "auto",
-    padding: 16,
+    padding: "18px 16px 28px",
     display: "grid",
     placeItems: "start center",
+    WebkitOverflowScrolling: "touch",
   },
   container: {
-    width: "min(1100px, 100%)",
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
     display: "grid",
     gap: 14,
   },
@@ -374,7 +428,7 @@ const ui = {
   title: { margin: 0, fontSize: 26, fontWeight: 980, letterSpacing: -0.3 },
   subtitle: {
     margin: 0,
-    color: "#64748B",
+    color: SLATE,
     fontWeight: 800,
     lineHeight: 1.4,
   },
@@ -525,32 +579,40 @@ const ui = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "8px 10px",
-    borderRadius: 14,
+    padding: "6px 12px 6px 6px",
+    borderRadius: 12,
     border: "1px solid #E7E9F2",
     background: "#fff",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
+    maxWidth: 220,
+    minWidth: 0,
   },
   userAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 14,
-    background: "rgba(8,159,138,0.12)",
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    background: ACCENT_SOFT,
     color: ACCENT,
     display: "grid",
     placeItems: "center",
-    fontWeight: 980,
+    flexShrink: 0,
   },
   userName: {
-    fontWeight: 980,
+    fontWeight: 800,
     fontSize: 12,
     color: "#0F172A",
-    lineHeight: 1.1,
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   userMail: {
-    fontWeight: 850,
-    fontSize: 12,
-    color: "#64748B",
-    lineHeight: 1.1,
+    fontWeight: 650,
+    fontSize: 11,
+    color: SLATE,
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 };

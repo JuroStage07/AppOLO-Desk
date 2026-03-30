@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   BarChart3,
   CheckCircle2,
+  Eye,
   Info,
   Loader2,
   TrendingUp,
@@ -16,10 +17,10 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
   where,
-  limit,
 } from "firebase/firestore";
 
 const ACCENT = "#089F8A";
@@ -45,6 +46,37 @@ function ymd(date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function toDateSafe(value) {
+  if (!value) return null;
+  if (typeof value?.toDate === "function") return value.toDate();
+  if (typeof value === "number") return new Date(value);
+  if (typeof value === "string") {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+/** Estados de la acción de descarga para el listado (alineado con recepción). */
+function getAccionEstadoRecepcion(item) {
+  const completedAt = item?.completedAt ?? item?.completeAt;
+  if (completedAt) return "Completa";
+  if (item?.startedAt) return "En proceso";
+  return "Creada";
+}
+
+function formatDateTimeShort(ts) {
+  const d = toDateSafe(ts);
+  if (!d) return "—";
+  return d.toLocaleString("es-CR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function startOfWeekMonday(date = new Date()) {
@@ -457,6 +489,7 @@ function buildDashboardFromDailyDocs(filterKey, docs = []) {
 
   const accionesFinalizadas = sum(docs, (d) => d.accionesFinalizadas);
   const accionesIniciadas = sum(docs, (d) => d.accionesIniciadas);
+  const accionesCreadas = sum(docs, (d) => d.accionesCreadas);
   const tiempoTotalMs = sum(docs, (d) => d.accionesTiempoTotalMs);
 
   const tiempoPromedioMs =
@@ -491,12 +524,13 @@ function buildDashboardFromDailyDocs(filterKey, docs = []) {
     label: labelMap[filterKey] || "Semana actual",
     heroBadge: heroBadgeMap[filterKey] || "Semanal",
     compliance,
+    accionesCreadas,
     kpis: [
       {
         label: "Descargas completadas",
         value: fmtInt(accionesFinalizadas),
         hint: "Acciones cerradas en el período",
-        comparison: `${fmtInt(accionesIniciadas)} iniciadas`,
+        comparison: `${fmtInt(accionesIniciadas)} iniciadas · ${fmtInt(accionesCreadas)} creadas`,
         tone: "default",
       },
       {
@@ -533,7 +567,15 @@ function buildDashboardFromDailyDocs(filterKey, docs = []) {
         label: "Andenes en uso",
         value: `${fmtInt(andenesEnUso)}/9`,
         hint: "Posiciones con actividad registrada",
-        comparison: `${fmtInt(accionesIniciadas)} acciones iniciadas`,
+        comparison: `${fmtInt(accionesIniciadas)} iniciadas · ${fmtInt(accionesCreadas)} creadas`,
+        tone: "default",
+      },
+      {
+        kpiKind: "aperturasCreadas",
+        label: "Aperturas creadas",
+        value: fmtInt(accionesCreadas),
+        hint: "Acciones de descarga dadas de alta en el período",
+        comparison: "Ver listado y estado",
         tone: "default",
       },
     ],
@@ -546,7 +588,7 @@ function buildDashboardFromDailyDocs(filterKey, docs = []) {
     teamTimes,
     notes: [
       `Se registran ${fmtInt(accionesFinalizadas)} descargas completadas durante ${labelMap[filterKey] || "el período seleccionado"}.`,
-      `El cumplimiento operativo actual se ubica en ${compliance}% sobre ${fmtInt(accionesIniciadas)} acciones iniciadas.`,
+      `El cumplimiento operativo actual se ubica en ${compliance}% sobre ${fmtInt(accionesIniciadas)} acciones iniciadas (${fmtInt(accionesCreadas)} creadas en el período).`,
       `El tiempo promedio de descarga es de ${fmtMinutesFromMs(tiempoPromedioMs)} y el volumen procesado alcanza ${fmtInt(bultosTotales)} bultos.`,
     ],
   };
@@ -998,6 +1040,10 @@ export default function MetricaRecepcion() {
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [noDataMessage, setNoDataMessage] = useState("");
+  const [aperturasModalOpen, setAperturasModalOpen] = useState(false);
+  const [aperturasModalLoading, setAperturasModalLoading] = useState(false);
+  const [aperturasModalItems, setAperturasModalItems] = useState([]);
+  const [aperturasModalError, setAperturasModalError] = useState("");
 
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
@@ -1021,12 +1067,13 @@ export default function MetricaRecepcion() {
         label: "Cargando",
         heroBadge: "Sin datos",
         compliance: 0,
+        accionesCreadas: 0,
         kpis: [
           {
             label: "Descargas completadas",
             value: "0",
             hint: "Acciones cerradas en el período",
-            comparison: "—",
+            comparison: "Ej. 4 iniciadas · 7 creadas",
             tone: "default",
           },
           {
@@ -1061,7 +1108,15 @@ export default function MetricaRecepcion() {
             label: "Andenes en uso",
             value: "0/9",
             hint: "Posiciones con actividad registrada",
-            comparison: "0 acciones iniciadas",
+            comparison: "Ej. 4 iniciadas · 7 creadas",
+            tone: "default",
+          },
+          {
+            kpiKind: "aperturasCreadas",
+            label: "Aperturas creadas",
+            value: "0",
+            hint: "Acciones de descarga dadas de alta en el período",
+            comparison: "Ej. ver listado",
             tone: "default",
           },
         ],
@@ -1165,6 +1220,41 @@ export default function MetricaRecepcion() {
       mounted = false;
     };
   }, [activeFilter]);
+
+  useEffect(() => {
+    if (!aperturasModalOpen) return;
+    let cancelled = false;
+    (async () => {
+      setAperturasModalLoading(true);
+      setAperturasModalError("");
+      try {
+        const dayKeys = buildDayKeysForFilter(activeFilter);
+        const allowed = new Set(dayKeys);
+        const q = query(
+          collection(db, "accion_descarga"),
+          orderBy("creadoAt", "desc"),
+          limit(1500)
+        );
+        const snap = await getDocs(q);
+        if (cancelled) return;
+        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const filtered = rows.filter((it) => {
+          const dt = toDateSafe(it?.creadoAt);
+          if (!dt) return false;
+          return allowed.has(ymd(dt));
+        });
+        setAperturasModalItems(filtered);
+      } catch (e) {
+        console.error("aperturasModal load:", e);
+        if (!cancelled) setAperturasModalError("No se pudo cargar el listado.");
+      } finally {
+        if (!cancelled) setAperturasModalLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [aperturasModalOpen, activeFilter]);
 
   return (
     <div style={ui.shell}>
@@ -1348,54 +1438,70 @@ export default function MetricaRecepcion() {
               </div>
 
               <div style={ui.kpiGrid}>
-                {currentData.kpis.map((item) => (
-                  <div
-                    key={item.label}
-                    style={{
-                      ...ui.kpiCard,
-                      ...(item.tone === "good"
-                        ? ui.kpiCardGood
-                        : item.tone === "warn"
-                          ? ui.kpiCardWarn
-                          : item.tone === "danger"
-                            ? ui.kpiCardDanger
-                            : {}),
-                    }}
-                  >
-                    <div style={ui.kpiCardTop}>
-                      <div style={ui.kpiLabel}>{item.label}</div>
-                      <div
-                        style={{
-                          ...ui.kpiToneDot,
-                          ...(item.tone === "good"
-                            ? ui.kpiToneDotGood
-                            : item.tone === "warn"
-                              ? ui.kpiToneDotWarn
-                              : item.tone === "danger"
-                                ? ui.kpiToneDotDanger
-                                : {}),
-                        }}
-                      />
-                    </div>
-
-                    <div style={ui.kpiValue}>{item.value}</div>
-                    <div style={ui.kpiMeta}>{item.hint}</div>
+                {currentData.kpis.map((item) => {
+                  const isAperturas = item.kpiKind === "aperturasCreadas";
+                  return (
                     <div
+                      key={item.kpiKind || item.label}
                       style={{
-                        ...ui.kpiHint,
+                        ...ui.kpiCard,
                         ...(item.tone === "good"
-                          ? ui.kpiHintGood
+                          ? ui.kpiCardGood
                           : item.tone === "warn"
-                            ? ui.kpiHintWarn
+                            ? ui.kpiCardWarn
                             : item.tone === "danger"
-                              ? ui.kpiHintDanger
+                              ? ui.kpiCardDanger
                               : {}),
                       }}
                     >
-                      {item.comparison}
+                      <div style={ui.kpiCardTop}>
+                        <div style={ui.kpiLabel}>{item.label}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {isAperturas && (
+                            <button
+                              type="button"
+                              onClick={() => setAperturasModalOpen(true)}
+                              style={ui.kpiEyeBtn}
+                              aria-label="Ver aperturas creadas y estado"
+                              title="Ver detalle"
+                            >
+                              <Eye size={18} strokeWidth={2.25} color={ACCENT} />
+                            </button>
+                          )}
+                          <div
+                            style={{
+                              ...ui.kpiToneDot,
+                              ...(item.tone === "good"
+                                ? ui.kpiToneDotGood
+                                : item.tone === "warn"
+                                  ? ui.kpiToneDotWarn
+                                  : item.tone === "danger"
+                                    ? ui.kpiToneDotDanger
+                                    : {}),
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={ui.kpiValue}>{item.value}</div>
+                      <div style={ui.kpiMeta}>{item.hint}</div>
+                      <div
+                        style={{
+                          ...ui.kpiHint,
+                          ...(item.tone === "good"
+                            ? ui.kpiHintGood
+                            : item.tone === "warn"
+                              ? ui.kpiHintWarn
+                              : item.tone === "danger"
+                                ? ui.kpiHintDanger
+                                : {}),
+                        }}
+                      >
+                        {item.comparison}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1528,6 +1634,90 @@ export default function MetricaRecepcion() {
           </div>
         </div>
       </main>
+
+      {aperturasModalOpen && (
+        <div style={ui.aperturasModalRoot} role="dialog" aria-modal="true" aria-labelledby="aperturas-modal-title">
+          <button
+            type="button"
+            style={ui.aperturasModalBackdrop}
+            onClick={() => setAperturasModalOpen(false)}
+            aria-label="Cerrar"
+          />
+
+          <div style={ui.aperturasSheet}>
+            <div style={ui.aperturasSheetHeader}>
+              <div>
+                <div id="aperturas-modal-title" style={ui.aperturasSheetTitle}>
+                  Aperturas creadas
+                </div>
+                <div style={ui.aperturasSheetSubtitle}>
+                  Acciones de descarga en <b>{currentData.label}</b> · fecha de alta
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAperturasModalOpen(false)}
+                style={ui.aperturasSheetCloseBtn}
+              >
+                Cerrar
+              </button>
+            </div>
+
+            {aperturasModalLoading ? (
+              <div style={ui.aperturasModalLoadingBox}>
+                <Loader2 size={22} strokeWidth={2.25} color={ACCENT} style={{ animation: "metricaRecepcionSpin 0.75s linear infinite" }} />
+                <span style={{ color: "#64748B", fontWeight: 800, fontSize: 13 }}>Cargando…</span>
+              </div>
+            ) : aperturasModalError ? (
+              <div style={ui.aperturasModalEmpty}>{aperturasModalError}</div>
+            ) : aperturasModalItems.length === 0 ? (
+              <div style={ui.aperturasModalEmpty}>No hay acciones de descarga en este período.</div>
+            ) : (
+              <div style={ui.aperturasList}>
+                {aperturasModalItems.map((row) => {
+                  const est = getAccionEstadoRecepcion(row);
+                  const title =
+                    String(row?.nombreAccion || "").trim() ||
+                    [row?.proveedorNombre, row?.idAnden ? `Andén ${row.idAnden}` : ""]
+                      .filter(Boolean)
+                      .join(" · ") ||
+                    row?.id;
+                  const estStyle =
+                    est === "Completa"
+                      ? ui.estadoPillCompleta
+                      : est === "En proceso"
+                        ? ui.estadoPillProceso
+                        : ui.estadoPillCreada;
+                  return (
+                    <div key={row.id} style={ui.aperturasRow}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={ui.aperturasRowTitle}>{title}</div>
+                        <div style={ui.aperturasRowMeta}>
+                          Alta {formatDateTimeShort(row?.creadoAt)}
+                          {row?.aperturaId ? ` · Apertura ${row.aperturaId}` : ""}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                        <span style={{ ...ui.estadoPill, ...estStyle }}>{est}</span>
+                        <button
+                          type="button"
+                          style={ui.aperturasRowLink}
+                          onClick={() => {
+                            setAperturasModalOpen(false);
+                            nav(`/recepcion/accion-descarga/${encodeURIComponent(row.id)}`);
+                          }}
+                        >
+                          Abrir
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2892,5 +3082,157 @@ const ui = {
     fontWeight: 900,
     fontSize: 12,
     whiteSpace: "nowrap",
+  },
+
+  kpiEyeBtn: {
+    border: "1px solid rgba(8,159,138,0.28)",
+    background: ACCENT_SOFT,
+    borderRadius: 12,
+    padding: "6px 8px",
+    cursor: "pointer",
+    display: "grid",
+    placeItems: "center",
+    lineHeight: 0,
+    fontFamily: "inherit",
+  },
+
+  aperturasModalRoot: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 200,
+    display: "grid",
+    placeItems: "end center",
+  },
+  aperturasModalBackdrop: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(15,23,42,0.35)",
+    border: "none",
+    cursor: "pointer",
+  },
+  aperturasSheet: {
+    position: "relative",
+    width: "min(640px, 100%)",
+    maxHeight: "min(78vh, 640px)",
+    background: "#fff",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    border: "1px solid #E7E9F2",
+    boxShadow: "0 -18px 60px rgba(15,23,42,0.22)",
+    padding: 16,
+    margin: 12,
+    boxSizing: "border-box",
+    display: "grid",
+    gridTemplateRows: "auto 1fr",
+    gap: 12,
+    zIndex: 1,
+  },
+  aperturasSheetHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  aperturasSheetTitle: {
+    fontSize: 17,
+    fontWeight: 980,
+    color: "#0F172A",
+    lineHeight: 1.2,
+  },
+  aperturasSheetSubtitle: {
+    marginTop: 4,
+    color: "#64748B",
+    fontWeight: 800,
+    fontSize: 12,
+    lineHeight: 1.4,
+  },
+  aperturasSheetCloseBtn: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid #E7E9F2",
+    backgroundColor: "#F2F4FB",
+    cursor: "pointer",
+    fontWeight: 950,
+    color: "#0F172A",
+    fontFamily: "inherit",
+    flexShrink: 0,
+  },
+  aperturasModalLoadingBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "24px 8px",
+    justifyContent: "center",
+  },
+  aperturasModalEmpty: {
+    color: "#64748B",
+    fontWeight: 800,
+    fontSize: 13,
+    padding: "20px 8px",
+    textAlign: "center",
+  },
+  aperturasList: {
+    overflow: "auto",
+    maxHeight: "min(52vh, 420px)",
+    display: "grid",
+    gap: 8,
+    paddingRight: 4,
+  },
+  aperturasRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "12px 12px",
+    borderRadius: 16,
+    border: "1px solid #E7E9F2",
+    background: "#FBFCFF",
+  },
+  aperturasRowTitle: {
+    fontWeight: 950,
+    fontSize: 13,
+    color: "#0F172A",
+    lineHeight: 1.35,
+    wordBreak: "break-word",
+  },
+  aperturasRowMeta: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: 800,
+    color: "#64748B",
+    lineHeight: 1.35,
+  },
+  estadoPill: {
+    fontSize: 11,
+    fontWeight: 900,
+    padding: "4px 10px",
+    borderRadius: 999,
+    whiteSpace: "nowrap",
+  },
+  estadoPillCreada: {
+    background: "#F1F5F9",
+    color: "#475569",
+    border: "1px solid #E2E8F0",
+  },
+  estadoPillProceso: {
+    background: "#FFFBEB",
+    color: "#B45309",
+    border: "1px solid #FDE68A",
+  },
+  estadoPillCompleta: {
+    background: "#F0FDF4",
+    color: "#15803D",
+    border: "1px solid #BBF7D0",
+  },
+  aperturasRowLink: {
+    border: "none",
+    background: "transparent",
+    color: ACCENT,
+    fontWeight: 950,
+    fontSize: 12,
+    cursor: "pointer",
+    textDecoration: "underline",
+    fontFamily: "inherit",
+    padding: "2px 0",
   },
 };

@@ -1,11 +1,14 @@
 // screens/AccionDescarga.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ArrowLeft, Truck, User } from "lucide-react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { db } from "../../firebase";
+import { auth, db } from "../../firebase";
 import imgAccionDescarga from "../../assets/accionDescarga.png";
 
 const ACCENT = "#089F8A";
+const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
+const SLATE = "#64748B";
 
 /* ===================== Helpers ===================== */
 function toDateSafe(value) {
@@ -79,6 +82,7 @@ function dateToYMD(d) {
 /* ===================== Screen ===================== */
 export default function AccionDescarga() {
   const nav = useNavigate();
+  const user = auth.currentUser;
 
   const [hovered, setHovered] = useState(null);
 
@@ -366,24 +370,40 @@ export default function AccionDescarga() {
   /* ===================== Render ===================== */
   return (
     <div style={ui.shell}>
-      {/* Topbar */}
-      <div style={ui.topbar}>
-        <div style={ui.brand} role="button" tabIndex={0} onClick={() => nav("/recepcion")}>
-          <div style={ui.brandMark}>RC</div>
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>Acciones de Descarga</div>
-            <div style={ui.brandSub}>Listado y filtros</div>
+      <header style={ui.topbar}>
+        <div style={ui.topbarInner}>
+          <div style={ui.brand} role="button" tabIndex={0} onClick={() => nav("/recepcion")}>
+            <div style={ui.brandMark}>
+              <Truck size={20} strokeWidth={2.25} color="#fff" />
+            </div>
+            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+              <div style={ui.brandTitle}>Acciones de Descarga</div>
+              <div style={ui.brandSub}>Listado y filtros</div>
+            </div>
+          </div>
+
+          <div style={ui.topbarRight}>
+            <div style={ui.userBox}>
+              <div style={ui.userAvatar}>
+                <User size={16} strokeWidth={2.2} />
+              </div>
+              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
+                <div style={ui.userMail}>{user?.email || "—"}</div>
+              </div>
+            </div>
+
+            <button type="button" onClick={() => nav("/recepcion")} style={ui.btnGhost} title="Volver">
+              <span style={ui.btnInlineIcon}>
+                <ArrowLeft size={16} strokeWidth={2.2} />
+                Recepción
+              </span>
+            </button>
           </div>
         </div>
+      </header>
 
-        <div style={ui.topbarRight}>
-          <button type="button" onClick={() => nav("/recepcion")} style={ui.btnGhost} title="Volver">
-            ← Recepción
-          </button>
-        </div>
-      </div>
-
-      <div style={ui.main}>
+      <main style={ui.main}>
         <div style={ui.container}>
           {/* Mini-hero */}
           <div style={ui.heroMini}>
@@ -427,7 +447,7 @@ export default function AccionDescarga() {
             </div>
           )}
         </div>
-      </div>
+      </main>
 
       {/* ===== Modal filtros ===== */}
       {filtersOpen && (
@@ -538,8 +558,11 @@ export default function AccionDescarga() {
 /* ===================== Styles (corporativo) ===================== */
 const ui = {
   shell: {
+    minHeight: "100vh",
     height: "100vh",
-    width: "100vw",
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     background: "#F6F7FB",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
     color: "#0F172A",
@@ -549,55 +572,131 @@ const ui = {
   },
 
   topbar: {
-    height: 64,
-    padding: "10px 16px",
+    width: "100%",
+    boxSizing: "border-box",
+    borderBottom: "1px solid #E7E9F2",
+    background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
+    backdropFilter: "blur(8px)",
+  },
+  topbarInner: {
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
+    padding: "12px 18px",
+    minHeight: 64,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottom: "1px solid #E7E9F2",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(246,247,251,0.95) 100%)",
-    backdropFilter: "blur(6px)",
+    gap: 12,
+    flexWrap: "wrap",
   },
 
-  brand: { display: "flex", alignItems: "center", gap: 12, cursor: "pointer", userSelect: "none" },
+  brand: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    cursor: "pointer",
+    userSelect: "none",
+    outline: "none",
+  },
   brandMark: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     background: ACCENT,
-    color: "#fff",
     display: "grid",
     placeItems: "center",
-    fontWeight: 950,
-    letterSpacing: 0.4,
-    boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
+    flexShrink: 0,
+    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
   },
-  brandTitle: { fontWeight: 950, fontSize: 14 },
-  brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B" },
+  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
+  brandSub: { fontWeight: 800, fontSize: 12, color: SLATE },
 
-  topbarRight: { display: "flex", alignItems: "center", gap: 12 },
+  topbarRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+
+  userBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "6px 12px 6px 6px",
+    borderRadius: 12,
+    border: "1px solid #E7E9F2",
+    background: "#fff",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
+    maxWidth: 220,
+    minWidth: 0,
+  },
+  userAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    background: ACCENT_SOFT,
+    color: ACCENT,
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+  },
+  userName: {
+    fontWeight: 800,
+    fontSize: 12,
+    color: "#0F172A",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  userMail: {
+    fontWeight: 650,
+    fontSize: 11,
+    color: SLATE,
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
 
   btnGhost: {
     border: "1px solid #E7E9F2",
     background: "#fff",
-    borderRadius: 14,
-    padding: "10px 12px",
+    borderRadius: 12,
+    padding: "9px 14px",
     cursor: "pointer",
-    fontWeight: 950,
+    fontWeight: 800,
+    fontSize: 13,
     color: "#0F172A",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
     whiteSpace: "nowrap",
+    fontFamily: "inherit",
+  },
+  btnInlineIcon: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
   },
 
   main: {
+    width: "100%",
+    boxSizing: "border-box",
     overflow: "auto",
-    padding: 16,
+    padding: "18px 16px 28px",
     display: "grid",
     placeItems: "start center",
+    WebkitOverflowScrolling: "touch",
   },
   container: {
-    width: "min(1100px, 100%)",
+    width: "100%",
+    maxWidth: 1120,
+    marginLeft: "auto",
+    marginRight: "auto",
+    boxSizing: "border-box",
     display: "grid",
     gap: 14,
   },
