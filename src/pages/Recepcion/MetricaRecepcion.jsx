@@ -6,6 +6,8 @@ import {
   ArrowLeft,
   BarChart3,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Eye,
   Info,
   Loader2,
@@ -1070,6 +1072,8 @@ export default function MetricaRecepcion() {
   const [aperturasFilterAnden, setAperturasFilterAnden] = useState("");
   const [aperturasFilterDesde, setAperturasFilterDesde] = useState("");
   const [aperturasFilterHasta, setAperturasFilterHasta] = useState("");
+  const [panelInfoModalOpen, setPanelInfoModalOpen] = useState(false);
+  const [alertsMonitoreoOpen, setAlertsMonitoreoOpen] = useState(false);
 
   useEffect(() => {
     if (!aperturasModalOpen) return;
@@ -1390,71 +1394,18 @@ export default function MetricaRecepcion() {
               {noDataMessage}
             </div>
           )}
-          <div style={ui.hero}>
-            <div style={ui.heroMain}>
-              <div style={ui.kickerRow}>
-                <span style={ui.kickerDot} />
-                <div style={ui.kicker}>Analítica operativa</div>
-                <span style={{ ...ui.badge, ...ui.badgeInline }}>
-                  <BarChart3 size={12} strokeWidth={2.5} style={{ marginRight: 5, flexShrink: 0 }} />
-                  {currentData.heroBadge}
-                </span>
-              </div>
-
-              <h1 style={ui.title}>Panel de Recepción</h1>
-
-              <p style={ui.subtitle}>
-                Visualiza el desempeño de la operación en un solo lugar: volumen procesado,
-                tiempos de ejecución, ocupación de andenes y productividad del equipo.
-              </p>
-
-              <div style={ui.heroChips}>
-                <div style={ui.heroChip}>Seguimiento diario</div>
-                <div style={ui.heroChip}>Indicadores por período</div>
-                <div style={ui.heroChip}>Enfoque operativo</div>
-              </div>
-            </div>
-
-            <div style={ui.heroNote}>
-              <div style={ui.heroNoteTop}>
-                <div>
-                  <div style={ui.heroNoteEyebrow}>Corte seleccionado</div>
-                  <div style={ui.heroNoteTitle}>{currentData.label}</div>
-                </div>
-                <div style={ui.heroNoteBadge}>{currentData.heroBadge}</div>
-              </div>
-
-              <div style={ui.heroNoteText}>
-                Revisa el estado general de la operación para el período activo.
-              </div>
-
-              <div style={ui.heroMiniList}>
-                <div style={ui.heroMiniItem}>
-                  <span style={ui.heroMiniDot} />
-                  Descargas cerradas = acciones finalizadas
-                </div>
-                <div style={ui.heroMiniItem}>
-                  <span style={ui.heroMiniDot} />
-                  Tiempo promedio = duración desde inicio hasta cierre
-                </div>
-                <div style={ui.heroMiniItem}>
-                  <span style={ui.heroMiniDot} />
-                  Usuarios activos = operadores con movimiento registrado
-                </div>
-                <div style={ui.heroMiniItem}>
-                  <span style={ui.heroMiniDot} />
-                  Andenes en uso = posiciones con actividad operativa
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div style={ui.sectionHeaderBlock}>
-            <div style={ui.sectionOverline}>Control</div>
-            <div style={ui.sectionTitle}>Filtros de visualización</div>
-            <div style={ui.sectionText}>
-              Selecciona el período de análisis para actualizar los indicadores y las gráficas del panel.
-            </div>
+          <div style={ui.heroCompact}>
+            <h1 style={{ ...ui.title, margin: 0 }}>Panel de Recepción</h1>
+            <button
+              type="button"
+              style={ui.heroInfoBtn}
+              onClick={() => setPanelInfoModalOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={panelInfoModalOpen}
+            >
+              <Info size={18} strokeWidth={2.25} color={ACCENT} />
+              Cómo funciona el panel
+            </button>
           </div>
 
           <div style={ui.stickyFiltersOnly}>
@@ -1570,78 +1521,99 @@ export default function MetricaRecepcion() {
 
           <div style={ui.sectionHeaderBlock}>
             <div style={ui.sectionOverline}>Monitoreo</div>
-            <div style={ui.sectionTitle}>Alertas y estado operativo</div>
-            <div style={ui.sectionText}>
-              Señales rápidas para detectar desvíos, pendientes y estado general del flujo operativo.
+            <div style={ui.alertsTitleRow}>
+              <div style={{ ...ui.sectionTitle, marginBottom: 0 }}>Alertas y estado operativo</div>
+              <button
+                type="button"
+                style={ui.alertsToggleBtn}
+                onClick={() => setAlertsMonitoreoOpen((o) => !o)}
+                aria-expanded={alertsMonitoreoOpen}
+                aria-controls="recepcion-alertas-panel"
+                id="recepcion-alertas-toggle"
+              >
+                {alertsMonitoreoOpen ? (
+                  <>
+                    Ocultar
+                    <ChevronUp size={16} strokeWidth={2.5} color={ACCENT} />
+                  </>
+                ) : (
+                  <>
+                    Mostrar alertas
+                    <ChevronDown size={16} strokeWidth={2.5} color={ACCENT} />
+                  </>
+                )}
+              </button>
             </div>
-          </div>
+            {alertsMonitoreoOpen && (
+              <>
+                <div style={ui.sectionText}>
+                  Señales rápidas para detectar desvíos, pendientes y estado general del flujo operativo.
+                </div>
+                <div style={ui.alertsGrid} id="recepcion-alertas-panel" role="region" aria-labelledby="recepcion-alertas-toggle">
+                  <div style={ui.alertCard}>
+                    <div style={ui.alertCardHeader}>
+                      <div>
+                        <div style={ui.alertCardTitle}>Alertas operativas</div>
+                        <div style={ui.alertCardSubtitle}>
+                          Indicadores que requieren seguimiento o validación.
+                        </div>
+                      </div>
+                      <span style={ui.alertCardBadge}>Monitoreo</span>
+                    </div>
 
-          <div style={ui.alertsGrid}>
-            <div style={ui.alertCard}>
-              <div style={ui.alertCardHeader}>
-                <div>
-                  <div style={ui.alertCardTitle}>Alertas operativas</div>
-                  <div style={ui.alertCardSubtitle}>
-                    Indicadores que requieren seguimiento o validación.
+                    <div style={ui.alertList}>
+                      {currentData.alerts.map((alert, idx) => (
+                        <div
+                          key={`${alert.title}-${idx}`}
+                          style={{
+                            ...ui.alertItem,
+                            ...(alert.tone === "good"
+                              ? ui.alertItemGood
+                              : alert.tone === "warn"
+                                ? ui.alertItemWarn
+                                : alert.tone === "danger"
+                                  ? ui.alertItemDanger
+                                  : {}),
+                          }}
+                        >
+                          <div
+                            style={{
+                              ...ui.alertIcon,
+                              ...(alert.tone === "good"
+                                ? ui.alertIconGood
+                                : alert.tone === "warn"
+                                  ? ui.alertIconWarn
+                                  : alert.tone === "danger"
+                                    ? ui.alertIconDanger
+                                    : {}),
+                            }}
+                          >
+                            {alert.tone === "good" ? (
+                              <CheckCircle2 size={18} strokeWidth={2.25} />
+                            ) : alert.tone === "warn" ? (
+                              <AlertTriangle size={18} strokeWidth={2.25} />
+                            ) : alert.tone === "danger" ? (
+                              <AlertTriangle size={18} strokeWidth={2.25} />
+                            ) : (
+                              <Info size={18} strokeWidth={2.25} />
+                            )}
+                          </div>
+
+                          <div style={ui.alertBody}>
+                            <div style={ui.alertTitle}>{alert.title}</div>
+                            <div style={ui.alertDescription}>{alert.description}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-                <span style={ui.alertCardBadge}>Monitoreo</span>
-              </div>
-
-              <div style={ui.alertList}>
-                {currentData.alerts.map((alert, idx) => (
-                  <div
-                    key={`${alert.title}-${idx}`}
-                    style={{
-                      ...ui.alertItem,
-                      ...(alert.tone === "good"
-                        ? ui.alertItemGood
-                        : alert.tone === "warn"
-                          ? ui.alertItemWarn
-                          : alert.tone === "danger"
-                            ? ui.alertItemDanger
-                            : {}),
-                    }}
-                  >
-                    <div
-                      style={{
-                        ...ui.alertIcon,
-                        ...(alert.tone === "good"
-                          ? ui.alertIconGood
-                          : alert.tone === "warn"
-                            ? ui.alertIconWarn
-                            : alert.tone === "danger"
-                              ? ui.alertIconDanger
-                              : {}),
-                      }}
-                    >
-                      {alert.tone === "good" ? (
-                        <CheckCircle2 size={18} strokeWidth={2.25} />
-                      ) : alert.tone === "warn" ? (
-                        <AlertTriangle size={18} strokeWidth={2.25} />
-                      ) : alert.tone === "danger" ? (
-                        <AlertTriangle size={18} strokeWidth={2.25} />
-                      ) : (
-                        <Info size={18} strokeWidth={2.25} />
-                      )}
-                    </div>
-
-                    <div style={ui.alertBody}>
-                      <div style={ui.alertTitle}>{alert.title}</div>
-                      <div style={ui.alertDescription}>{alert.description}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+              </>
+            )}
           </div>
 
           <div style={ui.sectionHeaderBlock}>
-            <div style={ui.sectionOverline}>Analítica</div>
-            <div style={ui.sectionTitle}>Visualización general</div>
-            <div style={ui.sectionText}>
-              Gráficas para revisar volumen, tendencia de cumplimiento y desempeño operativo del período.
-            </div>
+            <div style={ui.sectionOverlineLg}>Analítica</div>
           </div>
 
           <div style={ui.chartGrid}>
@@ -1696,6 +1668,108 @@ export default function MetricaRecepcion() {
           </div>
         </div>
       </main>
+
+      {panelInfoModalOpen && (
+        <div
+          style={ui.aperturasModalRoot}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="recepcion-info-modal-title"
+        >
+          <button
+            type="button"
+            style={ui.aperturasModalBackdrop}
+            onClick={() => setPanelInfoModalOpen(false)}
+            aria-label="Cerrar"
+          />
+
+          <div style={ui.infoHelpSheet}>
+            <div style={ui.aperturasSheetHeader}>
+              <div style={{ minWidth: 0 }}>
+                <div id="recepcion-info-modal-title" style={ui.aperturasSheetTitle}>
+                  Información del panel
+                </div>
+                <div style={ui.aperturasSheetSubtitle}>
+                  Contexto del corte y glosario de indicadores (se actualiza con el período activo).
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPanelInfoModalOpen(false)}
+                style={ui.aperturasSheetCloseBtn}
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gap: 16, overflow: "auto", maxHeight: "min(70vh, 560px)", paddingRight: 4 }}>
+              <div style={ui.heroMain}>
+                <div style={ui.kickerRow}>
+                  <span style={ui.kickerDot} />
+                  <div style={ui.kicker}>Analítica operativa</div>
+                  <span style={{ ...ui.badge, ...ui.badgeInline }}>
+                    <BarChart3 size={12} strokeWidth={2.5} style={{ marginRight: 5, flexShrink: 0 }} />
+                    {currentData.heroBadge}
+                  </span>
+                </div>
+
+                <p style={ui.subtitle}>
+                  Visualiza el desempeño de la operación en un solo lugar: volumen procesado,
+                  tiempos de ejecución, ocupación de andenes y productividad del equipo.
+                </p>
+
+                <div style={ui.heroChips}>
+                  <div style={ui.heroChip}>Seguimiento diario</div>
+                  <div style={ui.heroChip}>Indicadores por período</div>
+                  <div style={ui.heroChip}>Enfoque operativo</div>
+                </div>
+              </div>
+
+              <div style={ui.heroNote}>
+                <div style={ui.heroNoteTop}>
+                  <div>
+                    <div style={ui.heroNoteEyebrow}>Corte seleccionado</div>
+                    <div style={ui.heroNoteTitle}>{currentData.label}</div>
+                  </div>
+                  <div style={ui.heroNoteBadge}>{currentData.heroBadge}</div>
+                </div>
+
+                <div style={ui.heroNoteText}>
+                  Revisa el estado general de la operación para el período activo.
+                </div>
+
+                <div style={ui.heroMiniList}>
+                  <div style={ui.heroMiniItem}>
+                    <span style={ui.heroMiniDot} />
+                    Descargas cerradas = acciones finalizadas
+                  </div>
+                  <div style={ui.heroMiniItem}>
+                    <span style={ui.heroMiniDot} />
+                    Tiempo promedio = duración desde inicio hasta cierre
+                  </div>
+                  <div style={ui.heroMiniItem}>
+                    <span style={ui.heroMiniDot} />
+                    Usuarios activos = operadores con movimiento registrado
+                  </div>
+                  <div style={ui.heroMiniItem}>
+                    <span style={ui.heroMiniDot} />
+                    Andenes en uso = posiciones con actividad operativa
+                  </div>
+                </div>
+              </div>
+
+              <div style={ui.infoModalSection}>
+                <div style={ui.sectionOverline}>Control</div>
+                <div style={ui.sectionTitle}>Filtros de visualización</div>
+                <div style={ui.sectionText}>
+                  Selecciona el período de análisis para actualizar los indicadores y las gráficas del panel. Los
+                  controles de período siguen visibles debajo del título principal.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {aperturasModalOpen && (
         <div style={ui.aperturasModalRoot} role="dialog" aria-modal="true" aria-labelledby="aperturas-modal-title">
@@ -1977,6 +2051,32 @@ const ui = {
     paddingTop: 4,
   },
 
+  heroCompact: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    flexWrap: "wrap",
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+
+  heroInfoBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "10px 14px",
+    borderRadius: 14,
+    border: "1px solid rgba(8,159,138,0.28)",
+    background: ACCENT_SOFT,
+    color: "#0F172A",
+    fontWeight: 900,
+    fontSize: 13,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    boxShadow: "0 6px 16px rgba(15,23,42,0.06)",
+  },
+
   kickerRow: {
     display: "flex",
     alignItems: "center",
@@ -2085,6 +2185,30 @@ const ui = {
     marginBottom: 6,
   },
 
+  alertsTitleRow: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+
+  alertsToggleBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(8,159,138,0.28)",
+    background: ACCENT_SOFT,
+    color: "#0F172A",
+    fontWeight: 800,
+    fontSize: 12,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    flexShrink: 0,
+    boxShadow: "0 4px 12px rgba(15,23,42,0.05)",
+  },
+
   sectionTitle: {
     fontWeight: 980,
     fontSize: 16,
@@ -2100,11 +2224,13 @@ const ui = {
   },
 
   stickyFiltersOnly: {
-    position: "relative",
+    position: "sticky",
+    top: 0,
     zIndex: 90,
     background: "#F6F7FB",
-    paddingTop: 2,
-    paddingBottom: 10,
+    paddingTop: 6,
+    paddingBottom: 12,
+    boxShadow: "0 1px 0 rgba(15,23,42,0.06)",
   },
 
   stickyKpisOnly: {
@@ -2854,6 +2980,14 @@ const ui = {
     textTransform: "uppercase",
   },
 
+  sectionOverlineLg: {
+    color: ACCENT,
+    fontWeight: 950,
+    fontSize: 13,
+    letterSpacing: 0.55,
+    textTransform: "uppercase",
+  },
+
   filtersPanel: {
     display: "grid",
     gap: 14,
@@ -3270,6 +3404,30 @@ const ui = {
     gap: 12,
     overflow: "hidden",
   },
+
+  infoHelpSheet: {
+    position: "relative",
+    zIndex: 1,
+    width: "min(720px, calc(100vw - 32px))",
+    maxHeight: "min(calc(100vh - 32px), 720px)",
+    background: "#fff",
+    borderRadius: 22,
+    border: "1px solid #E7E9F2",
+    boxShadow: "0 24px 64px rgba(15,23,42,0.2)",
+    padding: 16,
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+    overflow: "hidden",
+  },
+
+  infoModalSection: {
+    paddingTop: 12,
+    marginTop: 4,
+    borderTop: "1px solid #E7E9F2",
+  },
+
   aperturasSheetHeader: {
     display: "flex",
     alignItems: "flex-start",
