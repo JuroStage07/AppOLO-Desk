@@ -32,6 +32,7 @@ import {
   serverTimestamp,
   updateDoc,
   deleteDoc,
+  limit,
 } from "firebase/firestore";
 
 import { db, auth } from "../../../firebase";
@@ -78,6 +79,11 @@ function formatChronoMs(ms) {
     return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   }
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function catalogItemLabel(item) {
+  if (!item || typeof item !== "object") return "";
+  return String(item.name ?? item.title ?? "").trim();
 }
 
 /** Alineado a subtareas en Firestore (misma lógica que el tablero). */
@@ -269,11 +275,11 @@ export default function OTsDetallePage() {
   const [showSubtaskModal, setShowSubtaskModal] = useState(false);
   const [savingSubtask, setSavingSubtask] = useState(false);
   const [subtasks, setSubtasks] = useState([]);
-  const [subtaskForm, setSubtaskForm] = useState({
-    title: "",
-    description: "",
-  });
-  const [editingSubtaskId, setEditingSubtaskId] = useState(null);
+  const [subtaskSearch, setSubtaskSearch] = useState("");
+  const [catalogSubtasks, setCatalogSubtasks] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [creatingCatalogSubtask, setCreatingCatalogSubtask] = useState(false);
+  const [removingCatalogId, setRemovingCatalogId] = useState("");
   const [deletingSubtaskId, setDeletingSubtaskId] = useState("");
 
   const [ot, setOt] = useState(null);
@@ -340,6 +346,29 @@ export default function OTsDetallePage() {
     );
     return () => window.clearInterval(timerId);
   }, [subtasks.length, anySubtaskChronoRunning]);
+
+  const loadCatalogSubtasks = async () => {
+    try {
+      setCatalogLoading(true);
+
+      const ref = collection(db, "subtaskList");
+      const snap = await getDocs(query(ref, orderBy("name"), limit(100)));
+
+      const rows = snap.docs
+        .map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }))
+        .filter((item) => item.active !== false);
+
+      setCatalogSubtasks(rows);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo cargar la lista global de subtareas.");
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
 
   const totalAttachments = useMemo(
     () => tasks.reduce((acc, t) => acc + Number(t.attachmentsCount || 0), 0),
@@ -410,49 +439,45 @@ export default function OTsDetallePage() {
     }
   };
 
-  const handleOpenSubtaskModal = (subtask = null) => {
-    if (!subtask && !canAddSubtasks) {
+  const handleOpenSubtaskModal = async () => {
+    if (!canAddSubtasks || readOnlyOt) {
       window.alert(
-        "Solo podés agregar subtareas mientras la OT está en proceso."
+        readOnlyOt
+          ? "La OT está finalizada. Solo lectura."
+          : "Solo podés agregar subtareas mientras la OT está en proceso."
       );
       return;
     }
-    if (subtask) {
-      setEditingSubtaskId(subtask.id);
-      setSubtaskForm({
-        title: subtask.title || "",
-        description: subtask.description || "",
-      });
-    } else {
-      setEditingSubtaskId(null);
-      setSubtaskForm({ title: "", description: "" });
-    }
 
+    setSubtaskSearch("");
+    await loadCatalogSubtasks();
     setShowSubtaskModal(true);
   };
 
-  const handleCloseSubtaskModal = () => {
-    if (savingSubtask) return;
-    setShowSubtaskModal(false);
-    setEditingSubtaskId(null);
-    setSubtaskForm({ title: "", description: "" });
-  };
+  const filteredCatalogSubtasks = useMemo(() => {
+    const q = subtaskSearch.trim().toLowerCase();
+    if (!q) return catalogSubtasks;
 
-  const handleCreateSubtask = async () => {
-    if (readOnlyOt) {
-      alert("La OT está finalizada. Solo lectura.");
-      return;
-    }
-    if (!editingSubtaskId && !canAddSubtasks) {
-      alert("Solo podés agregar subtareas mientras la OT está en proceso.");
-      return;
-    }
+    return catalogSubtasks.filter((item) =>
+      catalogItemLabel(item).toLowerCase().includes(q)
+    );
+  }, [catalogSubtasks, subtaskSearch]);
 
-    const title = subtaskForm.title.trim();
-    const description = subtaskForm.description.trim();
+  const exactCatalogMatch = useMemo(() => {
+    const q = subtaskSearch.trim().toLowerCase();
+    if (!q) return false;
 
-    if (!title) {
-      alert("El título de la subtarea es obligatorio.");
+    return catalogSubtasks.some(
+      (item) => catalogItemLabel(item).toLowerCase() === q
+    );
+  }, [catalogSubtasks, subtaskSearch]);
+
+  const handleCreateCatalogAndAttach = async () => {
+    const rawName = subtaskSearch.trim();
+    const normalizedName = rawName.replace(/\s+/g, " ").trim();
+
+    if (!normalizedName) {
+      alert("Escribí el nombre de la subtarea.");
       return;
     }
 
@@ -462,73 +487,150 @@ export default function OTsDetallePage() {
     }
 
     try {
-      setSavingSubtask(true);
+      setCreatingCatalogSubtask(true);
 
-      const subtareasRef = collection(db, "solicitudesOT", id, "subtareas");
+      const payload = {
+        name: normalizedName,
+        nameLower: normalizedName.toLowerCase(),
+        active: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: auth.currentUser.uid,
+        createdByName: auth.currentUser.displayName || "Usuario",
+      };
 
-      if (editingSubtaskId) {
-        const subtaskRef = doc(db, "solicitudesOT", id, "subtareas", editingSubtaskId);
+      const catalogRef = await addDoc(collection(db, "subtaskList"), payload);
 
-        await updateDoc(subtaskRef, {
-          title,
-          description,
-          updatedAt: serverTimestamp(),
-        });
+      const newCatalogItem = {
+        id: catalogRef.id,
+        name: normalizedName,
+        nameLower: normalizedName.toLowerCase(),
+        active: true,
+        createdBy: auth.currentUser.uid,
+        createdByName: auth.currentUser.displayName || "Usuario",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
-        setSubtasks((prev) =>
-          prev.map((item) =>
-            item.id === editingSubtaskId
-              ? {
-                ...item,
-                title,
-                description,
-                updatedAt: new Date(),
-              }
-              : item
-          )
-        );
-      } else {
-        const payload = {
-          title,
-          description,
-          status: "Pendiente",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdBy: auth.currentUser.uid,
-          createdByName: auth.currentUser.displayName || "Usuario",
-        };
+      setCatalogSubtasks((prev) => [...prev, newCatalogItem]);
 
-        const docRef = await addDoc(subtareasRef, payload);
+      await handleAttachSubtaskToOt(newCatalogItem);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo crear la subtarea en la lista global.");
+    } finally {
+      setCreatingCatalogSubtask(false);
+    }
+  };
 
-        setSubtasks((prev) => [
-          ...prev,
-          {
-            id: docRef.id,
-            title,
-            description,
-            status: "Pendiente",
-            createdBy: auth.currentUser.uid,
-            createdByName: auth.currentUser.displayName || "Usuario",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-        ]);
-      }
-
-      setShowSubtaskModal(false);
-      setEditingSubtaskId(null);
-      setSubtaskForm({ title: "", description: "" });
-      setDetailView("subtareas");
+  const handleRemoveFromGlobalCatalog = async (item) => {
+    if (!item?.id) return;
+    const label = catalogItemLabel(item);
+    const ok = window.confirm(
+      `¿Quitar "${label}" del catálogo global? Dejará de mostrarse para nuevas OT; las subtareas ya agregadas a órdenes no se borran.`
+    );
+    if (!ok) return;
+    if (!auth.currentUser?.uid) {
+      alert("No hay usuario autenticado.");
+      return;
+    }
+    try {
+      setRemovingCatalogId(item.id);
+      const ref = doc(db, "subtaskList", item.id);
+      await updateDoc(ref, {
+        active: false,
+        updatedAt: serverTimestamp(),
+      });
+      setCatalogSubtasks((prev) => prev.filter((x) => x.id !== item.id));
     } catch (err) {
       console.error(err);
       alert(
-        editingSubtaskId
-          ? "No se pudo actualizar la subtarea."
-          : "No se pudo guardar la subtarea."
+        "No se pudo quitar del catálogo. Revisá permisos en Firestore (subtaskList/update) o intentá de nuevo."
       );
+    } finally {
+      setRemovingCatalogId("");
+    }
+  };
+
+  const handleAttachSubtaskToOt = async (catalogItem) => {
+    if (readOnlyOt) {
+      alert("La OT está finalizada. Solo lectura.");
+      return;
+    }
+
+    if (!canAddSubtasks) {
+      alert("Solo podés agregar subtareas mientras la OT está en proceso.");
+      return;
+    }
+
+    const catalogId = catalogItem?.id;
+    const label = catalogItemLabel(catalogItem);
+    if (!catalogId || !label) {
+      alert("La subtarea seleccionada no es válida.");
+      return;
+    }
+
+    if (!auth.currentUser?.uid) {
+      alert("No hay usuario autenticado.");
+      return;
+    }
+
+    // Dedup por título alineado a lo que permiten las reglas (sin campo extra en Firestore).
+    // Si más adelante las reglas aceptan p.ej. subtaskRefId, se puede persistir el id del catálogo.
+    const alreadyExists = subtasks.some(
+      (s) =>
+        String(s.title || "").trim().toLowerCase() === label.toLowerCase()
+    );
+
+    if (alreadyExists) {
+      alert("Esta subtarea ya fue agregada a la OT.");
+      return;
+    }
+
+    try {
+      setSavingSubtask(true);
+
+      const payload = {
+        title: label,
+        description: "",
+        status: "Pendiente",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: auth.currentUser.uid,
+        createdByName: auth.currentUser.displayName || "Usuario",
+      };
+
+      const subtareasRef = collection(db, "solicitudesOT", id, "subtareas");
+      const docRef = await addDoc(subtareasRef, payload);
+
+      setSubtasks((prev) => [
+        ...prev,
+        {
+          id: docRef.id,
+          title: label,
+          description: "",
+          status: "Pendiente",
+          createdBy: auth.currentUser.uid,
+          createdByName: auth.currentUser.displayName || "Usuario",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      setSubtaskSearch("");
+      setDetailView("subtareas");
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo agregar la subtarea a la OT.");
     } finally {
       setSavingSubtask(false);
     }
+  };
+
+  const handleCloseSubtaskModal = () => {
+    if (savingSubtask || creatingCatalogSubtask || removingCatalogId) return;
+    setShowSubtaskModal(false);
+    setSubtaskSearch("");
   };
 
   const handleDeleteSubtask = async (subtaskId) => {
@@ -805,8 +907,8 @@ export default function OTsDetallePage() {
                                 value={
                                   chronoSummary.avgBetweenTasksMs != null
                                     ? formatChronoMs(
-                                        chronoSummary.avgBetweenTasksMs
-                                      )
+                                      chronoSummary.avgBetweenTasksMs
+                                    )
                                     : "—"
                                 }
                               />
@@ -864,27 +966,29 @@ export default function OTsDetallePage() {
 
                   <div style={ui.subtasksHeaderRight}>
                     <div style={ui.subtasksCount}>Total: {subtasks.length}</div>
-
-                    <button
-                      type="button"
-                      style={{
-                        ...ui.addMiniCircleBtn,
-                        ...(!canAddSubtasks || readOnlyOt
-                          ? ui.addMiniCircleBtnDisabled
-                          : {}),
-                      }}
-                      onClick={() => handleOpenSubtaskModal()}
-                      title={
-                        readOnlyOt
-                          ? "OT finalizada · solo lectura"
-                          : canAddSubtasks
-                            ? "Agregar subtarea"
-                            : "Solo podés agregar subtareas con la OT en proceso"
-                      }
-                      disabled={readOnlyOt || !canAddSubtasks}
-                    >
-                      <Plus size={18} />
-                    </button>
+                    {subtasks.length > 0 ? (
+                      <button
+                        type="button"
+                        style={{
+                          ...ui.addMiniCircleBtn,
+                          ...(!canAddSubtasks || readOnlyOt
+                            ? ui.addMiniCircleBtnDisabled
+                            : {}),
+                        }}
+                        onClick={() => handleOpenSubtaskModal()}
+                        disabled={readOnlyOt || !canAddSubtasks}
+                        title={
+                          readOnlyOt
+                            ? "OT finalizada · solo lectura"
+                            : canAddSubtasks
+                              ? "Agregar otra subtarea"
+                              : "Solo podés agregar subtareas con la OT en proceso"
+                        }
+                        aria-label="Agregar otra subtarea"
+                      >
+                        <Plus size={20} strokeWidth={2.25} />
+                      </button>
+                    ) : null}
                   </div>
                 </div>
 
@@ -895,121 +999,92 @@ export default function OTsDetallePage() {
                         subtask?.id && chronoSummary.perId[subtask.id]
                           ? chronoSummary.perId[subtask.id]
                           : {
-                              wMs: chronoWorkElapsedMs(
-                                subtask,
-                                chronoSummary.nowMs
-                              ),
-                              dMs: chronoDeadElapsedMs(
-                                subtask,
-                                chronoSummary.nowMs
-                              ),
-                              workRun: chronoWorkRunning(subtask),
-                              deadRun: chronoDeadRunning(subtask),
-                            };
+                            wMs: chronoWorkElapsedMs(
+                              subtask,
+                              chronoSummary.nowMs
+                            ),
+                            dMs: chronoDeadElapsedMs(
+                              subtask,
+                              chronoSummary.nowMs
+                            ),
+                            workRun: chronoWorkRunning(subtask),
+                            deadRun: chronoDeadRunning(subtask),
+                          };
                       const stLabel = subtaskStatusLabel(subtask);
                       return (
-                      <div key={subtask?.id || index} style={ui.subtaskItem}>
-                        <div style={ui.subtaskBullet}>{index + 1}</div>
+                        <div key={subtask?.id || index} style={ui.subtaskItem}>
+                          <div style={ui.subtaskBullet}>{index + 1}</div>
 
-                        <div style={ui.subtaskContent}>
-                          <div style={ui.subtaskTopRow}>
-                            <div style={ui.subtaskName}>
-                              {subtask?.title || subtask?.nombre || `Subtarea ${index + 1}`}
+                          <div style={ui.subtaskContent}>
+                            <div style={ui.subtaskTopRow}>
+                              <div style={ui.subtaskName}>
+                                {subtask?.title || `Subtarea ${index + 1}`}
+                              </div>
+
+                              <div style={ui.subtaskActions}>
+                                <button
+                                  type="button"
+                                  style={{
+                                    ...ui.subtaskIconBtn,
+                                    ...(readOnlyOt || deletingSubtaskId === subtask.id
+                                      ? ui.subtaskIconBtnDisabled
+                                      : {}),
+                                  }}
+                                  onClick={() => handleDeleteSubtask(subtask.id)}
+                                  title={
+                                    readOnlyOt
+                                      ? "OT finalizada · solo lectura"
+                                      : "Eliminar subtarea"
+                                  }
+                                  disabled={readOnlyOt || deletingSubtaskId === subtask.id}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
                             </div>
 
-                            <div style={ui.subtaskActions}>
-                              <button
-                                type="button"
-                                style={{
-                                  ...ui.subtaskIconBtn,
-                                  ...(readOnlyOt ? ui.subtaskIconBtnDisabled : {}),
-                                }}
-                                onClick={() => handleOpenSubtaskModal(subtask)}
-                                title={
-                                  readOnlyOt
-                                    ? "OT finalizada · solo lectura"
-                                    : "Editar subtarea"
-                                }
-                                disabled={readOnlyOt}
-                              >
-                                <Pencil size={15} />
-                              </button>
-
-                              <button
-                                type="button"
-                                style={{
-                                  ...ui.subtaskIconBtn,
-                                  ...(readOnlyOt || deletingSubtaskId === subtask.id
-                                    ? ui.subtaskIconBtnDisabled
-                                    : {}),
-                                }}
-                                onClick={() => handleDeleteSubtask(subtask.id)}
-                                title={
-                                  readOnlyOt
-                                    ? "OT finalizada · solo lectura"
-                                    : "Eliminar subtarea"
-                                }
-                                disabled={readOnlyOt || deletingSubtaskId === subtask.id}
-                              >
-                                <Trash2 size={15} />
-                              </button>
+                            <div style={ui.subtaskChronoRow}>
+                              <span style={ui.subtaskChronoPill}>
+                                Estado: <b>{stLabel}</b>
+                              </span>
+                              <span style={ui.subtaskChronoMetric}>
+                                Trabajo:{" "}
+                                <b style={{ color: cm.workRun ? ACCENT : "#334155" }}>
+                                  {formatChronoMs(cm.wMs)}
+                                </b>
+                                {cm.workRun ? (
+                                  <span style={ui.subtaskChronoLive}> · en curso</span>
+                                ) : null}
+                              </span>
+                              <span style={ui.subtaskChronoMetric}>
+                                T. muerto:{" "}
+                                <b
+                                  style={{
+                                    color: cm.deadRun ? "#B45309" : "#334155",
+                                  }}
+                                >
+                                  {formatChronoMs(cm.dMs)}
+                                </b>
+                                {cm.deadRun ? (
+                                  <span style={ui.subtaskChronoLiveDead}> · en curso</span>
+                                ) : null}
+                              </span>
                             </div>
-                          </div>
-
-                          <div style={ui.subtaskMeta}>
-                            {subtask?.description || subtask?.descripcion || "Sin descripción"}
-                          </div>
-
-                          <div style={ui.subtaskChronoRow}>
-                            <span style={ui.subtaskChronoPill}>
-                              Estado: <b>{stLabel}</b>
-                            </span>
-                            <span style={ui.subtaskChronoMetric}>
-                              Trabajo:{" "}
-                              <b style={{ color: cm.workRun ? ACCENT : "#334155" }}>
-                                {formatChronoMs(cm.wMs)}
-                              </b>
-                              {cm.workRun ? (
-                                <span style={ui.subtaskChronoLive}> · en curso</span>
-                              ) : null}
-                            </span>
-                            <span style={ui.subtaskChronoMetric}>
-                              T. muerto:{" "}
-                              <b
-                                style={{
-                                  color: cm.deadRun ? "#B45309" : "#334155",
-                                }}
-                              >
-                                {formatChronoMs(cm.dMs)}
-                              </b>
-                              {cm.deadRun ? (
-                                <span style={ui.subtaskChronoLiveDead}>
-                                  {" "}
-                                  · en curso
-                                </span>
-                              ) : null}
-                            </span>
                           </div>
                         </div>
-                      </div>
-                    );
+                      );
                     })}
                   </div>
                 ) : (
                   <div style={ui.emptySubtasksBox}>
-                    <div style={ui.emptySubtasksText}>
-                      No hay subtareas aun asignadas, presiona + para comenzar a añadir.
-                    </div>
-
                     <button
                       type="button"
                       style={{
-                        ...ui.addCircleBtn,
-                        ...(!canAddSubtasks || readOnlyOt
-                          ? ui.addCircleBtnDisabled
-                          : {}),
+                        ...ui.emptyAddSubtaskBtn,
+                        ...(!canAddSubtasks || readOnlyOt ? ui.addCircleBtnDisabled : {}),
                       }}
                       onClick={() => handleOpenSubtaskModal()}
+                      disabled={readOnlyOt || !canAddSubtasks}
                       title={
                         readOnlyOt
                           ? "OT finalizada · solo lectura"
@@ -1017,10 +1092,11 @@ export default function OTsDetallePage() {
                             ? "Agregar subtarea"
                             : "Solo podés agregar subtareas con la OT en proceso"
                       }
-                      disabled={readOnlyOt || !canAddSubtasks}
                     >
-                      <Plus size={24} />
+                      <Plus size={28} />
                     </button>
+
+                    <div style={ui.emptySubtasksText}>Agregar subtarea</div>
                   </div>
                 )}
               </div>
@@ -1099,20 +1175,20 @@ export default function OTsDetallePage() {
         </div>
       </div>
       {showSubtaskModal && (
-        <div style={ui.modalOverlay} onClick={handleCloseSubtaskModal}>
+        <div
+          style={ui.modalOverlay}
+          onClick={removingCatalogId ? undefined : handleCloseSubtaskModal}
+        >
           <div
             style={ui.modalCard}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={ui.modalHeader}>
               <div>
-                <div style={ui.modalTitle}>
-                  {editingSubtaskId ? "Editar subtarea" : "Agregar subtarea"}
-                </div>
+                <div style={ui.modalTitle}>Agregar subtarea</div>
                 <div style={ui.modalSubtitle}>
-                  {editingSubtaskId
-                    ? "Actualizá la información de la subtarea."
-                    : "Completá la información básica de la subtarea."}
+                  Buscá o creá subtareas del catálogo; podés enlazar varias a esta OT sin cerrar el
+                  modal.
                 </div>
               </div>
 
@@ -1127,32 +1203,79 @@ export default function OTsDetallePage() {
 
             <div style={ui.modalBody}>
               <div style={ui.fieldGroup}>
-                <label style={ui.fieldLabel}>Título</label>
                 <input
                   type="text"
-                  value={subtaskForm.title}
-                  onChange={(e) =>
-                    setSubtaskForm((prev) => ({ ...prev, title: e.target.value }))
-                  }
+                  value={subtaskSearch}
+                  onChange={(e) => setSubtaskSearch(e.target.value)}
                   style={ui.fieldInput}
-                  placeholder="Ej. Revisar tablero eléctrico"
+                  placeholder="Buscar subtarea..."
                 />
               </div>
 
-              <div style={ui.fieldGroup}>
-                <label style={ui.fieldLabel}>Descripción</label>
-                <textarea
-                  value={subtaskForm.description}
-                  onChange={(e) =>
-                    setSubtaskForm((prev) => ({
-                      ...prev,
-                      description: e.target.value,
-                    }))
-                  }
-                  style={ui.fieldTextarea}
-                  rows={5}
-                  placeholder="Detalle de la subtarea"
-                />
+              <div style={ui.catalogResultsWrap}>
+                {catalogLoading ? (
+                  <div style={ui.catalogEmptyMsg}>Cargando subtareas...</div>
+                ) : filteredCatalogSubtasks.length > 0 ? (
+                  filteredCatalogSubtasks.map((item) => (
+                    <div key={item.id} style={ui.catalogResultRow}>
+                      <button
+                        type="button"
+                        style={ui.catalogResultItem}
+                        onClick={() => handleAttachSubtaskToOt(item)}
+                        disabled={
+                          savingSubtask || removingCatalogId === item.id
+                        }
+                      >
+                        {catalogItemLabel(item)}
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          ...ui.catalogRemoveBtn,
+                          ...(removingCatalogId === item.id
+                            ? ui.catalogRemoveBtnBusy
+                            : {}),
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleRemoveFromGlobalCatalog(item);
+                        }}
+                        disabled={
+                          savingSubtask ||
+                          creatingCatalogSubtask ||
+                          !!removingCatalogId
+                        }
+                        title="Quitar del catálogo global"
+                        aria-label={`Quitar ${catalogItemLabel(item)} del catálogo`}
+                      >
+                        <Trash2 size={16} strokeWidth={2.2} />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div style={ui.catalogEmptyBlock}>
+                    <div style={ui.catalogEmptyMsg}>
+                      No encontramos resultados para <b>{subtaskSearch || "tu búsqueda"}</b>.
+                    </div>
+
+                    {subtaskSearch.trim() && !exactCatalogMatch ? (
+                      <button
+                        type="button"
+                        style={ui.btnPrimary}
+                        onClick={handleCreateCatalogAndAttach}
+                        disabled={
+                          creatingCatalogSubtask ||
+                          savingSubtask ||
+                          !!removingCatalogId
+                        }
+                      >
+                        {creatingCatalogSubtask
+                          ? "Agregando..."
+                          : `Agregar "${subtaskSearch.trim()}" a subtaskList`}
+                      </button>
+                    ) : null}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1161,22 +1284,11 @@ export default function OTsDetallePage() {
                 type="button"
                 style={ui.btnGhost}
                 onClick={handleCloseSubtaskModal}
-                disabled={savingSubtask}
+                disabled={
+                  savingSubtask || creatingCatalogSubtask || !!removingCatalogId
+                }
               >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                style={ui.btnPrimary}
-                onClick={handleCreateSubtask}
-                disabled={savingSubtask}
-              >
-                {savingSubtask
-                  ? "Guardando..."
-                  : editingSubtaskId
-                    ? "Guardar cambios"
-                    : "Guardar subtarea"}
+                Cerrar
               </button>
             </div>
           </div>
@@ -1988,12 +2100,6 @@ const ui = {
     gap: 8,
   },
 
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: 900,
-    color: "#0F172A",
-  },
-
   fieldInput: {
     width: "100%",
     border: "1px solid #D0D5DD",
@@ -2001,18 +2107,6 @@ const ui = {
     padding: "12px 14px",
     fontSize: 14,
     outline: "none",
-    boxSizing: "border-box",
-  },
-
-  fieldTextarea: {
-    width: "100%",
-    border: "1px solid #D0D5DD",
-    borderRadius: 14,
-    padding: "12px 14px",
-    fontSize: 14,
-    outline: "none",
-    resize: "vertical",
-    fontFamily: "inherit",
     boxSizing: "border-box",
   },
 
@@ -2053,5 +2147,82 @@ const ui = {
   subtaskIconBtnDisabled: {
     opacity: 0.6,
     cursor: "not-allowed",
+  },
+
+  emptyAddSubtaskBtn: {
+    width: 64,
+    height: 64,
+    borderRadius: "50%",
+    border: `1px solid ${ACCENT}`,
+    background: ACCENT,
+    color: "#fff",
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+    boxShadow: "0 12px 30px rgba(8,159,138,0.22)",
+  },
+
+  catalogResultsWrap: {
+    display: "grid",
+    gap: 10,
+    maxHeight: 320,
+    overflowY: "auto",
+  },
+
+  catalogResultRow: {
+    display: "flex",
+    alignItems: "stretch",
+    gap: 8,
+    width: "100%",
+  },
+
+  catalogResultItem: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: "left",
+    border: "1px solid #E7E9F2",
+    borderRadius: 14,
+    padding: "12px 14px",
+    background: "#F8FAFC",
+    color: "#0F172A",
+    fontSize: 14,
+    fontWeight: 800,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+
+  catalogRemoveBtn: {
+    flexShrink: 0,
+    width: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "1px solid #FECACA",
+    borderRadius: 14,
+    background: "#FFF1F2",
+    color: RED,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+
+  catalogRemoveBtnBusy: {
+    opacity: 0.65,
+    cursor: "wait",
+  },
+
+  catalogEmptyBlock: {
+    display: "grid",
+    gap: 14,
+    padding: 16,
+    border: "1px dashed #CBD5E1",
+    borderRadius: 14,
+    background: "#F8FAFC",
+  },
+
+  catalogEmptyMsg: {
+    color: "#64748B",
+    fontWeight: 700,
+    fontSize: 14,
+    lineHeight: 1.45,
   },
 };
