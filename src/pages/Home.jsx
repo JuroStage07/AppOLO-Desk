@@ -89,6 +89,14 @@ export default function Home() {
         img: imgMantenimiento,
         tag: "Mantenimiento",
       },
+      {
+        key: "servicios-generales",
+        title: "Servicios Generales",
+        desc: "Gestión operativa, seguimiento y control de servicios generales.",
+        path: "/servicios-generales",
+        img: imgMantenimiento, // cambiá esta imagen si luego creás una propia
+        tag: "Servicios",
+      },
     ],
     []
   );

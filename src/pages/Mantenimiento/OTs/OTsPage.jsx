@@ -38,13 +38,12 @@ import {
 
 import { auth, db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
+import { NewOTModal } from "./NewOTModal";
 import {
-  addDoc,
   collection,
   collectionGroup,
   serverTimestamp,
   doc,
-  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -54,6 +53,7 @@ import {
 } from "firebase/firestore";
 
 const ACCENT = "#089F8A";
+const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
 const BLUE = "#2563EB";
 const AMBER = "#F59E0B";
 const RED = "#FF4D73";
@@ -311,66 +311,6 @@ async function fetchMantenimientoResponsables(tenantId, company) {
     a.displayName.localeCompare(b.displayName, "es", { sensitivity: "base" })
   );
   return rows;
-}
-
-const DEPARTAMENTOS = [
-  "Control",
-  "Sistema",
-  "Personal",
-  "Comercio exterior",
-  "Ventas",
-  "CEDI",
-  "Transportes",
-  "Otro",
-];
-
-const LUGARES_PROBLEMA = [
-  "Piso #1",
-  "Piso #2",
-  "Piso #3",
-  "CEDI",
-  "Parqueo",
-  "Vehículo/Flota",
-  "Otro",
-];
-
-const TIPOS_PROBLEMA = [
-  "Albañeria",
-  "Pisos",
-  "Techos",
-  "Goteras",
-  "Canoas",
-  "Cielo raso",
-  "Instalación eléctrica",
-  "Cañerías",
-  "Carpintería",
-  "Fontanería",
-  "Pintura",
-  "Soldadura",
-  "Tanques sépticos",
-  "Aire acondicionado",
-  "Remodelaciones",
-  "Puertas y portones",
-  "Accesos",
-  "Racks",
-  "Equipos",
-  "Rotulaciones",
-  "Sistema de incendios",
-  "Andenes de carga",
-  "Banda transportadora",
-  "Ilimunacion",
-  "Baños",
-  "Control de plagas",
-  "Camaras / CCTV",
-  "Otro",
-];
-
-function todayISO() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 const initialColumns = [
@@ -998,77 +938,6 @@ function Column({
             )
           )
         )}
-      </div>
-    </div>
-  );
-}
-
-function SearchSelectModal({
-  open,
-  title,
-  options,
-  value,
-  onSelect,
-  onClose,
-}) {
-  const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    if (open) setSearch("");
-  }, [open]);
-
-  if (!open) return null;
-
-  const filtered = options.filter((opt) =>
-    opt.toLowerCase().includes(search.toLowerCase())
-  );
-
-  return (
-    <div style={picker.backdrop} onClick={onClose}>
-      <div style={picker.sheet} onClick={(e) => e.stopPropagation()}>
-        <div style={picker.header}>
-          <div style={picker.title}>{title}</div>
-          <button style={picker.close} onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div style={picker.searchWrap}>
-          <Search size={16} color="#64748B" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar..."
-            style={picker.searchInput}
-          />
-        </div>
-
-        <div style={picker.list}>
-          {filtered.length === 0 ? (
-            <div style={picker.empty}>No hay resultados.</div>
-          ) : (
-            filtered.map((opt) => {
-              const active = value === opt;
-              return (
-                <button
-                  key={opt}
-                  type="button"
-                  style={{
-                    ...picker.item,
-                    ...(active ? picker.itemActive : {}),
-                  }}
-                  onClick={() => {
-                    onSelect(opt);
-                    onClose();
-                  }}
-                >
-                  <span>{opt}</span>
-                  <ChevronRight size={16} />
-                </button>
-              );
-            })
-          )}
-        </div>
       </div>
     </div>
   );
@@ -2298,474 +2167,6 @@ function AssignResponsableModal({
   );
 }
 
-function NewOTModal({ open, onClose, onCreate }) {
-  const [saving, setSaving] = useState(false);
-  const [loadingProfile, setLoadingProfile] = useState(false);
-
-  const [picker, setPicker] = useState({
-    departamento: false,
-    lugarProblema: false,
-    tipoProblema: false,
-  });
-
-  const [form, setForm] = useState({
-    solicitanteNombre: "",
-    solicitanteFicha: "",
-    fecha: todayISO(),
-    nombreOT: "",
-    activoReferencia: "",
-    departamento: "",
-    departamentoOtro: "",
-    lugarProblema: "",
-    lugarProblemaOtro: "",
-    tipoProblema: "",
-    tipoProblemaOtro: "",
-    descripcionOT: "",
-    notas: "",
-  });
-
-  useEffect(() => {
-    if (!open) return;
-
-    const loadProfile = async () => {
-      try {
-        setLoadingProfile(true);
-
-        const uid = auth.currentUser?.uid;
-        if (!uid) return;
-
-        const profileRef = doc(db, "profiles", uid);
-        const profileSnap = await getDoc(profileRef);
-
-        if (profileSnap.exists()) {
-          const data = profileSnap.data();
-          setForm((prev) => ({
-            ...prev,
-            solicitanteNombre: data?.displayName || "",
-            solicitanteFicha: data?.numeroFicha || "",
-          }));
-        } else {
-          setForm((prev) => ({
-            ...prev,
-            solicitanteNombre:
-              auth.currentUser?.displayName ||
-              auth.currentUser?.email ||
-              "",
-            solicitanteFicha: "",
-          }));
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoadingProfile(false);
-      }
-    };
-
-    loadProfile();
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      setForm({
-        solicitanteNombre: "",
-        solicitanteFicha: "",
-        fecha: todayISO(),
-        nombreOT: "",
-        activoReferencia: "",
-        departamento: "",
-        departamentoOtro: "",
-        lugarProblema: "",
-        lugarProblemaOtro: "",
-        tipoProblema: "",
-        tipoProblemaOtro: "",
-        descripcionOT: "",
-        notas: "",
-      });
-      setPicker({
-        departamento: false,
-        lugarProblema: false,
-        tipoProblema: false,
-      });
-    }
-  }, [open]);
-
-  if (!open) return null;
-
-  const setField = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const departamentoFinal =
-    form.departamento === "Otro"
-      ? form.departamentoOtro.trim()
-      : form.departamento;
-
-  const lugarProblemaFinal =
-    form.lugarProblema === "Otro"
-      ? form.lugarProblemaOtro.trim()
-      : form.lugarProblema;
-
-  const tipoProblemaFinal =
-    form.tipoProblema === "Otro"
-      ? form.tipoProblemaOtro.trim()
-      : form.tipoProblema;
-
-  const canSave =
-    !saving &&
-    !loadingProfile &&
-    form.fecha.trim() &&
-    form.nombreOT.trim() &&
-    form.activoReferencia.trim() &&
-    form.departamento.trim() &&
-    departamentoFinal &&
-    form.lugarProblema.trim() &&
-    lugarProblemaFinal &&
-    form.tipoProblema.trim() &&
-    tipoProblemaFinal &&
-    form.descripcionOT.trim();
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!canSave) return;
-
-    try {
-      setSaving(true);
-
-      const now = Date.now();
-      const NroSolicitud = `SOL-OT-${now}`;
-
-      const payload = {
-        solicitanteNombre: form.solicitanteNombre?.trim() || "",
-        solicitanteFicha: form.solicitanteFicha?.trim() || "",
-        fecha: form.fecha,
-        nombreOT: form.nombreOT.trim(),
-        activoReferencia: form.activoReferencia.trim(),
-
-        departamento: departamentoFinal,
-        departamentoBase: form.departamento,
-        departamentoOtro:
-          form.departamento === "Otro" ? form.departamentoOtro.trim() : "",
-
-        lugarProblema: lugarProblemaFinal,
-        lugarProblemaBase: form.lugarProblema,
-        lugarProblemaOtro:
-          form.lugarProblema === "Otro" ? form.lugarProblemaOtro.trim() : "",
-
-        tipoProblema: tipoProblemaFinal,
-        tipoProblemaBase: form.tipoProblema,
-        tipoProblemaOtro:
-          form.tipoProblema === "Otro" ? form.tipoProblemaOtro.trim() : "",
-
-        descripcionOT: form.descripcionOT.trim(),
-        notas: form.notas.trim(),
-
-        OTState: OT_STATE_SOLICITADA,
-        NroSolicitud,
-
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        createdBy: auth.currentUser?.uid || null,
-        createdByName:
-          auth.currentUser?.displayName ||
-          auth.currentUser?.email ||
-          "Usuario",
-      };
-
-      const docRef = await addDoc(collection(db, "solicitudesOT"), payload);
-
-      onCreate?.({
-        id: docRef.id,
-        type: "pending",
-        checked: false,
-        priority: "SOLICITADA",
-        priorityTone: "solicitada",
-        subtaskCount: 0,
-        subtaskCompletedCount: 0,
-        taskTitle: form.nombreOT.trim(),
-        asset: form.activoReferencia.trim(),
-        duration: tipoProblemaFinal,
-        schedule: departamentoFinal,
-        date: form.fecha,
-
-        nroSolicitud: NroSolicitud,
-        solicitanteNombre: form.solicitanteNombre?.trim() || "",
-        solicitanteFicha: form.solicitanteFicha?.trim() || "",
-        lugarProblema: lugarProblemaFinal,
-        tipoProblema: tipoProblemaFinal,
-        descripcionOT: form.descripcionOT.trim(),
-        estadoOT: OT_STATE_SOLICITADA,
-        notas: form.notas.trim(),
-        responsableNombre: "",
-      });
-
-      alert("✅ Solicitud OT creada correctamente.");
-      onClose();
-    } catch (err) {
-      console.error(err);
-      alert("❌ Error creando la solicitud OT");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <div style={modal.backdrop} onClick={onClose}>
-        <div style={modal.sheetLg} onClick={(e) => e.stopPropagation()}>
-          <div style={modal.header}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={modal.icon}>
-                <Plus size={18} />
-              </div>
-
-              <div>
-                <div style={modal.title}>Nueva OT</div>
-                <div style={modal.sub}>
-                  Creá una nueva solicitud de orden de trabajo
-                </div>
-              </div>
-            </div>
-
-            <button style={modal.close} onClick={onClose} disabled={saving}>
-              <X size={18} />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} style={ui.modalForm}>
-            <div style={ui.twoCols}>
-              <div style={ui.fieldGroup}>
-                <div style={ui.label}>Nombre del solicitante</div>
-                <input
-                  value={form.solicitanteNombre}
-                  style={ui.input}
-                  readOnly
-                  placeholder="Cargando..."
-                />
-              </div>
-
-              <div style={ui.fieldGroup}>
-                <div style={ui.label}>Ficha del solicitante</div>
-                <input
-                  value={form.solicitanteFicha}
-                  style={ui.input}
-                  readOnly
-                  placeholder="Cargando..."
-                />
-              </div>
-            </div>
-
-            <div style={ui.twoCols}>
-              <div style={ui.fieldGroup}>
-                <div style={ui.label}>Fecha</div>
-                <input
-                  type="date"
-                  value={form.fecha}
-                  onChange={(e) => setField("fecha", e.target.value)}
-                  style={ui.input}
-                  disabled={saving}
-                />
-              </div>
-
-              <div style={ui.fieldGroup}>
-                <div style={ui.label}>Nombre de OT</div>
-                <input
-                  value={form.nombreOT}
-                  onChange={(e) => setField("nombreOT", e.target.value)}
-                  style={ui.input}
-                  placeholder="Ej: Reparación de portón principal"
-                  disabled={saving}
-                />
-              </div>
-            </div>
-
-            <div style={ui.fieldGroup}>
-              <div style={ui.label}>Activo referencia</div>
-              <input
-                value={form.activoReferencia}
-                onChange={(e) => setField("activoReferencia", e.target.value)}
-                style={ui.input}
-                placeholder="Ej: PORTÓN-01 / VEH-12 / RACK-03"
-                disabled={saving}
-              />
-            </div>
-
-            <div style={ui.twoCols}>
-              <div style={ui.fieldGroup}>
-                <div style={ui.label}>Departamento</div>
-                <button
-                  type="button"
-                  style={ui.selectorBtn}
-                  onClick={() =>
-                    setPicker((prev) => ({ ...prev, departamento: true }))
-                  }
-                  disabled={saving}
-                >
-                  <span>
-                    {form.departamento || "Seleccionar departamento"}
-                  </span>
-                  <ChevronRight size={16} />
-                </button>
-
-                {form.departamento === "Otro" && (
-                  <input
-                    value={form.departamentoOtro}
-                    onChange={(e) =>
-                      setField("departamentoOtro", e.target.value)
-                    }
-                    style={ui.input}
-                    placeholder="Especifique departamento"
-                    disabled={saving}
-                  />
-                )}
-              </div>
-
-              <div style={ui.fieldGroup}>
-                <div style={ui.label}>Lugar del problema</div>
-                <button
-                  type="button"
-                  style={ui.selectorBtn}
-                  onClick={() =>
-                    setPicker((prev) => ({ ...prev, lugarProblema: true }))
-                  }
-                  disabled={saving}
-                >
-                  <span>
-                    {form.lugarProblema || "Seleccionar lugar"}
-                  </span>
-                  <ChevronRight size={16} />
-                </button>
-
-                {form.lugarProblema === "Otro" && (
-                  <input
-                    value={form.lugarProblemaOtro}
-                    onChange={(e) =>
-                      setField("lugarProblemaOtro", e.target.value)
-                    }
-                    style={ui.input}
-                    placeholder="Especifique lugar"
-                    disabled={saving}
-                  />
-                )}
-              </div>
-            </div>
-
-            <div style={ui.fieldGroup}>
-              <div style={ui.label}>Tipo de problema</div>
-              <button
-                type="button"
-                style={ui.selectorBtn}
-                onClick={() =>
-                  setPicker((prev) => ({ ...prev, tipoProblema: true }))
-                }
-                disabled={saving}
-              >
-                <span>
-                  {form.tipoProblema || "Seleccionar tipo de problema"}
-                </span>
-                <ChevronRight size={16} />
-              </button>
-
-              {form.tipoProblema === "Otro" && (
-                <input
-                  value={form.tipoProblemaOtro}
-                  onChange={(e) => setField("tipoProblemaOtro", e.target.value)}
-                  style={ui.input}
-                  placeholder="Especifique tipo de problema"
-                  disabled={saving}
-                />
-              )}
-            </div>
-
-            <div style={ui.fieldGroup}>
-              <div style={ui.label}>Descripción de OT</div>
-              <textarea
-                value={form.descripcionOT}
-                onChange={(e) => setField("descripcionOT", e.target.value)}
-                style={ui.textarea}
-                placeholder="Describa el problema o trabajo requerido"
-                disabled={saving}
-              />
-            </div>
-
-            <div style={ui.fieldGroup}>
-              <div style={ui.label}>Notas</div>
-              <textarea
-                value={form.notas}
-                onChange={(e) => setField("notas", e.target.value)}
-                style={ui.textarea}
-                placeholder="Notas adicionales"
-                disabled={saving}
-              />
-            </div>
-
-            <div style={modal.actions}>
-              <button
-                type="button"
-                onClick={onClose}
-                style={ui.btnGhost}
-                disabled={saving}
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="submit"
-                style={ui.btnPrimary}
-                disabled={!canSave}
-              >
-                <Plus size={16} />
-                {saving ? "Guardando..." : "Crear solicitud"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <SearchSelectModal
-        open={picker.departamento}
-        title="Seleccionar departamento"
-        options={DEPARTAMENTOS}
-        value={form.departamento}
-        onSelect={(value) => {
-          setField("departamento", value);
-          if (value !== "Otro") setField("departamentoOtro", "");
-        }}
-        onClose={() =>
-          setPicker((prev) => ({ ...prev, departamento: false }))
-        }
-      />
-
-      <SearchSelectModal
-        open={picker.lugarProblema}
-        title="Seleccionar lugar del problema"
-        options={LUGARES_PROBLEMA}
-        value={form.lugarProblema}
-        onSelect={(value) => {
-          setField("lugarProblema", value);
-          if (value !== "Otro") setField("lugarProblemaOtro", "");
-        }}
-        onClose={() =>
-          setPicker((prev) => ({ ...prev, lugarProblema: false }))
-        }
-      />
-
-      <SearchSelectModal
-        open={picker.tipoProblema}
-        title="Seleccionar tipo de problema"
-        options={TIPOS_PROBLEMA}
-        value={form.tipoProblema}
-        onSelect={(value) => {
-          setField("tipoProblema", value);
-          if (value !== "Otro") setField("tipoProblemaOtro", "");
-        }}
-        onClose={() =>
-          setPicker((prev) => ({ ...prev, tipoProblema: false }))
-        }
-      />
-    </>
-  );
-}
-
 export default function OTsPage() {
   const nav = useNavigate();
   const authCtx = useContext(AuthCtx);
@@ -2798,6 +2199,11 @@ export default function OTsPage() {
     open: false,
     solicitudId: null,
     nroLabel: "",
+    nombreOT: "",
+  });
+  const [otCreatedSuccess, setOtCreatedSuccess] = useState({
+    open: false,
+    nroSolicitud: "",
     nombreOT: "",
   });
 
@@ -3240,6 +2646,15 @@ export default function OTsPage() {
     );
   };
 
+  const handleNewOTCreated = (newItem) => {
+    createNewCard(newItem);
+    setOtCreatedSuccess({
+      open: true,
+      nroSolicitud: newItem.nroSolicitud || "",
+      nombreOT: newItem.taskTitle || "",
+    });
+  };
+
   const openSolicitudDetalle = (solicitudId) => {
     if (!solicitudId) return;
     nav(`/mantenimiento/ots-solicitud/${solicitudId}`);
@@ -3369,8 +2784,60 @@ export default function OTsPage() {
       <NewOTModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onCreate={createNewCard}
+        onCreate={handleNewOTCreated}
+        suppressSuccessAlert
       />
+
+      {otCreatedSuccess.open ? (
+        <div
+          style={otSuccessModal.backdrop}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ots-created-success-title"
+        >
+          <div
+            style={otSuccessModal.sheet}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={otSuccessModal.iconWrap}>
+              <CircleCheck size={36} strokeWidth={2.25} color={ACCENT} />
+            </div>
+            <div id="ots-created-success-title" style={otSuccessModal.title}>
+              Solicitud creada
+            </div>
+            <p style={otSuccessModal.body}>
+              La orden de trabajo se registró correctamente.
+              {otCreatedSuccess.nroSolicitud ? (
+                <>
+                  {" "}
+                  <span style={{ fontWeight: 800, color: "#0F172A" }}>
+                    {otCreatedSuccess.nroSolicitud}
+                  </span>
+                </>
+              ) : null}
+              {otCreatedSuccess.nombreOT ? (
+                <>
+                  <br />
+                  <span style={{ fontWeight: 700 }}>{otCreatedSuccess.nombreOT}</span>
+                </>
+              ) : null}
+            </p>
+            <button
+              type="button"
+              style={otSuccessModal.okBtn}
+              onClick={() =>
+                setOtCreatedSuccess({
+                  open: false,
+                  nroSolicitud: "",
+                  nombreOT: "",
+                })
+              }
+            >
+              Aceptar
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <AssignResponsableModal
         open={assignModal.open}
@@ -4347,5 +3814,68 @@ const picker = {
     textAlign: "center",
     color: "#64748B",
     fontWeight: 800,
+  },
+};
+
+/** Modal de éxito al crear OT desde el tablero (misma línea visual que Servicios generales). */
+const otSuccessModal = {
+  backdrop: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 10050,
+    background: "rgba(15,23,42,0.5)",
+    display: "grid",
+    placeItems: "center",
+    padding: 20,
+    boxSizing: "border-box",
+  },
+  sheet: {
+    width: "min(400px, 100%)",
+    background: "#fff",
+    borderRadius: 20,
+    border: "1px solid #E7E9F2",
+    boxShadow: "0 24px 48px rgba(15,23,42,0.2)",
+    padding: "28px 24px 24px",
+    display: "grid",
+    gap: 14,
+    justifyItems: "center",
+    textAlign: "center",
+  },
+  iconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    background: ACCENT_SOFT,
+    display: "grid",
+    placeItems: "center",
+  },
+  title: {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 980,
+    color: "#0F172A",
+    letterSpacing: -0.3,
+  },
+  body: {
+    margin: 0,
+    fontSize: 14,
+    fontWeight: 650,
+    color: "#64748B",
+    lineHeight: 1.5,
+    maxWidth: 320,
+  },
+  okBtn: {
+    marginTop: 4,
+    border: `1px solid ${ACCENT}`,
+    background: ACCENT,
+    color: "#fff",
+    borderRadius: 14,
+    padding: "12px 28px",
+    fontWeight: 900,
+    fontSize: 15,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    minWidth: 160,
+    boxShadow: "0 12px 24px rgba(8,159,138,0.25)",
   },
 };

@@ -37,6 +37,10 @@ import AccionDescarga from "./pages/Recepcion/AccionDescarga";
 import AccionDetalle from "./pages/Recepcion/AccionDetalle";
 import MetricaRecepcion from "./pages/Recepcion/MetricaRecepcion";
 
+import ServiciosGenerales from "./pages/ServiciosGenerales";
+import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGeneralesOrdenesTrabajo";
+import ServiciosGeneralesOTCrear from "./pages/ServiciosGeneralesOTCrear";
+import ServiciosGeneralesOTGestion from "./pages/ServiciosGeneralesOTGestion";
 
 export default function App() {
   return (
@@ -166,6 +170,42 @@ export default function App() {
             element={
               <RequireAuth>
                 <div>Despacho</div>
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/servicios-generales"
+            element={
+              <RequireAuth>
+                <ServiciosGenerales />
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/servicios-generales/ordenes-trabajo"
+            element={
+              <RequireAuth>
+                <ServiciosGeneralesOrdenesTrabajo />
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/servicios-generales/ordenes-trabajo/crear"
+            element={
+              <RequireAuth>
+                <ServiciosGeneralesOTCrear />
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/servicios-generales/ordenes-trabajo/gestion"
+            element={
+              <RequireAuth>
+                <ServiciosGeneralesOTGestion />
               </RequireAuth>
             }
           />
