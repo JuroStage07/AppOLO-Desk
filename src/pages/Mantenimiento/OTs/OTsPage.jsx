@@ -31,6 +31,7 @@ import {
   ListChecks,
   Play,
   Pause,
+  Pencil,
   Timer,
   Lock,
 } from "lucide-react";
@@ -1086,6 +1087,11 @@ function SubtasksListModal({
   const [chronoBusyId, setChronoBusyId] = useState(null);
   const [tick, setTick] = useState(0);
   const [otStateLive, setOtStateLive] = useState("");
+  const [deadMotivoOpen, setDeadMotivoOpen] = useState(false);
+  const [deadMotivoMode, setDeadMotivoMode] = useState("first");
+  const [deadMotivoRow, setDeadMotivoRow] = useState(null);
+  const [deadMotivoText, setDeadMotivoText] = useState("");
+  const [deadMotivoSaving, setDeadMotivoSaving] = useState(false);
 
   useEffect(() => {
     if (!open || !solicitudId?.trim()) {
@@ -1152,6 +1158,8 @@ function SubtasksListModal({
   const subRef = (subId) =>
     doc(db, "solicitudesOT", solicitudId, "subtareas", subId);
 
+  const deadMotivoOf = (row) => String(row?.chronoDeadMotivo ?? "").trim();
+
   const handleStartWorkChrono = async (row) => {
     if (!solicitudId?.trim() || !row?.id || chronoBusyId) return;
     if (otStateLive === OT_STATE_FINALIZADA) return;
@@ -1177,7 +1185,7 @@ function SubtasksListModal({
     }
   };
 
-  const handleTiempoMuerto = async (row) => {
+  const handleTiempoMuerto = async (row, motivoNuevo) => {
     if (!solicitudId?.trim() || !row?.id || chronoBusyId) return;
     if (otStateLive === OT_STATE_FINALIZADA) return;
     if (!otStateLive) return;
@@ -1188,18 +1196,95 @@ function SubtasksListModal({
     if (t0 != null) wAcc += Date.now() - t0;
     try {
       setChronoBusyId(row.id);
-      await updateDoc(subRef(row.id), {
+      const patch = {
         chronoWorkAccumMs: wAcc,
         chronoWorkStartedAt: deleteField(),
         chronoDeadStartedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+      const m = String(motivoNuevo ?? "").trim();
+      if (m) {
+        patch.chronoDeadMotivo = m;
+      }
+      await updateDoc(subRef(row.id), patch);
     } catch (e) {
       console.error(e);
       alert("No se pudo registrar tiempo muerto.");
     } finally {
       setChronoBusyId(null);
     }
+  };
+
+  const cancelDeadMotivoModal = () => {
+    setDeadMotivoOpen(false);
+    setDeadMotivoMode("first");
+    setDeadMotivoRow(null);
+    setDeadMotivoText("");
+  };
+
+  const confirmDeadMotivoModal = async () => {
+    const row = deadMotivoRow;
+    if (!row?.id) return;
+    const t = deadMotivoText.replace(/\s+/g, " ").trim();
+
+    if (deadMotivoMode === "edit") {
+      if (t.length < 2) {
+        alert("El motivo debe tener al menos 2 caracteres.");
+        return;
+      }
+      try {
+        setDeadMotivoSaving(true);
+        await updateDoc(subRef(row.id), {
+          chronoDeadMotivo: t,
+          updatedAt: serverTimestamp(),
+        });
+        cancelDeadMotivoModal();
+      } catch (e) {
+        console.error(e);
+        alert("No se pudo guardar el motivo.");
+      } finally {
+        setDeadMotivoSaving(false);
+      }
+      return;
+    }
+
+    if (t.length < 2) {
+      alert("Escribí el motivo de tiempo muerto (al menos 2 caracteres).");
+      return;
+    }
+    try {
+      setDeadMotivoSaving(true);
+      await handleTiempoMuerto(row, t);
+      cancelDeadMotivoModal();
+    } finally {
+      setDeadMotivoSaving(false);
+    }
+  };
+
+  const requestTiempoMuerto = (row) => {
+    if (!solicitudId?.trim() || !row?.id || chronoBusyId) return;
+    if (otStateLive === OT_STATE_FINALIZADA) return;
+    if (!otStateLive) return;
+    if (isSubtaskFirestoreCompleted(row)) return;
+    if (!chronoWorkRunning(row) || chronoDeadRunning(row)) return;
+    if (deadMotivoOf(row)) {
+      void handleTiempoMuerto(row);
+      return;
+    }
+    setDeadMotivoMode("first");
+    setDeadMotivoRow(row);
+    setDeadMotivoText("");
+    setDeadMotivoOpen(true);
+  };
+
+  const openEditDeadMotivo = (row) => {
+    if (!solicitudId?.trim() || !row?.id || chronoBusyId) return;
+    if (otStateLive === OT_STATE_FINALIZADA) return;
+    if (!deadMotivoOf(row)) return;
+    setDeadMotivoMode("edit");
+    setDeadMotivoRow(row);
+    setDeadMotivoText(deadMotivoOf(row));
+    setDeadMotivoOpen(true);
   };
 
   const handleDetenerTiempoMuerto = async (row) => {
@@ -1317,7 +1402,11 @@ function SubtasksListModal({
   };
 
   return (
-    <div style={{ ...modal.backdrop, zIndex: 10050 }} onClick={onClose}>
+    <>
+    <div
+      style={{ ...modal.backdrop, zIndex: 10050 }}
+      onClick={deadMotivoOpen ? undefined : onClose}
+    >
       <div
         style={{
           ...modal.sheet,
@@ -1659,6 +1748,60 @@ function SubtasksListModal({
                         ) : null}
                       </div>
 
+                      {deadMotivoOf(row) ? (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            display: "flex",
+                            gap: 10,
+                            alignItems: "flex-start",
+                            justifyContent: "space-between",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: "#92400E",
+                            lineHeight: 1.4,
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            background: "#FFFBEB",
+                            border: "1px solid rgba(245, 158, 11, 0.28)",
+                          }}
+                        >
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <span style={{ fontWeight: 800, color: "#B45309" }}>
+                              Motivo tiempo muerto:{" "}
+                            </span>
+                            {deadMotivoOf(row)}
+                          </div>
+                          {!otFinalizada ? (
+                            <button
+                              type="button"
+                              onClick={() => openEditDeadMotivo(row)}
+                              disabled={!!chronoBusyId}
+                              title="Editar motivo"
+                              style={{
+                                flexShrink: 0,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                padding: "4px 8px",
+                                borderRadius: 8,
+                                border: "1px solid rgba(245, 158, 11, 0.4)",
+                                background: "#fff",
+                                color: "#B45309",
+                                fontSize: 11,
+                                fontWeight: 800,
+                                cursor: chronoBusyId ? "not-allowed" : "pointer",
+                                opacity: chronoBusyId ? 0.5 : 1,
+                                fontFamily: "inherit",
+                              }}
+                            >
+                              <Pencil size={13} strokeWidth={2.25} />
+                              Editar
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+
                       {done ? (
                         <div
                           style={{
@@ -1693,7 +1836,7 @@ function SubtasksListModal({
                             !workRun ||
                             deadRun
                           }
-                          onClick={() => void handleTiempoMuerto(row)}
+                          onClick={() => void requestTiempoMuerto(row)}
                         >
                           Tiempo muerto
                         </button>
@@ -1747,6 +1890,105 @@ function SubtasksListModal({
         </div>
       </div>
     </div>
+
+    {deadMotivoOpen ? (
+      <div
+        style={{ ...modal.backdrop, zIndex: 10060 }}
+        onClick={() => {
+          if (!deadMotivoSaving) cancelDeadMotivoModal();
+        }}
+      >
+        <div
+          style={{ ...modal.sheet, width: "min(440px, 100%)" }}
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dead-motivo-title"
+        >
+          <div style={modal.header}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ ...modal.icon, background: "#FFFBEB", borderColor: "rgba(245, 158, 11, 0.35)" }}>
+                <Timer size={18} color="#B45309" />
+              </div>
+              <div>
+                <div id="dead-motivo-title" style={modal.title}>
+                  {deadMotivoMode === "edit"
+                    ? "Editar motivo de tiempo muerto"
+                    : "Motivo de tiempo muerto"}
+                </div>
+                <div style={modal.sub}>
+                  {deadMotivoMode === "edit"
+                    ? "Actualizá el texto guardado en esta subtarea."
+                    : "Primera vez en esta subtarea: queda guardado para referencia en la OT."}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              style={{
+                ...modal.close,
+                ...(deadMotivoSaving ? { opacity: 0.5, pointerEvents: "none" } : {}),
+              }}
+              onClick={cancelDeadMotivoModal}
+              aria-label="Cerrar"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <div style={{ padding: "0 14px 14px" }}>
+            <label
+              htmlFor="dead-motivo-textarea"
+              style={{ fontSize: 12, fontWeight: 800, color: "#475569", display: "block", marginBottom: 8 }}
+            >
+              Describí el motivo
+            </label>
+            <textarea
+              id="dead-motivo-textarea"
+              value={deadMotivoText}
+              onChange={(e) => setDeadMotivoText(e.target.value)}
+              rows={4}
+              placeholder="Ej.: espera de repuesto, falta de acceso al área…"
+              disabled={deadMotivoSaving}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "12px 12px",
+                borderRadius: 12,
+                border: "1px solid #E2E8F0",
+                fontSize: 14,
+                fontWeight: 600,
+                fontFamily: "inherit",
+                resize: "vertical",
+                minHeight: 96,
+              }}
+            />
+          </div>
+          <div style={modal.actions}>
+            <button
+              type="button"
+              style={ui.btnGhost}
+              onClick={cancelDeadMotivoModal}
+              disabled={deadMotivoSaving}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              style={ui.btnPrimary}
+              onClick={() => void confirmDeadMotivoModal()}
+              disabled={deadMotivoSaving}
+            >
+              {deadMotivoSaving
+                ? "Guardando…"
+                : deadMotivoMode === "edit"
+                  ? "Guardar motivo"
+                  : "Iniciar tiempo muerto"}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }
 

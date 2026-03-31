@@ -281,6 +281,8 @@ export default function OTsDetallePage() {
   const [creatingCatalogSubtask, setCreatingCatalogSubtask] = useState(false);
   const [removingCatalogId, setRemovingCatalogId] = useState("");
   const [deletingSubtaskId, setDeletingSubtaskId] = useState("");
+  const [deadMotivoEdit, setDeadMotivoEdit] = useState(null);
+  const [deadMotivoEditSaving, setDeadMotivoEditSaving] = useState(false);
 
   const [ot, setOt] = useState(null);
   const [note, setNote] = useState("");
@@ -655,6 +657,53 @@ export default function OTsDetallePage() {
       alert("No se pudo eliminar la subtarea.");
     } finally {
       setDeletingSubtaskId("");
+    }
+  };
+
+  const openDeadMotivoEdit = (subtask) => {
+    if (readOnlyOt || !subtask?.id) return;
+    setDeadMotivoEdit({
+      subtaskId: subtask.id,
+      text: String(subtask.chronoDeadMotivo ?? "").trim(),
+    });
+  };
+
+  const closeDeadMotivoEdit = () => {
+    if (deadMotivoEditSaving) return;
+    setDeadMotivoEdit(null);
+  };
+
+  const saveDeadMotivoEdit = async () => {
+    if (!deadMotivoEdit?.subtaskId || !id?.trim()) return;
+    const t = deadMotivoEdit.text.replace(/\s+/g, " ").trim();
+    if (t.length < 2) {
+      alert("El motivo debe tener al menos 2 caracteres.");
+      return;
+    }
+    try {
+      setDeadMotivoEditSaving(true);
+      const ref = doc(
+        db,
+        "solicitudesOT",
+        id,
+        "subtareas",
+        deadMotivoEdit.subtaskId
+      );
+      await updateDoc(ref, {
+        chronoDeadMotivo: t,
+        updatedAt: serverTimestamp(),
+      });
+      setSubtasks((prev) =>
+        prev.map((s) =>
+          s.id === deadMotivoEdit.subtaskId ? { ...s, chronoDeadMotivo: t } : s
+        )
+      );
+      setDeadMotivoEdit(null);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo guardar el motivo.");
+    } finally {
+      setDeadMotivoEditSaving(false);
     }
   };
 
@@ -1070,6 +1119,31 @@ export default function OTsDetallePage() {
                                 ) : null}
                               </span>
                             </div>
+
+                            {String(subtask?.chronoDeadMotivo || "").trim() ? (
+                              <div style={ui.subtaskDeadMotivoBox}>
+                                <div style={ui.subtaskDeadMotivoRow}>
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <span style={ui.subtaskDeadMotivoLabel}>
+                                      Motivo tiempo muerto:{" "}
+                                    </span>
+                                    {String(subtask.chronoDeadMotivo).trim()}
+                                  </div>
+                                  {!readOnlyOt ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openDeadMotivoEdit(subtask)}
+                                      style={ui.subtaskDeadMotivoEditBtn}
+                                      title="Editar motivo"
+                                      disabled={!!deadMotivoEditSaving}
+                                    >
+                                      <Pencil size={13} strokeWidth={2.25} />
+                                      Editar
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       );
@@ -1294,6 +1368,107 @@ export default function OTsDetallePage() {
           </div>
         </div>
       )}
+
+      {deadMotivoEdit ? (
+        <div
+          style={{ ...ui.modalOverlay, zIndex: 10050 }}
+          onClick={deadMotivoEditSaving ? undefined : closeDeadMotivoEdit}
+        >
+          <div
+            style={{ ...ui.modalCard, width: "min(440px, 100%)" }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dead-motivo-edit-title"
+          >
+            <div style={ui.modalHeader}>
+              <div>
+                <div id="dead-motivo-edit-title" style={ui.modalTitle}>
+                  Editar motivo de tiempo muerto
+                </div>
+                <div style={ui.modalSubtitle}>
+                  El cambio se guarda en esta subtarea de la OT.
+                </div>
+              </div>
+              <button
+                type="button"
+                style={{
+                  ...ui.modalCloseBtn,
+                  ...(deadMotivoEditSaving
+                    ? { opacity: 0.5, pointerEvents: "none" }
+                    : {}),
+                }}
+                onClick={closeDeadMotivoEdit}
+                aria-label="Cerrar"
+              >
+                ×
+              </button>
+            </div>
+            <div style={ui.modalBody}>
+              <label
+                htmlFor="dead-motivo-edit-ta"
+                style={{
+                  fontSize: 12,
+                  fontWeight: 800,
+                  color: "#475569",
+                  display: "block",
+                  marginBottom: 8,
+                }}
+              >
+                Motivo
+              </label>
+              <textarea
+                id="dead-motivo-edit-ta"
+                value={deadMotivoEdit.text}
+                onChange={(e) =>
+                  setDeadMotivoEdit((prev) =>
+                    prev ? { ...prev, text: e.target.value } : prev
+                  )
+                }
+                rows={4}
+                disabled={deadMotivoEditSaving}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "12px 14px",
+                  borderRadius: 14,
+                  border: "1px solid #D0D5DD",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  fontFamily: "inherit",
+                  resize: "vertical",
+                  minHeight: 96,
+                }}
+              />
+            </div>
+            <div
+              style={{
+                padding: "0 20px 20px",
+                display: "flex",
+                gap: 10,
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                type="button"
+                style={ui.btnGhost}
+                onClick={closeDeadMotivoEdit}
+                disabled={deadMotivoEditSaving}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                style={ui.btnPrimary}
+                onClick={() => void saveDeadMotivoEdit()}
+                disabled={deadMotivoEditSaving}
+              >
+                {deadMotivoEditSaving ? "Guardando…" : "Guardar motivo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1966,6 +2141,46 @@ const ui = {
   subtaskChronoLiveDead: {
     color: "#B45309",
     fontWeight: 800,
+  },
+
+  subtaskDeadMotivoBox: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#92400E",
+    lineHeight: 1.45,
+    padding: "8px 10px",
+    borderRadius: 10,
+    background: "#FFFBEB",
+    border: "1px solid rgba(245, 158, 11, 0.28)",
+  },
+
+  subtaskDeadMotivoLabel: {
+    fontWeight: 800,
+    color: "#B45309",
+  },
+
+  subtaskDeadMotivoRow: {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+
+  subtaskDeadMotivoEditBtn: {
+    flexShrink: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "4px 8px",
+    borderRadius: 8,
+    border: "1px solid rgba(245, 158, 11, 0.4)",
+    background: "#fff",
+    color: "#B45309",
+    fontSize: 11,
+    fontWeight: 800,
+    cursor: "pointer",
+    fontFamily: "inherit",
   },
 
   emptySubtasksBox: {
