@@ -11,6 +11,7 @@ import {
   Eye,
   Info,
   Loader2,
+  Settings,
   TrendingUp,
   User,
 } from "lucide-react";
@@ -28,6 +29,9 @@ import {
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
 const SLATE = "#64748B";
+const ANDEN_SETTINGS_KEY = "recepcion.metrica.andenes.settings.v1";
+const EXCLUDED_ANDEN_USERS_LEGACY_KEY =
+  "recepcion.metrica.andenes.excludedUsers.v1";
 
 function fmtMinutesFromMs(ms) {
   const n = Number(ms || 0);
@@ -81,12 +85,46 @@ function formatDateTimeShort(ts) {
   });
 }
 
+function actionStarterIdentity(row) {
+  const uid = String(
+    row?.starterUid ??
+      row?.startedByUid ??
+      row?.startedBy ??
+      row?.creadoPorUid ??
+      row?.createdBy ??
+      "sin_uid"
+  ).trim();
+  const label = String(
+    row?.starter ??
+      row?.startedByName ??
+      row?.creadoPorNombre ??
+      row?.createdByName ??
+      row?.responsableNombre ??
+      uid
+  ).trim();
+  return { uid, label: label || "Usuario" };
+}
+
+function normalizeExcludedUserToken(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function parseYMD(s) {
   if (!s || !String(s).trim()) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s).trim());
   if (!m) return null;
   const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   return isNaN(dt.getTime()) ? null : dt;
+}
+
+function formatSelectedDateLabel(value) {
+  const d = parseYMD(value);
+  if (!d) return "Fecha seleccionada";
+  return d.toLocaleDateString("es-CR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function startOfDayDate(date) {
@@ -112,8 +150,13 @@ function startOfWeekMonday(date = new Date()) {
   return d;
 }
 
-function buildDayKeysForFilter(filterKey) {
+function buildDayKeysForFilter(filterKey, selectedDate = "") {
   const now = new Date();
+
+  if (filterKey === "fecha") {
+    const parsed = parseYMD(selectedDate);
+    return parsed ? [ymd(parsed)] : [];
+  }
 
   if (filterKey === "hoy") {
     return [ymd(now)];
@@ -484,24 +527,74 @@ function buildAndenesData(docs = []) {
           label: `Andén ${key}`,
           acciones: 0,
           finalizadas: 0,
+          _startersMap: new Map(),
         });
       }
 
       const row = map.get(key);
       row.acciones += Number(a?.accionesDia || 0);
       row.finalizadas += Number(a?.finalizadasDia || 0);
+
+      // Intenta leer detalle por usuario desde el payload diario del andén.
+      const startersRaw = Array.isArray(a?.starters)
+        ? a.starters
+        : Array.isArray(a?.usuarios)
+          ? a.usuarios
+          : Array.isArray(a?.operators)
+            ? a.operators
+            : [];
+
+      for (const s of startersRaw) {
+        const starterUid = String(
+          s?.starterUid ?? s?.uid ?? s?.userId ?? s?.starter ?? "sin_uid"
+        ).trim();
+        const starterLabel = String(
+          s?.starter ?? s?.displayName ?? s?.nombre ?? s?.userName ?? starterUid
+        ).trim();
+
+        const iniciadas = Number(
+          s?.iniciadasDia ?? s?.accionesDia ?? s?.iniciadas ?? s?.acciones ?? 0
+        );
+        const finalizadas = Number(
+          s?.finalizadasDia ?? s?.finalizadas ?? s?.cerradas ?? 0
+        );
+
+        if (!row._startersMap.has(starterUid)) {
+          row._startersMap.set(starterUid, {
+            uid: starterUid,
+            label: starterLabel || "Usuario",
+            iniciadas: 0,
+            finalizadas: 0,
+          });
+        }
+
+        const agg = row._startersMap.get(starterUid);
+        agg.iniciadas += iniciadas;
+        agg.finalizadas += finalizadas;
+      }
     }
   }
 
-  return Array.from(map.values()).sort((a, b) => b.acciones - a.acciones);
+  return Array.from(map.values())
+    .map((row) => ({
+      idAnden: row.label.replace("Andén ", ""),
+      label: row.label,
+      acciones: row.acciones,
+      finalizadas: row.finalizadas,
+      starters: Array.from(row._startersMap.values()).sort(
+        (a, b) => b.iniciadas - a.iniciadas
+      ),
+    }))
+    .sort((a, b) => b.acciones - a.acciones);
 }
 
-function buildDashboardFromDailyDocs(filterKey, docs = []) {
+function buildDashboardFromDailyDocs(filterKey, docs = [], selectedDate = "") {
   const labelMap = {
     hoy: "Hoy",
     semana: "Semana actual",
     mes: "Mes actual",
     rango: "Rango personalizado",
+    fecha: formatSelectedDateLabel(selectedDate),
   };
 
   const heroBadgeMap = {
@@ -509,6 +602,7 @@ function buildDashboardFromDailyDocs(filterKey, docs = []) {
     semana: "Semanal",
     mes: "Mensual",
     rango: "Personalizado",
+    fecha: "Fecha específica",
   };
 
   const accionesFinalizadas = sum(docs, (d) => d.accionesFinalizadas);
@@ -618,12 +712,13 @@ function buildDashboardFromDailyDocs(filterKey, docs = []) {
   };
 }
 
-function FilterTabs({ active, onChange }) {
+function FilterTabs({ active, onChange, selectedDate, onChangeDate }) {
   const filters = [
     { key: "hoy", label: "Hoy", hint: "Corte diario" },
     { key: "semana", label: "Semana", hint: "Vista semanal" },
     { key: "mes", label: "Mes", hint: "Vista mensual" },
     { key: "rango", label: "Rango personalizado", hint: "Últimos cortes" },
+    { key: "fecha", label: "Por fecha", hint: "Seleccionar día" },
   ];
 
   return (
@@ -657,6 +752,16 @@ function FilterTabs({ active, onChange }) {
       </div>
 
       <div style={ui.filtersActions}>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => {
+            onChangeDate(e.target.value);
+            onChange("fecha");
+          }}
+          style={ui.dateInput}
+          aria-label="Seleccionar fecha"
+        />
         <button type="button" style={ui.exportBtn} title="Exportar reporte">
           <span style={ui.btnInlineIcon}>
             <TrendingUp size={16} strokeWidth={2.2} />
@@ -893,7 +998,7 @@ function MixTypeChart({ data = [], periodLabel = "" }) {
   );
 }
 
-function AndenesChart({ data = [], periodLabel = "" }) {
+function AndenesChart({ data = [], periodLabel = "", onOpenDetalleAnden }) {
   const max = Math.max(...data.map((d) => d.acciones), 1);
 
   return (
@@ -916,8 +1021,20 @@ function AndenesChart({ data = [], periodLabel = "" }) {
             <div key={item.label} style={ui.mixRow}>
               <div style={ui.mixRowTop}>
                 <div style={ui.mixLabel}>{item.label}</div>
-                <div style={ui.mixValue}>
-                  {item.acciones} acc · {item.finalizadas} fin
+                <div style={ui.mixValueWrap}>
+                  <div style={ui.mixValue}>
+                    {item.acciones} acc · {item.finalizadas} fin
+                  </div>
+                  <button
+                    type="button"
+                    style={{
+                      ...ui.kpiEyeBtn,
+                    }}
+                    title="Ver operadores del andén"
+                    onClick={() => onOpenDetalleAnden?.(item)}
+                  >
+                    <Eye size={16} strokeWidth={2.2} color={ACCENT} />
+                  </button>
                 </div>
               </div>
 
@@ -1060,6 +1177,7 @@ export default function MetricaRecepcion() {
   const nav = useNavigate();
   const user = auth.currentUser;
   const [activeFilter, setActiveFilter] = useState("hoy");
+  const [selectedDate, setSelectedDate] = useState(ymd(new Date()));
   const [dashboardData, setDashboardData] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -1074,6 +1192,81 @@ export default function MetricaRecepcion() {
   const [aperturasFilterHasta, setAperturasFilterHasta] = useState("");
   const [panelInfoModalOpen, setPanelInfoModalOpen] = useState(false);
   const [alertsMonitoreoOpen, setAlertsMonitoreoOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [excludedAndenUsers, setExcludedAndenUsers] = useState([]);
+  const [minAndenStartedActions, setMinAndenStartedActions] = useState(1);
+  const [andenUsersCatalog, setAndenUsersCatalog] = useState([]);
+  const [showUsersCatalog, setShowUsersCatalog] = useState(false);
+  const [usersCatalogLoading, setUsersCatalogLoading] = useState(false);
+  const [usersCatalogError, setUsersCatalogError] = useState("");
+  const [andenSettingsHydrated, setAndenSettingsHydrated] = useState(false);
+  const [excludedAndenUserDraft, setExcludedAndenUserDraft] = useState("");
+  const [andenDetalleModal, setAndenDetalleModal] = useState({
+    open: false,
+    item: null,
+    loading: false,
+    error: "",
+    starters: [],
+  });
+
+  useEffect(() => {
+    try {
+      const rawNew = localStorage.getItem(ANDEN_SETTINGS_KEY);
+      if (rawNew) {
+        const parsed = JSON.parse(rawNew);
+        const list = Array.isArray(parsed?.excludedUsers)
+          ? parsed.excludedUsers
+          : [];
+        const clean = list.map((x) => String(x || "").trim()).filter(Boolean);
+        const minN = Math.max(
+          0,
+          Number.isFinite(Number(parsed?.minStartedActions))
+            ? Math.floor(Number(parsed.minStartedActions))
+            : 1
+        );
+        setExcludedAndenUsers(clean);
+        setMinAndenStartedActions(minN);
+      } else {
+        // Migración desde la versión vieja (solo lista negra).
+        const rawLegacy = localStorage.getItem(EXCLUDED_ANDEN_USERS_LEGACY_KEY);
+        if (rawLegacy) {
+          const parsedLegacy = JSON.parse(rawLegacy);
+          const clean = Array.isArray(parsedLegacy)
+            ? parsedLegacy.map((x) => String(x || "").trim()).filter(Boolean)
+            : [];
+          setExcludedAndenUsers(clean);
+          setMinAndenStartedActions(1);
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudo leer configuración local de usuarios excluidos.", e);
+    } finally {
+      setAndenSettingsHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!andenSettingsHydrated) return;
+    try {
+      localStorage.setItem(ANDEN_SETTINGS_KEY, JSON.stringify({
+        excludedUsers: excludedAndenUsers,
+        minStartedActions: minAndenStartedActions,
+      }));
+    } catch (e) {
+      console.warn("No se pudo guardar configuración local de usuarios excluidos.", e);
+    }
+  }, [excludedAndenUsers, minAndenStartedActions, andenSettingsHydrated]);
+
+  const excludedAndenUsersSet = useMemo(
+    () => new Set(excludedAndenUsers.map(normalizeExcludedUserToken).filter(Boolean)),
+    [excludedAndenUsers]
+  );
+  const minAndenStartedActionsSafe = Math.max(
+    0,
+    Number.isFinite(Number(minAndenStartedActions))
+      ? Math.floor(Number(minAndenStartedActions))
+      : 0
+  );
 
   useEffect(() => {
     if (!aperturasModalOpen) return;
@@ -1207,6 +1400,197 @@ export default function MetricaRecepcion() {
     );
   }, [dashboardData, loadError]);
 
+  const addExcludedAndenUser = () => {
+    const raw = String(excludedAndenUserDraft || "").trim();
+    const normalized = normalizeExcludedUserToken(raw);
+    if (!normalized) return;
+    const exists = excludedAndenUsers.some(
+      (item) => normalizeExcludedUserToken(item) === normalized
+    );
+    if (exists) {
+      setExcludedAndenUserDraft("");
+      return;
+    }
+    setExcludedAndenUsers((prev) => [...prev, raw]);
+    setExcludedAndenUserDraft("");
+  };
+
+  const removeExcludedAndenUser = (value) => {
+    const normalized = normalizeExcludedUserToken(value);
+    setExcludedAndenUsers((prev) =>
+      prev.filter((item) => normalizeExcludedUserToken(item) !== normalized)
+    );
+  };
+
+  const mergeAndenUsersCatalog = (rows = []) => {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    setAndenUsersCatalog((prev) => {
+      const map = new Map(
+        prev.map((item) => [normalizeExcludedUserToken(item.uid || item.label), item])
+      );
+      for (const row of rows) {
+        const uid = String(row?.uid || "").trim();
+        const label = String(row?.label || "").trim();
+        const key = normalizeExcludedUserToken(uid || label);
+        if (!key) continue;
+        map.set(key, {
+          uid: uid || "sin_uid",
+          label: label || uid || "Usuario",
+        });
+      }
+      return Array.from(map.values()).sort((a, b) =>
+        String(a.label).localeCompare(String(b.label), "es", { sensitivity: "base" })
+      );
+    });
+  };
+
+  const isCatalogUserExcluded = (item) => {
+    const uidKey = normalizeExcludedUserToken(item?.uid);
+    const nameKey = normalizeExcludedUserToken(item?.label);
+    return excludedAndenUsersSet.has(uidKey) || excludedAndenUsersSet.has(nameKey);
+  };
+
+  const toggleCatalogUserBlacklist = (item) => {
+    const preferred = String(item?.uid || "").trim() || String(item?.label || "").trim();
+    if (!preferred) return;
+    if (isCatalogUserExcluded(item)) {
+      removeExcludedAndenUser(preferred);
+      if (preferred !== item?.label) removeExcludedAndenUser(item?.label);
+      return;
+    }
+    setExcludedAndenUsers((prev) => {
+      const normalizedPreferred = normalizeExcludedUserToken(preferred);
+      const exists = prev.some(
+        (x) => normalizeExcludedUserToken(x) === normalizedPreferred
+      );
+      if (exists) return prev;
+      return [...prev, preferred];
+    });
+  };
+
+  const loadUsersCatalog = async () => {
+    try {
+      setUsersCatalogLoading(true);
+      setUsersCatalogError("");
+
+      const q = query(
+        collection(db, "accion_descarga"),
+        orderBy("creadoAt", "desc"),
+        limit(2500)
+      );
+      const snap = await getDocs(q);
+      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      const detected = rows.map((row) => {
+        const who = actionStarterIdentity(row);
+        return {
+          uid: who.uid || "sin_uid",
+          label: who.label || "Usuario",
+        };
+      });
+
+      mergeAndenUsersCatalog(detected);
+      setShowUsersCatalog(true);
+    } catch (e) {
+      console.error("loadUsersCatalog:", e);
+      setUsersCatalogError("No se pudo cargar la lista de usuarios.");
+    } finally {
+      setUsersCatalogLoading(false);
+    }
+  };
+
+  const openAndenDetalle = async (item) => {
+    if (!item) return;
+
+    const initialStarters = (Array.isArray(item.starters) ? item.starters : []).filter(
+      (starter) => {
+        const uidKey = normalizeExcludedUserToken(starter?.uid);
+        const nameKey = normalizeExcludedUserToken(starter?.label);
+        return (
+          Number(starter?.iniciadas || 0) >= minAndenStartedActionsSafe &&
+          !excludedAndenUsersSet.has(uidKey) &&
+          !excludedAndenUsersSet.has(nameKey)
+        );
+      }
+    );
+
+    setAndenDetalleModal({
+      open: true,
+      item,
+      loading: true,
+      error: "",
+      starters: initialStarters,
+    });
+
+    try {
+      const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate);
+      const allowed = new Set(dayKeys);
+      const andenId = String(item?.idAnden || item?.label?.replace("Andén ", "") || "").trim();
+
+      const q = query(
+        collection(db, "accion_descarga"),
+        orderBy("creadoAt", "desc"),
+        limit(1500)
+      );
+      const snap = await getDocs(q);
+      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      const filtered = rows.filter((row) => {
+        const rowAnden = String(row?.idAnden ?? "").trim();
+        if (!rowAnden || rowAnden !== andenId) return false;
+        const dt = toDateSafe(row?.creadoAt);
+        if (!dt) return false;
+        return allowed.has(ymd(dt));
+      });
+
+      const grouped = new Map();
+      for (const row of filtered) {
+        const who = actionStarterIdentity(row);
+        if (!grouped.has(who.uid)) {
+          grouped.set(who.uid, {
+            uid: who.uid,
+            label: who.label,
+            iniciadas: 0,
+            finalizadas: 0,
+          });
+        }
+        const agg = grouped.get(who.uid);
+        // "Iniciadas" se contabiliza por acciones que pasaron por inicio.
+        agg.iniciadas += row?.startedAt ? 1 : 0;
+        // Finalizadas por acción cerrada.
+        agg.finalizadas += row?.completedAt || row?.completeAt ? 1 : 0;
+      }
+
+      const startersRaw = Array.from(grouped.values());
+      mergeAndenUsersCatalog(startersRaw);
+
+      const starters = startersRaw
+        .filter((starter) => {
+          const uidKey = normalizeExcludedUserToken(starter.uid);
+          const nameKey = normalizeExcludedUserToken(starter.label);
+          return (
+            Number(starter.iniciadas || 0) >= minAndenStartedActionsSafe &&
+            !excludedAndenUsersSet.has(uidKey) &&
+            !excludedAndenUsersSet.has(nameKey)
+          );
+        })
+        .sort((a, b) => b.iniciadas - a.iniciadas);
+
+      setAndenDetalleModal((prev) => ({
+        ...prev,
+        loading: false,
+        starters,
+      }));
+    } catch (e) {
+      console.error("openAndenDetalle:", e);
+      setAndenDetalleModal((prev) => ({
+        ...prev,
+        loading: false,
+        error: "No se pudo cargar el detalle por usuario para este andén.",
+      }));
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -1239,7 +1623,7 @@ export default function MetricaRecepcion() {
           return;
         }
 
-        const dayKeys = buildDayKeysForFilter(activeFilter);
+        const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate);
 
         const q = query(
           collection(db, "dashboard_salud_daily"),
@@ -1253,13 +1637,19 @@ export default function MetricaRecepcion() {
         const allDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         const filteredDocs = allDocs.filter((d) => dayKeys.includes(d.dayKey));
 
-        const built = buildDashboardFromDailyDocs(activeFilter, filteredDocs);
+        const built = buildDashboardFromDailyDocs(
+          activeFilter,
+          filteredDocs,
+          selectedDate
+        );
 
         if (!filteredDocs.length) {
           const msg =
-            activeFilter === "hoy"
-              ? "Aún no se registran operaciones hoy."
-              : "Todavía no hay operaciones registradas para este período.";
+            activeFilter === "fecha"
+              ? `No hay operaciones registradas para la fecha ${formatSelectedDateLabel(selectedDate)}.`
+              : activeFilter === "hoy"
+                ? "Aún no se registran operaciones hoy."
+                : "Todavía no hay operaciones registradas para este período.";
 
           built.notes = [msg];
 
@@ -1285,7 +1675,7 @@ export default function MetricaRecepcion() {
     return () => {
       mounted = false;
     };
-  }, [activeFilter]);
+  }, [activeFilter, selectedDate]);
 
   useEffect(() => {
     if (!aperturasModalOpen) return;
@@ -1294,7 +1684,7 @@ export default function MetricaRecepcion() {
       setAperturasModalLoading(true);
       setAperturasModalError("");
       try {
-        const dayKeys = buildDayKeysForFilter(activeFilter);
+        const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate);
         const allowed = new Set(dayKeys);
         const q = query(
           collection(db, "accion_descarga"),
@@ -1320,7 +1710,7 @@ export default function MetricaRecepcion() {
     return () => {
       cancelled = true;
     };
-  }, [aperturasModalOpen, activeFilter]);
+  }, [aperturasModalOpen, activeFilter, selectedDate]);
 
   return (
     <div style={ui.shell}>
@@ -1363,6 +1753,18 @@ export default function MetricaRecepcion() {
               <span style={ui.btnInlineIcon}>
                 <ArrowLeft size={16} strokeWidth={2.2} />
                 Volver a recepción
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSettingsModalOpen(true)}
+              style={ui.btnGhost}
+              title="Configuración del panel"
+            >
+              <span style={ui.btnInlineIcon}>
+                <Settings size={16} strokeWidth={2.2} />
+                Configuración
               </span>
             </button>
           </div>
@@ -1423,7 +1825,12 @@ export default function MetricaRecepcion() {
                 </div>
               </div>
 
-              <FilterTabs active={activeFilter} onChange={setActiveFilter} />
+              <FilterTabs
+                active={activeFilter}
+                onChange={setActiveFilter}
+                selectedDate={selectedDate}
+                onChangeDate={setSelectedDate}
+              />
             </div>
           </div>
 
@@ -1620,7 +2027,11 @@ export default function MetricaRecepcion() {
             <MiniBarChart data={currentData.barData} periodLabel={currentData.label} />
             <MiniLineChart data={currentData.lineData} periodLabel={currentData.label} />
             <MixTypeChart data={currentData.typeMix} periodLabel={currentData.label} />
-            <AndenesChart data={currentData.andenesData} periodLabel={currentData.label} />
+            <AndenesChart
+              data={currentData.andenesData}
+              periodLabel={currentData.label}
+              onOpenDetalleAnden={openAndenDetalle}
+            />
           </div>
 
           <div style={ui.sectionHeaderBlock}>
@@ -1668,6 +2079,169 @@ export default function MetricaRecepcion() {
           </div>
         </div>
       </main>
+
+      {settingsModalOpen && (
+        <div
+          style={ui.aperturasModalRoot}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="recepcion-settings-modal-title"
+        >
+          <button
+            type="button"
+            style={ui.aperturasModalBackdrop}
+            onClick={() => setSettingsModalOpen(false)}
+            aria-label="Cerrar"
+          />
+
+          <div style={ui.infoHelpSheet}>
+            <div style={ui.aperturasSheetHeader}>
+              <div style={{ minWidth: 0 }}>
+                <div id="recepcion-settings-modal-title" style={ui.aperturasSheetTitle}>
+                  Configuración del panel
+                </div>
+                <div style={ui.aperturasSheetSubtitle}>
+                  Ajustes locales de visualización para métricas de recepción.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettingsModalOpen(false)}
+                style={ui.aperturasSheetCloseBtn}
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div style={ui.settingsSection}>
+              <div style={ui.settingsTitle}>Usuarios excluidos: Uso de andenes</div>
+              <div style={ui.settingsText}>
+                Agregá nombre o UID a una lista negra para que no aparezcan en el detalle del ojito por andén.
+              </div>
+              <div style={ui.settingsWarningText}>
+                Esta lista es definitiva: todo usuario agregado aquí quedará oculto en los listados del ojito.
+              </div>
+
+              <div style={ui.settingsRowCompact}>
+                <label style={ui.aperturasFilterField}>
+                  <span style={ui.aperturasFilterLabel}>Mínimo de acciones iniciadas</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={minAndenStartedActionsSafe}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const next = raw === "" ? 0 : Number(raw);
+                      if (!Number.isFinite(next)) return;
+                      setMinAndenStartedActions(Math.max(0, Math.floor(next)));
+                    }}
+                    style={ui.settingsInput}
+                  />
+                </label>
+              </div>
+
+              <div style={ui.settingsRow}>
+                <input
+                  type="text"
+                  value={excludedAndenUserDraft}
+                  onChange={(e) => setExcludedAndenUserDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addExcludedAndenUser();
+                    }
+                  }}
+                  placeholder="Ej: Juan Pérez o UID"
+                  style={ui.settingsInput}
+                />
+                <button
+                  type="button"
+                  onClick={addExcludedAndenUser}
+                  style={ui.settingsAddBtn}
+                >
+                  Agregar
+                </button>
+              </div>
+
+              <div style={ui.settingsRowCompact}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!showUsersCatalog && andenUsersCatalog.length === 0) {
+                      void loadUsersCatalog();
+                    } else if (!showUsersCatalog) {
+                      setShowUsersCatalog(true);
+                    } else {
+                      setShowUsersCatalog(false);
+                    }
+                  }}
+                  style={ui.settingsShowUsersBtn}
+                >
+                  {usersCatalogLoading
+                    ? "Cargando usuarios…"
+                    : showUsersCatalog
+                      ? "Ocultar usuarios"
+                      : "Mostrar usuarios"}
+                </button>
+              </div>
+
+              {usersCatalogError ? (
+                <div style={ui.settingsError}>{usersCatalogError}</div>
+              ) : null}
+
+              {showUsersCatalog && andenUsersCatalog.length > 0 ? (
+                <div style={ui.settingsCatalogBox}>
+                  <div style={ui.settingsCatalogTitle}>Usuarios detectados (selección rápida)</div>
+                  <div style={ui.settingsCatalogList}>
+                    {andenUsersCatalog.map((item) => {
+                      const excluded = isCatalogUserExcluded(item);
+                      return (
+                        <div key={`${item.uid}-${item.label}`} style={ui.settingsCatalogItem}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={ui.settingsListText}>{item.label}</div>
+                            <div style={ui.settingsCatalogSub}>UID: {item.uid || "—"}</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleCatalogUserBlacklist(item)}
+                            style={
+                              excluded
+                                ? ui.settingsTagExcluded
+                                : ui.settingsTagInclude
+                            }
+                          >
+                            {excluded ? "En lista negra" : "Excluir"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {excludedAndenUsers.length === 0 ? (
+                <div style={ui.settingsEmpty}>Sin usuarios excluidos.</div>
+              ) : (
+                <div style={ui.settingsList}>
+                  {excludedAndenUsers.map((item) => (
+                    <div key={item} style={ui.settingsListItem}>
+                      <span style={ui.settingsListText}>{item}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeExcludedAndenUser(item)}
+                        style={ui.settingsRemoveBtn}
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {panelInfoModalOpen && (
         <div
@@ -1767,6 +2341,104 @@ export default function MetricaRecepcion() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {andenDetalleModal.open && (
+        <div
+          style={ui.aperturasModalRoot}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="anden-detalle-modal-title"
+        >
+          <button
+            type="button"
+            style={ui.aperturasModalBackdrop}
+            onClick={() =>
+              setAndenDetalleModal({
+                open: false,
+                item: null,
+                loading: false,
+                error: "",
+                starters: [],
+              })
+            }
+            aria-label="Cerrar"
+          />
+
+          <div style={ui.aperturasSheet}>
+            <div style={ui.aperturasSheetHeader}>
+              <div style={{ minWidth: 0 }}>
+                <div id="anden-detalle-modal-title" style={ui.aperturasSheetTitle}>
+                  {andenDetalleModal.item?.label || "Andén"}
+                </div>
+                <div style={ui.aperturasSheetSubtitle}>
+                  Usuarios que iniciaron acciones · <b>{currentData.label}</b>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setAndenDetalleModal({
+                    open: false,
+                    item: null,
+                    loading: false,
+                    error: "",
+                    starters: [],
+                  })
+                }
+                style={ui.aperturasSheetCloseBtn}
+              >
+                Cerrar
+              </button>
+            </div>
+
+            {andenDetalleModal.loading ? (
+              <div style={ui.aperturasModalLoadingBox}>
+                <Loader2
+                  size={22}
+                  strokeWidth={2.25}
+                  color={ACCENT}
+                  style={{ animation: "metricaRecepcionSpin 0.75s linear infinite" }}
+                />
+                <span style={{ color: "#64748B", fontWeight: 800, fontSize: 13 }}>
+                  Cargando…
+                </span>
+              </div>
+            ) : andenDetalleModal.error ? (
+              <div style={ui.aperturasModalEmpty}>{andenDetalleModal.error}</div>
+            ) : !andenDetalleModal.starters?.length ? (
+              <div style={ui.aperturasModalEmpty}>
+                No se encontraron inicios de acciones por usuario para este andén en el período seleccionado.
+              </div>
+            ) : (
+              <div style={ui.aperturasListWrap}>
+                <div style={ui.aperturasList}>
+                  {andenDetalleModal.starters.map((starter) => (
+                    <div
+                      key={`${andenDetalleModal.item.label}-${starter.uid}`}
+                      style={ui.aperturasRow}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div style={ui.aperturasRowTitle}>{starter.label}</div>
+                        <div style={ui.aperturasRowMeta}>
+                          UID: {starter.uid || "—"}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ ...ui.estadoPill, ...ui.estadoPillProceso }}>
+                          {starter.iniciadas} iniciadas
+                        </span>
+                        <span style={{ ...ui.estadoPill, ...ui.estadoPillCompleta }}>
+                          {starter.finalizadas} finalizadas
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -3042,6 +3714,18 @@ const ui = {
     flexShrink: 0,
   },
 
+  dateInput: {
+    height: 44,
+    borderRadius: 12,
+    border: "1px solid #D7DCE5",
+    background: "#fff",
+    padding: "0 12px",
+    fontSize: 14,
+    color: "#0F172A",
+    outline: "none",
+    fontFamily: "inherit",
+  },
+
   filterBtnLabel: {
     fontWeight: 950,
     fontSize: 12,
@@ -3370,6 +4054,11 @@ const ui = {
     lineHeight: 0,
     fontFamily: "inherit",
   },
+  mixValueWrap: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+  },
 
   aperturasModalRoot: {
     position: "fixed",
@@ -3457,6 +4146,192 @@ const ui = {
     color: "#0F172A",
     fontFamily: "inherit",
     flexShrink: 0,
+  },
+  settingsSection: {
+    display: "grid",
+    gap: 10,
+    paddingTop: 4,
+  },
+  settingsTitle: {
+    fontSize: 14,
+    fontWeight: 950,
+    color: "#0F172A",
+  },
+  settingsText: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#64748B",
+    lineHeight: 1.45,
+  },
+  settingsWarningText: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: "#92400E",
+    background: "#FFFBEB",
+    border: "1px solid rgba(245, 158, 11, 0.35)",
+    borderRadius: 10,
+    padding: "8px 10px",
+    lineHeight: 1.4,
+  },
+  settingsRow: {
+    display: "grid",
+    gridTemplateColumns: "1fr auto",
+    gap: 8,
+    alignItems: "center",
+  },
+  settingsRowCompact: {
+    display: "grid",
+    gap: 8,
+  },
+  settingsShowUsersBtn: {
+    borderRadius: 10,
+    border: "1px solid #D8E4FE",
+    background: "#EEF4FF",
+    color: "#1D4ED8",
+    padding: "8px 12px",
+    fontSize: 12,
+    fontWeight: 900,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    width: "fit-content",
+  },
+  settingsError: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: "#B42318",
+    background: "#FEF2F2",
+    border: "1px solid #FECACA",
+    borderRadius: 10,
+    padding: "8px 10px",
+  },
+  settingsInput: {
+    borderRadius: 12,
+    border: "1px solid #E7E9F2",
+    background: "#FBFCFF",
+    padding: "10px 12px",
+    fontSize: 13,
+    fontWeight: 800,
+    color: "#0F172A",
+    outline: "none",
+    fontFamily: "inherit",
+    width: "100%",
+    boxSizing: "border-box",
+  },
+  settingsAddBtn: {
+    borderRadius: 12,
+    border: `1px solid ${ACCENT}`,
+    background: ACCENT,
+    color: "#fff",
+    padding: "10px 12px",
+    fontSize: 12,
+    fontWeight: 900,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    whiteSpace: "nowrap",
+  },
+  settingsEmpty: {
+    padding: "12px 10px",
+    borderRadius: 12,
+    border: "1px dashed #D3DAE8",
+    background: "#F8FAFC",
+    color: "#64748B",
+    fontWeight: 800,
+    fontSize: 12,
+  },
+  settingsList: {
+    display: "grid",
+    gap: 8,
+    maxHeight: 220,
+    overflow: "auto",
+    paddingRight: 2,
+  },
+  settingsCatalogBox: {
+    display: "grid",
+    gap: 8,
+    border: "1px solid #E7E9F2",
+    borderRadius: 12,
+    background: "#FBFCFF",
+    padding: 10,
+  },
+  settingsCatalogTitle: {
+    fontSize: 12,
+    fontWeight: 900,
+    color: "#475467",
+  },
+  settingsCatalogList: {
+    display: "grid",
+    gap: 6,
+    maxHeight: 180,
+    overflow: "auto",
+    paddingRight: 2,
+  },
+  settingsCatalogItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    border: "1px solid #E7E9F2",
+    borderRadius: 10,
+    background: "#fff",
+    padding: "7px 8px",
+  },
+  settingsCatalogSub: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  settingsTagInclude: {
+    borderRadius: 999,
+    border: "1px solid rgba(8,159,138,0.32)",
+    background: "#F1FBF8",
+    color: ACCENT,
+    padding: "5px 10px",
+    fontSize: 11,
+    fontWeight: 900,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    whiteSpace: "nowrap",
+  },
+  settingsTagExcluded: {
+    borderRadius: 999,
+    border: "1px solid #FECACA",
+    background: "#FFF1F2",
+    color: "#B42318",
+    padding: "5px 10px",
+    fontSize: 11,
+    fontWeight: 900,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    whiteSpace: "nowrap",
+  },
+  settingsListItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    border: "1px solid #E7E9F2",
+    borderRadius: 12,
+    background: "#fff",
+    padding: "8px 10px",
+  },
+  settingsListText: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: "#0F172A",
+    wordBreak: "break-word",
+  },
+  settingsRemoveBtn: {
+    borderRadius: 10,
+    border: "1px solid #FECACA",
+    background: "#FFF1F2",
+    color: "#B42318",
+    padding: "6px 10px",
+    fontSize: 11,
+    fontWeight: 900,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    whiteSpace: "nowrap",
   },
   aperturasModalLoadingBox: {
     display: "flex",

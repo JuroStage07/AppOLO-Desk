@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -36,6 +36,7 @@ import {
 } from "firebase/firestore";
 
 import { db, auth } from "../../../firebase";
+import { AuthCtx } from "../../../auth/AuthProvider";
 import { OT_STATE_FINALIZADA } from "./OTsFinalizadasPage";
 
 const ACCENT = "#089F8A";
@@ -43,6 +44,10 @@ const OT_STATE_EN_PROCESO = "En proceso";
 const OT_STATE_REVISION = "En revisión";
 const BLUE = "#2563EB";
 const RED = "#FF4D73";
+
+function canAccessOtDetalle(permisos, role) {
+  return role === "dev" || permisos?.mantenimiento === true;
+}
 
 function formatDate(value) {
   if (!value) return "—";
@@ -269,6 +274,11 @@ function DetailRow({ label, value }) {
 export default function OTsDetallePage() {
   const nav = useNavigate();
   const { id } = useParams();
+  const authCtx = useContext(AuthCtx);
+  const permisos = authCtx?.permisos || {};
+  const role = authCtx?.role || "";
+  const authLoading = !!authCtx?.loading;
+  const canAccess = canAccessOtDetalle(permisos, role);
 
   //subtareas
   const [detailView, setDetailView] = useState("tarea");
@@ -293,6 +303,15 @@ export default function OTsDetallePage() {
   const [chronoTick, setChronoTick] = useState(0);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!canAccess) {
+      alert("Acceso denegado. Necesitás permisos de Mantenimiento o rol dev.");
+      nav(-1);
+    }
+  }, [authLoading, canAccess, nav]);
+
+  useEffect(() => {
+    if (authLoading || !canAccess) return;
     const loadOT = async () => {
       try {
         setLoading(true);
@@ -330,7 +349,7 @@ export default function OTsDetallePage() {
     };
 
     if (id) loadOT();
-  }, [id]);
+  }, [id, authLoading, canAccess]);
 
   const anySubtaskChronoRunning = useMemo(
     () =>
@@ -706,6 +725,8 @@ export default function OTsDetallePage() {
       setDeadMotivoEditSaving(false);
     }
   };
+
+  if (authLoading || !canAccess) return null;
 
   if (loading) {
     return (
