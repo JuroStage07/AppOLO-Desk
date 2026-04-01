@@ -30,6 +30,13 @@ export default function ServiciosGenerales() {
         path: "/servicios-generales/ordenes-trabajo",
         tag: "Trabajo",
       },
+      {
+        key: "validar-ingreso",
+        title: "Validar ingreso",
+        desc: "Escaneá el QR o ingresá la cédula para validar el ingreso de colaboradores terceros.",
+        path: "/servicios-generales/validar-ingreso",
+        tag: "Control",
+      },
     ],
     []
   );

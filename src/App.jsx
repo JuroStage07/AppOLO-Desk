@@ -41,6 +41,7 @@ import ServiciosGenerales from "./pages/ServiciosGenerales";
 import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGeneralesOrdenesTrabajo";
 import ServiciosGeneralesOTCrear from "./pages/ServiciosGeneralesOTCrear";
 import ServiciosGeneralesOTGestion from "./pages/ServiciosGeneralesOTGestion";
+import ValidarIngreso from "./pages/ServiciosGenerales/ValidarIngreso";
 
 export default function App() {
   return (
@@ -206,6 +207,15 @@ export default function App() {
             element={
               <RequireAuth>
                 <ServiciosGeneralesOTGestion />
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/servicios-generales/validar-ingreso"
+            element={
+              <RequireAuth>
+                <ValidarIngreso />
               </RequireAuth>
             }
           />
