@@ -83,21 +83,24 @@ export default function Login() {
   const afterAuth = async (user) => {
     const mail = (user.email || "").toLowerCase();
 
-    // ✅ restringir dominio
     if (!mail.endsWith("@ologistics.com")) {
       await signOut(auth);
       throw new Error("DOMAIN_NOT_ALLOWED");
     }
 
-    // ✅ cargar profile
     const profile = await getProfileByUid(user.uid);
     if (!profile) {
       await signOut(auth);
       throw new Error("NO_PROFILE");
     }
 
-    // ✅ persistir y navegar
     persistSession(profile);
+
+    if (!profile.tenantId) {
+      nav("/config-region", { replace: true });
+      return;
+    }
+
     nav("/", { replace: true });
   };
 

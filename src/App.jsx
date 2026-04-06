@@ -3,9 +3,11 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import AuthProvider from "./auth/AuthProvider";
 import RequireAuth from "./auth/RequireAuth";
+import PrivateRoute from "./auth/PrivateRoute";
 
 import Login from "./pages/Login";
 import Home from "./pages/Home";
+import ConfigRegionPage from "./pages/ConfigRegionPage";
 
 //Documentacion
 import DocumentacionPage from "./pages/Documentacion/DocumentacionPage";
@@ -48,14 +50,26 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          {/* Públicas */}
           <Route path="/login" element={<Login />} />
 
+          {/* Requiere login pero NO tenant */}
+          <Route
+            path="/config-region"
+            element={
+              <RequireAuth>
+                <ConfigRegionPage />
+              </RequireAuth>
+            }
+          />
+
+          {/* ================= Home ================= */}
           <Route
             path="/"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <Home />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
@@ -63,9 +77,9 @@ export default function App() {
           <Route
             path="/documentacion"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <DocumentacionPage />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
@@ -73,150 +87,154 @@ export default function App() {
           <Route
             path="/salud"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <SaludOcupacional />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/salud/terceros"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <ControlTercerosManual />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/salud/aperturas"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <AdministrarAperturas />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/salud/aperturas/finalizadas"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <AperturasFinalizadas />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/salud/aperturas/detalle/:id"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <AperturaDetalle />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/salud/aperturas/rechazadas"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <AperturasRechazadas />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/salud/equipos"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <div>Revisión de equipos</div>
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
-          {/* Menú Visados (Generar / Administrar) */}
           <Route
             path="/salud/visado"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <Visados />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
-          {/* Generar visado */}
           <Route
             path="/salud/visado/generar"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <NuevoVisado />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
-          {/* Administrar visados */}
           <Route
             path="/salud/visados"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <AdministrarVisados />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
-          <Route path="/salud/metricas" element={<MetricaSaludOcupacional />} />
+          <Route
+            path="/salud/metricas"
+            element={
+              <PrivateRoute>
+                <MetricaSaludOcupacional />
+              </PrivateRoute>
+            }
+          />
 
           {/* ================= Rutas futuras generales ================= */}
           <Route
             path="/despacho"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <div>Despacho</div>
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/servicios-generales"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <ServiciosGenerales />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/servicios-generales/ordenes-trabajo"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <ServiciosGeneralesOrdenesTrabajo />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/servicios-generales/ordenes-trabajo/crear"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <ServiciosGeneralesOTCrear />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/servicios-generales/ordenes-trabajo/gestion"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <ServiciosGeneralesOTGestion />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/servicios-generales/validar-ingreso"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <ValidarIngreso />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
@@ -224,37 +242,36 @@ export default function App() {
           <Route
             path="/recepcion"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <Recepcion />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/recepcion/accion-descarga"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <AccionDescarga />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
-          {/* ✅ NUEVA RUTA: detalle de acción */}
           <Route
             path="/recepcion/accion-descarga/:accionId"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <AccionDetalle />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/recepcion/metricas"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <MetricaRecepcion />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
@@ -262,63 +279,63 @@ export default function App() {
           <Route
             path="/mantenimiento"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <Mantenimiento />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/mantenimiento/equipos"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <PanelEquiposMantenimiento />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/mantenimiento/equipos/:id"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <EquipoInfoPage />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/mantenimiento/ots"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <OTsHubMantenimiento />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/mantenimiento/ots/finalizadas"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <OTsFinalizadasPage />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/mantenimiento/OTsPage"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <OTsPage />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
 
           <Route
             path="/mantenimiento/ots-solicitud/:id"
             element={
-              <RequireAuth>
+              <PrivateRoute>
                 <OTsSolDetallePage />
-              </RequireAuth>
+              </PrivateRoute>
             }
           />
         </Routes>
