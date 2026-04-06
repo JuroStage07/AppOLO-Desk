@@ -1,5 +1,5 @@
 // EquipoInfoPage.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   doc,
@@ -15,6 +15,8 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { AuthCtx } from "../../auth/AuthProvider";
+import { filterByUserScope, isInUserScope } from "../../utils/dataScope";
 
 import ApiladorPng from "../../assets/equipos/apilador_icon.png";
 import CarretillaPng from "../../assets/equipos/carretilla_icon.png";
@@ -89,6 +91,9 @@ function SectionIconBtn({ title, subtitle, icon, onClick }) {
 export default function EquipoInfoPage() {
   const nav = useNavigate();
   const { id } = useParams(); // ruta: /mantenimiento/equipos/:id
+  const authCtx = useContext(AuthCtx);
+  const profile = authCtx?.profile || {};
+  const authLoading = authCtx?.loading;
 
   const [equipo, setEquipo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -110,6 +115,7 @@ export default function EquipoInfoPage() {
 
   // ✅ traer equipo (onSnapshot para UI “viva”)
   useEffect(() => {
+    if (authLoading) return;
     if (!id) return;
 
     setLoading(true);
@@ -118,7 +124,18 @@ export default function EquipoInfoPage() {
     const unsub = onSnapshot(
       ref,
       (snap) => {
-        setEquipo(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+        if (!snap.exists()) {
+          setEquipo(null);
+          setLoading(false);
+          return;
+        }
+        const row = { id: snap.id, ...snap.data() };
+        if (!isInUserScope(row, profile?.tenantId, profile?.company)) {
+          setEquipo(null);
+          setLoading(false);
+          return;
+        }
+        setEquipo(row);
         setLoading(false);
       },
       async (err) => {
@@ -126,7 +143,14 @@ export default function EquipoInfoPage() {
         // fallback (por si reglas bloquean snapshot pero permite getDoc)
         try {
           const snap = await getDoc(ref);
-          setEquipo(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+          if (!snap.exists()) {
+            setEquipo(null);
+          } else {
+            const row = { id: snap.id, ...snap.data() };
+            setEquipo(
+              isInUserScope(row, profile?.tenantId, profile?.company) ? row : null
+            );
+          }
         } catch (e) {
           console.error("EquipoInfoPage getDoc error:", e);
           setEquipo(null);
@@ -137,7 +161,7 @@ export default function EquipoInfoPage() {
     );
 
     return () => unsub();
-  }, [id]);
+  }, [id, authLoading, profile?.tenantId, profile?.company]);
 
   const familia = equipo?.familia || "";
   const estado = equipo?.estado || "";
@@ -267,7 +291,11 @@ export default function EquipoInfoPage() {
       );
 
       const snap = await getDocs(qRef);
-      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const rows = filterByUserScope(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        profile?.tenantId,
+        profile?.company
+      );
       setHistorial(rows);
     } catch (e) {
       console.error("loadHistorialFallas error:", e);

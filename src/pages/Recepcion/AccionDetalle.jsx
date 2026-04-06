@@ -1,5 +1,5 @@
 // screens/AccionDetalle.jsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Truck, User } from "lucide-react";
 import {
@@ -11,6 +11,8 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { auth, db } from "../../firebase";
+import { AuthCtx } from "../../auth/AuthProvider";
+import { isInUserScope } from "../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -186,6 +188,9 @@ function StatPill({ icon, label, value }) {
 export default function AccionDetalle() {
   const nav = useNavigate();
   const params = useParams();
+  const authCtx = useContext(AuthCtx);
+  const profile = authCtx?.profile || {};
+  const authLoading = authCtx?.loading;
 
   // Ruta esperada: /recepcion/accion-descarga/:accionId
   const accionId = params?.accionId || null;
@@ -235,6 +240,7 @@ export default function AccionDetalle() {
   }, []);
 
   useEffect(() => {
+    if (authLoading) return;
     if (!ref) {
       setLoading(false);
       setErr("Falta accionId");
@@ -248,8 +254,14 @@ export default function AccionDetalle() {
           setAccion(null);
           setErr("No existe la acción.");
         } else {
-          setAccion({ id: snap.id, ...snap.data() });
-          setErr(null);
+          const data = snap.data();
+          if (!isInUserScope(data, profile?.tenantId, profile?.company)) {
+            setAccion(null);
+            setErr("No tenés acceso a esta acción.");
+          } else {
+            setAccion({ id: snap.id, ...data });
+            setErr(null);
+          }
         }
         setLoading(false);
       },
@@ -261,7 +273,7 @@ export default function AccionDetalle() {
     );
 
     return () => unsub && unsub();
-  }, [ref]);
+  }, [authLoading, ref, profile?.tenantId, profile?.company]);
 
   const refreshOnce = useCallback(async () => {
     try {
@@ -272,8 +284,14 @@ export default function AccionDetalle() {
         setAccion(null);
         setErr("No existe la acción.");
       } else {
-        setAccion({ id: snap.id, ...snap.data() });
-        setErr(null);
+        const data = snap.data();
+        if (!isInUserScope(data, profile?.tenantId, profile?.company)) {
+          setAccion(null);
+          setErr("No tenés acceso a esta acción.");
+        } else {
+          setAccion({ id: snap.id, ...data });
+          setErr(null);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -281,7 +299,7 @@ export default function AccionDetalle() {
     } finally {
       setLoading(false);
     }
-  }, [ref]);
+  }, [ref, profile?.tenantId, profile?.company]);
 
   const estadoChip = useMemo(() => {
     const estado = accion?.estado;

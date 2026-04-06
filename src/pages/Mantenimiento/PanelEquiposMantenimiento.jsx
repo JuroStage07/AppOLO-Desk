@@ -1,8 +1,10 @@
 // PanelEquiposMantenimiento.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, onSnapshot, query } from "firebase/firestore";
 import { db } from "../../firebase";
+import { AuthCtx } from "../../auth/AuthProvider";
+import { filterByUserScope } from "../../utils/dataScope";
 
 // 👇 Ajustá rutas reales de tus imágenes
 import ApiladorPng from "../../assets/equipos/apilador_icon.png";
@@ -25,6 +27,9 @@ function getEquipoIcon(familia) {
 
 export default function PanelEquiposMantenimiento() {
     const nav = useNavigate();
+    const authCtx = useContext(AuthCtx);
+    const profile = authCtx?.profile || {};
+    const authLoading = authCtx?.loading;
 
     const [equipos, setEquipos] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -35,12 +40,17 @@ export default function PanelEquiposMantenimiento() {
     const [estadoFiltro, setEstadoFiltro] = useState("Todos"); // Todos | Activo | Inactivo | Mantenimiento
 
     useEffect(() => {
+        if (authLoading) return;
         const qRef = query(collection(db, "equipos"));
 
         const unsub = onSnapshot(
             qRef,
             (snap) => {
-                const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                const rows = filterByUserScope(
+                    snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+                    profile?.tenantId,
+                    profile?.company
+                );
                 setEquipos(rows);
                 setLoading(false);
             },
@@ -51,7 +61,7 @@ export default function PanelEquiposMantenimiento() {
         );
 
         return () => unsub();
-    }, []);
+    }, [authLoading, profile?.tenantId, profile?.company]);
 
     const familias = useMemo(() => {
         const set = new Set();

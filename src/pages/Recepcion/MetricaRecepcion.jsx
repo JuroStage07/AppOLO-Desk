@@ -25,6 +25,8 @@ import {
   query,
   where,
 } from "firebase/firestore";
+import { filterByUserScope } from "../../utils/dataScope";
+import useIsMobile from "../../hooks/useIsMobile";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -1176,12 +1178,14 @@ function TeamTimesCard({ data = [], periodLabel = "" }) {
 export default function MetricaRecepcion() {
   const nav = useNavigate();
   const user = auth.currentUser;
+  const isMobile = useIsMobile();
   const [activeFilter, setActiveFilter] = useState("hoy");
   const [selectedDate, setSelectedDate] = useState(ymd(new Date()));
   const [dashboardData, setDashboardData] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [noDataMessage, setNoDataMessage] = useState("");
+  const [tenantScope, setTenantScope] = useState({ tenantId: "", company: "" });
   const [aperturasModalOpen, setAperturasModalOpen] = useState(false);
   const [aperturasModalLoading, setAperturasModalLoading] = useState(false);
   const [aperturasModalItems, setAperturasModalItems] = useState([]);
@@ -1469,6 +1473,10 @@ export default function MetricaRecepcion() {
   };
 
   const loadUsersCatalog = async () => {
+    if (!tenantScope.tenantId || !tenantScope.company) {
+      setUsersCatalogError("No se pudo determinar el tenant para filtrar usuarios.");
+      return;
+    }
     try {
       setUsersCatalogLoading(true);
       setUsersCatalogError("");
@@ -1479,7 +1487,11 @@ export default function MetricaRecepcion() {
         limit(2500)
       );
       const snap = await getDocs(q);
-      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const rows = filterByUserScope(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        tenantScope.tenantId,
+        tenantScope.company
+      );
 
       const detected = rows.map((row) => {
         const who = actionStarterIdentity(row);
@@ -1501,6 +1513,16 @@ export default function MetricaRecepcion() {
 
   const openAndenDetalle = async (item) => {
     if (!item) return;
+    if (!tenantScope.tenantId || !tenantScope.company) {
+      setAndenDetalleModal({
+        open: true,
+        item,
+        loading: false,
+        error: "No se pudo determinar el tenant para cargar el detalle.",
+        starters: [],
+      });
+      return;
+    }
 
     const initialStarters = (Array.isArray(item.starters) ? item.starters : []).filter(
       (starter) => {
@@ -1533,7 +1555,11 @@ export default function MetricaRecepcion() {
         limit(1500)
       );
       const snap = await getDocs(q);
-      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const rows = filterByUserScope(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        tenantScope.tenantId,
+        tenantScope.company
+      );
 
       const filtered = rows.filter((row) => {
         const rowAnden = String(row?.idAnden ?? "").trim();
@@ -1614,6 +1640,7 @@ export default function MetricaRecepcion() {
 
         const tenantId = String(profile?.tenantId || "").trim();
         const company = String(profile?.company || "").trim();
+        setTenantScope({ tenantId, company });
 
         if (!tenantId || !company) {
           if (!mounted) return;
@@ -1679,6 +1706,12 @@ export default function MetricaRecepcion() {
 
   useEffect(() => {
     if (!aperturasModalOpen) return;
+    if (!tenantScope.tenantId || !tenantScope.company) {
+      setAperturasModalItems([]);
+      setAperturasModalError("No se pudo determinar el tenant para cargar la lista.");
+      setAperturasModalLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       setAperturasModalLoading(true);
@@ -1693,7 +1726,11 @@ export default function MetricaRecepcion() {
         );
         const snap = await getDocs(q);
         if (cancelled) return;
-        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const rows = filterByUserScope(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+          tenantScope.tenantId,
+          tenantScope.company
+        );
         const filtered = rows.filter((it) => {
           const dt = toDateSafe(it?.creadoAt);
           if (!dt) return false;
@@ -1710,18 +1747,26 @@ export default function MetricaRecepcion() {
     return () => {
       cancelled = true;
     };
-  }, [aperturasModalOpen, activeFilter, selectedDate]);
+  }, [
+    aperturasModalOpen,
+    activeFilter,
+    selectedDate,
+    tenantScope.tenantId,
+    tenantScope.company,
+  ]);
+
+  const m = isMobile;
 
   return (
-    <div style={ui.shell}>
+    <div style={{ ...ui.shell, ...(m ? ui.mShell : {}) }}>
       <style>{`
         @keyframes metricaRecepcionSpin {
           to { transform: rotate(360deg); }
         }
       `}</style>
 
-      <header style={ui.topbar}>
-        <div style={ui.topbarInner}>
+      <header style={{ ...ui.topbar, ...(m ? ui.mTopbar : {}) }}>
+        <div style={{ ...ui.topbarInner, ...(m ? ui.mTopbarInner : {}) }}>
           <div
             style={ui.brand}
             role="button"
@@ -1738,8 +1783,8 @@ export default function MetricaRecepcion() {
             </div>
           </div>
 
-          <div style={ui.topbarRight}>
-            <div style={ui.userBox}>
+          <div style={{ ...ui.topbarRight, ...(m ? ui.mTopbarRight : {}) }}>
+            <div style={{ ...ui.userBox, ...(m ? ui.mUserBox : {}) }}>
               <div style={ui.userAvatar}>
                 <User size={16} strokeWidth={2.2} />
               </div>
@@ -1749,7 +1794,11 @@ export default function MetricaRecepcion() {
               </div>
             </div>
 
-            <button type="button" onClick={() => nav("/recepcion")} style={ui.btnGhost}>
+            <button
+              type="button"
+              onClick={() => nav("/recepcion")}
+              style={{ ...ui.btnGhost, ...(m ? ui.mBtnGhost : {}) }}
+            >
               <span style={ui.btnInlineIcon}>
                 <ArrowLeft size={16} strokeWidth={2.2} />
                 Volver a recepción
@@ -1759,7 +1808,7 @@ export default function MetricaRecepcion() {
             <button
               type="button"
               onClick={() => setSettingsModalOpen(true)}
-              style={ui.btnGhost}
+              style={{ ...ui.btnGhost, ...(m ? ui.mBtnGhost : {}) }}
               title="Configuración del panel"
             >
               <span style={ui.btnInlineIcon}>
@@ -1771,8 +1820,8 @@ export default function MetricaRecepcion() {
         </div>
       </header>
 
-      <main style={ui.main}>
-        <div style={ui.container}>
+      <main style={{ ...ui.main, ...(m ? ui.mMain : {}) }}>
+        <div style={{ ...ui.container, ...(m ? ui.mContainer : {}) }}>
           {loadingData && (
             <div style={ui.infoBanner}>
               <span style={ui.btnInlineIcon}>
@@ -1796,11 +1845,11 @@ export default function MetricaRecepcion() {
               {noDataMessage}
             </div>
           )}
-          <div style={ui.heroCompact}>
+          <div style={{ ...ui.heroCompact, ...(m ? ui.mHeroCompact : {}) }}>
             <h1 style={{ ...ui.title, margin: 0 }}>Panel de Recepción</h1>
             <button
               type="button"
-              style={ui.heroInfoBtn}
+              style={{ ...ui.heroInfoBtn, ...(m ? ui.mHeroInfoBtn : {}) }}
               onClick={() => setPanelInfoModalOpen(true)}
               aria-haspopup="dialog"
               aria-expanded={panelInfoModalOpen}
@@ -1810,7 +1859,7 @@ export default function MetricaRecepcion() {
             </button>
           </div>
 
-          <div style={ui.stickyFiltersOnly}>
+          <div style={{ ...ui.stickyFiltersOnly, ...(m ? ui.mStickyFiltersOnly : {}) }}>
             <div style={ui.filtersPanel}>
               <div style={ui.filtersPanelTop}>
                 <div style={ui.filtersPanelInfo}>
@@ -1842,7 +1891,7 @@ export default function MetricaRecepcion() {
             </div>
           </div>
 
-          <div style={ui.stickyKpisOnly}>
+          <div style={{ ...ui.stickyKpisOnly, ...(m ? ui.mStickyKpisOnly : {}) }}>
             <div style={ui.kpiPanel}>
               <div style={ui.kpiPanelTop}>
                 <div style={ui.kpiPanelInfo}>
@@ -1857,7 +1906,7 @@ export default function MetricaRecepcion() {
                 </div>
               </div>
 
-              <div style={ui.kpiGrid}>
+              <div style={{ ...ui.kpiGrid, ...(m ? ui.mKpiGrid : {}) }}>
                 {currentData.kpis.map((item) => {
                   const isAperturas = item.kpiKind === "aperturasCreadas";
                   return (
@@ -1932,7 +1981,7 @@ export default function MetricaRecepcion() {
               <div style={{ ...ui.sectionTitle, marginBottom: 0 }}>Alertas y estado operativo</div>
               <button
                 type="button"
-                style={ui.alertsToggleBtn}
+                style={{ ...ui.alertsToggleBtn, ...(m ? ui.mAlertsToggleBtn : {}) }}
                 onClick={() => setAlertsMonitoreoOpen((o) => !o)}
                 aria-expanded={alertsMonitoreoOpen}
                 aria-controls="recepcion-alertas-panel"
@@ -2023,7 +2072,7 @@ export default function MetricaRecepcion() {
             <div style={ui.sectionOverlineLg}>Analítica</div>
           </div>
 
-          <div style={ui.chartGrid}>
+          <div style={{ ...ui.chartGrid, ...(m ? ui.mChartGrid : {}) }}>
             <MiniBarChart data={currentData.barData} periodLabel={currentData.label} />
             <MiniLineChart data={currentData.lineData} periodLabel={currentData.label} />
             <MixTypeChart data={currentData.typeMix} periodLabel={currentData.label} />
@@ -2042,7 +2091,7 @@ export default function MetricaRecepcion() {
             </div>
           </div>
 
-          <div style={ui.teamGrid}>
+          <div style={{ ...ui.teamGrid, ...(m ? ui.mTeamGrid : {}) }}>
             <TeamProductivityCard
               data={currentData.teamProductivity}
               periodLabel={currentData.label}
@@ -4484,4 +4533,22 @@ const ui = {
     fontFamily: "inherit",
     padding: "2px 0",
   },
+
+  // mobile overrides
+  mShell: { minHeight: "100dvh" },
+  mTopbar: { position: "sticky", top: 0, zIndex: 120 },
+  mTopbarInner: { padding: "10px 12px", minHeight: 56, gap: 8 },
+  mTopbarRight: { width: "100%", justifyContent: "flex-start", gap: 8 },
+  mUserBox: { display: "none" },
+  mBtnGhost: { width: "100%", justifyContent: "center", minHeight: 40 },
+  mMain: { padding: "12px 10px 18px" },
+  mContainer: { gap: 12 },
+  mHeroCompact: { gap: 10, alignItems: "flex-start" },
+  mHeroInfoBtn: { width: "100%", justifyContent: "center" },
+  mAlertsToggleBtn: { width: "100%", justifyContent: "center" },
+  mStickyFiltersOnly: { position: "relative", top: "auto", paddingBottom: 8 },
+  mStickyKpisOnly: { position: "relative", top: "auto", paddingBottom: 8 },
+  mKpiGrid: { gridTemplateColumns: "1fr", gap: 10 },
+  mChartGrid: { gridTemplateColumns: "1fr", gap: 10 },
+  mTeamGrid: { gridTemplateColumns: "1fr", gap: 10 },
 };

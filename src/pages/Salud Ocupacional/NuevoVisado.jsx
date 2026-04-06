@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../../firebase";
@@ -12,6 +12,8 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { AuthCtx } from "../../auth/AuthProvider";
+import { isInUserScope } from "../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 
@@ -30,6 +32,9 @@ const yesNo = [
 
 export default function NuevoVisado() {
   const nav = useNavigate();
+  const authCtx = useContext(AuthCtx);
+  const profile = authCtx?.profile || {};
+  const authLoading = authCtx?.loading;
   const [busyLogout, setBusyLogout] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -104,6 +109,7 @@ export default function NuevoVisado() {
   const onSubmit = async (e) => {
     e?.preventDefault?.();
     if (!canSave) return;
+    if (authLoading) return;
 
     setSaving(true);
     try {
@@ -114,31 +120,43 @@ export default function NuevoVisado() {
 
       if (!cedula) throw new Error("Falta cédula");
 
+      const tenantId = String(profile?.tenantId || "").trim();
+      const company = String(profile?.company || "").trim();
+      if (!tenantId || !company) throw new Error("Falta tenantId/company en el profile.");
+
       const q = query(collection(db, "usuariosTerceros"), where("cedula", "==", cedula));
       const snap = await getDocs(q);
+      const existingScoped = snap.docs
+        .map((d) => ({ id: d.id, ...d.data(), __ref: d.ref }))
+        .find((row) => isInUserScope(row, tenantId, company));
 
-      if (snap.empty) {
+      if (!existingScoped) {
         await addDoc(collection(db, "usuariosTerceros"), {
           cedula,
           nombre,
           empresa,
           motivo,
+          tenantId,
+          company,
           entrada: false,
           usuarioBloqueado: false,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
       } else {
-        const docRef = snap.docs[0].ref;
-        await updateDoc(docRef, {
+        await updateDoc(existingScoped.__ref, {
           nombre,
           empresa,
           motivo,
+          tenantId,
+          company,
           updatedAt: serverTimestamp(),
         });
       }
 
       const visadoRef = await addDoc(collection(db, "visados"), {
+        tenantId,
+        company,
         cedula,
         nombre,
         nombreLower: nombre.toLowerCase(),
@@ -180,6 +198,8 @@ export default function NuevoVisado() {
 
       //  Crear registro para firma
       await addDoc(collection(db, "visadosPorFirmar"), {
+        tenantId,
+        company,
         visadoUID: visadoRef.id,
         solicitudNum,
 

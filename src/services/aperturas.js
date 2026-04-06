@@ -12,6 +12,7 @@ import {
 
 import { db } from "../firebase";
 import { listenAperturasRecepcionFinalizadas } from "./aperturasRecepcion";
+import { filterByUserScope } from "../utils/dataScope";
 
 // ----------------------------------------------------
 // Helpers (opcionales)
@@ -61,7 +62,7 @@ export function listenAperturasRechazadas(cb) {
  * Une `aperturas` y `aperturasRecepcion` (mismo criterio estado finalizada, sin orderBy).
  * Cada ítem incluye `__sourceCollection` para que detalle y updates usen la colección correcta.
  */
-export function listenAperturasFinalizadasGlobal(cb) {
+export function listenAperturasFinalizadasGlobal(cb, tenantId, company) {
   let readyA = false;
   let readyR = false;
   let listA = [];
@@ -69,7 +70,8 @@ export function listenAperturasFinalizadasGlobal(cb) {
 
   const emit = () => {
     if (!readyA || !readyR) return;
-    cb(mergeFinalizadasLists(listA, listR));
+    const merged = mergeFinalizadasLists(listA, listR);
+    cb(filterByUserScope(merged, tenantId, company));
   };
 
   const qy = query(collection(db, "aperturas"), where("estado", "==", "finalizada"));

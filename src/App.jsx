@@ -1,7 +1,8 @@
-import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import React, { useContext } from "react";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 
 import AuthProvider from "./auth/AuthProvider";
+import { AuthCtx } from "./auth/AuthProvider";
 import RequireAuth from "./auth/RequireAuth";
 import PrivateRoute from "./auth/PrivateRoute";
 
@@ -44,11 +45,40 @@ import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGeneralesOrdenesT
 import ServiciosGeneralesOTCrear from "./pages/ServiciosGeneralesOTCrear";
 import ServiciosGeneralesOTGestion from "./pages/ServiciosGeneralesOTGestion";
 import ValidarIngreso from "./pages/ServiciosGenerales/ValidarIngreso";
+import useIsMobile from "./hooks/useIsMobile";
+
+function TenantScopeBadge() {
+  const { user, profile, loading } = useContext(AuthCtx);
+  const location = useLocation();
+  const isMobile = useIsMobile();
+
+  if (location.pathname === "/login") return null;
+  if (!user || loading) return null;
+
+  const tenantId = String(profile?.tenantId || "").trim();
+  const company = String(profile?.company || "").trim();
+  const region =
+    String(profile?.region || "").trim() ||
+    String(profile?.regionId || "").trim() ||
+    String(profile?.regionName || "").trim();
+
+  const primary = tenantId || region || "Sin tenant";
+  const secondary = company || (tenantId && region ? region : "");
+
+  return (
+    <div style={scopeBadge.wrap} role="status" aria-live="polite">
+      <div style={scopeBadge.kicker}>Contexto actual</div>
+      <div style={scopeBadge.primary}>{primary}</div>
+      {!isMobile && !!secondary && <div style={scopeBadge.secondary}>{secondary}</div>}
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <TenantScopeBadge />
         <Routes>
           {/* Públicas */}
           <Route path="/login" element={<Login />} />
@@ -343,3 +373,42 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
+const scopeBadge = {
+  wrap: {
+    position: "fixed",
+    bottom: "max(10px, env(safe-area-inset-bottom))",
+    right: 10,
+    zIndex: 20000,
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.96) 100%)",
+    color: "#0F172A",
+    border: "1px solid rgba(15,23,42,0.10)",
+    borderRadius: 14,
+    padding: "8px 10px",
+    display: "grid",
+    gap: 2,
+    pointerEvents: "none",
+    boxShadow: "0 10px 22px rgba(15,23,42,0.13)",
+    backdropFilter: "blur(4px)",
+    maxWidth: "min(88vw, 320px)",
+  },
+  kicker: {
+    fontSize: 10,
+    fontWeight: 900,
+    color: "#089F8A",
+    letterSpacing: 0.35,
+    textTransform: "uppercase",
+  },
+  primary: {
+    fontSize: 12.5,
+    fontWeight: 900,
+    lineHeight: 1.25,
+    color: "#0F172A",
+  },
+  secondary: {
+    fontSize: 11.5,
+    fontWeight: 800,
+    color: "#64748B",
+  },
+};

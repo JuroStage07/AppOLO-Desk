@@ -39,6 +39,8 @@ import {
 import { auth, db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { NewOTModal } from "./NewOTModal";
+import { isSolicitudOtInScope } from "../../../utils/dataScope";
+import useIsMobile from "../../../hooks/useIsMobile";
 import {
   collection,
   collectionGroup,
@@ -2169,8 +2171,10 @@ function AssignResponsableModal({
 
 export default function OTsPage() {
   const nav = useNavigate();
+  const isMobile = useIsMobile();
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile;
+  const loading = authCtx?.loading;
 
   const [columns, setColumns] = useState(initialColumns);
   const columnsRef = useRef(columns);
@@ -2230,6 +2234,7 @@ export default function OTsPage() {
 
     for (const d of snap.docs) {
       const data = d.data();
+      if (!isSolicitudOtInScope(data, profile?.tenantId, profile?.company)) continue;
       const state = data.OTState || OT_STATE_SOLICITADA;
       const subStats = normalizeSubtaskStats(subtaskCountById[d.id]);
 
@@ -2257,7 +2262,7 @@ export default function OTsPage() {
       })
     );
     setLoadingPendientes(false);
-  }, []);
+  }, [profile?.tenantId, profile?.company]);
 
   /** Total y completadas por solicitud (lectura subcolección; sirve para barra y chip). */
   const syncSubtaskCountsFromServer = useCallback(async () => {
@@ -2271,6 +2276,10 @@ export default function OTsPage() {
     const counts = {};
     await Promise.all(
       snap.docs.map(async (d) => {
+        const data = d.data();
+        if (!isSolicitudOtInScope(data, profile?.tenantId, profile?.company)) {
+          return;
+        }
         try {
           const subSnap = await getDocs(
             collection(db, "solicitudesOT", d.id, "subtareas")
@@ -2288,7 +2297,7 @@ export default function OTsPage() {
     );
     subtaskCountsRef.current = counts;
     applyBoardFromRefs();
-  }, [applyBoardFromRefs]);
+  }, [applyBoardFromRefs, profile?.tenantId, profile?.company]);
 
   const refetchSolicitudesOnce = useCallback(async () => {
     try {
@@ -2303,6 +2312,7 @@ export default function OTsPage() {
   }, [solicitudesQuery, syncSubtaskCountsFromServer]);
 
   useEffect(() => {
+    if (loading) return;
     setLoadingPendientes(true);
 
     const unsubSolicitudes = onSnapshot(
@@ -2331,7 +2341,7 @@ export default function OTsPage() {
       unsubSolicitudes();
       unsubSubtareas();
     };
-  }, [solicitudesQuery, syncSubtaskCountsFromServer]);
+  }, [loading, solicitudesQuery, syncSubtaskCountsFromServer]);
 
 
   const selectedCount = useMemo(() => {
@@ -2661,8 +2671,8 @@ export default function OTsPage() {
   };
 
   return (
-    <div style={ui.shell}>
-      <div style={ui.topbar}>
+    <div style={{ ...ui.shell, ...(isMobile ? ui.mShell : {}) }}>
+      <div style={{ ...ui.topbar, ...(isMobile ? ui.mTopbar : {}) }}>
         <div style={ui.brand}>
           <div style={ui.brandMark}>OT</div>
 
@@ -2672,17 +2682,25 @@ export default function OTsPage() {
           </div>
         </div>
 
-        <div style={ui.topbarRight}>
-          <button type="button" onClick={() => nav(-1)} style={ui.btnGhost}>
+        <div style={{ ...ui.topbarRight, ...(isMobile ? ui.mTopbarRight : {}) }}>
+          <button
+            type="button"
+            onClick={() => nav(-1)}
+            style={{ ...ui.btnGhost, ...(isMobile ? ui.mBtnGhost : {}) }}
+          >
             <ArrowLeft size={16} />
             Volver
           </button>
 
-          <button type="button" style={ui.btnGhost}>
+          <button type="button" style={{ ...ui.btnGhost, ...(isMobile ? ui.mBtnGhost : {}) }}>
             <ClipboardList size={16} />({selectedCount}) Seleccionado
           </button>
 
-          <button type="button" style={ui.btnGhost} onClick={refetchSolicitudesOnce}>
+          <button
+            type="button"
+            style={{ ...ui.btnGhost, ...(isMobile ? ui.mBtnGhost : {}) }}
+            onClick={refetchSolicitudesOnce}
+          >
             <RotateCcw size={16} />
             Actualizar
           </button>
@@ -2690,7 +2708,7 @@ export default function OTsPage() {
           <button
             type="button"
             onClick={() => setModalOpen(true)}
-            style={ui.btnPrimary}
+            style={{ ...ui.btnPrimary, ...(isMobile ? ui.mBtnPrimary : {}) }}
           >
             <Plus size={16} />
             Nueva OT
@@ -2698,12 +2716,12 @@ export default function OTsPage() {
         </div>
       </div>
 
-      <div style={ui.main}>
-        <div style={ui.container}>
+      <div style={{ ...ui.main, ...(isMobile ? ui.mMain : {}) }}>
+        <div style={{ ...ui.container, ...(isMobile ? ui.mContainer : {}) }}>
           <div style={ui.heroCard}>
             <div style={ui.heroAccent} />
 
-            <div style={ui.heroGrid}>
+            <div style={{ ...ui.heroGrid, ...(isMobile ? ui.mHeroGrid : {}) }}>
               <div>
                 <div style={ui.kicker}>Tablero operativo</div>
                 <h1 style={ui.heroTitle}>Órdenes de Trabajo</h1>
@@ -2714,7 +2732,7 @@ export default function OTsPage() {
                 </p>
               </div>
 
-              <div style={ui.heroStats}>
+              <div style={{ ...ui.heroStats, ...(isMobile ? ui.mHeroStats : {}) }}>
                 <div style={ui.heroStat}>
                   <div style={ui.heroStatIcon}>
                     <LayoutGrid size={18} />
@@ -2738,7 +2756,7 @@ export default function OTsPage() {
             </div>
           </div>
 
-          <div style={ui.boardWrap}>
+          <div style={{ ...ui.boardWrap, ...(isMobile ? ui.mBoardWrap : {}) }}>
             <div style={ui.board}>
               {columns.map((column, index) => (
                 <Column
@@ -3815,6 +3833,24 @@ const picker = {
     color: "#64748B",
     fontWeight: 800,
   },
+
+  // mobile overrides
+  mShell: { minHeight: "100dvh" },
+  mTopbar: {
+    height: "auto",
+    minHeight: 56,
+    padding: "10px 12px",
+    alignItems: "flex-start",
+    flexDirection: "column",
+  },
+  mTopbarRight: { width: "100%", justifyContent: "flex-start", gap: 8 },
+  mBtnGhost: { width: "100%", justifyContent: "center", minHeight: 40 },
+  mBtnPrimary: { width: "100%", justifyContent: "center", minHeight: 42 },
+  mMain: { padding: 10 },
+  mContainer: { gap: 10 },
+  mHeroGrid: { gridTemplateColumns: "1fr", padding: 12, gap: 12 },
+  mHeroStats: { gridTemplateColumns: "1fr", gap: 8 },
+  mBoardWrap: { paddingBottom: 8 },
 };
 
 /** Modal de éxito al crear OT desde el tablero (misma línea visual que Servicios generales). */

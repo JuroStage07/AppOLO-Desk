@@ -12,7 +12,22 @@ import {
 import { db, auth } from "../firebase";
 import { dayKeyOf } from "../utils/dayKey";
 
-export async function findUsuarioByCedula(cedula) {
+function normalizeScopeValue(v) {
+  return String(v || "").trim();
+}
+
+function isInScope(record, tenantId, company) {
+  const tUser = normalizeScopeValue(tenantId);
+  const cUser = normalizeScopeValue(company);
+  if (!tUser && !cUser) return true;
+  const tRow = normalizeScopeValue(record?.tenantId);
+  const cRow = normalizeScopeValue(record?.company);
+  if (tUser && tRow !== tUser) return false;
+  if (cUser && cRow !== cUser) return false;
+  return true;
+}
+
+export async function findUsuarioByCedula(cedula, tenantId, company) {
   const qU = query(
     collection(db, "usuariosTerceros"),
     where("cedula", "==", String(cedula).trim()),
@@ -21,7 +36,9 @@ export async function findUsuarioByCedula(cedula) {
   const snap = await getDocs(qU);
   if (snap.empty) return null;
   const d = snap.docs[0];
-  return { id: d.id, ...d.data() };
+  const row = { id: d.id, ...d.data() };
+  if (!isInScope(row, tenantId, company)) return null;
+  return row;
 }
 
 export async function alreadyTipoToday({ terceroId, tipo }) {
@@ -37,7 +54,7 @@ export async function alreadyTipoToday({ terceroId, tipo }) {
   return !snap.empty;
 }
 
-export async function registrarEvento({ usuario, tipo }) {
+export async function registrarEvento({ usuario, tipo, tenantId, company }) {
   const uid = auth.currentUser?.uid;
 
   const payload = {
@@ -49,17 +66,19 @@ export async function registrarEvento({ usuario, tipo }) {
     terceroCedula: String(usuario.cedula ?? "").trim(),
     terceroEmpresa: String(usuario.empresa ?? "").trim(),
     terceroMotivo: String(usuario.motivo ?? "").trim(),
+    tenantId: normalizeScopeValue(tenantId) || normalizeScopeValue(usuario?.tenantId) || "",
+    company: normalizeScopeValue(company) || normalizeScopeValue(usuario?.company) || "",
     ...(uid ? { creadoPorUid: uid } : {}), // 👈 solo si hay uid
   };
 
   await addDoc(collection(db, "controlTerceros"), payload);
 }
 
-export async function registrarEntradaPorCedula(cedula) {
+export async function registrarEntradaPorCedula(cedula, tenantId, company) {
   const c = String(cedula).trim();
   if (!c) return { ok: false, kind: "warn", msg: "Ingresa una cédula." };
 
-  const usuario = await findUsuarioByCedula(c);
+  const usuario = await findUsuarioByCedula(c, tenantId, company);
   if (!usuario?.id) return { ok: false, kind: "warn", msg: `No existe un tercero con cédula: ${c}` };
 
   if (usuario.usuarioBloqueado === true) {
@@ -75,16 +94,16 @@ export async function registrarEntradaPorCedula(cedula) {
 
   const ref = doc(db, "usuariosTerceros", usuario.id);
   await updateDoc(ref, { entrada: true, entradaAt: serverTimestamp(), updatedAt: serverTimestamp() });
-  await registrarEvento({ usuario, tipo: "ENTRADA" });
+  await registrarEvento({ usuario, tipo: "ENTRADA", tenantId, company });
 
   return { ok: true, kind: "ok", msg: `✅ Entrada: ${String(usuario.nombre ?? "").trim()}` };
 }
 
-export async function registrarSalidaPorCedula(cedula) {
+export async function registrarSalidaPorCedula(cedula, tenantId, company) {
   const c = String(cedula).trim();
   if (!c) return { ok: false, kind: "warn", msg: "Ingresa una cédula." };
 
-  const usuario = await findUsuarioByCedula(c);
+  const usuario = await findUsuarioByCedula(c, tenantId, company);
   if (!usuario?.id) return { ok: false, kind: "warn", msg: `No existe un tercero con cédula: ${c}` };
 
   if (usuario.usuarioBloqueado === true) {
@@ -100,7 +119,7 @@ export async function registrarSalidaPorCedula(cedula) {
 
   const ref = doc(db, "usuariosTerceros", usuario.id);
   await updateDoc(ref, { entrada: false, salidaAt: serverTimestamp(), updatedAt: serverTimestamp() });
-  await registrarEvento({ usuario, tipo: "SALIDA" });
+  await registrarEvento({ usuario, tipo: "SALIDA", tenantId, company });
 
   return { ok: true, kind: "ok", msg: `✅ Salida: ${String(usuario.nombre ?? "").trim()}` };
 }

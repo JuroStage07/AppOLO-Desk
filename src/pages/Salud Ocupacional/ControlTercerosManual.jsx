@@ -1,17 +1,22 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { onSnapshot, collection, query, where } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 
 import { db, auth } from "../../firebase";
+import { AuthCtx } from "../../auth/AuthProvider";
 import {
   registrarEntradaPorCedula,
   registrarSalidaPorCedula,
 } from "../../services/controlTerceros";
+import { filterByUserScope } from "../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 
 export default function ControlTercerosManual() {
+  const authCtx = useContext(AuthCtx);
+  const profile = authCtx?.profile || {};
+  const authLoading = authCtx?.loading;
   const [mode, setMode] = useState("ENTRADA"); // ENTRADA | SALIDA
   const [cedula, setCedula] = useState("");
   const [busy, setBusy] = useState(false);
@@ -55,6 +60,7 @@ export default function ControlTercerosManual() {
   }, [activos, fNombre, fEmpresa]);
 
   useEffect(() => {
+    if (authLoading) return;
     const qActivos = query(
       collection(db, "usuariosTerceros"),
       where("entrada", "==", true)
@@ -63,10 +69,14 @@ export default function ControlTercerosManual() {
     const unsub = onSnapshot(
       qActivos,
       (snap) => {
-        setActivosCount(snap.size);
+        const scopedRows = filterByUserScope(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+          profile?.tenantId,
+          profile?.company
+        );
+        setActivosCount(scopedRows.length);
 
-        const rows = snap.docs.map((d) => {
-          const data = d.data() || {};
+        const rows = scopedRows.map((data) => {
 
           const ts =
             data.entradaAt ||
@@ -83,7 +93,7 @@ export default function ControlTercerosManual() {
                   : null;
 
           return {
-            id: d.id, // uid doc
+            id: data.id, // uid doc
             nombre: data.nombre || data.name || data.fullName || "Sin nombre",
             empresa: data.empresa || data.company || "Sin empresa",
             cedula: data.cedula || data.documento || data.doc || data.identificacion || "",
@@ -100,7 +110,7 @@ export default function ControlTercerosManual() {
     );
 
     return () => unsub();
-  }, []);
+  }, [authLoading, profile?.tenantId, profile?.company]);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -170,8 +180,8 @@ export default function ControlTercerosManual() {
     setBusy(true);
     try {
       const res = isEntrada
-        ? await registrarEntradaPorCedula(v)
-        : await registrarSalidaPorCedula(v);
+        ? await registrarEntradaPorCedula(v, profile?.tenantId, profile?.company)
+        : await registrarSalidaPorCedula(v, profile?.tenantId, profile?.company);
 
       if (res.kind === "blocked") {
         setBlockedMsg(res.msg || "Acceso bloqueado.");

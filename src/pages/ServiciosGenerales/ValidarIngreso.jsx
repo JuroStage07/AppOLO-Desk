@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, getDocs, limit, query, where } from "firebase/firestore";
 import { ArrowLeft, UserCheck, AlertCircle, CheckCircle2, User, ScanLine, ShieldX } from "lucide-react";
 import { db } from "../../firebase";
+import { AuthCtx } from "../../auth/AuthProvider";
+import { isInUserScope } from "../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8,159,138,0.12)";
@@ -18,6 +20,8 @@ const COUNTDOWN_S = 5;
 
 export default function ValidarIngreso() {
   const nav = useNavigate();
+  const authCtx = useContext(AuthCtx);
+  const profile = authCtx?.profile || {};
   const inputRef = useRef(null);
   const lockRef = useRef(false);
   const countdownRef = useRef(null);
@@ -69,8 +73,12 @@ export default function ValidarIngreso() {
     );
     const snap = await getDocs(q);
     if (snap.empty) return null;
-    const d = snap.docs[0];
-    return { id: d.id, ...d.data() };
+    const tenantId = String(profile?.tenantId || "").trim();
+    const company = String(profile?.company || "").trim();
+    const row = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .find((it) => isInUserScope(it, tenantId, company));
+    return row || null;
   };
 
   const procesarCedula = useCallback(async (raw) => {

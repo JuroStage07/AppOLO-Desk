@@ -467,7 +467,6 @@ export function NewOTModal({
 }) {
   const [saving, setSaving] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
-
   const [pickerOpen, setPickerOpen] = useState(emptyPicker());
 
   const [form, setForm] = useState(emptyForm);

@@ -1,5 +1,5 @@
 // screens/aperturas/AperturasFinalizadas.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import {
@@ -21,6 +21,8 @@ import {
   User,
 } from "lucide-react";
 import { auth } from "../../firebase";
+import useIsMobile from "../../hooks/useIsMobile";
+import { AuthCtx } from "../../auth/AuthProvider";
 
 import { listenAperturasFinalizadasGlobal } from "../../services/aperturas";
 
@@ -205,6 +207,10 @@ const formatFecha = (isoOrTs) => {
 export default function AperturasFinalizadas() {
   const nav = useNavigate();
   const user = auth.currentUser;
+  const isMobile = useIsMobile();
+  const authCtx = useContext(AuthCtx);
+  const profile = authCtx?.profile || {};
+  const authLoading = authCtx?.loading;
 
   const [busyLogout, setBusyLogout] = useState(false);
   const [hovered, setHovered] = useState(null);
@@ -238,9 +244,14 @@ export default function AperturasFinalizadas() {
   }, []);
 
   useEffect(() => {
-    const unsub = listenAperturasFinalizadasGlobal(setAperturasFinalizadas);
+    if (authLoading) return;
+    const unsub = listenAperturasFinalizadasGlobal(
+      setAperturasFinalizadas,
+      profile?.tenantId,
+      profile?.company
+    );
     return () => unsub?.();
-  }, []);
+  }, [authLoading, profile?.tenantId, profile?.company]);
 
   useEffect(() => {
     setVisibleCount(10);
@@ -336,17 +347,18 @@ export default function AperturasFinalizadas() {
 
   const filtrosLabel = `${tipoSeleccionado} · ${mesSeleccionado === "Todos" ? "Todos los meses" : `Mes ${mesSeleccionado}`
     } · ${anioSeleccionado}`;
+  const m = isMobile;
 
   return (
-    <div style={ui.shell}>
+    <div style={{ ...ui.shell, ...(m ? ui.mShell : {}) }}>
       <style>{`
         @keyframes aperturasFinalizadasSpin {
           to { transform: rotate(360deg); }
         }
       `}</style>
 
-      <header style={ui.topbar}>
-        <div style={ui.topbarInner}>
+      <header style={{ ...ui.topbar, ...(m ? ui.mTopbar : {}) }}>
+        <div style={{ ...ui.topbarInner, ...(m ? ui.mTopbarInner : {}) }}>
           <div
             style={ui.brand}
             role="button"
@@ -365,8 +377,8 @@ export default function AperturasFinalizadas() {
             </div>
           </div>
 
-          <div style={ui.topbarRight}>
-            <div style={ui.userBox}>
+          <div style={{ ...ui.topbarRight, ...(m ? ui.mTopbarRight : {}) }}>
+            <div style={{ ...ui.userBox, ...(m ? ui.mUserBox : {}) }}>
               <div style={ui.userAvatar}>
                 <User size={16} strokeWidth={2.2} />
               </div>
@@ -379,7 +391,7 @@ export default function AperturasFinalizadas() {
             <button
               type="button"
               onClick={() => go("/salud/aperturas")}
-              style={ui.btnGhost}
+              style={{ ...ui.btnGhost, ...(m ? ui.mBtnGhost : {}) }}
               disabled={busyLogout}
             >
               Administrar
@@ -388,7 +400,11 @@ export default function AperturasFinalizadas() {
             <button
               type="button"
               onClick={logout}
-              style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
+              style={{
+                ...ui.btnGhost,
+                ...(m ? ui.mBtnGhost : {}),
+                ...(busyLogout ? ui.btnDisabled : {}),
+              }}
               disabled={busyLogout}
               title="Cerrar sesión"
             >
@@ -401,9 +417,9 @@ export default function AperturasFinalizadas() {
         </div>
       </header>
 
-      <main style={ui.main}>
-        <div style={ui.container}>
-          <section style={ui.hero}>
+      <main style={{ ...ui.main, ...(m ? ui.mMain : {}) }}>
+        <div style={{ ...ui.container, ...(m ? ui.mContainer : {}) }}>
+          <section style={{ ...ui.hero, ...(m ? ui.mHero : {}) }}>
             <div style={{ display: "grid", gap: 10, minWidth: 0 }}>
               <div style={ui.kickerRow}>
                 <span style={ui.kickerDot} />
@@ -420,7 +436,7 @@ export default function AperturasFinalizadas() {
               </p>
             </div>
 
-            <div style={ui.statsRow}>
+            <div style={{ ...ui.statsRow, ...(m ? ui.mStatsRow : {}) }}>
               <div style={ui.statCard}>
                 <div style={ui.statCardLabel}>En pantalla</div>
                 <div style={ui.statCardValue}>
@@ -443,7 +459,7 @@ export default function AperturasFinalizadas() {
             </div>
           </section>
 
-          <div style={ui.searchCard}>
+          <div style={{ ...ui.searchCard, ...(m ? ui.mSearchCard : {}) }}>
             <div style={ui.searchInner}>
               <Search size={18} color={SLATE} strokeWidth={2.2} style={{ flexShrink: 0 }} />
               <input
@@ -464,11 +480,14 @@ export default function AperturasFinalizadas() {
                 </button>
               ) : null}
             </div>
-            <div style={ui.searchActions}>
+            <div style={{ ...ui.searchActions, ...(m ? ui.mSearchActions : {}) }}>
               <button
                 type="button"
                 onClick={() => setShowFilters((v) => !v)}
-                style={showFilters ? ui.btnFilterActive : ui.btnGhost}
+                style={{
+                  ...(showFilters ? ui.btnFilterActive : ui.btnGhost),
+                  ...(m ? ui.mBtnGhost : {}),
+                }}
                 disabled={busyLogout}
               >
                 <span style={ui.btnInlineIcon}>
@@ -484,7 +503,7 @@ export default function AperturasFinalizadas() {
               <button
                 type="button"
                 onClick={() => setVisibleCount(10)}
-                style={ui.btnGhost}
+                style={{ ...ui.btnGhost, ...(m ? ui.mBtnGhost : {}) }}
                 disabled={busyLogout || isLoading}
                 title="Volver al inicio de la lista"
               >
@@ -502,7 +521,7 @@ export default function AperturasFinalizadas() {
                 <Filter size={18} color={ACCENT} strokeWidth={2.2} />
                 <span style={ui.filterCardTitle}>Refinar resultados</span>
               </div>
-              <div style={ui.filterGrid}>
+              <div style={{ ...ui.filterGrid, ...(m ? ui.mFilterGrid : {}) }}>
                 <label style={ui.fieldLabel}>
                   Tipo
                   <div style={ui.selectWrap}>
@@ -589,7 +608,7 @@ export default function AperturasFinalizadas() {
                 <button
                   type="button"
                   onClick={limpiarFiltros}
-                  style={ui.btnGhost}
+                  style={{ ...ui.btnGhost, ...(m ? ui.mBtnGhost : {}) }}
                   disabled={busyLogout}
                 >
                   <span style={ui.btnInlineIcon}>
@@ -627,7 +646,7 @@ export default function AperturasFinalizadas() {
             </div>
           ) : (
             <>
-              <div style={ui.listGrid}>
+              <div style={{ ...ui.listGrid, ...(m ? ui.mListGrid : {}) }}>
                 {data.items.map((item, idx) => {
                   const cuando = item?.completedAt || item?.fecha || item?.createdAt;
                   const isHover = hovered === (item.id ?? idx);
@@ -683,7 +702,7 @@ export default function AperturasFinalizadas() {
                         </span>
                       </div>
 
-                      <dl style={ui.detailsGrid}>
+                      <dl style={{ ...ui.detailsGrid, ...(m ? ui.mDetailsGrid : {}) }}>
                         <div style={ui.detailCell}>
                           <dt style={ui.detailDt}>
                             <CalendarDays size={14} strokeWidth={2.2} style={ui.detailDtIcon} />
@@ -1340,4 +1359,21 @@ const ui = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
+
+  // mobile overrides
+  mShell: { minHeight: "100dvh", height: "100dvh" },
+  mTopbar: { position: "sticky", top: 0, zIndex: 120 },
+  mTopbarInner: { padding: "10px 12px", minHeight: 56, gap: 8 },
+  mTopbarRight: { width: "100%", justifyContent: "flex-start", gap: 8 },
+  mUserBox: { display: "none" },
+  mBtnGhost: { width: "100%", justifyContent: "center", minHeight: 40 },
+  mMain: { padding: "12px 10px 18px" },
+  mContainer: { gap: 12 },
+  mHero: { gap: 12 },
+  mStatsRow: { gridTemplateColumns: "1fr", gap: 8 },
+  mSearchCard: { padding: "10px 10px", gap: 8 },
+  mSearchActions: { width: "100%", justifyContent: "stretch" },
+  mFilterGrid: { gridTemplateColumns: "1fr", gap: 10 },
+  mListGrid: { gridTemplateColumns: "1fr", gap: 10 },
+  mDetailsGrid: { gridTemplateColumns: "1fr", gap: "10px 12px" },
 };

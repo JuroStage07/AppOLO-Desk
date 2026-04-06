@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { AuthCtx } from "../auth/AuthProvider";
 import { auth, db } from "../firebase";
+import { filterSolicitudesOtByScope } from "../utils/dataScope";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -58,6 +59,8 @@ export default function ServiciosGeneralesOTGestion() {
   const authCtx = useContext(AuthCtx);
   const role = authCtx?.role || "";
   const permisos = authCtx?.permisos || {};
+  const profile = authCtx?.profile || {};
+  const authLoading = authCtx?.loading;
   const canOpenMantenimientoDetail =
     role === "dev" || permisos?.mantenimiento === true;
   const user = auth.currentUser;
@@ -83,6 +86,7 @@ export default function ServiciosGeneralesOTGestion() {
   }, []);
 
   useEffect(() => {
+    if (authLoading) return;
     setListLoading(true);
     const q = query(
       collection(db, "solicitudesOT"),
@@ -91,10 +95,14 @@ export default function ServiciosGeneralesOTGestion() {
     const unsub = onSnapshot(
       q,
       async (snap) => {
-        const data = snap.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }));
+        const data = filterSolicitudesOtByScope(
+          snap.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+          })),
+          profile?.tenantId,
+          profile?.company
+        );
         data.sort((a, b) => {
           const ta = a.updatedAt?.toMillis?.() ?? a.createdAt?.toMillis?.() ?? 0;
           const tb = b.updatedAt?.toMillis?.() ?? b.createdAt?.toMillis?.() ?? 0;
@@ -138,7 +146,7 @@ export default function ServiciosGeneralesOTGestion() {
       }
     );
     return () => unsub();
-  }, []);
+  }, [authLoading, profile?.tenantId, profile?.company]);
 
   const logout = async () => {
     try {

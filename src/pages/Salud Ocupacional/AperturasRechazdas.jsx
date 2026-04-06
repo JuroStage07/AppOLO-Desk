@@ -1,5 +1,5 @@
 // screens/aperturas/AperturasRechazadas.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import {
@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 
 import { auth, db } from "../../firebase";
+import { AuthCtx } from "../../auth/AuthProvider";
+import { filterByUserScope } from "../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -65,7 +67,7 @@ const formatDateTime = (value) => {
 
 /* ===================== Data listener ===================== */
 // ✅ Listener listo (no dependés de otro service)
-function listenAperturasRechazadas(setItems) {
+function listenAperturasRechazadas(setItems, tenantId, company) {
   const qy = query(
     collection(db, "aperturas"),
     where("estado", "==", "rechazada"),
@@ -76,7 +78,11 @@ function listenAperturasRechazadas(setItems) {
   return onSnapshot(
     qy,
     (snap) => {
-      const out = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const out = filterByUserScope(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        tenantId,
+        company
+      );
       setItems(out);
     },
     (err) => {
@@ -98,15 +104,23 @@ const MOTIVOS = [
 export default function AperturasRechazadas() {
   const nav = useNavigate();
   const user = auth.currentUser;
+  const authCtx = useContext(AuthCtx);
+  const profile = authCtx?.profile || {};
+  const authLoading = authCtx?.loading;
 
   const [busyLogout, setBusyLogout] = useState(false);
   const [items, setItems] = useState([]);
   const [motivoFiltro, setMotivoFiltro] = useState("Todos");
 
   useEffect(() => {
-    const unsub = listenAperturasRechazadas(setItems);
+    if (authLoading) return;
+    const unsub = listenAperturasRechazadas(
+      setItems,
+      profile?.tenantId,
+      profile?.company
+    );
     return () => unsub?.();
-  }, []);
+  }, [authLoading, profile?.tenantId, profile?.company]);
 
   const filtered = useMemo(() => {
     if (motivoFiltro === "Todos") return items;

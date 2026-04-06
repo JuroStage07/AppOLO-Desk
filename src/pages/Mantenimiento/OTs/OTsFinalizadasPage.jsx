@@ -6,6 +6,7 @@ import { ArrowLeft, ClipboardList } from "lucide-react";
 
 import { auth, db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
+import { filterSolicitudesOtByScope } from "../../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 
@@ -14,7 +15,7 @@ export const OT_STATE_FINALIZADA = "Finalizada";
 
 export default function OTsFinalizadasPage() {
   const nav = useNavigate();
-  const { permisos, loading } = useContext(AuthCtx);
+  const { permisos, loading, profile } = useContext(AuthCtx);
 
   const [items, setItems] = useState([]);
   const [loadError, setLoadError] = useState("");
@@ -29,6 +30,7 @@ export default function OTsFinalizadasPage() {
   }, [loading, permisos, nav]);
 
   useEffect(() => {
+    if (loading) return;
     if (!permisos?.mantenimiento) return;
 
     const q = query(
@@ -39,7 +41,11 @@ export default function OTsFinalizadasPage() {
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const rows = filterSolicitudesOtByScope(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+          profile?.tenantId,
+          profile?.company
+        );
         rows.sort((a, b) => {
           const ta = a.updatedAt?.toMillis?.() ?? a.createdAt?.toMillis?.() ?? 0;
           const tb = b.updatedAt?.toMillis?.() ?? b.createdAt?.toMillis?.() ?? 0;
@@ -59,7 +65,7 @@ export default function OTsFinalizadasPage() {
     );
 
     return () => unsub();
-  }, [permisos?.mantenimiento]);
+  }, [loading, permisos?.mantenimiento, profile?.tenantId, profile?.company]);
 
   if (!permisos?.mantenimiento) return null;
 

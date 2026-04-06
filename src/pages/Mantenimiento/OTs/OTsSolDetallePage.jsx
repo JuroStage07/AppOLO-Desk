@@ -38,6 +38,7 @@ import {
 import { db, auth } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { OT_STATE_FINALIZADA } from "./OTsFinalizadasPage";
+import { isSolicitudOtInScope } from "../../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 const OT_STATE_EN_PROCESO = "En proceso";
@@ -278,6 +279,7 @@ export default function OTsDetallePage() {
   const permisos = authCtx?.permisos || {};
   const role = authCtx?.role || "";
   const authLoading = !!authCtx?.loading;
+  const profile = authCtx?.profile || {};
   const canAccess = canAccessOtDetalle(permisos, role);
 
   //subtareas
@@ -325,6 +327,11 @@ export default function OTsDetallePage() {
           setOt(null);
           return;
         }
+        if (!isSolicitudOtInScope(snap.data(), profile?.tenantId, profile?.company)) {
+          setError("No tenés acceso a esta OT.");
+          setOt(null);
+          return;
+        }
 
         const normalized = normalizeTask(snap.id, snap.data()) || null;
 
@@ -349,7 +356,7 @@ export default function OTsDetallePage() {
     };
 
     if (id) loadOT();
-  }, [id, authLoading, canAccess]);
+  }, [id, authLoading, canAccess, profile?.tenantId, profile?.company]);
 
   const anySubtaskChronoRunning = useMemo(
     () =>
@@ -439,6 +446,10 @@ export default function OTsDetallePage() {
       });
       const snap = await getDoc(ref);
       if (snap.exists()) {
+        if (!isSolicitudOtInScope(snap.data(), profile?.tenantId, profile?.company)) {
+          window.alert("No tenés acceso a esta OT.");
+          return;
+        }
         const normalized = normalizeTask(snap.id, snap.data());
         setOt(normalized);
         setTasks(normalized?.tasks || []);

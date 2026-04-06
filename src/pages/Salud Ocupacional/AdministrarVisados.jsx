@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   collection,
@@ -17,6 +17,8 @@ import autoTable from "jspdf-autotable";
 import LogoPng from "../../assets/Logo.png";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAuth } from "firebase/auth";
+import { AuthCtx } from "../../auth/AuthProvider";
+import { filterByUserScope } from "../../utils/dataScope";
 
 // Convierte un import de imagen (url) a DataURL para jsPDF
 async function loadImageAsDataURL(src) {
@@ -513,6 +515,9 @@ function safe(v) {
 
 export default function AdministrarVisados() {
   const nav = useNavigate();
+  const authCtx = useContext(AuthCtx);
+  const profile = authCtx?.profile || {};
+  const authLoading = authCtx?.loading;
 
   const [qText, setQText] = useState("");
   const [from, setFrom] = useState(todayISO());
@@ -545,6 +550,7 @@ export default function AdministrarVisados() {
   const onSearch = async (e) => {
     e?.preventDefault?.();
     if (!canSearch) return;
+    if (authLoading) return;
 
     setErr("");
     setBusy(true);
@@ -562,7 +568,11 @@ export default function AdministrarVisados() {
       );
 
       const snap = await getDocs(qBase);
-      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const docs = filterByUserScope(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        profile?.tenantId,
+        profile?.company
+      );
 
       const tRaw = String(qText || "").trim().toLowerCase();
       if (!tRaw) {

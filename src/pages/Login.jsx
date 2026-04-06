@@ -12,6 +12,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import useIsMobile from "../hooks/useIsMobile";
 
 const ACCENT = "#089F8A";
 
@@ -35,6 +36,7 @@ function persistSession(profile) {
 
 export default function Login() {
   const nav = useNavigate();
+  const isMobile = useIsMobile();
 
   // email/pass normal
   const [email, setEmail] = useState("");
@@ -81,13 +83,6 @@ export default function Login() {
 
   /** Post-auth: valida dominio + carga profile + guarda + navega */
   const afterAuth = async (user) => {
-    const mail = (user.email || "").toLowerCase();
-
-    if (!mail.endsWith("@ologistics.com")) {
-      await signOut(auth);
-      throw new Error("DOMAIN_NOT_ALLOWED");
-    }
-
     const profile = await getProfileByUid(user.uid);
     if (!profile) {
       await signOut(auth);
@@ -199,11 +194,15 @@ export default function Login() {
   };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
+    <div style={{ ...styles.page, ...(isMobile ? styles.pageMobile : {}) }}>
+      <div style={{ ...styles.card, ...(isMobile ? styles.cardMobile : {}) }}>
         <div style={styles.topAccent} />
         <div style={styles.header}>
-          <img src={logo} alt="AppoloDesk" style={styles.logo} />
+          <img
+            src={logo}
+            alt="AppoloDesk"
+            style={{ ...styles.logo, ...(isMobile ? styles.logoMobile : {}) }}
+          />
           <p style={styles.sub}>Inicia sesión para registrar entradas y salidas.</p>
         </div>
 
@@ -329,6 +328,11 @@ const styles = {
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
     overflow: "hidden",
   },
+  pageMobile: {
+    padding: 12,
+    placeItems: "stretch",
+    overflowY: "auto",
+  },
 
   card: {
     width: "min(440px, 100%)",
@@ -339,6 +343,12 @@ const styles = {
     overflow: "hidden",
     boxShadow: "0 18px 44px rgba(15,23,42,0.10)",
     position: "relative",
+  },
+  cardMobile: {
+    width: "100%",
+    padding: 14,
+    borderRadius: 16,
+    margin: "auto 0",
   },
 
   header: {
@@ -448,6 +458,10 @@ const styles = {
     maxHeight: "22dvh",       // 👈 se adapta a pantallas pequeñas
     objectFit: "contain",
     marginBottom: 6,
+  },
+  logoMobile: {
+    height: 128,
+    maxHeight: "18dvh",
   },
 };
 

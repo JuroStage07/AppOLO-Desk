@@ -1,5 +1,5 @@
 // screens/aperturas/AperturaDetalle.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { doc, updateDoc, deleteDoc, serverTimestamp, addDoc, collection } from "firebase/firestore";
@@ -25,7 +25,9 @@ import {
 } from "lucide-react";
 
 import { auth, db } from "../../firebase";
+import { AuthCtx } from "../../auth/AuthProvider";
 import { listenApertura } from "../../services/aperturas";
+import { isInUserScope } from "../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -409,6 +411,8 @@ export default function AperturaDetalle() {
   const nav = useNavigate();
   const { id } = useParams(); // /salud/aperturas/detalle/:id
   const user = auth.currentUser;
+  const authCtx = useContext(AuthCtx);
+  const profile = authCtx?.profile || {};
 
   const [busyLogout, setBusyLogout] = useState(false);
 
@@ -517,6 +521,14 @@ export default function AperturaDetalle() {
     return () => unsub?.();
   }, [id]);
 
+  useEffect(() => {
+    if (!apertura) return;
+    if (!isInUserScope(apertura, profile?.tenantId, profile?.company)) {
+      alert("No tenés acceso a esta apertura.");
+      nav(-1);
+    }
+  }, [apertura, nav, profile?.tenantId, profile?.company]);
+
   const isLoading = apertura === undefined;
 
   const logout = async () => {
@@ -608,6 +620,12 @@ export default function AperturaDetalle() {
         creadoPorUid: user?.uid || null,
         creadoPorNombre: user?.displayName || "—",
         creadoAt: serverTimestamp(),
+        tenantId:
+          String(apertura?.tenantId || "").trim() ||
+          String(profile?.tenantId || "").trim(),
+        company:
+          String(apertura?.company || "").trim() ||
+          String(profile?.company || "").trim(),
         proveedorNombre: proveedorNombre || null,
         idAnden: anden || null,
         nombreAccion,

@@ -1,9 +1,11 @@
 // screens/AccionDescarga.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Truck, User } from "lucide-react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { AuthCtx } from "../../auth/AuthProvider";
 import { auth, db } from "../../firebase";
+import { filterByUserScope } from "../../utils/dataScope";
 import imgAccionDescarga from "../../assets/accionDescarga.png";
 
 const ACCENT = "#089F8A";
@@ -83,6 +85,9 @@ function dateToYMD(d) {
 export default function AccionDescarga() {
   const nav = useNavigate();
   const user = auth.currentUser;
+  const authCtx = useContext(AuthCtx);
+  const profile = authCtx?.profile || {};
+  const authLoading = authCtx?.loading;
 
   const [hovered, setHovered] = useState(null);
 
@@ -123,11 +128,16 @@ export default function AccionDescarga() {
 
   // realtime
   useEffect(() => {
+    if (authLoading) return;
     const q = query(collection(db, "accion_descarga"), orderBy("creadoAt", "desc"));
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const rows = filterByUserScope(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+          profile?.tenantId,
+          profile?.company
+        );
         setItems(rows);
         setLoading(false);
       },
@@ -138,7 +148,7 @@ export default function AccionDescarga() {
       }
     );
     return () => unsub();
-  }, []);
+  }, [authLoading, profile?.tenantId, profile?.company]);
 
   // Debounce buscador
   useEffect(() => {
