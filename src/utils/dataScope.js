@@ -39,3 +39,19 @@ export function filterSolicitudesOtByScope(rows, tenantId, company) {
   if (!Array.isArray(rows)) return [];
   return rows.filter((row) => isSolicitudOtInScope(row, tenantId, company));
 }
+
+/**
+ * equipos: documentos sin tenantId/company (legacy o creados antes del acotado) se muestran
+ * igual; si traen ámbito, debe coincidir con el perfil.
+ */
+export function isEquipoInScope(record, tenantId, company) {
+  const tRow = normalizeScopeValue(record?.tenantId);
+  const cRow = normalizeScopeValue(record?.company);
+  if (!tRow && !cRow) return true;
+  return isInUserScope(record, tenantId, company);
+}
+
+export function filterEquiposByScope(rows, tenantId, company) {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter((row) => isEquipoInScope(row, tenantId, company));
+}

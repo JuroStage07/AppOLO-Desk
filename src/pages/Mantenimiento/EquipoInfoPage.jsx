@@ -16,7 +16,19 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { AuthCtx } from "../../auth/AuthProvider";
-import { filterByUserScope, isInUserScope } from "../../utils/dataScope";
+import {
+  filterByUserScope,
+  isEquipoInScope,
+} from "../../utils/dataScope";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ClipboardCheck,
+  FileText,
+  Fingerprint,
+  History,
+  Pencil,
+} from "lucide-react";
 
 import ApiladorPng from "../../assets/equipos/apilador_icon.png";
 import CarretillaPng from "../../assets/equipos/carretilla_icon.png";
@@ -69,21 +81,24 @@ function Row({ label, value }) {
   );
 }
 
-function SectionIconBtn({ title, subtitle, icon, onClick }) {
+function SectionIconBtn({ title, subtitle, children, onClick }) {
   return (
-    <button type="button" style={ui.sectionBtn} onClick={onClick}>
-      <div style={ui.sectionIconCircle}>
-        <span style={ui.sectionIconTxt} aria-hidden>
-          {icon}
-        </span>
-      </div>
+    <button
+      type="button"
+      className="equipo-section-btn"
+      style={ui.sectionBtn}
+      onClick={onClick}
+    >
+      <div style={ui.sectionIconCircle}>{children}</div>
 
-      <div style={{ flex: 1, textAlign: "left" }}>
+      <div style={{ flex: 1, textAlign: "left", minWidth: 0 }}>
         <div style={ui.sectionBtnTitle}>{title}</div>
         {subtitle ? <div style={ui.sectionBtnSub}>{subtitle}</div> : null}
       </div>
 
-      <div style={ui.sectionChevron}>›</div>
+      <div style={ui.sectionChevron} aria-hidden>
+        ›
+      </div>
     </button>
   );
 }
@@ -130,7 +145,7 @@ export default function EquipoInfoPage() {
           return;
         }
         const row = { id: snap.id, ...snap.data() };
-        if (!isInUserScope(row, profile?.tenantId, profile?.company)) {
+        if (!isEquipoInScope(row, profile?.tenantId, profile?.company)) {
           setEquipo(null);
           setLoading(false);
           return;
@@ -148,7 +163,7 @@ export default function EquipoInfoPage() {
           } else {
             const row = { id: snap.id, ...snap.data() };
             setEquipo(
-              isInUserScope(row, profile?.tenantId, profile?.company) ? row : null
+              isEquipoInScope(row, profile?.tenantId, profile?.company) ? row : null
             );
           }
         } catch (e) {
@@ -181,6 +196,18 @@ export default function EquipoInfoPage() {
     if (p === "propio") return "info";
     return "warn";
   }, [propiedad]);
+
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.setAttribute("data-equipo-info-spin", "1");
+    style.textContent = `
+      @keyframes equipoInfoSpin { to { transform: rotate(360deg); } }
+      .equipo-section-btn:hover { transform: translateY(-1px); box-shadow: 0 14px 32px rgba(15,23,42,0.1); border-color: rgba(8,159,138,0.22); }
+      .equipo-section-btn:focus-visible { outline: 2px solid ${ACCENT}; outline-offset: 2px; }
+    `;
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
 
   const revisionTone = equipo?.checklistD === false ? "warn" : "ok";
   const revisionTxt = equipo?.checklistD === false ? "Pendiente" : "Al día";
@@ -347,16 +374,32 @@ export default function EquipoInfoPage() {
     <div style={ui.shell}>
       {/* Topbar */}
       <div style={ui.topbar}>
-        <div style={ui.brand} onClick={() => nav("/mantenimiento")}>
+        <div
+          style={ui.brand}
+          onClick={() => nav("/mantenimiento")}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              nav("/mantenimiento");
+            }
+          }}
+          aria-label="Ir a mantenimiento"
+        >
+          <div style={ui.brandMark} aria-hidden>
+            <FileText size={20} strokeWidth={2.2} color="#fff" />
+          </div>
           <div style={{ display: "grid", gap: 2 }}>
             <div style={ui.brandTitle}>Mantenimiento</div>
             <div style={ui.brandSub}>Equipo · Información</div>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={ui.topbarActions}>
           <button type="button" onClick={() => nav(-1)} style={ui.btnGhost}>
-            ← Volver
+            <ArrowLeft size={17} strokeWidth={2} aria-hidden />
+            Volver
           </button>
         </div>
       </div>
@@ -367,32 +410,38 @@ export default function EquipoInfoPage() {
           {loading ? (
             <div style={ui.stateCard}>
               <div style={ui.spinner} />
-              <div style={{ fontWeight: 900, color: "#64748B" }}>
-                Cargando equipo…
-              </div>
+              <div style={ui.stateCardTitle}>Cargando equipo…</div>
+              <div style={ui.stateCardHint}>Sincronizando datos con el servidor</div>
             </div>
           ) : !equipo ? (
             <div style={ui.stateCard}>
-              <div style={{ fontWeight: 950, color: "#0F172A" }}>
-                No se encontró la información del equipo.
+              <div style={ui.stateEmptyIcon} aria-hidden>
+                <AlertTriangle size={28} strokeWidth={2} color="#94A3B8" />
               </div>
+              <div style={ui.stateCardTitle}>No se encontró este equipo</div>
+              <p style={ui.stateCardHint}>
+                Puede no existir, no tener permisos o estar fuera de tu ámbito (empresa /
+                tenant).
+              </p>
               <button
                 type="button"
-                style={{ ...ui.btnGhost, marginTop: 10 }}
+                style={{ ...ui.btnGhost, marginTop: 6 }}
                 onClick={() => nav(-1)}
               >
-                Volver
+                <ArrowLeft size={17} strokeWidth={2} aria-hidden />
+                Volver al listado
               </button>
             </div>
           ) : (
             <>
               {/* HERO */}
               <div style={ui.hero}>
+                <div style={ui.heroAccent} aria-hidden />
                 <div style={ui.heroTop}>
                   <div style={ui.iconCircle}>
                     <img
                       src={getEquipoIcon(familia)}
-                      alt="equipo"
+                      alt=""
                       style={ui.iconImg}
                     />
                   </div>
@@ -413,7 +462,8 @@ export default function EquipoInfoPage() {
                   </div>
 
                   <button type="button" onClick={openEdit} style={ui.editBtn}>
-                    ✎ Editar
+                    <Pencil size={16} strokeWidth={2.2} aria-hidden />
+                    Editar
                   </button>
                 </div>
 
@@ -497,29 +547,33 @@ export default function EquipoInfoPage() {
               {/* Secciones */}
               <div style={ui.sectionsWrap}>
                 <SectionIconBtn
-                  icon="📄"
                   title="Datos generales"
                   subtitle="Marca, familia, estado, responsables"
                   onClick={() => openModal("general")}
-                />
+                >
+                  <FileText size={20} strokeWidth={2} color="#0F172A" />
+                </SectionIconBtn>
                 <SectionIconBtn
-                  icon="✅"
                   title="Control"
                   subtitle="Checklist, fechas, estado operativo"
                   onClick={() => openModal("control")}
-                />
+                >
+                  <ClipboardCheck size={20} strokeWidth={2} color="#0F172A" />
+                </SectionIconBtn>
                 <SectionIconBtn
-                  icon="🆔"
                   title="Identificación"
                   subtitle="ID, código/placa, serie, modelo"
                   onClick={() => openModal("id")}
-                />
+                >
+                  <Fingerprint size={20} strokeWidth={2} color="#0F172A" />
+                </SectionIconBtn>
                 <SectionIconBtn
-                  icon="⚠️"
                   title="Historial de fallas"
-                  subtitle="Todas las fallas registradas"
+                  subtitle="Fallas registradas en checklist diaria"
                   onClick={() => openModal("historial")}
-                />
+                >
+                  <History size={20} strokeWidth={2} color="#0F172A" />
+                </SectionIconBtn>
               </div>
             </>
           )}
@@ -543,7 +597,12 @@ export default function EquipoInfoPage() {
                 </div>
               </div>
 
-              <button type="button" onClick={closeModal} style={ui.modalCloseBtn}>
+              <button
+                type="button"
+                onClick={closeModal}
+                style={ui.modalCloseBtn}
+                aria-label="Cerrar"
+              >
                 ✕
               </button>
             </div>
@@ -608,7 +667,12 @@ export default function EquipoInfoPage() {
                 </div>
               </div>
 
-              <button type="button" onClick={closeEdit} style={ui.modalCloseBtn}>
+              <button
+                type="button"
+                onClick={closeEdit}
+                style={ui.modalCloseBtn}
+                aria-label="Cerrar"
+              >
                 ✕
               </button>
             </div>
@@ -664,7 +728,8 @@ export default function EquipoInfoPage() {
 
 const ui = {
   shell: {
-    width: "98.78vw",
+    width: "100%",
+    maxWidth: "100vw",
     minHeight: "100vh",
     background: "#F6F7FB",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
@@ -672,6 +737,7 @@ const ui = {
     display: "grid",
     gridTemplateRows: "auto 1fr",
     overflowX: "hidden",
+    boxSizing: "border-box",
   },
 
   topbar: {
@@ -698,6 +764,16 @@ const ui = {
     cursor: "pointer",
     userSelect: "none",
     minWidth: 240,
+    borderRadius: 14,
+    padding: "4px 8px 4px 4px",
+    margin: "-4px -8px -4px -4px",
+    outline: "none",
+  },
+  topbarActions: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
   },
   brandMark: {
     width: 42,
@@ -725,6 +801,10 @@ const ui = {
     color: "#0F172A",
     boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
     whiteSpace: "nowrap",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    transition: "box-shadow 140ms ease, border-color 140ms ease, transform 140ms ease",
   },
 
   main: { width: "100%", padding: 16, display: "block" },
@@ -734,27 +814,65 @@ const ui = {
     background: "#fff",
     border: "1px solid #E7E9F2",
     borderRadius: 20,
-    padding: 16,
+    padding: "24px 20px",
     boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
     display: "grid",
     placeItems: "center",
     gap: 10,
+    textAlign: "center",
+    maxWidth: 420,
+    margin: "0 auto",
+  },
+  stateEmptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    background: "#F1F5F9",
+    border: "1px solid #E7E9F2",
+    display: "grid",
+    placeItems: "center",
+    marginBottom: 4,
+  },
+  stateCardTitle: {
+    fontWeight: 950,
+    fontSize: 17,
+    color: "#0F172A",
+    lineHeight: 1.25,
+  },
+  stateCardHint: {
+    fontWeight: 800,
+    fontSize: 13,
+    color: "#64748B",
+    lineHeight: 1.45,
+    margin: 0,
+    maxWidth: 360,
   },
   spinner: {
-    width: 28,
-    height: 28,
+    width: 30,
+    height: 30,
     borderRadius: 999,
     border: "3px solid #E7E9F2",
     borderTop: `3px solid ${ACCENT}`,
-    animation: "spin 0.9s linear infinite",
+    animation: "equipoInfoSpin 0.85s linear infinite",
   },
 
   hero: {
+    position: "relative",
+    overflow: "hidden",
     background: "#fff",
     border: "1px solid #E7E9F2",
     borderRadius: 20,
-    padding: 14,
+    padding: 16,
+    paddingTop: 18,
     boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
+  },
+  heroAccent: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    height: 4,
+    width: "100%",
+    background: `linear-gradient(90deg, ${ACCENT} 0%, rgba(8,159,138,0.25) 60%, rgba(8,159,138,0) 100%)`,
   },
   heroTop: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" },
 
@@ -772,12 +890,13 @@ const ui = {
 
   heroTitle: {
     fontWeight: 980,
-    fontSize: 18,
-    lineHeight: "22px",
-    marginBottom: 6,
+    fontSize: 20,
+    lineHeight: 1.25,
+    marginBottom: 8,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
     overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
   },
 
   chipsRow: { display: "flex", gap: 8, flexWrap: "wrap" },
@@ -801,13 +920,17 @@ const ui = {
 
   editBtn: {
     borderRadius: 999,
-    border: "1px solid #E7E9F2",
-    background: "#F6F7FB",
-    padding: "8px 12px",
+    border: `1px solid rgba(8,159,138,0.35)`,
+    background: "rgba(8, 159, 138, 0.08)",
+    padding: "9px 14px",
     cursor: "pointer",
     fontWeight: 950,
-    color: "#0F172A",
+    color: ACCENT,
     whiteSpace: "nowrap",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    transition: "background 140ms ease, box-shadow 140ms ease",
   },
 
   heroBottom: { marginTop: 12, display: "grid", gap: 8 },
@@ -869,6 +992,8 @@ const ui = {
     cursor: "pointer",
     textAlign: "left",
     boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    transition: "transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease",
+    outline: "none",
   },
   sectionIconCircle: {
     width: 44,
@@ -885,24 +1010,27 @@ const ui = {
   sectionBtnSub: { marginTop: 3, fontWeight: 850, fontSize: 12, color: "#5A6072" },
   sectionChevron: { fontSize: 28, fontWeight: 950, color: "#9AA1B3", marginTop: -2 },
 
-  // Modal sheet
+  // Modal (centrado; cómodo en escritorio y móvil)
   modalBackdrop: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.35)",
+    background: "rgba(15,23,42,0.45)",
     display: "grid",
-    alignItems: "end",
+    placeItems: "center",
     zIndex: 999,
-    padding: 0,
+    padding: 16,
+    boxSizing: "border-box",
   },
   modalCard: {
     background: "#fff",
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderRadius: 20,
     border: "1px solid #E7E9F2",
-    padding: 16,
-    maxHeight: "78vh",
+    padding: 18,
+    maxHeight: "min(85vh, 720px)",
+    width: "100%",
+    maxWidth: 520,
     overflow: "auto",
+    boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
   },
   modalHeader: { display: "flex", alignItems: "center", gap: 12, marginBottom: 10 },
   modalTitle: { fontWeight: 950, fontSize: 16, color: "#12131A" },
@@ -948,11 +1076,12 @@ const ui = {
     borderRadius: 14,
     padding: "12px 12px",
     width: "100%",
-    background: "#12131A",
+    background: ACCENT,
     color: "#fff",
     fontWeight: 950,
-    border: "none",
+    border: `1px solid ${ACCENT}`,
     cursor: "pointer",
+    boxShadow: "0 14px 28px rgba(8,159,138,0.22)",
   },
 
   inputLabel: { color: "#9AA1B3", fontWeight: 950, fontSize: 12, marginBottom: 6 },
@@ -967,8 +1096,3 @@ const ui = {
     outline: "none",
   },
 };
-
-/**
- * Pegá esto en tu CSS global (una vez) para el spinner:
- * @keyframes spin { to { transform: rotate(360deg); } }
- */

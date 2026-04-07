@@ -2,9 +2,16 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, onSnapshot, query } from "firebase/firestore";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Filter,
+  LayoutGrid,
+  RotateCcw,
+} from "lucide-react";
 import { db } from "../../firebase";
 import { AuthCtx } from "../../auth/AuthProvider";
-import { filterByUserScope } from "../../utils/dataScope";
+import { filterEquiposByScope } from "../../utils/dataScope";
 
 // 👇 Ajustá rutas reales de tus imágenes
 import ApiladorPng from "../../assets/equipos/apilador_icon.png";
@@ -12,6 +19,7 @@ import CarretillaPng from "../../assets/equipos/carretilla_icon.png";
 import MontacargasPng from "../../assets/equipos/montacargas_icon.png";
 
 const ACCENT = "#089F8A";
+const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
 
 function safe(v) {
     return String(v ?? "").trim();
@@ -33,6 +41,7 @@ export default function PanelEquiposMantenimiento() {
 
     const [equipos, setEquipos] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     const [showFilters, setShowFilters] = useState(false);
     const [familiaActiva, setFamiliaActiva] = useState("Todas");
@@ -43,19 +52,24 @@ export default function PanelEquiposMantenimiento() {
         if (authLoading) return;
         const qRef = query(collection(db, "equipos"));
 
+        setLoadError("");
         const unsub = onSnapshot(
             qRef,
             (snap) => {
-                const rows = filterByUserScope(
+                const rows = filterEquiposByScope(
                     snap.docs.map((d) => ({ id: d.id, ...d.data() })),
                     profile?.tenantId,
                     profile?.company
                 );
                 setEquipos(rows);
                 setLoading(false);
+                setLoadError("");
             },
             (err) => {
                 console.error("PanelEquiposMantenimiento onSnapshot error:", err);
+                setLoadError(
+                    "No se pudo cargar el listado. Revisá conexión y permisos en Firestore."
+                );
                 setLoading(false);
             }
         );
@@ -125,33 +139,107 @@ export default function PanelEquiposMantenimiento() {
         [equiposFiltrados]
     );
 
+    const hasActiveFilters =
+        revisionFiltro !== "Todas" ||
+        estadoFiltro !== "Todos" ||
+        familiaActiva !== "Todas";
+
+    const resetFilters = () => {
+        setRevisionFiltro("Todas");
+        setEstadoFiltro("Todos");
+        setFamiliaActiva("Todas");
+    };
+
+    useEffect(() => {
+        const style = document.createElement("style");
+        style.setAttribute("data-panel-equipos-spin", "1");
+        style.textContent = `
+          @keyframes panelEquiposSpin { to { transform: rotate(360deg); } }
+          @keyframes panelEquiposPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.72; } }
+          .panel-equipo-card:hover { transform: translateY(-2px); }
+          .panel-equipo-card[data-tone="default"]:hover { box-shadow: 0 18px 42px rgba(15,23,42,0.1); border-color: rgba(8,159,138,0.22); }
+          .panel-equipo-card[data-tone="red"]:hover { box-shadow: 0 18px 40px rgba(220,38,38,0.12); border-color: rgba(220,38,38,0.4); }
+          .panel-equipo-card[data-tone="yellow"]:hover { box-shadow: 0 18px 40px rgba(217,119,6,0.14); border-color: rgba(217,119,6,0.42); }
+          .panel-equipo-card[data-tone="default"]:focus-visible { outline: 2px solid ${ACCENT}; outline-offset: 2px; }
+          .panel-equipo-card[data-tone="red"]:focus-visible { outline: 2px solid #DC2626; outline-offset: 2px; }
+          .panel-equipo-card[data-tone="yellow"]:focus-visible { outline: 2px solid #D97706; outline-offset: 2px; }
+        `;
+        document.head.appendChild(style);
+        return () => style.remove();
+    }, []);
+
     return (
         <div style={ui.shell}>
             {/* Topbar */}
             <div style={ui.topbar}>
-                <div style={ui.brand} onClick={() => nav("/mantenimiento")}>
+                <div
+                    style={ui.brand}
+                    onClick={() => nav("/mantenimiento")}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            nav("/mantenimiento");
+                        }
+                    }}
+                    aria-label="Ir a mantenimiento"
+                >
+                    <div style={ui.brandMark} aria-hidden>
+                        <LayoutGrid size={20} strokeWidth={2.2} color="#fff" />
+                    </div>
                     <div style={{ display: "grid", gap: 2 }}>
                         <div style={ui.brandTitle}>Mantenimiento</div>
                         <div style={ui.brandSub}>Panel · Equipos</div>
                     </div>
                 </div>
 
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={ui.topbarActions}>
                     <div style={ui.kpi}>
                         <div style={ui.kpiLabel}>Mostrando</div>
-                        <div style={ui.kpiValue}>{equiposFiltrados.length}</div>
+                        <div style={ui.kpiValue}>
+                            {loading ? "—" : equiposFiltrados.length}
+                            {!loading && equipos.length > 0 ? (
+                                <span style={ui.kpiHint}>
+                                    {" "}
+                                    / {equipos.length} en ámbito
+                                </span>
+                            ) : null}
+                        </div>
                     </div>
 
                     <button
                         type="button"
                         onClick={() => setShowFilters((v) => !v)}
-                        style={ui.btnGhost}
+                        style={{
+                            ...ui.btnGhost,
+                            ...(showFilters ? ui.btnGhostActive : {}),
+                        }}
+                        aria-expanded={showFilters}
                     >
-                        {showFilters ? "Ocultar filtros" : "Mostrar filtros"}
+                        <Filter size={17} strokeWidth={2} aria-hidden />
+                        {showFilters ? "Ocultar filtros" : "Filtros"}
                     </button>
 
-                    <button type="button" onClick={() => nav(-1)} style={ui.btnGhost}>
-                        ← Volver
+                    {hasActiveFilters ? (
+                        <button
+                            type="button"
+                            onClick={resetFilters}
+                            style={ui.btnGhost}
+                            title="Quitar todos los filtros"
+                        >
+                            <RotateCcw size={17} strokeWidth={2} aria-hidden />
+                            Limpiar
+                        </button>
+                    ) : null}
+
+                    <button
+                        type="button"
+                        onClick={() => nav(-1)}
+                        style={ui.btnGhost}
+                    >
+                        <ArrowLeft size={17} strokeWidth={2} aria-hidden />
+                        Volver
                     </button>
                 </div>
             </div>
@@ -160,33 +248,53 @@ export default function PanelEquiposMantenimiento() {
                 <div style={ui.container}>
                     {/* Header card */}
                     <div style={ui.headerCard}>
+                        <div style={ui.headerAccent} aria-hidden />
                         <div style={ui.kickerRow}>
                             <span style={ui.kickerDot} />
                             <div style={ui.kicker}>Centro de control</div>
-                            <span style={ui.badge}>{loading ? "Cargando…" : "Listo"}</span>
+                            <span style={ui.badge}>
+                                {loadError
+                                    ? "Error"
+                                    : loading
+                                      ? "Cargando…"
+                                      : "Listo"}
+                            </span>
                         </div>
 
                         <h1 style={ui.title}>Equipos</h1>
                         <p style={ui.subtitle}>
-                            Se priorizan equipos con <b>falla</b> y se resaltan con ícono de alerta.
+                            Las tarjetas con{" "}
+                            <AlertTriangle
+                                size={14}
+                                style={{ verticalAlign: "-2px", display: "inline" }}
+                                aria-hidden
+                            />{" "}
+                            indican <b>falla activa</b>. Tocá una tarjeta para ver el detalle.
                         </p>
 
-                        <div style={ui.summaryChip}>
-                            <span style={{ fontWeight: 900, color: "#0F172A" }}>
-                                {equiposFiltrados.length}
-                            </span>
-                            <span style={{ color: "#64748B", fontWeight: 800 }}>
-                                (Pendientes:{" "}
+                        {loadError ? (
+                            <div style={ui.errorBanner} role="alert">
+                                {loadError}
+                            </div>
+                        ) : (
+                            <div style={ui.summaryChip}>
                                 <span style={{ fontWeight: 900, color: "#0F172A" }}>
-                                    {pendientesEnVista}
-                                </span>{" "}
-                                · Al día:{" "}
-                                <span style={{ fontWeight: 900, color: "#0F172A" }}>
-                                    {alDiaEnVista}
+                                    {loading ? "—" : equiposFiltrados.length}
                                 </span>
-                                )
-                            </span>
-                        </div>
+                                <span style={{ color: "#64748B", fontWeight: 800 }}>
+                                    {" "}
+                                    visibles · Pendientes checklist:{" "}
+                                    <span style={{ fontWeight: 900, color: "#0F172A" }}>
+                                        {loading ? "—" : pendientesEnVista}
+                                    </span>
+                                    {" · "}
+                                    Al día:{" "}
+                                    <span style={{ fontWeight: 900, color: "#0F172A" }}>
+                                        {loading ? "—" : alDiaEnVista}
+                                    </span>
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Filters */}
@@ -256,13 +364,48 @@ export default function PanelEquiposMantenimiento() {
 
                     {/* Grid */}
                     <div style={ui.grid}>
-                        {!loading && equiposFiltrados.length === 0 && (
+                        {loading &&
+                            Array.from({ length: 6 }).map((_, i) => (
+                                <div key={`sk-${i}`} style={ui.skeletonCard} aria-hidden>
+                                    <div style={ui.skeletonIcon} />
+                                    <div style={ui.skeletonLine} />
+                                    <div style={{ ...ui.skeletonLine, width: "55%" }} />
+                                    <div style={{ ...ui.skeletonLine, width: "40%" }} />
+                                </div>
+                            ))}
+
+                        {!loading &&
+                            equipos.length > 0 &&
+                            equiposFiltrados.length === 0 && (
+                                <div style={ui.empty}>
+                                    <div style={ui.emptyTitle}>Ningún equipo coincide</div>
+                                    <p style={ui.emptyText}>
+                                        Probá otro filtro o restablecé los criterios.
+                                    </p>
+                                    {hasActiveFilters ? (
+                                        <button
+                                            type="button"
+                                            onClick={resetFilters}
+                                            style={ui.emptyBtn}
+                                        >
+                                            Quitar filtros
+                                        </button>
+                                    ) : null}
+                                </div>
+                            )}
+
+                        {!loading && equipos.length === 0 && !loadError && (
                             <div style={ui.empty}>
-                                No hay equipos para este filtro.
+                                <div style={ui.emptyTitle}>Sin equipos en tu ámbito</div>
+                                <p style={ui.emptyText}>
+                                    Cuando existan documentos en la colección equipos, aparecerán
+                                    aquí.
+                                </p>
                             </div>
                         )}
 
-                        {equiposFiltrados.map((e) => {
+                        {!loading &&
+                            equiposFiltrados.map((e) => {
                             const fallaActiva = e.fallaActiva === true;
                             const pendiente = e.checklistD !== true;
 
@@ -270,6 +413,15 @@ export default function PanelEquiposMantenimiento() {
                             const estado = estadoRaw.toLowerCase();
                             const isActivo = estado === "activo";
                             const isMantenimiento = estado.includes("mantenimiento");
+                            const isInactivo = estado === "inactivo";
+
+                            /** Rojo: falla o inactivo. Amarillo: mantenimiento (si no aplica rojo). */
+                            const cardTone =
+                                fallaActiva || isInactivo
+                                    ? "red"
+                                    : isMantenimiento
+                                      ? "yellow"
+                                      : "default";
 
                             const estadoPillStyle = isActivo
                                 ? ui.pillOk
@@ -283,20 +435,64 @@ export default function PanelEquiposMantenimiento() {
                                 <button
                                     key={e.id}
                                     type="button"
-                                    style={ui.card}
+                                    className="panel-equipo-card"
+                                    data-tone={cardTone}
+                                    style={{
+                                        ...ui.card,
+                                        ...(cardTone === "red"
+                                            ? ui.cardBgRed
+                                            : cardTone === "yellow"
+                                              ? ui.cardBgYellow
+                                              : {}),
+                                    }}
                                     onClick={() => nav(`/mantenimiento/equipos/${e.id}`)}
+                                    aria-label={`Abrir ${safe(e.equipo) || "equipo"}, código ${safe(e.codigo) || "sin código"}`}
                                 >
                                     {fallaActiva && (
-                                        <div style={ui.warnBadge}>
-                                            <span style={ui.warnIcon}>⚠</span>
-                                            <span style={ui.warnTxt}>Falla</span>
+                                        <div
+                                            style={{
+                                                ...ui.warnBadge,
+                                                ...(cardTone === "red"
+                                                    ? ui.warnBadgeOnRed
+                                                    : {}),
+                                            }}
+                                        >
+                                            <AlertTriangle
+                                                size={14}
+                                                strokeWidth={2.5}
+                                                color={
+                                                    cardTone === "red"
+                                                        ? "#B91C1C"
+                                                        : "#B86B00"
+                                                }
+                                                aria-hidden
+                                            />
+                                            <span
+                                                style={{
+                                                    ...ui.warnTxt,
+                                                    ...(cardTone === "red"
+                                                        ? { color: "#991B1B" }
+                                                        : {}),
+                                                }}
+                                            >
+                                                Falla
+                                            </span>
                                         </div>
                                     )}
 
-                                    <div style={ui.iconCircle}>
+                                    <div
+                                        style={{
+                                            ...ui.iconCircle,
+                                            ...(cardTone === "red"
+                                                ? ui.iconCircleOnRed
+                                                : cardTone === "yellow"
+                                                  ? ui.iconCircleOnYellow
+                                                  : {}),
+                                        }}
+                                    >
                                         <img
                                             src={getEquipoIcon(e.familia)}
-                                            alt="equipo"
+                                            alt=""
                                             style={ui.iconImg}
                                         />
                                     </div>
@@ -336,13 +532,15 @@ export default function PanelEquiposMantenimiento() {
 
 const ui = {
     shell: {
-        width: "98.78vw",
+        width: "100%",
+        maxWidth: "100vw",
         minHeight: "100vh",
         background: "#F6F7FB",
         fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
         color: "#0F172A",
         display: "grid",
         gridTemplateRows: "auto 1fr",
+        boxSizing: "border-box",
     },
 
     cardCode: {
@@ -376,6 +574,10 @@ const ui = {
         cursor: "pointer",
         userSelect: "none",
         minWidth: 240,
+        borderRadius: 14,
+        padding: "4px 8px 4px 4px",
+        margin: "-4px -8px -4px -4px",
+        outline: "none",
     },
     brandMark: {
         width: 42,
@@ -389,6 +591,13 @@ const ui = {
         letterSpacing: 0.4,
         boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
         flexShrink: 0,
+    },
+    topbarActions: {
+        display: "flex",
+        gap: 10,
+        alignItems: "center",
+        flexWrap: "wrap",
+        justifyContent: "flex-end",
     },
     brandTitle: { fontWeight: 950, fontSize: 14, lineHeight: "16px" },
     brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B", lineHeight: "14px" },
@@ -405,6 +614,7 @@ const ui = {
     },
     kpiLabel: { fontWeight: 850, fontSize: 12, color: "#64748B" },
     kpiValue: { fontWeight: 950, fontSize: 12, color: "#0F172A", lineHeight: 1.1 },
+    kpiHint: { fontWeight: 800, fontSize: 11, color: "#94A3B8" },
 
     btnGhost: {
         border: "1px solid #E7E9F2",
@@ -416,7 +626,16 @@ const ui = {
         color: "#0F172A",
         boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
         whiteSpace: "nowrap",
-        transition: "transform 120ms ease, box-shadow 120ms ease",
+        transition: "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+    },
+    btnGhostActive: {
+        border: `1px solid ${ACCENT}`,
+        background: ACCENT_SOFT,
+        color: ACCENT,
+        boxShadow: "0 10px 24px rgba(8,159,138,0.12)",
     },
 
     main: {
@@ -434,11 +653,33 @@ const ui = {
     },
 
     headerCard: {
+        position: "relative",
         background: "#fff",
         border: "1px solid #E7E9F2",
         borderRadius: 20,
         padding: 16,
+        paddingTop: 18,
         boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
+        overflow: "hidden",
+    },
+    headerAccent: {
+        position: "absolute",
+        left: 0,
+        top: 0,
+        height: 4,
+        width: "100%",
+        background: `linear-gradient(90deg, ${ACCENT} 0%, rgba(8,159,138,0.25) 60%, rgba(8,159,138,0) 100%)`,
+    },
+    errorBanner: {
+        marginTop: 12,
+        borderRadius: 14,
+        padding: "12px 14px",
+        background: "#FFF6F6",
+        border: "1px solid rgba(239,68,68,0.25)",
+        color: "#9A1D1D",
+        fontWeight: 850,
+        fontSize: 13,
+        lineHeight: 1.4,
     },
 
     kickerRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
@@ -536,13 +777,23 @@ const ui = {
         borderRadius: 18,
         padding: 14,
         cursor: "pointer",
-        boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
+        boxShadow: "0 12px 28px rgba(15,23,42,0.06)",
         display: "grid",
         gap: 8,
         alignContent: "start",
-        minHeight: 0,                 // ✅ quitar altura fija
-        transition: "transform 140ms ease, box-shadow 140ms ease, border 140ms ease",
+        minHeight: 0,
+        transition: "transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease",
         outline: "none",
+    },
+    cardBgRed: {
+        background: "linear-gradient(165deg, #FFF1F1 0%, #FFE4E4 55%, #FEF2F2 100%)",
+        borderColor: "rgba(220, 38, 38, 0.32)",
+        boxShadow: "0 12px 28px rgba(220, 38, 38, 0.08)",
+    },
+    cardBgYellow: {
+        background: "linear-gradient(165deg, #FFFBEB 0%, #FEF3C7 50%, #FFFBF0 100%)",
+        borderColor: "rgba(217, 119, 6, 0.35)",
+        boxShadow: "0 12px 28px rgba(217, 119, 6, 0.09)",
     },
 
     // (opcional) si querés hover/focus sin CSS externo:
@@ -559,9 +810,12 @@ const ui = {
         padding: "6px 10px",
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
+        gap: 6,
     },
-    warnIcon: { fontWeight: 950, color: "#B86B00" },
+    warnBadgeOnRed: {
+        border: "1px solid rgba(220, 38, 38, 0.35)",
+        background: "rgba(255,255,255,0.9)",
+    },
     warnTxt: { fontWeight: 950, fontSize: 12, color: "#B86B00" },
 
     iconCircle: {
@@ -573,6 +827,14 @@ const ui = {
         display: "grid",
         placeItems: "center",
         marginTop: 2,
+    },
+    iconCircleOnRed: {
+        background: "rgba(255,255,255,0.82)",
+        borderColor: "rgba(220, 38, 38, 0.2)",
+    },
+    iconCircleOnYellow: {
+        background: "rgba(255,255,255,0.82)",
+        borderColor: "rgba(217, 119, 6, 0.22)",
     },
     iconImg: { width: 34, height: 34, objectFit: "contain" },
 
@@ -625,10 +887,59 @@ const ui = {
     empty: {
         gridColumn: "1 / -1",
         borderRadius: 18,
-        border: "1px solid #E7E9F2",
+        border: "1px dashed #D7DEE8",
+        background: "linear-gradient(180deg, #fff 0%, #FBFCFF 100%)",
+        padding: "28px 20px",
+        textAlign: "center",
+        maxWidth: 480,
+        margin: "0 auto",
+        justifySelf: "center",
+    },
+    emptyTitle: {
+        fontWeight: 950,
+        fontSize: 16,
+        color: "#0F172A",
+        marginBottom: 8,
+    },
+    emptyText: {
+        fontWeight: 800,
+        fontSize: 13,
+        color: "#64748B",
+        lineHeight: 1.45,
+        margin: 0,
+    },
+    emptyBtn: {
+        marginTop: 16,
+        borderRadius: 14,
+        border: `1px solid ${ACCENT}`,
+        background: ACCENT_SOFT,
+        color: ACCENT,
+        padding: "10px 18px",
+        fontWeight: 950,
+        cursor: "pointer",
+    },
+    skeletonCard: {
+        borderRadius: 18,
+        border: "1px solid #EEF1F7",
         background: "#fff",
         padding: 14,
-        fontWeight: 900,
-        color: "#64748B",
+        display: "grid",
+        gap: 10,
+        minHeight: 168,
+        animation: "panelEquiposPulse 1.4s ease-in-out infinite",
+    },
+    skeletonIcon: {
+        width: 56,
+        height: 56,
+        borderRadius: 18,
+        background: "linear-gradient(90deg, #F1F5F9 0%, #E8EDF4 50%, #F1F5F9 100%)",
+        backgroundSize: "200% 100%",
+    },
+    skeletonLine: {
+        height: 12,
+        borderRadius: 8,
+        width: "78%",
+        background: "linear-gradient(90deg, #F1F5F9 0%, #E8EDF4 50%, #F1F5F9 100%)",
+        backgroundSize: "200% 100%",
     },
 };
