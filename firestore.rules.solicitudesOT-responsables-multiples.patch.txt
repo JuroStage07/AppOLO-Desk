@@ -1,0 +1,9 @@
+// Obsoleto: el bloque completo actualizado está en:
+//   firestore.rules.solicitudesOT.snippet.txt
+//
+// Cambios respecto a la versión anterior:
+// - allow update: en changedKeys().hasOnly se agregaron
+//     'responsablesUids',
+//     'responsablesNombres'
+// - Condición nueva: si cambia cualquiera de las dos listas, ambas deben ser
+//   list y tener el mismo tamaño (alineadas con el cliente).

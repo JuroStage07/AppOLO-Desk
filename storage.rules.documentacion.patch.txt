@@ -1,0 +1,37 @@
+// =============================================================================
+// Storage — reemplazá la sección // DOCUMENTACION y el match /documentacion/...
+// por lo de abajo. El resto del archivo queda igual.
+//
+// Lectura: igual que antes (admin global O mismo tenant con permiso documentación).
+// Escritura: solo roles admin (isAdmin: admin / dev / administrativo) y mismo tenant,
+//             PDF únicamente (alineado a Firestore documentacion).
+// =============================================================================
+
+    // =========================
+    // DOCUMENTACION
+    // =========================
+    function canReadDocumentacionStorage(tenantId, company) {
+      return isAdmin()
+        || (
+          sameTenantPath(tenantId, company)
+          && (
+            hasPerm("documentacion")
+            || hasPerm("documentos")
+            || role() in ["administrativo", "dev", "admin"]
+          )
+        );
+    }
+
+    function canWriteDocumentacionStorage(tenantId, company) {
+      return sameTenantPath(tenantId, company)
+        && isAdmin()
+        && request.resource != null
+        && request.resource.contentType == "application/pdf";
+    }
+
+    // ... en el match:
+
+    match /documentacion/{tenantId}/{company}/{allPaths=**} {
+      allow read: if canReadDocumentacionStorage(tenantId, company);
+      allow write: if canWriteDocumentacionStorage(tenantId, company);
+    }

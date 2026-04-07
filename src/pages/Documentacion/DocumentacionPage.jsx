@@ -156,15 +156,28 @@ export default function DocumentacionPage() {
         setForm((prev) => ({ ...prev, [key]: value }));
     };
 
+    /** Solo administrativo y dev pueden subir o reemplazar metadatos (alineado a reglas Firestore). */
+    const isDocumentacionUploader = useMemo(() => {
+        const r = profile?.role;
+        return r === "administrativo" || r === "dev";
+    }, [profile?.role]);
+
+    useEffect(() => {
+        if (profile && !isDocumentacionUploader) {
+            setShowUploadModal(false);
+        }
+    }, [profile, isDocumentacionUploader]);
+
     const canUpload = useMemo(() => {
         return (
+            isDocumentacionUploader &&
             !busy &&
             !!safe(form.title) &&
             !!safe(form.category) &&
             !!pdfFile &&
             pdfFile.type === "application/pdf"
         );
-    }, [busy, form, pdfFile]);
+    }, [isDocumentacionUploader, busy, form, pdfFile]);
 
     const filteredDocs = useMemo(() => {
         const t = safe(qText).toLowerCase();
@@ -206,6 +219,10 @@ export default function DocumentacionPage() {
 
     const handleUpload = async (e) => {
         e?.preventDefault?.();
+        if (!isDocumentacionUploader) {
+            setErr("Solo usuarios administrativos o desarrollo pueden subir documentación.");
+            return;
+        }
         if (!canUpload) return;
 
         setBusy(true);
@@ -283,6 +300,7 @@ export default function DocumentacionPage() {
 
     //Modal new document
     const openUploadModal = () => {
+        if (!isDocumentacionUploader) return;
         setErr("");
         setShowUploadModal(true);
     };
@@ -354,14 +372,16 @@ export default function DocumentacionPage() {
                                     </div>
 
                                     <div style={ui.panelActions}>
-                                        <button
-                                            type="button"
-                                            onClick={openUploadModal}
-                                            style={ui.heroActionBtn}
-                                        >
-                                            <span style={ui.heroActionIcon}>＋</span>
-                                            <span>Nuevo documento</span>
-                                        </button>
+                                        {isDocumentacionUploader && (
+                                            <button
+                                                type="button"
+                                                onClick={openUploadModal}
+                                                style={ui.heroActionBtn}
+                                            >
+                                                <span style={ui.heroActionIcon}>＋</span>
+                                                <span>Nuevo documento</span>
+                                            </button>
+                                        )}
 
                                         <button
                                             type="button"

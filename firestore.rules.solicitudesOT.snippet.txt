@@ -1,39 +1,3 @@
-// =============================================================================
-// INSTRUCCIONES (Firebase Console → Firestore → Reglas)
-// 1) Buscá:  function sameTenantCompanyData(data) { ... }   (termina con "    }")
-//    Justo DESPUÉS de ese cierre, PEGÁ el bloque «PEGAR A» de abajo.
-// 2) Buscá:  // =========================
-//            //  Solicitudes OT
-//            // =========================
-//            match /solicitudesOT/{solicitudId} {
-//    Reemplazá TODO ese match (hasta su "}" final que cierra solicitudesOT, incluye subtareas)
-//    por el bloque «PEGAR B» completo.
-// 3) Guardá y publicá las reglas.
-//
-// Qué corrige: el create de solicitudesOT admite tenantId/company (strings) y valida
-// que, si van informados, coincidan con el perfil (sameTenantCompanyData).
-// Sin esas claves en el documento, la función devuelve true (compatible con el cliente actual).
-// =============================================================================
-
-
-// ----------------------------- PEGAR A ---------------------------------------
-
-    function solicitudOtCreateTenantCompanyOk() {
-      return !('tenantId' in request.resource.data)
-        || !('company' in request.resource.data)
-        || (
-          request.resource.data.tenantId is string
-          && request.resource.data.company is string
-          && (
-            (request.resource.data.tenantId == '' && request.resource.data.company == '')
-            || sameTenantCompanyData(request.resource.data)
-          )
-        );
-    }
-
-
-// ----------------------------- PEGAR B ---------------------------------------
-
 // =========================
 //  Solicitudes OT
 // =========================
@@ -110,7 +74,9 @@ match /solicitudesOT/{solicitudId} {
       'updatedAt',
       'notas',
       'responsableUid',
-      'responsableNombre'
+      'responsableNombre',
+      'responsablesUids',
+      'responsablesNombres'
     ])
     && (
       !request.resource.data.diff(resource.data).changedKeys().hasAny(['OTState']) ||
@@ -131,6 +97,14 @@ match /solicitudesOT/{solicitudId} {
     && (
       !request.resource.data.diff(resource.data).changedKeys().hasAny(['responsableNombre']) ||
       request.resource.data.responsableNombre is string
+    )
+    && (
+      !request.resource.data.diff(resource.data).changedKeys().hasAny(['responsablesUids', 'responsablesNombres']) ||
+      (
+        request.resource.data.responsablesUids is list &&
+        request.resource.data.responsablesNombres is list &&
+        request.resource.data.responsablesUids.size() == request.resource.data.responsablesNombres.size()
+      )
     );
 
   allow delete: if canSolicitudesOT();

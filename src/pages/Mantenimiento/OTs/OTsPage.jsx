@@ -46,12 +46,14 @@ import {
   collectionGroup,
   serverTimestamp,
   doc,
+  deleteDoc,
   getDocs,
   onSnapshot,
   orderBy,
   query,
   updateDoc,
   deleteField,
+  writeBatch,
 } from "firebase/firestore";
 
 const ACCENT = "#089F8A";
@@ -124,6 +126,56 @@ function chronoTsToMillis(ts) {
     );
   }
   return null;
+}
+
+/** Firestore puede guardar `fecha` como string o Timestamp; nunca renderizar el objeto en JSX. */
+function fechaFieldToDisplayString(value) {
+  if (value == null || value === "") return "";
+  if (typeof value?.toDate === "function") {
+    return value.toDate().toLocaleDateString("es-AR");
+  }
+  if (typeof value?.seconds === "number") {
+    const ms =
+      value.seconds * 1000 + Math.floor((value.nanoseconds || 0) / 1e6);
+    return new Date(ms).toLocaleDateString("es-AR");
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) return d.toLocaleDateString("es-AR");
+  }
+  return String(value);
+}
+
+/** Lista nueva (`responsablesNombres`) o texto legacy (`responsableNombre`). */
+function responsablesDisplayFromFirestoreData(data) {
+  if (!data || typeof data !== "object") return "";
+  const names = data.responsablesNombres;
+  if (Array.isArray(names) && names.length > 0) {
+    return names
+      .map((s) => String(s == null ? "" : s).trim())
+      .filter(Boolean)
+      .join(", ");
+  }
+  const single =
+    data.responsableNombre && String(data.responsableNombre).trim();
+  return single || "";
+}
+
+/** Borra subtareas y luego el documento padre (Firestore no elimina subcolecciones en cascada). */
+async function deleteSolicitudOtFromFirestore(solicitudId) {
+  const subSnap = await getDocs(
+    collection(db, "solicitudesOT", solicitudId, "subtareas")
+  );
+  const BATCH_MAX = 450;
+  const docs = subSnap.docs;
+  for (let i = 0; i < docs.length; i += BATCH_MAX) {
+    const batch = writeBatch(db);
+    for (const d of docs.slice(i, i + BATCH_MAX)) {
+      batch.delete(d.ref);
+    }
+    await batch.commit();
+  }
+  await deleteDoc(doc(db, "solicitudesOT", solicitudId));
 }
 
 function formatChronoMs(ms) {
@@ -215,7 +267,7 @@ function mapSnapshotToPendingItem(d, subtaskStats = { total: 0, completed: 0 }) 
     asset: data.activoReferencia || "Activo no definido",
     duration: data.tipoProblema || "Sin tipo",
     schedule: data.departamento || "Sin departamento",
-    date: data.fecha || "",
+    date: fechaFieldToDisplayString(data.fecha),
     nroSolicitud: data.NroSolicitud || "",
     solicitanteNombre: data.solicitanteNombre || "",
     solicitanteFicha: data.solicitanteFicha || "",
@@ -249,7 +301,7 @@ function mapSnapshotToSolicitudCardItem(
     asset: data.activoReferencia || "Activo no definido",
     duration: data.tipoProblema || "Sin tipo",
     schedule: data.departamento || "Sin departamento",
-    date: data.fecha || "",
+    date: fechaFieldToDisplayString(data.fecha),
     nroSolicitud: nroSolicitudParaOtEnTablero(data.NroSolicitud || ""),
     solicitanteNombre: data.solicitanteNombre || "",
     solicitanteFicha: data.solicitanteFicha || "",
@@ -258,12 +310,16 @@ function mapSnapshotToSolicitudCardItem(
     descripcionOT: data.descripcionOT || "",
     estadoOT: data.OTState || (isProceso ? OT_STATE_EN_PROCESO : OT_STATE_REVISION),
     notas: data.notas || "",
-    responsableNombre: (data.responsableNombre && String(data.responsableNombre).trim()) || "",
+    responsableNombre: responsablesDisplayFromFirestoreData(data),
   };
 }
 
-function pendingItemToProcesoSolicitudItem(item, responsable) {
-  const name = responsable?.displayName?.trim() || "";
+function pendingItemToProcesoSolicitudItem(item, responsables) {
+  const list = Array.isArray(responsables) ? responsables : [];
+  const names = list
+    .map((r) => String(r?.displayName || "").trim())
+    .filter(Boolean);
+  const joined = names.join(", ");
   return {
     ...item,
     type: "solicitud",
@@ -271,7 +327,7 @@ function pendingItemToProcesoSolicitudItem(item, responsable) {
     priority: "EN PROCESO",
     priorityTone: "proceso",
     estadoOT: OT_STATE_EN_PROCESO,
-    responsableNombre: name,
+    responsableNombre: joined,
     nroSolicitud: nroSolicitudParaOtEnTablero(item.nroSolicitud || ""),
   };
 }
@@ -1960,6 +2016,111 @@ function ConfirmSendToRevisionModal({
   );
 }
 
+function ConfirmDeleteSolicitudModal({
+  open,
+  onClose,
+  onConfirm,
+  solicitudId,
+  columnIndex,
+  nroLabel,
+  nombreOT,
+}) {
+  const [busy, setBusy] = useState(false);
+
+  if (!open) return null;
+
+  const handleConfirm = async () => {
+    if (!solicitudId?.trim()) return;
+    try {
+      setBusy(true);
+      await onConfirm(solicitudId, columnIndex);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      style={{ ...modal.backdrop, zIndex: 10050 }}
+      onClick={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <div
+        style={modal.sheet}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-delete-title"
+      >
+        <div style={modal.header}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                ...modal.icon,
+                background: "rgba(255, 71, 115, 0.08)",
+                border: "1px solid rgba(255, 71, 115, 0.28)",
+                color: RED,
+              }}
+            >
+              <Trash2 size={18} strokeWidth={2.5} />
+            </div>
+            <div>
+              <div id="confirm-delete-title" style={modal.title}>
+                Eliminar solicitud
+              </div>
+              <div style={modal.sub}>
+                Esta acción no se puede deshacer. Se borrará en el servidor
+                (incluidas las subtareas).
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            style={modal.close}
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Cerrar"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ padding: "0 14px 16px", display: "grid", gap: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: "#64748B" }}>
+            {nroLabel || "—"}
+            {nombreOT ? ` · ${nombreOT}` : ""}
+          </div>
+        </div>
+
+        <div style={modal.actions}>
+          <button
+            type="button"
+            style={ui.btnGhost}
+            onClick={onClose}
+            disabled={busy}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            style={{
+              ...ui.btnPrimary,
+              borderColor: RED,
+              background: RED,
+              boxShadow: "0 18px 32px rgba(255,71,115,0.2)",
+            }}
+            onClick={() => void handleConfirm()}
+            disabled={busy}
+          >
+            {busy ? "Eliminando…" : "Sí, eliminar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AssignResponsableModal({
   open,
   onClose,
@@ -1974,7 +2135,8 @@ function AssignResponsableModal({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [candidates, setCandidates] = useState([]);
-  const [selectedUid, setSelectedUid] = useState(null);
+  /** Orden de selección (uids). */
+  const [selectedUids, setSelectedUids] = useState([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -1982,7 +2144,7 @@ function AssignResponsableModal({
 
     setSearch("");
     setLoadError("");
-    setSelectedUid(null);
+    setSelectedUids([]);
     setCandidates([]);
 
     let cancelled = false;
@@ -2025,16 +2187,27 @@ function AssignResponsableModal({
       )
     : candidates;
 
-  const selected = candidates.find((c) => c.uid === selectedUid);
+  const selectedRows = selectedUids
+    .map((uid) => candidates.find((c) => c.uid === uid))
+    .filter(Boolean);
+
+  const toggleUid = (uid) => {
+    setSelectedUids((prev) => {
+      const i = prev.indexOf(uid);
+      if (i >= 0) return prev.filter((id) => id !== uid);
+      return [...prev, uid];
+    });
+  };
 
   const handleConfirm = async () => {
-    if (!selected || !solicitudId) return;
+    if (!solicitudId || selectedRows.length === 0) return;
+    const responsables = selectedRows.map((c) => ({
+      uid: c.uid,
+      displayName: c.displayName,
+    }));
     try {
       setSaving(true);
-      await onConfirm(solicitudId, {
-        uid: selected.uid,
-        displayName: selected.displayName,
-      });
+      await onConfirm(solicitudId, responsables);
       onClose();
     } catch (e) {
       console.error(e);
@@ -2064,11 +2237,12 @@ function AssignResponsableModal({
             </div>
             <div>
               <div id="assign-responsable-title" style={modal.title}>
-                Responsable de la OT
+                Responsables de la OT
               </div>
               <div style={modal.sub}>
-                Elegí quién ejecuta esta orden en mantenimiento. Solo aparecen
-                perfiles con permiso de mantenimiento, admin o dev.
+                Elegí uno o más personas que ejecutan esta orden. Tocá cada fila
+                para marcar o desmarcar. Solo aparecen perfiles con permiso de
+                mantenimiento, admin o dev.
               </div>
             </div>
           </div>
@@ -2088,6 +2262,46 @@ function AssignResponsableModal({
             {nroSolicitud || solicitudId}
             {nombreOT ? ` · ${nombreOT}` : ""}
           </div>
+          {selectedRows.length > 0 ? (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                alignItems: "center",
+              }}
+            >
+              <span
+                style={{ fontSize: 11, fontWeight: 800, color: "#64748B" }}
+              >
+                Seleccionados ({selectedRows.length}):
+              </span>
+              {selectedRows.map((c) => (
+                <button
+                  key={c.uid}
+                  type="button"
+                  title="Quitar"
+                  onClick={() => toggleUid(c.uid)}
+                  style={{
+                    border: `1px solid ${ACCENT}`,
+                    background: ACCENT_SOFT,
+                    color: "#0F172A",
+                    borderRadius: 999,
+                    padding: "4px 10px",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  {c.displayName}
+                  <X size={14} strokeWidth={2.5} />
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div style={picker.searchWrap}>
@@ -2113,7 +2327,7 @@ function AssignResponsableModal({
             </div>
           ) : (
             filtered.map((c) => {
-              const active = c.uid === selectedUid;
+              const active = selectedUids.includes(c.uid);
               return (
                 <button
                   key={c.uid}
@@ -2121,25 +2335,55 @@ function AssignResponsableModal({
                   style={{
                     ...picker.item,
                     ...(active ? picker.itemActive : {}),
-                    flexDirection: "column",
-                    alignItems: "stretch",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
                   }}
-                  onClick={() => setSelectedUid(c.uid)}
+                  onClick={() => toggleUid(c.uid)}
                 >
-                  <span>{c.displayName}</span>
-                  <span
+                  <div
                     style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: "#64748B",
-                      marginTop: 4,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "stretch",
+                      textAlign: "left",
+                      minWidth: 0,
                     }}
                   >
-                    {c.numeroFicha
-                      ? `Ficha ${c.numeroFicha} · `
-                      : ""}
-                    {c.role}
-                  </span>
+                    <span>{c.displayName}</span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#64748B",
+                        marginTop: 4,
+                      }}
+                    >
+                      {c.numeroFicha
+                        ? `Ficha ${c.numeroFicha} · `
+                        : ""}
+                      {c.role}
+                    </span>
+                  </div>
+                  {active ? (
+                    <CircleCheck
+                      size={22}
+                      strokeWidth={2.5}
+                      color={ACCENT}
+                      style={{ flexShrink: 0 }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 999,
+                        border: "2px solid #E2E8F0",
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
                 </button>
               );
             })
@@ -2159,7 +2403,7 @@ function AssignResponsableModal({
             type="button"
             style={ui.btnPrimary}
             onClick={() => void handleConfirm()}
-            disabled={!selected || saving}
+            disabled={selectedRows.length === 0 || saving}
           >
             {saving ? "Guardando…" : "Confirmar y mover a en proceso"}
           </button>
@@ -2196,6 +2440,13 @@ export default function OTsPage() {
   const [confirmRevisionModal, setConfirmRevisionModal] = useState({
     open: false,
     solicitudId: null,
+    nroLabel: "",
+    nombreOT: "",
+  });
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState({
+    open: false,
+    solicitudId: null,
+    columnIndex: 0,
     nroLabel: "",
     nombreOT: "",
   });
@@ -2358,18 +2609,66 @@ export default function OTsPage() {
     return columns.reduce((acc, c) => acc + c.items.length, 0);
   }, [columns]);
 
-  const deleteCard = (itemId, columnIndex) => {
-    setColumns((prev) =>
-      prev.map((column, idx) =>
-        idx === columnIndex
-          ? {
-            ...column,
-            items: column.items.filter((item) => item.id !== itemId),
-          }
-          : column
-      )
-    );
-  };
+  const closeDeleteConfirmModal = useCallback(() => {
+    setDeleteConfirmModal({
+      open: false,
+      solicitudId: null,
+      columnIndex: 0,
+      nroLabel: "",
+      nombreOT: "",
+    });
+  }, []);
+
+  const executeDeleteConfirm = useCallback(
+    async (solicitudId, columnIndex) => {
+      if (!solicitudId?.trim()) return;
+
+      const removeFromBoard = () => {
+        setColumns((prev) =>
+          prev.map((column, idx) =>
+            idx === columnIndex
+              ? {
+                  ...column,
+                  items: column.items.filter((item) => item.id !== solicitudId),
+                }
+              : column
+          )
+        );
+      };
+
+      if (isLocalOnlyOtId(solicitudId)) {
+        removeFromBoard();
+        closeDeleteConfirmModal();
+        return;
+      }
+
+      try {
+        await deleteSolicitudOtFromFirestore(solicitudId);
+        removeFromBoard();
+        closeDeleteConfirmModal();
+      } catch (err) {
+        console.error("Error eliminando solicitudOT:", err);
+        alert(
+          "❌ No se pudo eliminar. Revisá permisos y que las reglas de Firestore permitan borrar en solicitudesOT y subtareas."
+        );
+      }
+    },
+    [closeDeleteConfirmModal]
+  );
+
+  const deleteCard = useCallback((itemId, columnIndex) => {
+    if (!itemId?.trim()) return;
+    setOpenMenuId(null);
+    const col = columnsRef.current[columnIndex];
+    const item = col?.items.find((i) => i.id === itemId);
+    setDeleteConfirmModal({
+      open: true,
+      solicitudId: itemId,
+      columnIndex,
+      nroLabel: item?.nroSolicitud || item?.ot || "",
+      nombreOT: item?.taskTitle || "",
+    });
+  }, []);
 
   const requestMovePendingToProceso = (solicitudId) => {
     if (!solicitudId?.trim()) return;
@@ -2414,9 +2713,18 @@ export default function OTsPage() {
     });
   }, []);
 
-  const executeMovePendingToProceso = async (solicitudId, responsable) => {
-    if (!solicitudId?.trim() || !responsable?.uid) {
-      throw new Error("Faltan datos para asignar el responsable.");
+  const executeMovePendingToProceso = async (solicitudId, responsables) => {
+    const raw = Array.isArray(responsables) ? responsables : [];
+    const cleaned = raw
+      .filter((r) => r?.uid)
+      .map((r) => ({
+        uid: r.uid,
+        displayName: String(r.displayName || "").trim() || r.uid,
+      }));
+    const uids = cleaned.map((r) => r.uid);
+    const nombres = cleaned.map((r) => r.displayName);
+    if (!solicitudId?.trim() || uids.length === 0) {
+      throw new Error("Elegí al menos un responsable.");
     }
 
     const prev = columnsRef.current;
@@ -2436,7 +2744,7 @@ export default function OTsPage() {
         (i) => i.id === solicitudId && i.type === "pending"
       );
       if (!still) return innerPrev;
-      const oti = pendingItemToProcesoSolicitudItem(still, responsable);
+      const oti = pendingItemToProcesoSolicitudItem(still, cleaned);
       return innerPrev.map((c) => {
         if (c.id === "pendientes") {
           return { ...c, items: c.items.filter((i) => i.id !== solicitudId) };
@@ -2456,14 +2764,16 @@ export default function OTsPage() {
     try {
       await updateDoc(doc(db, "solicitudesOT", solicitudId), {
         OTState: OT_STATE_EN_PROCESO,
-        responsableUid: responsable.uid,
-        responsableNombre: responsable.displayName,
+        responsableUid: uids[0],
+        responsableNombre: nombres.join(", "),
+        responsablesUids: uids,
+        responsablesNombres: nombres,
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
       console.error(err);
       alert(
-        "❌ No se pudo guardar «En proceso» ni el responsable. Revisá las reglas de Firestore: en solicitudesOT/update deben permitirse responsableUid y responsableNombre junto a OTState y updatedAt. Se recargará el tablero."
+        "❌ No se pudo guardar «En proceso» ni los responsables. Revisá las reglas de Firestore: en solicitudesOT/update deben permitirse OTState, updatedAt, responsableUid, responsableNombre, responsablesUids y responsablesNombres. Se recargará el tablero."
       );
       void refetchSolicitudesOnce();
       throw err;
@@ -2866,6 +3176,16 @@ export default function OTsPage() {
         tenantId={profile?.tenantId || ""}
         company={profile?.company || ""}
         onConfirm={executeMovePendingToProceso}
+      />
+
+      <ConfirmDeleteSolicitudModal
+        open={deleteConfirmModal.open}
+        onClose={closeDeleteConfirmModal}
+        solicitudId={deleteConfirmModal.solicitudId}
+        columnIndex={deleteConfirmModal.columnIndex}
+        nroLabel={deleteConfirmModal.nroLabel}
+        nombreOT={deleteConfirmModal.nombreOT}
+        onConfirm={executeDeleteConfirm}
       />
 
       <ConfirmSendToRevisionModal

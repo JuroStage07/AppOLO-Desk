@@ -1,0 +1,40 @@
+// =============================================================================
+// Firestore — documentación: solo administrativo y dev pueden crear/actualizar
+// Reemplazá en tu archivo de reglas las funciones y el bloque match que indican
+// abajo (dejá canDocumentacion() igual para lectura con permiso documentacion/documentos).
+// =============================================================================
+
+// ------------- REEMPLAZAR estas funciones (sección Documentación helpers) -------------
+
+    function canDocumentacion() {
+      return authed() && (
+        isAdminRequester()
+        || hasPerm('documentacion')
+        || hasPerm('documentos')
+      );
+    }
+
+    function canUploadDocumentacionAdmin() {
+      return isAdminRequester();
+    }
+
+    function canReadDocumentacion() {
+      return canDocumentacion()
+        && sameTenantCompanyData(resource.data);
+    }
+
+    function canCreateDocumentacion() {
+      return canUploadDocumentacionAdmin()
+        && sameTenantCompanyData(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+    }
+
+    function canUpdateDocumentacion() {
+      return canUploadDocumentacionAdmin()
+        && sameTenantCompanyData(resource.data)
+        && sameTenantCompanyData(request.resource.data);
+    }
+
+// ------------- El bloque match /documentacion/{docId} queda usando las funciones de arriba -------------
+// (allow get, list: canReadDocumentacion; create: canCreateDocumentacion; update: canUpdateDocumentacion)
+// No hace falta cambiar el match si ya usa canCreateDocumentacion / canUpdateDocumentacion.
