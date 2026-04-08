@@ -112,6 +112,7 @@ export default function NuevoVisado() {
     if (authLoading) return;
 
     setSaving(true);
+    let step = "init";
     try {
       const cedula = String(form.identificacion || "").trim();
       const nombre = String(form.nombres || "").trim();
@@ -131,6 +132,7 @@ export default function NuevoVisado() {
         .find((row) => isInUserScope(row, tenantId, company));
 
       if (!existingScoped) {
+        step = "usuariosTerceros:create";
         await addDoc(collection(db, "usuariosTerceros"), {
           cedula,
           nombre,
@@ -144,6 +146,7 @@ export default function NuevoVisado() {
           updatedAt: serverTimestamp(),
         });
       } else {
+        step = "usuariosTerceros:update";
         await updateDoc(existingScoped.__ref, {
           nombre,
           empresa,
@@ -154,6 +157,7 @@ export default function NuevoVisado() {
         });
       }
 
+      step = "visados:create";
       const visadoRef = await addDoc(collection(db, "visados"), {
         tenantId,
         company,
@@ -197,6 +201,7 @@ export default function NuevoVisado() {
       const solicitudNum = `VIS-${now}`;
 
       //  Crear registro para firma
+      step = "visadosPorFirmar:create";
       await addDoc(collection(db, "visadosPorFirmar"), {
         tenantId,
         company,
@@ -232,8 +237,12 @@ export default function NuevoVisado() {
       alert("✅ Visado guardado correctamente.");
       nav("/salud/visado", { replace: true });
     } catch (err) {
-      console.error(err);
-      alert("❌ Error guardando visado");
+      console.error("NuevoVisado error:", step, err?.code, err?.message, err);
+      alert(
+        `❌ Error guardando visado\n\nPaso: ${step}\nCódigo: ${err?.code || "error"}\nMensaje: ${
+          err?.message || "falló"
+        }`
+      );
     } finally {
       setSaving(false);
     }
