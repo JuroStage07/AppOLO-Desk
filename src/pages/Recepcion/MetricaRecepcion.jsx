@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../../firebase";
 import {
@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
+  FileSpreadsheet,
   Info,
   Loader2,
   Settings,
@@ -26,6 +27,7 @@ import {
   where,
 } from "firebase/firestore";
 import { filterByUserScope } from "../../utils/dataScope";
+import { buildMetricaRecepcionExcelProBuffer } from "../../utils/metricaRecepcionExcelPro";
 import useIsMobile from "../../hooks/useIsMobile";
 
 const ACCENT = "#089F8A";
@@ -515,6 +517,157 @@ function buildTypeMix(docs = []) {
     .sort((a, b) => b.value - a.value);
 }
 
+function uniqueDayKeysCount(docs = []) {
+  const s = new Set();
+  for (const d of docs) {
+    const k = String(d?.dayKey || "").trim();
+    if (k) s.add(k);
+  }
+  return s.size;
+}
+
+function lineComplianceTrend(lineData = []) {
+  if (lineData.length < 3) return null;
+  const mid = Math.floor(lineData.length / 2);
+  const first = lineData.slice(0, mid);
+  const second = lineData.slice(mid);
+  const avg = (chunk) =>
+    chunk.length ? Math.round(sum(chunk, (x) => x.value) / chunk.length) : 0;
+  const a = avg(first);
+  const b = avg(second);
+  const diff = b - a;
+  if (Math.abs(diff) < 4) {
+    return "El cumplimiento se mantiene relativamente estable entre el inicio y el final del período mostrado.";
+  }
+  if (diff > 0) {
+    return `Tendencia favorable: la segunda mitad del período promedia ~${diff} puntos porcentuales más de cumplimiento que la primera.`;
+  }
+  return `Atención: la segunda mitad del período promedia ~${Math.abs(diff)} puntos porcentuales menos de cumplimiento que la primera.`;
+}
+
+function buildExecutiveSummary({
+  label,
+  compliance,
+  accionesFinalizadas,
+  accionesIniciadas,
+  accionesCreadas,
+  tiempoPromedioMs,
+  bultosTotales,
+  bultosPorHora,
+  horasTotales,
+  andenesEnUso,
+  lineData,
+  barData,
+  typeMix,
+  docs,
+  pendingUsersCount = 0,
+}) {
+  const tone = getComplianceTone(compliance);
+  const diasConCorte = uniqueDayKeysCount(docs);
+  const barTotal = sum(barData || [], (x) => x.value);
+  const barAvg =
+    barData?.length && barTotal > 0
+      ? Math.round(barTotal / barData.length)
+      : 0;
+  const barPeak =
+    barData?.length > 0
+      ? Math.max(...barData.map((x) => Number(x.value) || 0))
+      : 0;
+
+  const headline =
+    compliance >= 85
+      ? "Operación con cierre sólido frente al volumen iniciado."
+      : compliance >= 70
+        ? "Operación en zona de mejora: conviene reforzar el cierre de acciones abiertas."
+        : "Operación bajo presión: priorizar el cierre de descargas y revisar cuellos de botella.";
+
+  const pillars = [
+    {
+      title: "Volumen y cierre",
+      value: `${fmtInt(accionesFinalizadas)} cerradas`,
+      hint: `${fmtInt(accionesIniciadas)} iniciadas · ${fmtInt(accionesCreadas)} creadas`,
+    },
+    {
+      title: "Cumplimiento",
+      value: `${compliance}%`,
+      hint: "Finalizadas respecto a iniciadas en el período",
+    },
+    {
+      title: "Ritmo de muelle",
+      value:
+        horasTotales > 0
+          ? `${fmtInt(bultosPorHora)} bultos/h`
+          : "Sin horas acumuladas",
+      hint:
+        horasTotales > 0
+          ? `${fmtOneDecimal(horasTotales)} h de tiempo de descarga acumulado`
+          : "Registre tiempos para estimar throughput",
+    },
+    {
+      title: "Capacidad",
+      value: `${fmtInt(andenesEnUso)} andenes activos`,
+      hint: `${fmtInt(bultosTotales)} bultos procesados · ${fmtMinutesFromMs(tiempoPromedioMs)} promedio por cierre`,
+    },
+  ];
+
+  const findings = [];
+  if (diasConCorte > 0) {
+    findings.push(
+      `Se consolidaron métricas sobre ${diasConCorte} día(s) con corte en el período (${label}).`
+    );
+  }
+  if (barData?.length) {
+    findings.push(
+      `Descargas completadas: total ${fmtInt(barTotal)}, promedio ${fmtInt(barAvg)} por intervalo, pico ${fmtInt(barPeak)}.`
+    );
+  }
+  const trendLine = lineComplianceTrend(lineData || []);
+  if (trendLine) findings.push(trendLine);
+  const topType = (typeMix || [])[0];
+  if (topType && topType.value > 0) {
+    findings.push(
+      `El tipo de operación «${topType.label}» concentra el ${topType.percent}% del volumen registrado.`
+    );
+  }
+
+  let recommendedFocus = null;
+  if (compliance < 70) {
+    recommendedFocus =
+      "Priorizar seguimiento de acciones iniciadas sin cierre y validar asignación por andén.";
+  } else if (compliance < 85) {
+    recommendedFocus =
+      "Mantener tablero de pendientes por operador y revisar días con mayor desalineación inicio/cierre.";
+  } else if (pendingUsersCount > 0) {
+    recommendedFocus =
+      "Aun con buen cumplimiento global, hay operadores con iniciadas pendientes de cierre: conviene cerrar el detalle por usuario.";
+  } else if (tiempoPromedioMs >= 6 * 60 * 60 * 1000) {
+    recommendedFocus =
+      "El tiempo promedio de descarga es elevado; revisar procesos o excepciones que alargan el ciclo.";
+  } else {
+    recommendedFocus =
+      "Mantener el ritmo actual y usar el detalle por andén para detectar desvíos tempranos.";
+  }
+
+  const metricSnapshot = [
+    { label: "Cumplimiento global", value: `${compliance}%` },
+    { label: "Descargas cerradas", value: fmtInt(accionesFinalizadas) },
+    { label: "Descargas iniciadas", value: fmtInt(accionesIniciadas) },
+    { label: "Tiempo promedio", value: fmtMinutesFromMs(tiempoPromedioMs) },
+    { label: "Bultos totales", value: fmtInt(bultosTotales) },
+    { label: "Bultos / hora (estim.)", value: fmtInt(bultosPorHora) },
+  ];
+
+  return {
+    headline,
+    statusTone: tone,
+    periodLabel: label,
+    pillars,
+    findings,
+    recommendedFocus,
+    metricSnapshot,
+  };
+}
+
 function buildAndenesData(docs = []) {
   const map = new Map();
 
@@ -620,7 +773,7 @@ function buildDashboardFromDailyDocs(filterKey, docs = [], selectedDate = "") {
   const compliance =
     accionesIniciadas > 0 ? Math.round((accionesFinalizadas / accionesIniciadas) * 100) : 0;
 
-  const { alerts } = buildAlertsFromDocs({
+  const { alerts, pendingUsers: pendingUsersCount } = buildAlertsFromDocs({
     compliance,
     tiempoPromedioMs,
     docs,
@@ -640,11 +793,33 @@ function buildDashboardFromDailyDocs(filterKey, docs = [], selectedDate = "") {
   const teamProductivity = buildTeamProductivity(docs).slice(0, 6);
   const teamTimes = buildTeamTimes(docs).slice(0, 6);
 
+  const barData = buildBarData(filterKey, docs);
+  const lineData = buildLineData(filterKey, docs);
+
+  const executiveSummary = buildExecutiveSummary({
+    label: labelMap[filterKey] || "Semana actual",
+    compliance,
+    accionesFinalizadas,
+    accionesIniciadas,
+    accionesCreadas,
+    tiempoPromedioMs,
+    bultosTotales,
+    bultosPorHora,
+    horasTotales,
+    andenesEnUso,
+    lineData,
+    barData,
+    typeMix,
+    docs,
+    pendingUsersCount,
+  });
+
   return {
     label: labelMap[filterKey] || "Semana actual",
     heroBadge: heroBadgeMap[filterKey] || "Semanal",
     compliance,
     accionesCreadas,
+    executiveSummary,
     kpis: [
       {
         label: "Descargas completadas",
@@ -699,8 +874,8 @@ function buildDashboardFromDailyDocs(filterKey, docs = [], selectedDate = "") {
         tone: "default",
       },
     ],
-    barData: buildBarData(filterKey, docs),
-    lineData: buildLineData(filterKey, docs),
+    barData,
+    lineData,
     alerts,
     typeMix,
     andenesData,
@@ -714,7 +889,245 @@ function buildDashboardFromDailyDocs(filterKey, docs = [], selectedDate = "") {
   };
 }
 
-function FilterTabs({ active, onChange, selectedDate, onChangeDate }) {
+function escapeCsvCell(val) {
+  const s = val == null ? "" : String(val);
+  if (/[",\r\n]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function rowsToCsvString(rows) {
+  return rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n");
+}
+
+function triggerCsvDownload(filename, csvText) {
+  const blob = new Blob(["\uFEFF", csvText], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function buildMetricaRecepcionExportRows({
+  data,
+  tenantId,
+  company,
+  activeFilter,
+  selectedDate,
+  userEmail,
+  userName,
+}) {
+  const rows = [];
+  const push = (cells) => rows.push(cells);
+  const blank = () => rows.push([]);
+
+  push(["Métrica Recepción — exportación"]);
+  push(["Generado", new Date().toISOString()]);
+  push(["Usuario", userName || userEmail || ""]);
+  push(["Correo", userEmail || ""]);
+  push(["Tenant", tenantId || ""]);
+  push(["Company", company || ""]);
+  push(["Filtro de período", activeFilter || ""]);
+  push(["Fecha (selector)", selectedDate || ""]);
+  push(["Vista", data?.label || ""]);
+  push(["Badge", data?.heroBadge || ""]);
+  blank();
+  push(["Resumen ejecutivo"]);
+  const ex = data?.executiveSummary;
+  if (ex) {
+    push(["Titular", ex.headline || ""]);
+    push(["Estado", ex.statusTone || ""]);
+    if (ex.coverage?.expected) {
+      push([
+        "Cobertura de cortes",
+        `${ex.coverage.withData} de ${ex.coverage.expected} días con registro (${ex.coverage.missing} sin documento)`,
+      ]);
+    }
+    push(["Seguimiento sugerido", ex.recommendedFocus || ""]);
+    for (const f of ex.findings || []) {
+      push(["Hallazgo", f]);
+    }
+    for (const p of ex.pillars || []) {
+      push(["Pilar", p.title || "", p.value || "", p.hint || ""]);
+    }
+    for (const s of ex.metricSnapshot || []) {
+      push(["Métrica rápida", s.label || "", s.value || ""]);
+    }
+  } else {
+    push(["Titular", ""]);
+  }
+  blank();
+  push(["Cumplimiento global %", String(data?.compliance ?? "")]);
+  push(["Acciones creadas (período)", String(data?.accionesCreadas ?? "")]);
+  blank();
+
+  push(["Días del período (cortes esperados por filtro)"]);
+  push(["dayKey"]);
+  for (const dk of data?.periodDayKeysExpected || []) {
+    push([dk]);
+  }
+  blank();
+
+  push(["Cortes con documento en Firestore (dashboard_salud_daily)"]);
+  push(["dayKey"]);
+  for (const dk of data?.dayKeysWithData || []) {
+    push([dk]);
+  }
+  blank();
+
+  if ((data?.dayKeysSinDatos || []).length > 0) {
+    push(["Cortes esperados sin registro diario"]);
+    push(["dayKey"]);
+    for (const dk of data.dayKeysSinDatos) {
+      push([dk]);
+    }
+    blank();
+  }
+
+  push(["Agregados por día (misma fuente que el panel)"]);
+  push([
+    "dayKey",
+    "docId",
+    "accionesFinalizadas",
+    "accionesIniciadas",
+    "accionesCreadas",
+    "accionesBultosTotales",
+    "accionesTiempoTotalMs",
+    "tiempoPromedioDescarga",
+  ]);
+  for (const row of data?.dailySlice || []) {
+    const af = row.accionesFinalizadas;
+    const tpMs =
+      af > 0 ? Math.round(row.accionesTiempoTotalMs / af) : 0;
+    push([
+      row.dayKey,
+      row.docId,
+      String(row.accionesFinalizadas),
+      String(row.accionesIniciadas),
+      String(row.accionesCreadas),
+      String(row.accionesBultosTotales),
+      String(row.accionesTiempoTotalMs),
+      fmtMinutesFromMs(tpMs),
+    ]);
+  }
+  blank();
+
+  push(["KPIs"]);
+  push(["Indicador", "Valor", "Detalle", "Comparación"]);
+  for (const k of data?.kpis || []) {
+    push([k.label, k.value, k.hint || "", k.comparison || ""]);
+  }
+  blank();
+
+  push(["Descargas completadas por período (barras)"]);
+  push(["Etiqueta", "Valor"]);
+  for (const r of data?.barData || []) {
+    push([r.label, String(r.value)]);
+  }
+  blank();
+
+  push(["Cumplimiento por punto (línea)"]);
+  push(["Etiqueta", "Cumplimiento %"]);
+  for (const r of data?.lineData || []) {
+    push([r.label, String(r.value)]);
+  }
+  blank();
+
+  push(["Mix por tipo de operación"]);
+  push(["Tipo", "Cantidad", "Porcentaje %"]);
+  for (const r of data?.typeMix || []) {
+    push([r.label, String(r.value), String(r.percent ?? "")]);
+  }
+  blank();
+
+  push(["Andenes"]);
+  push(["Andén", "Acciones", "Finalizadas"]);
+  for (const a of data?.andenesData || []) {
+    push([a.label, String(a.acciones), String(a.finalizadas)]);
+  }
+  blank();
+
+  push(["Detalle por usuario — andenes"]);
+  push(["Andén", "Usuario", "Iniciadas", "Finalizadas"]);
+  for (const a of data?.andenesData || []) {
+    const starters = Array.isArray(a.starters) ? a.starters : [];
+    for (const s of starters) {
+      push([
+        a.label,
+        s.label || s.uid || "—",
+        String(s.iniciadas ?? ""),
+        String(s.finalizadas ?? ""),
+      ]);
+    }
+  }
+  blank();
+
+  push(["Productividad por usuario"]);
+  push([
+    "Usuario",
+    "Iniciadas",
+    "Finalizadas",
+    "Bultos",
+    "Tiempo promedio",
+    "Tiempo total",
+  ]);
+  for (const t of data?.teamProductivity || []) {
+    push([
+      t.label || "—",
+      String(t.iniciadas ?? ""),
+      String(t.finalizadas ?? ""),
+      String(t.bultos ?? ""),
+      fmtMinutesFromMs(t.tiempoPromedioMs),
+      fmtMinutesFromMs(t.tiempoTotalMs),
+    ]);
+  }
+  blank();
+
+  push(["Tiempos por usuario (ordenados)"]);
+  push(["Usuario", "Finalizadas", "Tiempo promedio", "Tiempo total"]);
+  for (const t of data?.teamTimes || []) {
+    push([
+      t.label || "—",
+      String(t.finalizadas ?? ""),
+      fmtMinutesFromMs(t.tiempoPromedioMs),
+      fmtMinutesFromMs(t.tiempoTotalMs),
+    ]);
+  }
+  blank();
+
+  push(["Alertas"]);
+  push(["Tono", "Título", "Descripción"]);
+  for (const al of data?.alerts || []) {
+    push([al.tone || "", al.title || "", al.description || ""]);
+  }
+  blank();
+
+  push(["Notas"]);
+  push(["Texto"]);
+  for (const n of data?.notes || []) {
+    push([n]);
+  }
+
+  return rows;
+}
+
+function FilterTabs({
+  active,
+  onChange,
+  selectedDate,
+  onChangeDate,
+  onExport,
+  onExportExcel,
+  exportDisabled,
+}) {
   const filters = [
     { key: "hoy", label: "Hoy", hint: "Corte diario" },
     { key: "semana", label: "Semana", hint: "Vista semanal" },
@@ -764,10 +1177,48 @@ function FilterTabs({ active, onChange, selectedDate, onChangeDate }) {
           style={ui.dateInput}
           aria-label="Seleccionar fecha"
         />
-        <button type="button" style={ui.exportBtn} title="Exportar reporte">
+        <button
+          type="button"
+          style={{
+            ...ui.exportBtn,
+            ...(exportDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+          }}
+          title={
+            exportDisabled
+              ? "Espera a que carguen las métricas o corrige el error"
+              : "Descargar reporte en CSV (UTF-8)"
+          }
+          disabled={!!exportDisabled}
+          onClick={() => {
+            if (!exportDisabled && typeof onExport === "function") onExport();
+          }}
+        >
           <span style={ui.btnInlineIcon}>
             <TrendingUp size={16} strokeWidth={2.2} />
-            Exportar reporte
+            CSV
+          </span>
+        </button>
+        <button
+          type="button"
+          style={{
+            ...ui.exportBtnExcel,
+            ...(exportDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+          }}
+          title={
+            exportDisabled
+              ? "Espera a que carguen las métricas o corrige el error"
+              : "Descargar informe Excel con gráficos, tablas y estilos"
+          }
+          disabled={!!exportDisabled}
+          onClick={() => {
+            if (!exportDisabled && typeof onExportExcel === "function") {
+              onExportExcel();
+            }
+          }}
+        >
+          <span style={ui.btnInlineIcon}>
+            <FileSpreadsheet size={16} strokeWidth={2.2} />
+            Excel
           </span>
         </button>
       </div>
@@ -775,8 +1226,92 @@ function FilterTabs({ active, onChange, selectedDate, onChangeDate }) {
   );
 }
 
+function ExecutiveSummaryPanel({ summary }) {
+  if (!summary?.headline) return null;
+
+  const tone = summary.statusTone || "default";
+  const shell =
+    tone === "good"
+      ? ui.execSummaryShellGood
+      : tone === "warn"
+        ? ui.execSummaryShellWarn
+        : tone === "danger"
+          ? ui.execSummaryShellDanger
+          : ui.execSummaryShell;
+
+  const cov = summary.coverage;
+
+  return (
+    <div style={{ ...ui.execSummaryCard, ...shell }}>
+      <div style={ui.execSummaryHeader}>
+        <div>
+          <div style={ui.execSummaryKicker}>Resumen ejecutivo</div>
+          <div style={ui.execSummaryHeadline}>{summary.headline}</div>
+          <div style={ui.execSummaryPeriod}>
+            Alcance: <b>{summary.periodLabel}</b>
+            {cov?.expected ? (
+              <>
+                {" "}
+                · Cobertura de cortes: <b>{cov.withData}</b> de <b>{cov.expected}</b> días esperados
+                {cov.missing > 0 ? (
+                  <span style={ui.execSummaryWarnInline}>
+                    {" "}
+                    ({cov.missing} sin documento diario)
+                  </span>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </div>
+        <span style={ui.execSummaryStatusBadge}>
+          {tone === "good" ? "En objetivo" : tone === "warn" ? "Observar" : "Priorizar acción"}
+        </span>
+      </div>
+
+      <div style={ui.execSummaryPillars}>
+        {(summary.pillars || []).map((p) => (
+          <div key={p.title} style={ui.execSummaryPillar}>
+            <div style={ui.execSummaryPillarTitle}>{p.title}</div>
+            <div style={ui.execSummaryPillarValue}>{p.value}</div>
+            <div style={ui.execSummaryPillarHint}>{p.hint}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={ui.execSummaryBody}>
+        <div style={ui.execSummaryCol}>
+          <div style={ui.execSummaryColTitle}>Hallazgos</div>
+          <ul style={ui.execSummaryList}>
+            {(summary.findings || []).map((t, i) => (
+              <li key={i} style={ui.execSummaryLi}>
+                {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div style={ui.execSummaryCol}>
+          <div style={ui.execSummaryColTitle}>Seguimiento sugerido</div>
+          <p style={ui.execSummaryFocus}>{summary.recommendedFocus}</p>
+          <div style={ui.execSummaryColTitle}>Lectura rápida</div>
+          <div style={ui.snapshotGrid}>
+            {(summary.metricSnapshot || []).map((m) => (
+              <div key={m.label} style={ui.snapshotCell}>
+                <div style={ui.snapshotLabel}>{m.label}</div>
+                <div style={ui.snapshotValue}>{m.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MiniBarChart({ data = [], periodLabel = "Semana actual" }) {
   const max = Math.max(...data.map((d) => d.value), 1);
+  const total = data.reduce((s, d) => s + (Number(d.value) || 0), 0);
+  const avg = data.length && total > 0 ? Math.round(total / data.length) : 0;
+  const peak = data.length ? Math.max(...data.map((d) => Number(d.value) || 0)) : 0;
 
   return (
     <div style={ui.chartCard}>
@@ -784,29 +1319,49 @@ function MiniBarChart({ data = [], periodLabel = "Semana actual" }) {
         <div>
           <div style={ui.chartTitle}>Descargas por período</div>
           <div style={ui.chartSubtitle}>
-            Cantidad de acciones completadas · {periodLabel}
+            Acciones completadas por intervalo · {periodLabel}
           </div>
+          {data.length > 0 && (
+            <div style={ui.chartMetaRow}>
+              Total <b>{fmtInt(total)}</b>
+              <span style={ui.chartMetaSep}>·</span>
+              Promedio <b>{fmtInt(avg)}</b>
+              <span style={ui.chartMetaSep}>·</span>
+              Pico <b>{fmtInt(peak)}</b>
+            </div>
+          )}
         </div>
         <span style={ui.chartBadge}>Operación</span>
       </div>
 
-      <div style={ui.barChartWrap}>
+      <div style={ui.barChartPanel}>
         {data.length === 0 ? (
           <div style={ui.emptyMiniText}>Sin datos para graficar.</div>
         ) : (
-          data.map((item) => (
-            <div key={item.label} style={ui.barItem}>
-              <div
-                style={{
-                  ...ui.bar,
-                  height: `${Math.max((item.value / max) * 118, 10)}px`,
-                }}
-                title={`${item.label}: ${item.value}`}
-              />
-              <div style={ui.barValue}>{item.value}</div>
-              <div style={ui.barLabel}>{item.label}</div>
+          <>
+            <div style={ui.barGridBg} aria-hidden>
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} style={ui.barGridLine} />
+              ))}
             </div>
-          ))
+            <div style={ui.barChartWrap}>
+              {data.map((item) => (
+                <div key={item.label} style={ui.barItem}>
+                  <div
+                    style={{
+                      ...ui.bar,
+                      height: `${Math.max((item.value / max) * 118, 10)}px`,
+                    }}
+                    title={`${item.label}: ${fmtInt(item.value)} descargas`}
+                  />
+                  <div style={ui.barValue}>{fmtInt(item.value)}</div>
+                  <div style={ui.barLabel} title={String(item.label)}>
+                    {item.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -814,29 +1369,53 @@ function MiniBarChart({ data = [], periodLabel = "Semana actual" }) {
 }
 
 function MiniLineChart({ data = [], periodLabel = "Últimos cortes" }) {
-  const width = 100;
-  const height = 36;
+  const lineGradId = useId().replace(/:/g, "");
+  const w = 100;
+  const h = 44;
+  const padT = 6;
+  const padB = 4;
+  const chartH = h - padT - padB;
 
-  const max = Math.max(...data.map((d) => d.value), 1);
-  const min = Math.min(...data.map((d) => d.value), 0);
+  const nums = data.map((d) => Math.max(0, Math.min(100, Number(d.value) || 0)));
+  const avg =
+    nums.length > 0 ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : 0;
+  const minV = nums.length ? Math.min(...nums) : 0;
+  const maxV = nums.length ? Math.max(...nums) : 0;
+  const refY = padT + (1 - 85 / 100) * chartH;
 
-  const points = data
-    .map((d, i) => {
-      const x = (i / Math.max(data.length - 1, 1)) * width;
-      const normalized = (d.value - min) / Math.max(max - min, 1);
-      const y = height - normalized * height;
-      return `${x},${y}`;
-    })
-    .join(" ");
+  const linePts = data.map((d, i) => {
+    const x = (i / Math.max(data.length - 1, 1)) * w;
+    const v = Math.max(0, Math.min(100, Number(d.value) || 0));
+    const y = padT + (1 - v / 100) * chartH;
+    return { x, y };
+  });
+  const linePoints = linePts.map((p) => `${p.x},${p.y}`).join(" ");
+  const areaPoints =
+    linePts.length > 0
+      ? `0,${padT + chartH} ${linePts.map((p) => `${p.x},${p.y}`).join(" ")} ${w},${padT + chartH}`
+      : "";
+
+  const compactLegend = data.length > 8;
 
   return (
     <div style={ui.chartCard}>
       <div style={ui.chartHeader}>
         <div>
-          <div style={ui.chartTitle}>Cumplimiento de tiempo objetivo</div>
+          <div style={ui.chartTitle}>Cumplimiento operativo</div>
           <div style={ui.chartSubtitle}>
-            Porcentaje de descargas dentro del tiempo esperado · {periodLabel}
+            Finalizadas ÷ iniciadas por intervalo (0–100%) · {periodLabel}
           </div>
+          {data.length > 0 && (
+            <div style={ui.chartMetaRow}>
+              Mín. <b>{minV}%</b>
+              <span style={ui.chartMetaSep}>·</span>
+              Prom. <b>{avg}%</b>
+              <span style={ui.chartMetaSep}>·</span>
+              Máx. <b>{maxV}%</b>
+              <span style={ui.chartMetaSep}>·</span>
+              <span style={ui.lineRefHint}>Línea punteada: objetivo 85%</span>
+            </div>
+          )}
         </div>
         <span style={ui.chartBadge}>Seguimiento</span>
       </div>
@@ -845,37 +1424,64 @@ function MiniLineChart({ data = [], periodLabel = "Últimos cortes" }) {
         {data.length === 0 ? (
           <div style={ui.emptyMiniText}>Sin tendencia disponible.</div>
         ) : (
-          <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={ui.lineSvg}>
-            <polyline
-              fill="none"
-              stroke="rgba(8,159,138,0.12)"
-              strokeWidth="5.5"
-              points={points}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={ui.lineSvg}>
+            <line
+              x1="0"
+              y1={refY}
+              x2={w}
+              y2={refY}
+              stroke="#94A3B8"
+              strokeWidth="0.35"
+              strokeDasharray="2 2"
+              opacity={0.9}
             />
+            <polygon
+              fill={`url(#${lineGradId})`}
+              points={areaPoints}
+              opacity={0.92}
+            />
+            <defs>
+              <linearGradient id={lineGradId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="rgba(8,159,138,0.22)" />
+                <stop offset="100%" stopColor="rgba(8,159,138,0.02)" />
+              </linearGradient>
+            </defs>
             <polyline
               fill="none"
               stroke={ACCENT}
-              strokeWidth="2.25"
-              points={points}
+              strokeWidth="1.1"
+              points={linePoints}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+            {data.map((d, i) => {
+              const x = (i / Math.max(data.length - 1, 1)) * w;
+              const v = Math.max(0, Math.min(100, Number(d.value) || 0));
+              const y = padT + (1 - v / 100) * chartH;
+              return (
+                <circle key={`${d.label}-${i}`} cx={x} cy={y} r="1.1" fill="#fff" stroke={ACCENT} strokeWidth="0.45" />
+              );
+            })}
           </svg>
         )}
       </div>
 
-      <div style={ui.lineLegend}>
-        {data.map((d) => (
-          <div key={d.label} style={ui.legendItem}>
-            <span style={ui.legendDot} />
-            <span style={ui.legendText}>
-              {d.label}: {d.value}%
-            </span>
-          </div>
-        ))}
-      </div>
+      {!compactLegend && data.length > 0 ? (
+        <div style={ui.lineLegend}>
+          {data.map((d) => (
+            <div key={d.label} style={ui.legendItem}>
+              <span style={ui.legendDot} />
+              <span style={ui.legendText}>
+                {d.label}: {d.value}%
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : data.length > 0 ? (
+        <div style={ui.lineLegendCompact}>
+          {data.length} puntos en el período · use el Excel para el detalle tabular.
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -958,6 +1564,7 @@ function MiniUserChart({ data = [], periodLabel = "Semana actual" }) {
 
 function MixTypeChart({ data = [], periodLabel = "" }) {
   const max = Math.max(...data.map((d) => d.value), 1);
+  const totalMix = data.reduce((s, d) => s + (Number(d.value) || 0), 0);
 
   return (
     <div style={ui.chartCard}>
@@ -965,8 +1572,15 @@ function MixTypeChart({ data = [], periodLabel = "" }) {
         <div>
           <div style={ui.chartTitle}>Mix de operación</div>
           <div style={ui.chartSubtitle}>
-            Distribución de descargas por tipo · {periodLabel}
+            Distribución por tipo de acción · {periodLabel}
           </div>
+          {data.length > 0 && (
+            <div style={ui.chartMetaRow}>
+              Acciones tipificadas: <b>{fmtInt(totalMix)}</b>
+              <span style={ui.chartMetaSep}>·</span>
+              {data.length} categorías
+            </div>
+          )}
         </div>
         <span style={ui.chartBadge}>Tipo</span>
       </div>
@@ -980,7 +1594,7 @@ function MixTypeChart({ data = [], periodLabel = "" }) {
               <div style={ui.mixRowTop}>
                 <div style={ui.mixLabel}>{item.label}</div>
                 <div style={ui.mixValue}>
-                  {item.value} · {item.percent}%
+                  {fmtInt(item.value)} · {item.percent}%
                 </div>
               </div>
 
@@ -1196,6 +1810,7 @@ export default function MetricaRecepcion() {
   const [aperturasFilterHasta, setAperturasFilterHasta] = useState("");
   const [panelInfoModalOpen, setPanelInfoModalOpen] = useState(false);
   const [alertsMonitoreoOpen, setAlertsMonitoreoOpen] = useState(false);
+  const [executiveSummaryOpen, setExecutiveSummaryOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [excludedAndenUsers, setExcludedAndenUsers] = useState([]);
   const [minAndenStartedActions, setMinAndenStartedActions] = useState(1);
@@ -1403,6 +2018,79 @@ export default function MetricaRecepcion() {
       }
     );
   }, [dashboardData, loadError]);
+
+  const handleExportReport = useCallback(() => {
+    if (loadingData || loadError || !dashboardData) return;
+    const rows = buildMetricaRecepcionExportRows({
+      data: dashboardData,
+      tenantId: tenantScope.tenantId,
+      company: tenantScope.company,
+      activeFilter,
+      selectedDate,
+      userEmail: user?.email || "",
+      userName: user?.displayName || "",
+    });
+    const csv = rowsToCsvString(rows);
+    const safeFilter = String(activeFilter || "periodo").replace(/[^\w-]/g, "_");
+    const safeDate = String(selectedDate || "fecha").replace(/[^\d-]/g, "");
+    triggerCsvDownload(
+      `metrica-recepcion_${safeFilter}_${safeDate}_${Date.now()}.csv`,
+      csv
+    );
+  }, [
+    loadingData,
+    loadError,
+    dashboardData,
+    tenantScope.tenantId,
+    tenantScope.company,
+    activeFilter,
+    selectedDate,
+    user?.email,
+    user?.displayName,
+  ]);
+
+  const handleExportExcel = useCallback(async () => {
+    if (loadingData || loadError || !dashboardData) return;
+    try {
+      const buffer = await buildMetricaRecepcionExcelProBuffer(dashboardData, {
+        tenantId: tenantScope.tenantId,
+        company: tenantScope.company,
+        activeFilter,
+        selectedDate,
+        userEmail: user?.email || "",
+        userName: user?.displayName || "",
+      });
+      const safeFilter = String(activeFilter || "periodo").replace(/[^\w-]/g, "_");
+      const safeDate = String(selectedDate || "fecha").replace(/[^\d-]/g, "");
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `metrica-recepcion_${safeFilter}_${safeDate}_${Date.now()}.xlsx`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("handleExportExcel:", e);
+      window.alert(
+        "No se pudo generar el archivo Excel. Revisa la consola o inténtalo de nuevo."
+      );
+    }
+  }, [
+    loadingData,
+    loadError,
+    dashboardData,
+    tenantScope.tenantId,
+    tenantScope.company,
+    activeFilter,
+    selectedDate,
+    user?.email,
+    user?.displayName,
+  ]);
 
   const addExcludedAndenUser = () => {
     const raw = String(excludedAndenUserDraft || "").trim();
@@ -1670,6 +2358,42 @@ export default function MetricaRecepcion() {
           selectedDate
         );
 
+        const withData = new Set(
+          filteredDocs
+            .map((d) => String(d.dayKey || "").trim())
+            .filter(Boolean)
+        );
+        built.periodDayKeysExpected = [...dayKeys];
+        built.dayKeysWithData = [...withData].sort();
+        built.dayKeysSinDatos = dayKeys.filter((k) => !withData.has(k));
+        if (built.executiveSummary) {
+          built.executiveSummary = {
+            ...built.executiveSummary,
+            coverage:
+              dayKeys.length > 0
+                ? {
+                    expected: dayKeys.length,
+                    withData: withData.size,
+                    missing: built.dayKeysSinDatos.length,
+                  }
+                : null,
+          };
+        }
+        built.dailySlice = filteredDocs
+          .slice()
+          .sort((a, b) =>
+            String(a.dayKey || "").localeCompare(String(b.dayKey || ""))
+          )
+          .map((d) => ({
+            dayKey: String(d.dayKey || ""),
+            docId: String(d.id || ""),
+            accionesFinalizadas: Number(d.accionesFinalizadas || 0),
+            accionesIniciadas: Number(d.accionesIniciadas || 0),
+            accionesCreadas: Number(d.accionesCreadas || 0),
+            accionesBultosTotales: Number(d.accionesBultosTotales || 0),
+            accionesTiempoTotalMs: Number(d.accionesTiempoTotalMs || 0),
+          }));
+
         if (!filteredDocs.length) {
           const msg =
             activeFilter === "fecha"
@@ -1879,15 +2603,10 @@ export default function MetricaRecepcion() {
                 onChange={setActiveFilter}
                 selectedDate={selectedDate}
                 onChangeDate={setSelectedDate}
+                onExport={handleExportReport}
+                onExportExcel={handleExportExcel}
+                exportDisabled={loadingData || !!loadError || !dashboardData}
               />
-            </div>
-          </div>
-
-          <div style={ui.sectionHeaderBlock}>
-            <div style={ui.sectionOverline}>Resumen</div>
-            <div style={ui.sectionTitle}>Indicadores clave</div>
-            <div style={ui.sectionText}>
-              Vista rápida del desempeño operativo, el volumen procesado y la capacidad utilizada en el período activo.
             </div>
           </div>
 
@@ -1895,16 +2614,52 @@ export default function MetricaRecepcion() {
             <div style={ui.kpiPanel}>
               <div style={ui.kpiPanelTop}>
                 <div style={ui.kpiPanelInfo}>
-                  <div style={ui.kpiPanelTitle}>Resumen ejecutivo</div>
+                  <div style={ui.kpiPanelTitle}>Indicadores y lectura ejecutiva</div>
                   <div style={ui.kpiPanelText}>
-                    Métricas principales para evaluar ritmo operativo, cumplimiento y uso de capacidad.
+                    Síntesis narrativa del período e indicadores numéricos para ritmo, cumplimiento y capacidad.
                   </div>
                 </div>
 
-                <div style={ui.kpiPanelMeta}>
-                  Corte activo: <b>{currentData.label}</b>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: m ? "column" : "row",
+                    alignItems: m ? "stretch" : "flex-end",
+                    gap: 10,
+                    flexShrink: 0,
+                  }}
+                >
+                  <button
+                    type="button"
+                    style={{ ...ui.alertsToggleBtn, ...(m ? { alignSelf: "stretch", justifyContent: "center" } : {}) }}
+                    onClick={() => setExecutiveSummaryOpen((o) => !o)}
+                    aria-expanded={executiveSummaryOpen}
+                    aria-controls="recepcion-resumen-ejecutivo-panel"
+                    id="recepcion-resumen-ejecutivo-toggle"
+                  >
+                    {executiveSummaryOpen ? (
+                      <>
+                        Ocultar resumen ejecutivo
+                        <ChevronUp size={16} strokeWidth={2.5} color={ACCENT} />
+                      </>
+                    ) : (
+                      <>
+                        Mostrar resumen ejecutivo
+                        <ChevronDown size={16} strokeWidth={2.5} color={ACCENT} />
+                      </>
+                    )}
+                  </button>
+                  <div style={ui.kpiPanelMeta}>
+                    Corte activo: <b>{currentData.label}</b>
+                  </div>
                 </div>
               </div>
+
+              {executiveSummaryOpen && (
+                <div id="recepcion-resumen-ejecutivo-panel" role="region" aria-labelledby="recepcion-resumen-ejecutivo-toggle">
+                  <ExecutiveSummaryPanel summary={currentData.executiveSummary} />
+                </div>
+              )}
 
               <div style={{ ...ui.kpiGrid, ...(m ? ui.mKpiGrid : {}) }}>
                 {currentData.kpis.map((item) => {
@@ -3023,6 +3778,22 @@ const ui = {
     fontFamily: "inherit",
   },
 
+  exportBtnExcel: {
+    border: "1px solid #D7DCE5",
+    background: "#FFFFFF",
+    color: "#0F172A",
+    borderRadius: 12,
+    padding: "9px 14px",
+    fontWeight: 800,
+    fontSize: 13,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
+    whiteSpace: "nowrap",
+    fontFamily: "inherit",
+  },
+
   kpiGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))",
@@ -3116,6 +3887,192 @@ const ui = {
     fontWeight: 800,
     fontSize: 12,
     whiteSpace: "nowrap",
+  },
+
+  execSummaryCard: {
+    borderRadius: 20,
+    padding: 18,
+    display: "grid",
+    gap: 14,
+    border: "1px solid #E7E9F2",
+    background: "linear-gradient(145deg, #FFFFFF 0%, #F8FAFC 100%)",
+    boxShadow: "0 10px 26px rgba(15,23,42,0.06)",
+  },
+
+  execSummaryShell: {},
+
+  execSummaryShellGood: {
+    border: "1px solid rgba(22,163,74,0.22)",
+    background: "linear-gradient(145deg, #FFFFFF 0%, #F7FEF9 100%)",
+  },
+
+  execSummaryShellWarn: {
+    border: "1px solid rgba(217,119,6,0.22)",
+    background: "linear-gradient(145deg, #FFFFFF 0%, #FFFAF5 100%)",
+  },
+
+  execSummaryShellDanger: {
+    border: "1px solid rgba(220,38,38,0.22)",
+    background: "linear-gradient(145deg, #FFFFFF 0%, #FFF7F7 100%)",
+  },
+
+  execSummaryHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+  },
+
+  execSummaryKicker: {
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.06,
+    textTransform: "uppercase",
+    color: ACCENT,
+    marginBottom: 6,
+  },
+
+  execSummaryHeadline: {
+    fontSize: "clamp(16px, 2.6vw, 19px)",
+    fontWeight: 950,
+    color: "#0F172A",
+    lineHeight: 1.35,
+    maxWidth: 720,
+  },
+
+  execSummaryPeriod: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: 750,
+    color: "#64748B",
+    lineHeight: 1.45,
+  },
+
+  execSummaryWarnInline: {
+    color: "#B45309",
+    fontWeight: 800,
+  },
+
+  execSummaryStatusBadge: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "#F1F5F9",
+    border: "1px solid #E2E8F0",
+    color: "#334155",
+    fontWeight: 900,
+    fontSize: 11,
+    flexShrink: 0,
+    alignSelf: "flex-start",
+  },
+
+  execSummaryPillars: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+    gap: 10,
+  },
+
+  execSummaryPillar: {
+    padding: "12px 14px",
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.72)",
+    border: "1px solid #E7E9F2",
+    display: "grid",
+    gap: 4,
+    minHeight: 86,
+  },
+
+  execSummaryPillarTitle: {
+    fontSize: 11,
+    fontWeight: 900,
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.04,
+  },
+
+  execSummaryPillarValue: {
+    fontSize: 16,
+    fontWeight: 950,
+    color: "#0F172A",
+    lineHeight: 1.2,
+  },
+
+  execSummaryPillarHint: {
+    fontSize: 11,
+    fontWeight: 750,
+    color: "#64748B",
+    lineHeight: 1.35,
+  },
+
+  execSummaryBody: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+    gap: 16,
+    alignItems: "start",
+  },
+
+  execSummaryCol: {
+    display: "grid",
+    gap: 8,
+  },
+
+  execSummaryColTitle: {
+    fontSize: 12,
+    fontWeight: 950,
+    color: "#0F172A",
+  },
+
+  execSummaryList: {
+    margin: 0,
+    paddingLeft: 18,
+    color: "#475569",
+    fontWeight: 750,
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+
+  execSummaryLi: {
+    marginBottom: 6,
+  },
+
+  execSummaryFocus: {
+    margin: 0,
+    color: "#0F172A",
+    fontWeight: 800,
+    fontSize: 13,
+    lineHeight: 1.5,
+    padding: "12px 14px",
+    borderRadius: 14,
+    background: "rgba(8,159,138,0.06)",
+    border: "1px solid rgba(8,159,138,0.12)",
+  },
+
+  snapshotGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 8,
+  },
+
+  snapshotCell: {
+    padding: "10px 12px",
+    borderRadius: 12,
+    background: "#F8FAFC",
+    border: "1px solid #E7E9F2",
+  },
+
+  snapshotLabel: {
+    fontSize: 10,
+    fontWeight: 900,
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.04,
+    marginBottom: 4,
+  },
+
+  snapshotValue: {
+    fontSize: 15,
+    fontWeight: 950,
+    color: "#0F172A",
   },
 
   kpiCardTop: {
@@ -3228,14 +4185,51 @@ const ui = {
     whiteSpace: "nowrap",
   },
 
+  chartMetaRow: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: 750,
+    color: "#64748B",
+    lineHeight: 1.4,
+  },
+
+  chartMetaSep: {
+    margin: "0 6px",
+    color: "#CBD5E1",
+    fontWeight: 700,
+  },
+
+  barChartPanel: {
+    position: "relative",
+    marginTop: 6,
+    minHeight: 160,
+  },
+
+  barGridBg: {
+    position: "absolute",
+    inset: "10px 6px 52px 6px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    pointerEvents: "none",
+    zIndex: 0,
+  },
+
+  barGridLine: {
+    height: 1,
+    background: "linear-gradient(90deg, transparent, #E2E8F0 12%, #E2E8F0 88%, transparent)",
+    opacity: 0.85,
+  },
+
   barChartWrap: {
+    position: "relative",
+    zIndex: 1,
     height: 160,
     display: "flex",
     alignItems: "end",
     justifyContent: "space-between",
     gap: 8,
     padding: "10px 6px 0",
-    marginTop: 4,
   },
 
   barItem: {
@@ -3391,8 +4385,14 @@ const ui = {
 
   lineSvg: {
     width: "100%",
-    height: "96px",
+    height: "108px",
     overflow: "visible",
+  },
+
+  lineRefHint: {
+    fontSize: 11,
+    fontWeight: 750,
+    color: "#94A3B8",
   },
 
   lineLegend: {
@@ -3400,6 +4400,14 @@ const ui = {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 8,
+  },
+
+  lineLegendCompact: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: 750,
+    color: "#64748B",
+    lineHeight: 1.4,
   },
 
   legendItem: {
@@ -3761,6 +4769,7 @@ const ui = {
     alignItems: "center",
     gap: 10,
     flexShrink: 0,
+    flexWrap: "wrap",
   },
 
   dateInput: {
