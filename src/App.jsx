@@ -13,6 +13,11 @@ import ConfigRegionPage from "./pages/ConfigRegionPage";
 //Documentacion
 import DocumentacionPage from "./pages/Documentacion/DocumentacionPage";
 
+//Despacho
+import Despacho from "./pages/Despacho/Despacho";
+import DespachoInProgressPage from "./pages/Despacho/DespachoInProgressPage";
+import DespachoFinalizadosPage from "./pages/Despacho/DespachoFinalizadosPage";
+
 //SaludOcupacional
 import SaludOcupacional from "./pages/Salud Ocupacional/SaludOcupacional";
 import ControlTercerosManual from "./pages/Salud Ocupacional/ControlTercerosManual";
@@ -40,6 +45,8 @@ import AccionDescarga from "./pages/Recepcion/AccionDescarga";
 import AccionDetalle from "./pages/Recepcion/AccionDetalle";
 import MetricaRecepcion from "./pages/Recepcion/MetricaRecepcion";
 
+import EPAHubPage from "./pages/EPA/EPAHubPage";
+import AperturasFinalizadasEPA from "./pages/EPA/AperturasFinalizadasEPA";
 import ServiciosGenerales from "./pages/ServiciosGenerales";
 import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGeneralesOrdenesTrabajo";
 import ServiciosGeneralesOTCrear from "./pages/ServiciosGeneralesOTCrear";
@@ -109,6 +116,32 @@ export default function App() {
             element={
               <PrivateRoute>
                 <DocumentacionPage />
+              </PrivateRoute>
+            }
+          />
+
+          {/* ================= Despacho ================= */}
+          <Route
+            path="/despacho"
+            element={
+              <PrivateRoute>
+                <Despacho />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/despacho/in-progress"
+            element={
+              <PrivateRoute>
+                <DespachoInProgressPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/despacho/finalizados"
+            element={
+              <PrivateRoute>
+                <DespachoFinalizadosPage />
               </PrivateRoute>
             }
           />
@@ -213,16 +246,25 @@ export default function App() {
             }
           />
 
-          {/* ================= Rutas futuras generales ================= */}
+          {/* ================= EPA ================= */}
           <Route
-            path="/despacho"
+            path="/epa"
             element={
               <PrivateRoute>
-                <div>Despacho</div>
+                <EPAHubPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/epa/aperturas-finalizadas"
+            element={
+              <PrivateRoute>
+                <AperturasFinalizadasEPA />
               </PrivateRoute>
             }
           />
 
+          {/* ================= Rutas futuras generales ================= */}
           <Route
             path="/servicios-generales"
             element={

@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
+import { AuthCtx } from "../auth/AuthProvider";
 import {
   ArrowRight,
   LayoutDashboard,
@@ -16,6 +17,8 @@ import imgSalud from "../assets/saludOcupacional.png";
 import imgDespacho from "../assets/despacho.png";
 import imgMantenimiento from "../assets/mantenimiento.png";
 import imgRecepcion from "../assets/recepcion.png";
+import imgServiciosGenerales from "../assets/serviciosGenerales.png";
+import imgEpa from "../assets/epalogo.jpeg";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -23,6 +26,7 @@ const SLATE = "#64748B";
 
 export default function Home() {
   const nav = useNavigate();
+  const { profile } = useContext(AuthCtx);
   const user = auth.currentUser;
   const [hovered, setHovered] = useState(null);
   const [busyLogout, setBusyLogout] = useState(false);
@@ -54,12 +58,13 @@ export default function Home() {
     }
   };
 
-  const areas = useMemo(
+  const allAreas = useMemo(
     () => [
       {
         key: "despacho",
         title: "Despacho",
-        desc: "Gestión de despachos, carga y control operativo.",
+        desc: "Gestión de despachos, carga y control operativo. Elegí en curso o historial finalizados.",
+        // /despacho → pages/Despacho/Despacho.jsx (hub de módulos)
         path: "/despacho",
         img: imgDespacho,
         tag: "Operación",
@@ -94,12 +99,44 @@ export default function Home() {
         title: "Servicios Generales",
         desc: "Gestión operativa, seguimiento y control de servicios generales.",
         path: "/servicios-generales",
-        img: imgMantenimiento, // cambiá esta imagen si luego creás una propia
+        img: imgServiciosGenerales, // cambiá esta imagen si luego creás una propia
         tag: "Servicios",
+      },
+      {
+        key: "epa",
+        title: "EPA",
+        desc: "Área de trabajo EPA. Próximamente más módulos.",
+        path: "/epa",
+        img: imgEpa,
+        tag: "EPA",
+        // Logo horizontal: contain evita recortes; fondo alineado al arte
+        mediaStyle: {
+          backgroundSize: "contain",
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "center",
+          backgroundColor: "#eef2f6",
+        },
+        mediaOverlayStyle: {
+          background:
+            "linear-gradient(180deg, rgba(15,23,42,0.06) 0%, rgba(15,23,42,0.18) 100%)",
+        },
+        pillExtra: {
+          border: "1px solid rgba(15,23,42,0.1)",
+          background: "rgba(255,255,255,0.92)",
+          color: "#0F172A",
+          backdropFilter: "blur(6px)",
+        },
       },
     ],
     []
   );
+
+  const areas = useMemo(() => {
+    if (profile?.epaAdmin === true) {
+      return allAreas.filter((a) => a.key === "epa");
+    }
+    return allAreas;
+  }, [allAreas, profile?.epaAdmin]);
 
   return (
     <div style={ui.shell}>
@@ -223,11 +260,25 @@ export default function Home() {
                     style={{
                       ...ui.media,
                       backgroundImage: `url(${a.img})`,
+                      ...(a.mediaStyle || {}),
                     }}
                   >
-                    <div style={ui.mediaOverlay} />
+                    <div
+                      style={{
+                        ...ui.mediaOverlay,
+                        ...(a.mediaOverlayStyle || {}),
+                      }}
+                    />
                     <div style={ui.mediaTop}>
-                      <span style={{ ...ui.pill, ...(accent ? ui.pillAccent : {}) }}>{a.tag}</span>
+                      <span
+                        style={{
+                          ...ui.pill,
+                          ...(accent ? ui.pillAccent : {}),
+                          ...(a.pillExtra || {}),
+                        }}
+                      >
+                        {a.tag}
+                      </span>
                     </div>
                   </div>
 

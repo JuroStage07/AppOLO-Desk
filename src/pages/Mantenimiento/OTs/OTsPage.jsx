@@ -22,6 +22,7 @@ import {
   X,
   Wrench,
   User,
+  Users,
   LayoutGrid,
   ClipboardList,
   RefreshCw,
@@ -249,7 +250,83 @@ function normalizeSubtaskStats(v) {
   return { total: 0, completed: 0 };
 }
 
-function mapSnapshotToPendingItem(d, subtaskStats = { total: 0, completed: 0 }) {
+/** Responsables a nivel OT (al pasar a «En proceso»). */
+function assigneeUidsFromSolicitudDoc(data) {
+  if (!data || typeof data !== "object") return [];
+  const uids = new Set();
+  const raw = data.responsablesUids;
+  if (Array.isArray(raw)) {
+    for (const u of raw) {
+      const s = String(u ?? "").trim();
+      if (s) uids.add(s);
+    }
+  }
+  const ru = String(data.responsableUid ?? "").trim();
+  if (ru) uids.add(ru);
+  return Array.from(uids);
+}
+
+/** Campos opcionales en subtareas si en el futuro se asignan por tarea. */
+const SUBTASK_ASSIGNEE_UID_FIELDS = [
+  "assignedTo",
+  "assignedToUid",
+  "assigneeUid",
+  "asignadoUid",
+  "responsableUid",
+  "usuarioAsignadoUid",
+];
+
+function assigneeUidsFromSubtaskData(subData) {
+  if (!subData || typeof subData !== "object") return [];
+  const out = [];
+  for (const f of SUBTASK_ASSIGNEE_UID_FIELDS) {
+    const v = subData[f];
+    if (v == null) continue;
+    const s = String(v).trim();
+    if (s) out.push(s);
+  }
+  return out;
+}
+
+function mergeAssigneeUidsForSolicitud(data, subSnap) {
+  const uids = new Set(assigneeUidsFromSolicitudDoc(data));
+  const docs = subSnap?.docs ?? [];
+  for (const docSnap of docs) {
+    for (const u of assigneeUidsFromSubtaskData(docSnap.data())) {
+      uids.add(u);
+    }
+  }
+  return Array.from(uids);
+}
+
+function normAssigneeFilterName(s) {
+  return String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * ¿El nombre elegido coincide con alguno de los que figuran en `responsableNombre`?
+ * (lista separada por comas, como al guardar responsablesNombres / responsableNombre.)
+ */
+function matchesResponsableNombreAssigneeFilter(responsableNombreStr, personDisplayName) {
+  const needle = normAssigneeFilterName(personDisplayName);
+  if (!needle) return false;
+  const raw = String(responsableNombreStr ?? "").trim();
+  if (!raw) return false;
+  const parts = raw
+    .split(/[,;]/)
+    .map((p) => normAssigneeFilterName(p))
+    .filter(Boolean);
+  return parts.some((p) => p === needle);
+}
+
+function mapSnapshotToPendingItem(
+  d,
+  subtaskStats = { total: 0, completed: 0 },
+  assigneeUids = []
+) {
   const { total, completed } = normalizeSubtaskStats(subtaskStats);
   const data = d.data();
   return {
@@ -277,6 +354,7 @@ function mapSnapshotToPendingItem(d, subtaskStats = { total: 0, completed: 0 }) 
     estadoOT: data.OTState || OT_STATE_SOLICITADA,
     notas: data.notas || "",
     responsableNombre: "",
+    assigneeUids: Array.isArray(assigneeUids) ? assigneeUids : [],
   };
 }
 
@@ -284,7 +362,8 @@ function mapSnapshotToPendingItem(d, subtaskStats = { total: 0, completed: 0 }) 
 function mapSnapshotToSolicitudCardItem(
   d,
   phase,
-  subtaskStats = { total: 0, completed: 0 }
+  subtaskStats = { total: 0, completed: 0 },
+  assigneeUids = []
 ) {
   const { total, completed } = normalizeSubtaskStats(subtaskStats);
   const data = d.data();
@@ -311,6 +390,7 @@ function mapSnapshotToSolicitudCardItem(
     estadoOT: data.OTState || (isProceso ? OT_STATE_EN_PROCESO : OT_STATE_REVISION),
     notas: data.notas || "",
     responsableNombre: responsablesDisplayFromFirestoreData(data),
+    assigneeUids: Array.isArray(assigneeUids) ? assigneeUids : [],
   };
 }
 
@@ -320,6 +400,9 @@ function pendingItemToProcesoSolicitudItem(item, responsables) {
     .map((r) => String(r?.displayName || "").trim())
     .filter(Boolean);
   const joined = names.join(", ");
+  const uids = list
+    .map((r) => String(r?.uid || "").trim())
+    .filter(Boolean);
   return {
     ...item,
     type: "solicitud",
@@ -328,6 +411,7 @@ function pendingItemToProcesoSolicitudItem(item, responsables) {
     priorityTone: "proceso",
     estadoOT: OT_STATE_EN_PROCESO,
     responsableNombre: joined,
+    assigneeUids: uids,
     nroSolicitud: nroSolicitudParaOtEnTablero(item.nroSolicitud || ""),
   };
 }
@@ -337,6 +421,13 @@ function profileIsMantenimientoStaff(data) {
   if (data.active === false) return false;
   const role = data.role;
   if (role === "administrativo" || role === "dev") return true;
+  return data.permisos != null && data.permisos.mantenimiento === true;
+}
+
+/** Solo permiso explícito de mantenimiento (p. ej. filtro «En proceso»). */
+function profileHasMantenimientoPermiso(data) {
+  if (!data || typeof data !== "object") return false;
+  if (data.active === false) return false;
   return data.permisos != null && data.permisos.mantenimiento === true;
 }
 
@@ -356,6 +447,28 @@ async function fetchMantenimientoResponsables(tenantId, company) {
   snap.forEach((docSnap) => {
     const data = docSnap.data();
     if (!profileIsMantenimientoStaff(data)) return;
+    if (tenantId && data.tenantId && data.tenantId !== tenantId) return;
+    if (company && data.company && data.company !== company) return;
+    rows.push({
+      uid: docSnap.id,
+      displayName: displayNameFromProfile(docSnap.id, data),
+      numeroFicha: (data.numeroFicha && String(data.numeroFicha)) || "",
+      role: data.role || "",
+    });
+  });
+  rows.sort((a, b) =>
+    a.displayName.localeCompare(b.displayName, "es", { sensitivity: "base" })
+  );
+  return rows;
+}
+
+/** Listado para filtro de columna En proceso: únicamente perfiles con permiso mantenimiento. */
+async function fetchProfilesMantenimientoPermiso(tenantId, company) {
+  const snap = await getDocs(collection(db, "profiles"));
+  const rows = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data();
+    if (!profileHasMantenimientoPermiso(data)) return;
     if (tenantId && data.tenantId && data.tenantId !== tenantId) return;
     if (company && data.company && data.company !== company) return;
     rows.push({
@@ -853,6 +966,15 @@ function Column({
   highlightRevisionDrop = false,
   onBoardDragStart,
   onBoardDragEnd,
+  assigneeFilterList = [],
+  assigneeFilterListLoading = false,
+  filterAssigneeUid = "",
+  onAssigneeFilterChange,
+  unfilteredCount = 0,
+  isMobile = false,
+  onRefreshBoard,
+  /** Columna En proceso: el filtro usa `responsableNombre` (nombres asignados), no solo UID. */
+  filterUsesResponsableNombre = false,
 }) {
   const isProceso = column.id === "proceso";
   const isRevision = column.id === "revision";
@@ -866,22 +988,78 @@ function Column({
     );
   };
 
+  const assigneeFilterOn = Boolean(filterAssigneeUid?.trim());
+  const filterUid = filterAssigneeUid?.trim() || "";
+
   return (
     <div style={ui.column}>
       <div style={ui.columnHead}>
-        <div style={ui.columnHeadLeft}>
-          <div style={{ ...ui.columnStripe, background: column.stripe }} />
-          <div>
-            <div style={ui.columnTitle}>{column.title}</div>
-            <div style={ui.columnSubtitle}>{column.subtitle}</div>
+        <div style={ui.columnHeadTop}>
+          <div style={ui.columnHeadLeft}>
+            <div style={{ ...ui.columnStripe, background: column.stripe }} />
+            <div>
+              <div style={ui.columnTitle}>{column.title}</div>
+              <div style={ui.columnSubtitle}>{column.subtitle}</div>
+            </div>
+          </div>
+
+          <div style={ui.columnHeadRight}>
+            <div
+              style={ui.countPill}
+              title={
+                assigneeFilterOn
+                  ? `${column.items.length} visibles · ${unfilteredCount} en la columna`
+                  : undefined
+              }
+            >
+              {assigneeFilterOn ? `${column.items.length}/${unfilteredCount}` : column.items.length}
+            </div>
+            <button
+              type="button"
+              style={ui.iconBtn}
+              onClick={() => onRefreshBoard?.()}
+              title="Actualizar tablero"
+            >
+              <RefreshCw size={16} />
+            </button>
           </div>
         </div>
 
-        <div style={ui.columnHeadRight}>
-          <div style={ui.countPill}>{column.items.length}</div>
-          <button style={ui.iconBtn}>
-            <RefreshCw size={16} />
-          </button>
+        <div style={{ ...ui.columnHeadFilter, ...(isMobile ? ui.mColumnHeadFilter : {}) }}>
+          <label
+            htmlFor={`ots-col-filter-${column.id}`}
+            style={ui.columnFilterLabel}
+          >
+            <Users size={12} strokeWidth={2.5} style={{ verticalAlign: "middle", marginRight: 4 }} />
+            Responsable
+          </label>
+          <select
+            id={`ots-col-filter-${column.id}`}
+            value={filterUid}
+            onChange={(e) => onAssigneeFilterChange?.(e.target.value)}
+            style={{
+              ...ui.columnFilterSelect,
+              ...(isMobile ? ui.mColumnFilterSelect : {}),
+            }}
+            disabled={assigneeFilterListLoading}
+          >
+            <option value="">
+              Todos
+              {unfilteredCount > 0 ? ` (${unfilteredCount})` : ""}
+            </option>
+            {assigneeFilterList.map((r) => (
+              <option key={r.uid} value={r.uid}>
+                {r.displayName}
+                {r.numeroFicha ? ` · Ficha ${r.numeroFicha}` : ""}
+              </option>
+            ))}
+          </select>
+          {filterUsesResponsableNombre ? (
+            <div style={ui.columnFilterHint}>
+              Lista: solo perfiles con <b>permiso de mantenimiento</b>. El filtro coincide con el
+              texto de <b>responsables asignados</b> en la OT (responsableNombre).
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -942,11 +1120,13 @@ function Column({
           <div style={ui.emptyColumn}>
             <ClipboardList size={20} />
             <div>
-              {isProceso
-                ? "Arrastrá una tarea pendiente aquí, o desde Revisión para volver a proceso."
-                : isRevision
-                  ? "Las OT en proceso con subtareas al 100% se pueden arrastrar aquí."
-                  : "No hay elementos en esta columna."}
+              {assigneeFilterOn
+                ? "No hay tarjetas con este responsable en esta columna. Probá «Todos» o otro usuario."
+                : isProceso
+                  ? "Arrastrá una tarea pendiente aquí, o desde Revisión para volver a proceso."
+                  : isRevision
+                    ? "Las OT en proceso con subtareas al 100% se pueden arrastrar aquí."
+                    : "No hay elementos en esta columna."}
             </div>
           </div>
         ) : (
@@ -2461,6 +2641,19 @@ export default function OTsPage() {
     nroSolicitud: "",
     nombreOT: "",
   });
+  /** Filtro por columna: UID de responsable (vacío = todos en esa columna). */
+  const [filterAssigneeByColumnId, setFilterAssigneeByColumnId] = useState({
+    pendientes: "",
+    proceso: "",
+    revision: "",
+  });
+  const [assigneeFilterList, setAssigneeFilterList] = useState([]);
+  /** Solo `permisos.mantenimiento`: opciones del filtro en columna En proceso. */
+  const [assigneeFilterListProceso, setAssigneeFilterListProceso] = useState(
+    []
+  );
+  const [assigneeFilterListLoading, setAssigneeFilterListLoading] =
+    useState(false);
 
   const solicitudesSnapRef = useRef(null);
   const subtaskCountsRef = useRef({});
@@ -2487,20 +2680,24 @@ export default function OTsPage() {
       const data = d.data();
       if (!isSolicitudOtInScope(data, profile?.tenantId, profile?.company)) continue;
       const state = data.OTState || OT_STATE_SOLICITADA;
-      const subStats = normalizeSubtaskStats(subtaskCountById[d.id]);
+      const rawSub = subtaskCountById[d.id];
+      const subStats = normalizeSubtaskStats(rawSub);
+      const assigneeUids = Array.isArray(rawSub?.assigneeUids)
+        ? rawSub.assigneeUids
+        : assigneeUidsFromSolicitudDoc(data);
 
       if (state === OT_STATE_EN_PROCESO) {
         procesoItems.push(
-          mapSnapshotToSolicitudCardItem(d, "proceso", subStats)
+          mapSnapshotToSolicitudCardItem(d, "proceso", subStats, assigneeUids)
         );
       } else if (state === OT_STATE_REVISION) {
         revisionItems.push(
-          mapSnapshotToSolicitudCardItem(d, "revision", subStats)
+          mapSnapshotToSolicitudCardItem(d, "revision", subStats, assigneeUids)
         );
       } else if (state === OT_STATE_FINALIZADA) {
         // Queda fuera del tablero activo (listado «OT finalizadas»).
       } else {
-        pendientes.push(mapSnapshotToPendingItem(d, subStats));
+        pendientes.push(mapSnapshotToPendingItem(d, subStats, assigneeUids));
       }
     }
 
@@ -2539,10 +2736,18 @@ export default function OTsPage() {
           subSnap.forEach((docSnap) => {
             if (isSubtaskFirestoreCompleted(docSnap.data())) completed += 1;
           });
-          counts[d.id] = { total: subSnap.size, completed };
+          counts[d.id] = {
+            total: subSnap.size,
+            completed,
+            assigneeUids: mergeAssigneeUidsForSolicitud(data, subSnap),
+          };
         } catch (e) {
           console.warn("getDocs subtareas", d.id, e);
-          counts[d.id] = { total: 0, completed: 0 };
+          counts[d.id] = {
+            total: 0,
+            completed: 0,
+            assigneeUids: assigneeUidsFromSolicitudDoc(data),
+          };
         }
       })
     );
@@ -2594,6 +2799,78 @@ export default function OTsPage() {
     };
   }, [loading, solicitudesQuery, syncSubtaskCountsFromServer]);
 
+  useEffect(() => {
+    if (loading || !profile) return;
+    let cancelled = false;
+    (async () => {
+      setAssigneeFilterListLoading(true);
+      try {
+        const [rows, rowsProceso] = await Promise.all([
+          fetchMantenimientoResponsables(profile.tenantId, profile.company),
+          fetchProfilesMantenimientoPermiso(profile.tenantId, profile.company),
+        ]);
+        if (!cancelled) {
+          setAssigneeFilterList(rows);
+          setAssigneeFilterListProceso(rowsProceso);
+        }
+      } catch (e) {
+        console.error("fetch listas filtro OTs:", e);
+        if (!cancelled) {
+          setAssigneeFilterList([]);
+          setAssigneeFilterListProceso([]);
+        }
+      } finally {
+        if (!cancelled) setAssigneeFilterListLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, profile?.tenantId, profile?.company]);
+
+  /** Si el filtro de proceso apuntaba a alguien que ya no está en la lista restringida, se limpia. */
+  useEffect(() => {
+    const uid = (filterAssigneeByColumnId.proceso ?? "").trim();
+    if (!uid) return;
+    if (!assigneeFilterListProceso.some((r) => r.uid === uid)) {
+      setFilterAssigneeByColumnId((p) => ({ ...p, proceso: "" }));
+    }
+  }, [assigneeFilterListProceso, filterAssigneeByColumnId.proceso]);
+
+  const displayColumns = useMemo(() => {
+    return columns.map((col) => {
+      const uid = (filterAssigneeByColumnId[col.id] ?? "").trim();
+      if (!uid) return col;
+      if (col.id === "proceso") {
+        const person = assigneeFilterListProceso.find((r) => r.uid === uid);
+        const displayName = person?.displayName || "";
+        return {
+          ...col,
+          items: col.items.filter((item) => {
+            if (
+              displayName &&
+              matchesResponsableNombreAssigneeFilter(
+                item.responsableNombre,
+                displayName
+              )
+            ) {
+              return true;
+            }
+            const uids = item.assigneeUids;
+            if (Array.isArray(uids) && uids.includes(uid)) return true;
+            return false;
+          }),
+        };
+      }
+      return {
+        ...col,
+        items: col.items.filter((item) => {
+          const uids = item.assigneeUids;
+          return Array.isArray(uids) && uids.includes(uid);
+        }),
+      };
+    });
+  }, [columns, filterAssigneeByColumnId, assigneeFilterListProceso]);
 
   const selectedCount = useMemo(() => {
     return columns.reduce(
@@ -3068,7 +3345,7 @@ export default function OTsPage() {
 
           <div style={{ ...ui.boardWrap, ...(isMobile ? ui.mBoardWrap : {}) }}>
             <div style={ui.board}>
-              {columns.map((column, index) => (
+              {displayColumns.map((column, index) => (
                 <Column
                   key={column.id}
                   column={column}
@@ -3102,6 +3379,23 @@ export default function OTsPage() {
                     setRevisionDragActive(false);
                     setRevisionToProcesoDragActive(false);
                   }}
+                  assigneeFilterList={
+                    column.id === "proceso"
+                      ? assigneeFilterListProceso
+                      : assigneeFilterList
+                  }
+                  assigneeFilterListLoading={assigneeFilterListLoading}
+                  filterAssigneeUid={filterAssigneeByColumnId[column.id] ?? ""}
+                  onAssigneeFilterChange={(uid) =>
+                    setFilterAssigneeByColumnId((p) => ({
+                      ...p,
+                      [column.id]: uid,
+                    }))
+                  }
+                  unfilteredCount={columns[index].items.length}
+                  isMobile={isMobile}
+                  onRefreshBoard={refetchSolicitudesOnce}
+                  filterUsesResponsableNombre={column.id === "proceso"}
                 />
               ))}
             </div>
@@ -3457,12 +3751,51 @@ const ui = {
     borderRadius: 18,
     padding: 12,
     display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+    flexDirection: "column",
+    gap: 10,
     marginBottom: 12,
     flexShrink: 0,
     boxShadow: "0 8px 18px rgba(15,23,42,0.04)",
+  },
+  columnHeadTop: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    minWidth: 0,
+  },
+  columnHeadFilter: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+  columnFilterLabel: {
+    fontSize: 11,
+    fontWeight: 850,
+    color: "#64748B",
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+  },
+  columnFilterSelect: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "8px 10px",
+    borderRadius: 12,
+    border: "1px solid #E2E8F0",
+    background: "#F8FAFC",
+    fontSize: 12,
+    fontWeight: 800,
+    color: "#0F172A",
+    fontFamily: "inherit",
+    cursor: "pointer",
+  },
+  columnFilterHint: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "#94A3B8",
+    lineHeight: 1.35,
+    marginTop: 2,
   },
   columnHeadLeft: {
     display: "flex",
@@ -4170,6 +4503,8 @@ const picker = {
   mContainer: { gap: 10 },
   mHeroGrid: { gridTemplateColumns: "1fr", padding: 12, gap: 12 },
   mHeroStats: { gridTemplateColumns: "1fr", gap: 8 },
+  mColumnHeadFilter: { gap: 8 },
+  mColumnFilterSelect: { fontSize: 13, minHeight: 40 },
   mBoardWrap: { paddingBottom: 8 },
 };
 

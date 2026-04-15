@@ -17,8 +17,9 @@ import {
 import { db } from "../../firebase";
 import { AuthCtx } from "../../auth/AuthProvider";
 import {
-  filterByUserScope,
   isEquipoInScope,
+  isInUserScope,
+  normalizeScopeValue,
 } from "../../utils/dataScope";
 import {
   AlertTriangle,
@@ -120,6 +121,7 @@ export default function EquipoInfoPage() {
   // historial de fallas
   const [historial, setHistorial] = useState([]);
   const [historialLoading, setHistorialLoading] = useState(false);
+  const [historialError, setHistorialError] = useState("");
 
   // editar
   const [editOpen, setEditOpen] = useState(false);
@@ -224,6 +226,7 @@ export default function EquipoInfoPage() {
   const closeModal = () => {
     setModalOpen(false);
     setModalKey(null);
+    setHistorialError("");
   };
 
   const modalTitle =
@@ -304,29 +307,84 @@ export default function EquipoInfoPage() {
     }
   };
 
+  const checklistRowInScope = (row) => {
+    const tRow = normalizeScopeValue(row?.tenantId);
+    const cRow = normalizeScopeValue(row?.company);
+    if (!tRow && !cRow) return true;
+    return isInUserScope(row, profile?.tenantId, profile?.company);
+  };
+
+  const rowTieneFallasRegistradas = (row) => {
+    if (row?.hasFallas === true) return true;
+    const f = row?.fallas;
+    if (Array.isArray(f) && f.length > 0) return true;
+    if (Array.isArray(row?.itemsFalla) && row.itemsFalla.length > 0) return true;
+    if (Array.isArray(row?.fallasSeleccionadas) && row.fallasSeleccionadas.length > 0) {
+      return true;
+    }
+    return false;
+  };
+
+  const sortByCreatedAtDesc = (rows) =>
+    [...rows].sort((a, b) => {
+      const ta = a?.createdAt?.toDate?.()?.getTime?.() ?? 0;
+      const tb = b?.createdAt?.toDate?.()?.getTime?.() ?? 0;
+      return tb - ta;
+    });
+
   const loadHistorialFallas = async () => {
     if (!id) return;
 
     setHistorialLoading(true);
+    setHistorialError("");
     try {
-      const qRef = query(
-        collection(db, "checklists_diarias"),
-        where("equipoId", "==", id),
-        where("hasFallas", "==", true),
-        orderBy("createdAt", "desc"),
-        limit(50)
-      );
+      let snap;
+      try {
+        const qRef = query(
+          collection(db, "checklists_diarias"),
+          where("equipoId", "==", id),
+          orderBy("createdAt", "desc"),
+          limit(80)
+        );
+        snap = await getDocs(qRef);
+      } catch (e1) {
+        console.warn("Historial (orderBy):", e1);
+        const qSimple = query(
+          collection(db, "checklists_diarias"),
+          where("equipoId", "==", id),
+          limit(80)
+        );
+        snap = await getDocs(qSimple);
+      }
 
-      const snap = await getDocs(qRef);
-      const rows = filterByUserScope(
-        snap.docs.map((d) => ({ id: d.id, ...d.data() })),
-        profile?.tenantId,
-        profile?.company
-      );
+      let rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      if (rows.length === 0) {
+        try {
+          const qAlt = query(
+            collection(db, "checklists_diarias"),
+            where("equipo", "==", id),
+            limit(80)
+          );
+          const snapAlt = await getDocs(qAlt);
+          rows = snapAlt.docs.map((d) => ({ id: d.id, ...d.data() }));
+        } catch (e2) {
+          console.warn("Historial (campo equipo):", e2);
+        }
+      }
+
+      rows = rows.filter(checklistRowInScope).filter(rowTieneFallasRegistradas);
+      rows = sortByCreatedAtDesc(rows).slice(0, 50);
       setHistorial(rows);
     } catch (e) {
       console.error("loadHistorialFallas error:", e);
       setHistorial([]);
+      const msg = e?.message || "";
+      setHistorialError(
+        msg.includes("index")
+          ? "Falta un índice en Firestore para esta consulta. Abrí la consola del navegador y usá el enlace que sugiere Firebase."
+          : "No se pudo cargar el historial. Revisá conexión y permisos."
+      );
     } finally {
       setHistorialLoading(false);
     }
@@ -616,6 +674,18 @@ export default function EquipoInfoPage() {
                 <div style={{ padding: 14, textAlign: "center", color: "#64748B", fontWeight: 900 }}>
                   Cargando historial…
                 </div>
+              ) : historialError ? (
+                <div
+                  style={{
+                    padding: 14,
+                    textAlign: "center",
+                    color: "#B91C1C",
+                    fontWeight: 800,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {historialError}
+                </div>
               ) : historial.length === 0 ? (
                 <div style={{ padding: 14, textAlign: "center", color: "#64748B", fontWeight: 900 }}>
                   No hay fallas registradas para este equipo.
@@ -623,7 +693,18 @@ export default function EquipoInfoPage() {
               ) : (
                 historial.map((h) => {
                   const fecha = toLocale(h.createdAt);
-                  const fallas = Array.isArray(h.fallas) ? h.fallas : [];
+                  const fallas = Array.isArray(h.fallas)
+                    ? h.fallas
+                    : Array.isArray(h.itemsFalla)
+                      ? h.itemsFalla
+                      : Array.isArray(h.fallasSeleccionadas)
+                        ? h.fallasSeleccionadas
+                        : [];
+                  const labelFalla = (f) => {
+                    if (f == null) return "Falla";
+                    if (typeof f === "string") return f;
+                    return f.label ?? f.titulo ?? f.nombre ?? f.descripcion ?? "Falla";
+                  };
                   return (
                     <div key={h.id} style={ui.histItem}>
                       <div style={ui.histTitle}>{fecha}</div>
@@ -633,7 +714,7 @@ export default function EquipoInfoPage() {
                       <div style={ui.histBody}>
                         {fallas.length > 0
                           ? fallas.map((f, idx) => (
-                            <div key={`${h.id}-${idx}`}>• {f?.label ?? "Falla"}</div>
+                            <div key={`${h.id}-${idx}`}>• {labelFalla(f)}</div>
                           ))
                           : "—"}
                       </div>
