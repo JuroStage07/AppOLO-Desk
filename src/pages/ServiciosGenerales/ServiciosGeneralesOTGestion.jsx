@@ -14,9 +14,9 @@ import {
   User,
   UserCheck,
 } from "lucide-react";
-import { AuthCtx } from "../auth/AuthProvider";
-import { auth, db } from "../firebase";
-import { filterSolicitudesOtByScope } from "../utils/dataScope";
+import { AuthCtx } from "../../auth/AuthProvider";
+import { auth, db } from "../../firebase";
+import { filterSolicitudesOtByScope } from "../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";

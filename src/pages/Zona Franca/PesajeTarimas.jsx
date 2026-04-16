@@ -4,54 +4,54 @@ import { signOut } from "firebase/auth";
 import {
   ArrowLeft,
   ArrowRight,
-  ClipboardList,
   Loader2,
   LogOut,
+  Scale,
+  Search,
   User,
 } from "lucide-react";
-import { auth } from "../firebase";
+import { auth } from "../../firebase";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
 const SLATE = "#64748B";
 
-export default function ServiciosGenerales() {
+export default function PesajeTarimas() {
   const nav = useNavigate();
   const user = auth.currentUser;
   const [busyLogout, setBusyLogout] = useState(false);
-  const [hoveredModule, setHoveredModule] = useState(null);
+  const [hoveredCard, setHoveredCard] = useState(null);
 
   const modules = useMemo(
     () => [
       {
-        key: "ordenes-trabajo",
-        title: "Órdenes de trabajo",
-        desc: "Ingresá al módulo para solicitudes, seguimiento y cierre de OT en Servicios generales.",
-        path: "/servicios-generales/ordenes-trabajo",
-        tag: "Trabajo",
+        key: "registrar-tarimas",
+        title: "Registrar tarimas",
+        desc: "Ingresá la información del pesaje de tarimas y guardá nuevos registros.",
+        path: "/servicios-generales/pesaje-tarimas/registrar",
+        tag: "Registro",
+        icon: <Scale size={28} strokeWidth={2} color={ACCENT} />,
       },
       {
-        key: "validar-ingreso",
-        title: "Validar ingreso",
-        desc: "Escaneá el QR o ingresá la cédula para validar el ingreso de colaboradores terceros.",
-        path: "/servicios-generales/validar-ingreso",
-        tag: "Control",
+        key: "consultar-tarimas",
+        title: "Consultar tarimas",
+        desc: "Buscá y revisá registros de pesaje de tarimas ya almacenados.",
+        path: "/servicios-generales/pesaje-tarimas/consultar",
+        tag: "Consulta",
+        icon: <Search size={28} strokeWidth={2} color={ACCENT} />,
       },
     ],
     []
   );
 
   useEffect(() => {
-    const prevOverflow = document.body.style.overflow;
     const prevBg = document.body.style.background;
     const prevMargin = document.body.style.margin;
 
-    document.body.style.overflow = "hidden";
     document.body.style.background = "#F6F7FB";
     document.body.style.margin = "0";
 
     return () => {
-      document.body.style.overflow = prevOverflow;
       document.body.style.background = prevBg;
       document.body.style.margin = prevMargin;
     };
@@ -67,83 +67,80 @@ export default function ServiciosGenerales() {
   };
 
   return (
-    <div style={ui.shell}>
-      <header style={ui.topbar}>
-        <div style={ui.topbarInner}>
-          <div style={ui.topbarLeft}>
-            <button
-              type="button"
-              onClick={() => nav("/")}
-              style={ui.backBtn}
-              title="Volver al inicio"
-            >
-              <ArrowLeft size={18} strokeWidth={2.2} />
-              Inicio
-            </button>
-          </div>
-
-          <div style={ui.brand}>
-            <div style={ui.brandMark}>
-              <ClipboardList size={20} strokeWidth={2.25} color="#fff" />
+    <div style={ui.scrollViewport}>
+      <div style={ui.shell}>
+        <header style={ui.topbar}>
+          <div style={ui.topbarInner}>
+            <div style={ui.topbarLeft}>
+              <button
+                type="button"
+                onClick={() => nav("/servicios-generales")}
+                style={ui.backBtn}
+              >
+                <ArrowLeft size={18} strokeWidth={2.2} />
+                Servicios generales
+              </button>
             </div>
-            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-              <div style={ui.brandTitle}>Servicios generales</div>
-              <div style={ui.brandSub}>Áreas operativas</div>
-            </div>
-          </div>
 
-          <div style={ui.topbarRight}>
-            <div style={ui.userBox}>
-              <div style={ui.userAvatar}>
-                <User size={16} strokeWidth={2.2} />
+            <div style={ui.brand}>
+              <div style={ui.brandMark}>
+                <Scale size={20} strokeWidth={2.25} color="#fff" />
               </div>
               <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-                <div style={ui.userMail}>{user?.email || "—"}</div>
+                <div style={ui.brandTitle}>Pesaje tarimas</div>
+                <div style={ui.brandSub}>Zona Franca</div>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => void logout()}
-              disabled={busyLogout}
-              style={ui.btnGhost}
-            >
-              {busyLogout ? (
-                <Loader2
-                  size={16}
-                  style={{ animation: "sgSpin 0.7s linear infinite" }}
-                />
-              ) : (
-                <LogOut size={16} strokeWidth={2.2} />
-              )}
-              Salir
-            </button>
+            <div style={ui.topbarRight}>
+              <div style={ui.userBox}>
+                <div style={ui.userAvatar}>
+                  <User size={16} strokeWidth={2.2} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={ui.userEmail}>{user?.email || "Sesión"}</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={logout}
+                disabled={busyLogout}
+                style={ui.logoutBtn}
+                title="Cerrar sesión"
+              >
+                {busyLogout ? (
+                  <Loader2
+                    size={18}
+                    style={{ animation: "spin 0.9s linear infinite" }}
+                  />
+                ) : (
+                  <LogOut size={18} strokeWidth={2.2} />
+                )}
+              </button>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <style>{`
-        @keyframes sgSpin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
 
-      <main style={ui.main}>
-        <div style={ui.container}>
+        <main style={ui.main}>
           <div style={ui.pageHead}>
-            <h1 style={ui.pageTitle}>Servicios generales</h1>
+            <h1 style={ui.pageTitle}>Pesaje de tarimas</h1>
             <p style={ui.pageLead}>
-              Elegí un módulo de trabajo para ingresar. Cada uno concentra sus
-              pantallas y flujos propios.
+              Seleccioná una opción para registrar nuevos pesajes o consultar
+              registros existentes.
             </p>
           </div>
 
-          <section style={ui.modulesSection} aria-label="Módulos de trabajo">
-            <div style={ui.modulesKicker}>Módulos de trabajo</div>
+          <section style={ui.modulesSection}>
             <div style={ui.modulesGrid}>
               {modules.map((m) => {
-                const hover = hoveredModule === m.key;
+                const hovered = hoveredCard === m.key;
+
                 return (
                   <div
                     key={m.key}
@@ -153,25 +150,25 @@ export default function ServiciosGenerales() {
                     onKeyDown={(e) =>
                       (e.key === "Enter" || e.key === " ") && nav(m.path)
                     }
-                    onMouseEnter={() => setHoveredModule(m.key)}
-                    onMouseLeave={() => setHoveredModule(null)}
+                    onMouseEnter={() => setHoveredCard(m.key)}
+                    onMouseLeave={() => setHoveredCard(null)}
                     style={{
                       ...ui.moduleCard,
-                      ...(hover ? ui.moduleCardHover : {}),
+                      ...(hovered ? ui.moduleCardHover : {}),
                     }}
                   >
                     <div style={ui.moduleCardTop}>
                       <span style={ui.moduleTag}>{m.tag}</span>
-                      <div style={ui.moduleIconWrap}>
-                        <ClipboardList size={28} strokeWidth={2} color={ACCENT} />
-                      </div>
+                      <div style={ui.moduleIconWrap}>{m.icon}</div>
                     </div>
+
                     <div style={ui.moduleBody}>
                       <h2 style={ui.moduleTitle}>{m.title}</h2>
                       <p style={ui.moduleDesc}>{m.desc}</p>
+
                       <div style={ui.moduleFooter}>
                         <span style={ui.moduleEnter}>
-                          Entrar al módulo
+                          Entrar
                           <ArrowRight size={16} strokeWidth={2.5} />
                         </span>
                       </div>
@@ -181,98 +178,91 @@ export default function ServiciosGenerales() {
               })}
             </div>
           </section>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
 
 const ui = {
-  shell: {
+  scrollViewport: {
     minHeight: "100vh",
     width: "100%",
-    maxWidth: "100%",
     boxSizing: "border-box",
-    background: "#F6F7FB",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-    color: "#0F172A",
-    display: "grid",
-    gridTemplateRows: "auto 1fr",
+    padding: "0 0 28px",
+  },
+
+  shell: {
+    maxWidth: 1100,
+    margin: "0 auto",
+    padding: "0 16px",
+    boxSizing: "border-box",
   },
 
   topbar: {
-    width: "100%",
-    boxSizing: "border-box",
-    borderBottom: "1px solid #E7E9F2",
-    background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
-    zIndex: 10,
+    position: "sticky",
+    top: 0,
+    zIndex: 20,
+    paddingTop: 14,
+    paddingBottom: 12,
+    background: "linear-gradient(180deg, #F6F7FB 85%, rgba(246,247,251,0))",
   },
 
   topbarInner: {
-    width: "100%",
-    maxWidth: 1120,
-    marginLeft: "auto",
-    marginRight: "auto",
-    boxSizing: "border-box",
-    padding: "12px 18px",
-    minHeight: 64,
     display: "grid",
     gridTemplateColumns: "1fr auto 1fr",
     alignItems: "center",
     gap: 12,
+    minHeight: 52,
   },
 
-  topbarLeft: {
-    display: "flex",
-    justifyContent: "flex-start",
-  },
+  topbarLeft: { justifySelf: "start" },
 
   topbarRight: {
+    justifySelf: "end",
     display: "flex",
-    justifyContent: "flex-end",
     alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
+    gap: 10,
   },
 
   backBtn: {
     display: "inline-flex",
     alignItems: "center",
     gap: 8,
-    padding: "8px 12px",
-    borderRadius: 12,
-    border: "1px solid #E7E9F2",
+    border: "1px solid #E2E8F0",
     background: "#fff",
-    color: "#334155",
+    color: SLATE,
+    borderRadius: 12,
+    padding: "10px 12px",
     fontWeight: 800,
     fontSize: 13,
     cursor: "pointer",
-    fontFamily: "inherit",
+    boxShadow: "0 1px 0 rgba(15,23,42,0.04)",
   },
 
   brand: {
     display: "flex",
     alignItems: "center",
     gap: 12,
-    justifySelf: "center",
     minWidth: 0,
   },
 
   brandMark: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 14,
-    background: ACCENT,
+    background: `linear-gradient(135deg, ${ACCENT}, #047857)`,
     display: "grid",
     placeItems: "center",
-    flexShrink: 0,
+    boxShadow: `0 10px 22px ${ACCENT_SOFT}`,
   },
 
   brandTitle: {
     fontWeight: 950,
-    fontSize: 15,
+    fontSize: 16,
     color: "#0F172A",
     letterSpacing: -0.2,
+    lineHeight: 1.15,
   },
 
   brandSub: {
@@ -285,9 +275,9 @@ const ui = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "6px 10px",
-    borderRadius: 14,
-    border: "1px solid #E7E9F2",
+    padding: "8px 10px",
+    borderRadius: 12,
+    border: "1px solid #E2E8F0",
     background: "#fff",
     maxWidth: 260,
   },
@@ -297,60 +287,36 @@ const ui = {
     height: 32,
     borderRadius: 10,
     background: ACCENT_SOFT,
+    color: ACCENT,
     display: "grid",
     placeItems: "center",
-    color: ACCENT,
-    flexShrink: 0,
   },
 
-  userName: {
-    fontWeight: 900,
+  userEmail: {
     fontSize: 12,
+    fontWeight: 800,
     color: "#0F172A",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
 
-  userMail: {
-    fontWeight: 700,
-    fontSize: 11,
-    color: SLATE,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-
-  btnGhost: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "8px 12px",
+  logoutBtn: {
+    width: 44,
+    height: 44,
     borderRadius: 12,
-    border: "1px solid #E7E9F2",
+    border: "1px solid #E2E8F0",
     background: "#fff",
-    color: "#334155",
-    fontWeight: 800,
-    fontSize: 13,
+    color: SLATE,
     cursor: "pointer",
-    fontFamily: "inherit",
+    display: "grid",
+    placeItems: "center",
   },
 
   main: {
-    width: "100%",
-    boxSizing: "border-box",
-    overflow: "auto",
-    padding: "22px 16px 32px",
-  },
-
-  container: {
-    width: "100%",
-    maxWidth: 1120,
-    marginLeft: "auto",
-    marginRight: "auto",
-    boxSizing: "border-box",
+    paddingTop: 8,
     display: "grid",
-    gap: 22,
+    gap: 18,
   },
 
   pageHead: {
@@ -360,7 +326,7 @@ const ui = {
 
   pageTitle: {
     margin: 0,
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: 980,
     letterSpacing: -0.4,
     color: "#0F172A",
@@ -368,24 +334,16 @@ const ui = {
 
   pageLead: {
     margin: 0,
-    maxWidth: 640,
+    maxWidth: 680,
     fontSize: 14,
-    fontWeight: 700,
+    lineHeight: 1.55,
     color: SLATE,
-    lineHeight: 1.45,
+    fontWeight: 700,
   },
 
   modulesSection: {
     display: "grid",
     gap: 14,
-  },
-
-  modulesKicker: {
-    fontSize: 11,
-    fontWeight: 900,
-    letterSpacing: 0.45,
-    textTransform: "uppercase",
-    color: ACCENT,
   },
 
   modulesGrid: {
@@ -402,8 +360,8 @@ const ui = {
     overflow: "hidden",
     cursor: "pointer",
     textAlign: "left",
-    fontFamily: "inherit",
-    transition: "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease",
+    transition:
+      "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease",
   },
 
   moduleCardHover: {
@@ -418,7 +376,8 @@ const ui = {
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 12,
-    background: "linear-gradient(180deg, rgba(8,159,138,0.06) 0%, transparent 100%)",
+    background:
+      "linear-gradient(180deg, rgba(8,159,138,0.06) 0%, transparent 100%)",
   },
 
   moduleTag: {
@@ -452,7 +411,7 @@ const ui = {
 
   moduleTitle: {
     margin: 0,
-    fontSize: 19,
+    fontSize: 20,
     fontWeight: 980,
     color: "#0F172A",
     letterSpacing: -0.2,

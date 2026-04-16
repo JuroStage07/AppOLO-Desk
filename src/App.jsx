@@ -47,11 +47,14 @@ import MetricaRecepcion from "./pages/Recepcion/MetricaRecepcion";
 
 import EPAHubPage from "./pages/EPA/EPAHubPage";
 import AperturasFinalizadasEPA from "./pages/EPA/AperturasFinalizadasEPA";
-import ServiciosGenerales from "./pages/ServiciosGenerales";
-import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGeneralesOrdenesTrabajo";
-import ServiciosGeneralesOTCrear from "./pages/ServiciosGeneralesOTCrear";
-import ServiciosGeneralesOTGestion from "./pages/ServiciosGeneralesOTGestion";
+import ServiciosGenerales from "./pages/ServiciosGenerales/ServiciosGenerales";
+import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGenerales/ServiciosGeneralesOrdenesTrabajo";
+import ServiciosGeneralesOTCrear from "./pages/ServiciosGenerales/ServiciosGeneralesOTCrear";
+import ServiciosGeneralesOTGestion from "./pages/ServiciosGenerales/ServiciosGeneralesOTGestion";
 import ValidarIngreso from "./pages/ServiciosGenerales/ValidarIngreso";
+import PesajeTarimas from "./pages/Zona Franca/PesajeTarimas";
+import RegistrarTarimas from "./pages/Zona Franca/RegistrarTarimas";
+import ConsultarTarimas from "./pages/Zona Franca/ConsultarTarimas";
 import useIsMobile from "./hooks/useIsMobile";
 
 function TenantScopeBadge() {
@@ -306,6 +309,33 @@ export default function App() {
             element={
               <PrivateRoute>
                 <ValidarIngreso />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/servicios-generales/pesaje-tarimas"
+            element={
+              <PrivateRoute>
+                <PesajeTarimas />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/servicios-generales/pesaje-tarimas/registrar"
+            element={
+              <PrivateRoute>
+                <RegistrarTarimas />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/servicios-generales/pesaje-tarimas/consultar"
+            element={
+              <PrivateRoute>
+                <ConsultarTarimas />
               </PrivateRoute>
             }
           />

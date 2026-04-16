@@ -68,6 +68,8 @@ export default function Home() {
         path: "/despacho",
         img: imgDespacho,
         tag: "Operación",
+        blocked: true,
+        blockedDesc: "Acceso al módulo deshabilitado temporalmente.",
       },
       {
         key: "salud",
@@ -240,20 +242,28 @@ export default function Home() {
             {areas.map((a) => {
               const isHover = hovered === a.key;
               const accent = a.tone === "accent";
+              const blocked = a.blocked === true;
 
               return (
                 <div
                   key={a.key}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => go(a.path)}
-                  onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && go(a.path)}
-                  onMouseEnter={() => setHovered(a.key)}
+                  role={blocked ? "group" : "button"}
+                  aria-disabled={blocked ? true : undefined}
+                  tabIndex={blocked ? -1 : 0}
+                  onClick={() => {
+                    if (!blocked) go(a.path);
+                  }}
+                  onKeyDown={(e) => {
+                    if (blocked) return;
+                    if (e.key === "Enter" || e.key === " ") go(a.path);
+                  }}
+                  onMouseEnter={() => !blocked && setHovered(a.key)}
                   onMouseLeave={() => setHovered(null)}
                   style={{
                     ...ui.card,
-                    ...(accent ? ui.cardAccent : {}),
-                    ...(isHover ? ui.cardHover : {}),
+                    ...(accent && !blocked ? ui.cardAccent : {}),
+                    ...(isHover && !blocked ? ui.cardHover : {}),
+                    ...(blocked ? ui.cardBlocked : {}),
                   }}
                 >
                   <div
@@ -279,21 +289,38 @@ export default function Home() {
                       >
                         {a.tag}
                       </span>
+                      {blocked ? (
+                        <span style={ui.pillBlocked}>
+                          <Lock size={11} strokeWidth={2.5} style={{ marginRight: 5 }} />
+                          Bloqueado
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
                   <div style={ui.cardBody}>
                     <div style={ui.cardTitle}>{a.title}</div>
-                    <div style={ui.cardDesc}>{a.desc}</div>
+                    <div style={ui.cardDesc}>{blocked ? a.blockedDesc || a.desc : a.desc}</div>
 
                     <div style={ui.cardFooter}>
-                      <span style={{ ...ui.link, ...(accent ? ui.linkAccent : {}) }}>
-                        <span style={ui.btnInlineIcon}>
-                          Entrar
-                          <ArrowRight size={14} strokeWidth={2.5} />
+                      {blocked ? (
+                        <span style={ui.linkBlocked}>
+                          <span style={ui.btnInlineIcon}>
+                            <Lock size={14} strokeWidth={2.5} />
+                            No disponible
+                          </span>
                         </span>
+                      ) : (
+                        <span style={{ ...ui.link, ...(accent ? ui.linkAccent : {}) }}>
+                          <span style={ui.btnInlineIcon}>
+                            Entrar
+                            <ArrowRight size={14} strokeWidth={2.5} />
+                          </span>
+                        </span>
+                      )}
+                      <span style={{ ...ui.metaHint, ...(blocked ? ui.metaHintBlocked : {}) }}>
+                        {blocked ? "—" : a.path}
                       </span>
-                      <span style={ui.metaHint}>{a.path}</span>
                     </div>
                   </div>
                 </div>
@@ -554,6 +581,12 @@ const ui = {
     transform: "translateY(-2px)",
     boxShadow: "0 16px 36px rgba(15, 23, 42, 0.12)",
   },
+  cardBlocked: {
+    cursor: "not-allowed",
+    opacity: 0.88,
+    filter: "grayscale(0.25)",
+    boxShadow: "0 8px 20px rgba(15, 23, 42, 0.05)",
+  },
 
   media: {
     height: 124,
@@ -592,6 +625,19 @@ const ui = {
     borderColor: "rgba(255,255,255,0.45)",
     background: "rgba(8,159,138,0.28)",
   },
+  pillBlocked: {
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.4)",
+    background: "rgba(15,23,42,0.45)",
+    color: "#fff",
+    fontWeight: 950,
+    fontSize: 11,
+    backdropFilter: "blur(6px)",
+    display: "inline-flex",
+    alignItems: "center",
+    marginLeft: "auto",
+  },
 
   cardBody: { padding: 16 },
 
@@ -607,5 +653,14 @@ const ui = {
   },
   link: { color: "#0F172A", fontWeight: 850, fontSize: 13, display: "inline-flex", alignItems: "center" },
   linkAccent: { color: ACCENT },
+  linkBlocked: {
+    color: SLATE,
+    fontWeight: 800,
+    fontSize: 13,
+    display: "inline-flex",
+    alignItems: "center",
+    cursor: "not-allowed",
+  },
   metaHint: { color: "#94A3B8", fontWeight: 700, fontSize: 12 },
+  metaHintBlocked: { opacity: 0.65 },
 };

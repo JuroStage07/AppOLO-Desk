@@ -1,0 +1,67 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function authed() {
+      return request.auth != null;
+    }
+
+    // =========================
+    // PESAJE TARIMAS
+    // =========================
+    match /pesajes/{pesajeId} {
+
+      function canPesaje() {
+        return authed();
+      }
+
+      /** Email del cliente debe coincidir con el token (o vacío si el proveedor no da email). */
+      function validRegistradoEmail() {
+        return request.resource.data.registradoPorEmail is string
+          && (
+            request.auth.token.email == null
+              ? request.resource.data.registradoPorEmail == ''
+              : request.resource.data.registradoPorEmail == request.auth.token.email
+          );
+      }
+
+      function validRegistradoNombre() {
+        return request.resource.data.registradoPorNombre is string
+          && request.resource.data.registradoPorNombre.size() <= 256;
+      }
+
+      // Consulta por ID (getDoc con número de tarima)
+      allow get: if canPesaje();
+
+      allow list: if false;
+
+      allow create, update: if canPesaje()
+        && request.resource.data.keys().hasOnly([
+          'numero',
+          'peso',
+          'unidad',
+          'fechaRegistro',
+          'registradoPorUid',
+          'registradoPorEmail',
+          'registradoPorNombre'
+        ])
+        && request.resource.data.numero is string
+        && request.resource.data.numero.size() > 0
+        && request.resource.data.numero == pesajeId
+        && request.resource.data.peso is number
+        && request.resource.data.peso > 0
+        && request.resource.data.unidad is string
+        && request.resource.data.unidad in ['kg', 'g', 'lb', 'oz', 't']
+        && request.resource.data.fechaRegistro is timestamp
+        && request.resource.data.registradoPorUid is string
+        && request.resource.data.registradoPorUid == request.auth.uid
+        && validRegistradoEmail()
+        && validRegistradoNombre();
+
+      allow delete: if false;
+    }
+
+    // Otras colecciones: agregá acá tus match existentes o fusioná este archivo con tu rules actual en la consola.
+  }
+}
