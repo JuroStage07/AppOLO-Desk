@@ -105,7 +105,7 @@ export default function Home() {
       {
         key: "epa",
         title: "EPA",
-        desc: "Área de trabajo EPA. Próximamente más módulos.",
+        desc: "Área de trabajo EPA.",
         path: "/epa",
         img: imgEpa,
         tag: "EPA",

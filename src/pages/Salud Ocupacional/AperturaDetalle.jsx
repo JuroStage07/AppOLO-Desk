@@ -1,5 +1,5 @@
 // screens/aperturas/AperturaDetalle.jsx
-import React, { useContext, useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { doc, updateDoc, deleteDoc, serverTimestamp, addDoc, collection } from "firebase/firestore";
@@ -8,21 +8,28 @@ import {
   ArrowLeft,
   Ban,
   Camera,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   Clock,
   Copy,
+  Download,
   FileText,
   HelpCircle,
   Loader2,
   LogOut,
+  Maximize2,
   MoreHorizontal,
   Play,
   Receipt,
   Shield,
+  ShieldAlert,
+  LifeBuoy,
   User,
   X,
 } from "lucide-react";
+
+import JSZip from "jszip";
 
 import { auth, db } from "../../firebase";
 import { AuthCtx } from "../../auth/AuthProvider";
@@ -32,6 +39,10 @@ import { isInUserScope } from "../../utils/dataScope";
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
 const SLATE = "#64748B";
+
+/** Sin acceso a ver formulario / RS en detalle (solo lectura de esas secciones vía esta pantalla). */
+const RESTRICTED_FORM_RS_VIEW_UID = "kN48Rzyk5BcFOwKxAohqR0uY0tc2";
+const RESTRICTED_FORM_RS_VIEW_EMAIL = "epa@user.com";
 
 /* ===================== Helpers RS (igual RN) ===================== */
 const RS_KEY_BY_FORM = {
@@ -79,6 +90,26 @@ function isRFCompleted(apertura) {
   if (!rf) return false;
 
   return rf.completed === true;
+}
+
+function extFromImageBlobType(mime) {
+  if (!mime || typeof mime !== "string") return "jpg";
+  if (mime.includes("png")) return "png";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
+  if (mime.includes("gif")) return "gif";
+  return "jpg";
+}
+
+/** Nombre de carpeta / archivo ZIP seguro en Windows/macOS/Linux */
+function sanitizeFolderNameForZip(name) {
+  const cleaned = String(name ?? "")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/\s+/g, " ")
+    .slice(0, 120)
+    .trim();
+  return cleaned.length ? cleaned : "apertura";
 }
 
 /* ===================== Date helpers ===================== */
@@ -180,13 +211,15 @@ function Modal({ open, onClose, title, subtitle, children, maxWidth = 420, foote
 
         <div style={ui.modalBody}>{children}</div>
 
-        <div style={ui.modalFooter}>
-          {footer ?? (
-            <button type="button" onClick={onClose} style={ui.btnPrimary}>
-              Cerrar
-            </button>
-          )}
-        </div>
+        {footer !== false ? (
+          <div style={ui.modalFooter}>
+            {footer ?? (
+              <button type="button" onClick={onClose} style={ui.btnPrimary}>
+                Cerrar
+              </button>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>,
     document.body
@@ -424,12 +457,20 @@ export default function AperturaDetalle() {
 
   // visor de fotos (RF)
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
-  const [photoViewerUrl, setPhotoViewerUrl] = useState(null);
+  const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
+  const photoViewerFullRef = useRef(null);
+  const facturaViewerFullRef = useRef(null);
 
   // modales
   const [formOpen, setFormOpen] = useState(false);
   const [rsOpen, setRsOpen] = useState(false);
   const [rfOpen, setRfOpen] = useState(false);
+  const [rfDownloadAllBusy, setRfDownloadAllBusy] = useState(false);
+  const [restrictedFormRsOpen, setRestrictedFormRsOpen] = useState(false);
+
+  const isRestrictedFormRsView =
+    user?.uid === RESTRICTED_FORM_RS_VIEW_UID ||
+    (user?.email && user.email.toLowerCase() === RESTRICTED_FORM_RS_VIEW_EMAIL);
 
   const formKey = FORM_KEY_BY_FORM[apertura?.tipoFormulario] || null;
 
@@ -438,6 +479,13 @@ export default function AperturaDetalle() {
   const rfData = formKey ? apertura?.registroFotografico?.[formKey] : null;
 
   const rfUrls = useMemo(() => collectPhotoUrls(rfData), [rfData]);
+
+  const photoViewerSafeIndex =
+    photoViewerOpen && rfUrls.length > 0
+      ? Math.min(Math.max(0, photoViewerIndex), rfUrls.length - 1)
+      : 0;
+  const photoViewerCurrentUrl =
+    photoViewerOpen && rfUrls.length > 0 ? rfUrls[photoViewerSafeIndex] ?? null : null;
 
   // extra modals
   const [timesOpen, setTimesOpen] = useState(false);
@@ -719,6 +767,10 @@ export default function AperturaDetalle() {
 
   // (los dejo por si los usas después)
   const goToFormulario = () => {
+    if (isRestrictedFormRsView) {
+      setRestrictedFormRsOpen(true);
+      return;
+    }
     if (!apertura?.id || !tipoFormulario) return alert("Sin tipo de formulario");
     if (tipoFormulario === "Proveedor Nacional")
       return go(`/salud/aperturas/form/proveedor-n/${encodeURIComponent(apertura.id)}${viewQS}`);
@@ -729,6 +781,10 @@ export default function AperturaDetalle() {
   };
 
   const goToRS = () => {
+    if (isRestrictedFormRsView) {
+      setRestrictedFormRsOpen(true);
+      return;
+    }
     if (!isReadOnly && !isFormCompleted) return alert("Debes completar el formulario para abrir RS.");
     if (tipoFormulario === "Proveedor Nacional")
       return go(`/salud/aperturas/rs/proveedor-n/${encodeURIComponent(apertura.id)}${viewQS}`);
@@ -748,11 +804,189 @@ export default function AperturaDetalle() {
       return go(`/salud/aperturas/rf/nacionalizados/${encodeURIComponent(apertura.id)}${viewQS}`);
   };
 
+  const enterPhotoFullscreen = async () => {
+    const el = photoViewerFullRef.current;
+    if (!el) return;
+    try {
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const downloadCurrentPhoto = async () => {
+    const url = photoViewerCurrentUrl;
+    if (!url) return;
+    const base = `registro-fotografico-${photoViewerSafeIndex + 1}`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const ext = extFromImageBlobType(blob.type);
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = `${base}.${ext}`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+    } catch (e) {
+      console.error(e);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${base}.jpg`;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  };
+
+  const enterFacturaFullscreen = async () => {
+    const el = facturaViewerFullRef.current;
+    if (!el) return;
+    try {
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const downloadFacturaPhoto = async () => {
+    const url = fotoFacturaUrl;
+    if (!url) return;
+    const base = "factura";
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const ext = extFromImageBlobType(blob.type);
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = `${base}.${ext}`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+    } catch (e) {
+      console.error(e);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${base}.jpg`;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  };
+
+  const downloadAllRfPhotos = async () => {
+    if (!rfUrls.length || rfDownloadAllBusy || !apertura) return;
+    const folderName = sanitizeFolderNameForZip(apertura.nombre || apertura.id);
+    setRfDownloadAllBusy(true);
+    let ok = 0;
+    let fail = 0;
+    try {
+      const zip = new JSZip();
+      const root = zip.folder(folderName);
+      if (!root) throw new Error("No se pudo crear la carpeta en el ZIP");
+      for (let i = 0; i < rfUrls.length; i++) {
+        const url = rfUrls[i];
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const blob = await res.blob();
+          const ext = extFromImageBlobType(blob.type);
+          root.file(`foto-${String(i + 1).padStart(2, "0")}.${ext}`, blob);
+          ok++;
+        } catch (e) {
+          console.error("RF ZIP foto", i, e);
+          fail++;
+        }
+      }
+      if (ok === 0) {
+        alert("No se pudo descargar ninguna foto. Revisá tu conexión o los permisos de las URLs.");
+        return;
+      }
+      const outBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+      const objUrl = URL.createObjectURL(outBlob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = `${folderName}.zip`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      if (fail > 0) {
+        alert(`Se incluyeron ${ok} de ${rfUrls.length} fotos. ${fail} no se pudieron descargar.`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo generar el archivo ZIP. Intentá de nuevo.");
+    } finally {
+      setRfDownloadAllBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!photoViewerOpen && !viewerOpen) {
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+      else if (document.webkitFullscreenElement) void document.webkitExitFullscreen?.();
+    }
+    if (!photoViewerOpen) return;
+    const onKey = (e) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setPhotoViewerIndex((i) => {
+          const max = rfUrls.length - 1;
+          if (max < 0) return 0;
+          const cur = Math.min(Math.max(0, i), max);
+          return Math.max(0, cur - 1);
+        });
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setPhotoViewerIndex((i) => {
+          const max = rfUrls.length - 1;
+          if (max < 0) return 0;
+          const cur = Math.min(Math.max(0, i), max);
+          return Math.min(max, cur + 1);
+        });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [photoViewerOpen, viewerOpen, rfUrls.length]);
+
   return (
     <div style={ui.shell}>
       <style>{`
         @keyframes aperturaDetalleSpin {
           to { transform: rotate(360deg); }
+        }
+        .photo-rf-fs-root:fullscreen {
+          background: #0f172a;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 12px;
+          box-sizing: border-box;
+          border-radius: 0;
+        }
+        .photo-rf-fs-root:fullscreen img {
+          width: auto !important;
+          height: auto !important;
+          max-width: 100% !important;
+          max-height: 100vh !important;
+          object-fit: contain !important;
         }
       `}</style>
 
@@ -970,7 +1204,18 @@ export default function AperturaDetalle() {
               {receptionUnlocked ? (
                 <div style={ui.taskbar}>
                   <div style={ui.taskbarInner}>
-                    <button type="button" onClick={() => setFormOpen(true)} style={ui.tbBtnPrimary} title="Ver formulario">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isRestrictedFormRsView) {
+                          setRestrictedFormRsOpen(true);
+                          return;
+                        }
+                        setFormOpen(true);
+                      }}
+                      style={ui.tbBtnPrimary}
+                      title="Ver formulario"
+                    >
                       <span style={ui.btnInlineIcon}>
                         <FileText size={17} strokeWidth={2.2} />
                         Ver formulario
@@ -980,11 +1225,18 @@ export default function AperturaDetalle() {
                     <button
                       type="button"
                       onClick={() => {
+                        if (isRestrictedFormRsView) {
+                          setRestrictedFormRsOpen(true);
+                          return;
+                        }
                         if (!isReadOnly && !isFormCompleted) return alert("Debes completar el formulario para abrir RS.");
                         setRsOpen(true);
                       }}
-                      style={{ ...ui.tbBtnSoft, ...(!isReadOnly && !isFormCompleted ? ui.tbBtnDisabled : {}) }}
-                      disabled={!isReadOnly && !isFormCompleted}
+                      style={{
+                        ...ui.tbBtnSoft,
+                        ...(!isRestrictedFormRsView && !isReadOnly && !isFormCompleted ? ui.tbBtnDisabled : {}),
+                      }}
+                      disabled={!isRestrictedFormRsView && !isReadOnly && !isFormCompleted}
                       title="Ver RS"
                     >
                       <span style={ui.btnInlineIcon}>
@@ -1119,18 +1371,64 @@ export default function AperturaDetalle() {
               </Modal>
 
               {/* ===== Viewer factura ===== */}
-              <Modal open={viewerOpen} onClose={() => setViewerOpen(false)} title="Factura" maxWidth={720}>
-                {fotoFacturaUrl ? (
-                  <div style={{ display: "grid", gap: 12 }}>
-                    <div style={ui.viewerBox}>
-                      <img src={fotoFacturaUrl} alt="Factura" style={ui.viewerImg} />
-                    </div>
-
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <Modal
+                open={viewerOpen}
+                onClose={() => setViewerOpen(false)}
+                title="Factura"
+                maxWidth={900}
+                tone="viewer"
+                footer={
+                  fotoFacturaUrl ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 10,
+                        justifyContent: "flex-end",
+                        alignItems: "center",
+                        width: "100%",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => void enterFacturaFullscreen()}
+                        style={ui.btnGhost}
+                        title="Ver en pantalla completa"
+                      >
+                        <span style={ui.btnInlineIcon}>
+                          <Maximize2 size={16} strokeWidth={2.2} />
+                          Ver foto
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void downloadFacturaPhoto()}
+                        style={ui.btnGhost}
+                        title="Descargar imagen de la factura"
+                      >
+                        <span style={ui.btnInlineIcon}>
+                          <Download size={16} strokeWidth={2.2} />
+                          Descargar
+                        </span>
+                      </button>
                       <button type="button" onClick={() => setViewerOpen(false)} style={ui.btnPrimary}>
                         Cerrar
                       </button>
                     </div>
+                  ) : (
+                    <button type="button" onClick={() => setViewerOpen(false)} style={ui.btnPrimary}>
+                      Cerrar
+                    </button>
+                  )
+                }
+              >
+                {fotoFacturaUrl ? (
+                  <div
+                    ref={facturaViewerFullRef}
+                    className="photo-rf-fs-root"
+                    style={{ ...ui.viewerBox, overflow: "hidden" }}
+                  >
+                    <img src={fotoFacturaUrl} alt="Factura" style={ui.viewerFacturaImg} />
                   </div>
                 ) : (
                   <div style={ui.emptyWrap}>
@@ -1141,6 +1439,59 @@ export default function AperturaDetalle() {
                     <div style={ui.emptyText}>Esta apertura no tiene foto de factura.</div>
                   </div>
                 )}
+              </Modal>
+
+              {/* ===== Modal: acceso restringido (form / RS) ===== */}
+              <Modal
+                open={restrictedFormRsOpen}
+                onClose={() => setRestrictedFormRsOpen(false)}
+                title="Acceso restringido"
+                subtitle="Formulario y revisión de seguridad"
+                maxWidth={460}
+              >
+                <div style={{ display: "grid", gap: 14 }}>
+                  <div style={{ display: "grid", placeItems: "center", gap: 12, textAlign: "center" }}>
+                    <div style={ui.restrictedModalIcon} aria-hidden>
+                      <ShieldAlert size={30} strokeWidth={2.1} color="#C2410C" />
+                    </div>
+                    <p style={ui.restrictedModalLead}>
+                      No podés abrir el contenido del formulario ni de la revisión de seguridad desde esta pantalla.
+                    </p>
+                  </div>
+
+                  <div style={ui.restrictedModalScope}>
+                    <div style={ui.restrictedModalRow}>
+                      <div style={ui.restrictedModalRowIcon} aria-hidden>
+                        <FileText size={18} strokeWidth={2.2} color="#475569" />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={ui.restrictedModalRowTitle}>Formulario</div>
+                        <div style={ui.restrictedModalRowHint}>Vista y respuestas guardadas</div>
+                      </div>
+                      <span style={{ ...ui.pillBase, ...ui.pillWarning, fontSize: 11, flexShrink: 0 }}>No disponible</span>
+                    </div>
+                    <div style={ui.restrictedModalSep} />
+                    <div style={ui.restrictedModalRow}>
+                      <div style={ui.restrictedModalRowIcon} aria-hidden>
+                        <Shield size={18} strokeWidth={2.2} color="#475569" />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={ui.restrictedModalRowTitle}>Revisión de seguridad (RS)</div>
+                        <div style={ui.restrictedModalRowHint}>Respuestas de la revisión</div>
+                      </div>
+                      <span style={{ ...ui.pillBase, ...ui.pillWarning, fontSize: 11, flexShrink: 0 }}>No disponible</span>
+                    </div>
+                  </div>
+
+                  <div style={ui.restrictedModalCallout}>
+                    <div style={ui.restrictedModalCalloutIcon} aria-hidden>
+                      <LifeBuoy size={20} strokeWidth={2.2} color={ACCENT} />
+                    </div>
+                    <p style={ui.restrictedModalCalloutText}>
+                      Si necesitás acceso, contactá al <strong style={{ fontWeight: 900 }}>equipo de desarrollo</strong>.
+                    </p>
+                  </div>
+                </div>
               </Modal>
 
               {/* ===== Modal: Form ===== */}
@@ -1209,7 +1560,13 @@ export default function AperturaDetalle() {
               </Modal>
 
               {/* ===== Modal: RF (galería) ===== */}
-              <Modal open={rfOpen} onClose={() => setRfOpen(false)} title="Registro Fotográfico · Fotos" maxWidth={900}>
+              <Modal
+                open={rfOpen}
+                onClose={() => setRfOpen(false)}
+                title="Registro Fotográfico · Fotos"
+                maxWidth={900}
+                footer={false}
+              >
                 <div style={ui.cardBody}>
                   {rfUrls.length === 0 ? (
                     <div style={ui.emptyMini}>
@@ -1217,29 +1574,51 @@ export default function AperturaDetalle() {
                       <div style={ui.emptyMiniText}>No hay fotos guardadas en el registro fotográfico.</div>
                     </div>
                   ) : (
-                    <div style={ui.photoGrid}>
-                      {rfUrls.map((url) => (
+                    <>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          alignItems: "center",
+                          gap: 10,
+                          flexWrap: "wrap",
+                          marginBottom: 2,
+                        }}
+                      >
                         <button
-                          key={url}
                           type="button"
-                          style={ui.photoThumbBtn}
-                          onClick={() => {
-                            setPhotoViewerUrl(url);
-                            setPhotoViewerOpen(true);
+                          onClick={() => void downloadAllRfPhotos()}
+                          disabled={rfDownloadAllBusy}
+                          style={{
+                            ...ui.btnGhost,
+                            ...(rfDownloadAllBusy ? ui.btnDisabled : {}),
                           }}
-                          title="Ver foto"
+                          title="Descargar todas las fotos en un ZIP (carpeta con el nombre de la apertura)"
                         >
-                          <img src={url} alt="RF" style={ui.photoThumbImg} />
+                          <span style={ui.btnInlineIcon}>
+                            <Download size={16} strokeWidth={2.2} />
+                            {rfDownloadAllBusy ? "Generando ZIP…" : "Descargar todas"}
+                          </span>
                         </button>
-                      ))}
-                    </div>
+                      </div>
+                      <div style={ui.photoGrid}>
+                        {rfUrls.map((url, idx) => (
+                          <button
+                            key={`${idx}-${url}`}
+                            type="button"
+                            style={ui.photoThumbBtn}
+                            onClick={() => {
+                              setPhotoViewerIndex(idx);
+                              setPhotoViewerOpen(true);
+                            }}
+                            title="Ver foto"
+                          >
+                            <img src={url} alt="RF" style={ui.photoThumbImg} />
+                          </button>
+                        ))}
+                      </div>
+                    </>
                   )}
-
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-                    <button type="button" onClick={() => setRfOpen(false)} style={ui.btnPrimary}>
-                      Cerrar
-                    </button>
-                  </div>
                 </div>
               </Modal>
 
@@ -1247,18 +1626,101 @@ export default function AperturaDetalle() {
               <Modal
                 open={photoViewerOpen}
                 onClose={() => setPhotoViewerOpen(false)}
-                title="Foto"
+                title={
+                  rfUrls.length > 1 ? `Foto · ${photoViewerSafeIndex + 1} / ${rfUrls.length}` : "Foto"
+                }
                 maxWidth={980}
                 tone="viewer"
                 footer={
-                  <button type="button" onClick={() => setPhotoViewerOpen(false)} style={ui.btnPrimary}>
-                    Cerrar
-                  </button>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 10,
+                      justifyContent: "flex-end",
+                      alignItems: "center",
+                      width: "100%",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => void enterPhotoFullscreen()}
+                      style={{ ...ui.btnGhost, ...(!photoViewerCurrentUrl ? ui.btnDisabled : {}) }}
+                      disabled={!photoViewerCurrentUrl}
+                      title="Ver en pantalla completa"
+                    >
+                      <span style={ui.btnInlineIcon}>
+                        <Maximize2 size={16} strokeWidth={2.2} />
+                        Ver foto
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void downloadCurrentPhoto()}
+                      style={{ ...ui.btnGhost, ...(!photoViewerCurrentUrl ? ui.btnDisabled : {}) }}
+                      disabled={!photoViewerCurrentUrl}
+                      title="Descargar esta foto"
+                    >
+                      <span style={ui.btnInlineIcon}>
+                        <Download size={16} strokeWidth={2.2} />
+                        Descargar
+                      </span>
+                    </button>
+                    <button type="button" onClick={() => setPhotoViewerOpen(false)} style={ui.btnPrimary}>
+                      Cerrar
+                    </button>
+                  </div>
                 }
               >
-                {photoViewerUrl ? (
-                  <div style={ui.viewerBox}>
-                    <img src={photoViewerUrl} alt="Foto RF" style={ui.viewerImg} />
+                {photoViewerCurrentUrl ? (
+                  <div style={ui.viewerAlbumWrap}>
+                    <button
+                      type="button"
+                      style={{
+                        ...ui.viewerNavBtn,
+                        ...(photoViewerSafeIndex <= 0 ? ui.viewerNavBtnDisabled : {}),
+                      }}
+                      disabled={photoViewerSafeIndex <= 0}
+                      onClick={() =>
+                        setPhotoViewerIndex((i) => {
+                          const max = rfUrls.length - 1;
+                          const cur = Math.min(Math.max(0, i), max);
+                          return Math.max(0, cur - 1);
+                        })
+                      }
+                      title="Foto anterior"
+                      aria-label="Foto anterior"
+                    >
+                      <ChevronLeft size={24} strokeWidth={2.25} />
+                    </button>
+                    <div style={ui.viewerAlbumMain}>
+                      <div
+                        ref={photoViewerFullRef}
+                        className="photo-rf-fs-root"
+                        style={ui.viewerBox}
+                      >
+                        <img src={photoViewerCurrentUrl} alt="Foto RF" style={ui.viewerImg} />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      style={{
+                        ...ui.viewerNavBtn,
+                        ...(photoViewerSafeIndex >= rfUrls.length - 1 ? ui.viewerNavBtnDisabled : {}),
+                      }}
+                      disabled={photoViewerSafeIndex >= rfUrls.length - 1}
+                      onClick={() =>
+                        setPhotoViewerIndex((i) => {
+                          const max = rfUrls.length - 1;
+                          const cur = Math.min(Math.max(0, i), max);
+                          return Math.min(max, cur + 1);
+                        })
+                      }
+                      title="Foto siguiente"
+                      aria-label="Foto siguiente"
+                    >
+                      <ChevronRight size={24} strokeWidth={2.25} />
+                    </button>
                   </div>
                 ) : (
                   <div style={ui.emptyMini}>
@@ -1590,6 +2052,80 @@ const ui = {
   emptyMiniTitle: { fontWeight: 980, color: "#0F172A" },
   emptyMiniText: { color: SLATE, fontWeight: 650, marginTop: 6, fontSize: 13 },
 
+  restrictedModalIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    border: "1px solid rgba(251, 146, 60, 0.35)",
+    background: "linear-gradient(180deg, #FFF7ED 0%, #FFEDD5 100%)",
+    display: "grid",
+    placeItems: "center",
+    boxShadow: "0 10px 24px rgba(234, 88, 12, 0.08)",
+  },
+  restrictedModalLead: {
+    margin: 0,
+    fontSize: 14,
+    lineHeight: 1.55,
+    color: SLATE,
+    fontWeight: 650,
+    maxWidth: 400,
+    justifySelf: "center",
+  },
+  restrictedModalScope: {
+    padding: "12px 14px",
+    borderRadius: 16,
+    border: "1px solid #E7E9F2",
+    background: "#FBFCFF",
+    display: "grid",
+    gap: 0,
+  },
+  restrictedModalRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "4px 0",
+  },
+  restrictedModalRowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    border: "1px solid #E7E9F2",
+    background: "#fff",
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+  },
+  restrictedModalRowTitle: { fontWeight: 900, fontSize: 13, color: "#0F172A", letterSpacing: 0.01 },
+  restrictedModalRowHint: { marginTop: 2, fontSize: 12, color: SLATE, fontWeight: 650 },
+  restrictedModalSep: { height: 1, background: "rgba(231,233,242,0.95)", margin: "6px 0" },
+
+  restrictedModalCallout: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: "12px 14px",
+    borderRadius: 16,
+    background: ACCENT_SOFT,
+    border: "1px solid rgba(8,159,138,0.22)",
+  },
+  restrictedModalCalloutIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    background: "#fff",
+    border: "1px solid rgba(8,159,138,0.2)",
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+  },
+  restrictedModalCalloutText: {
+    margin: 0,
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: "#0F172A",
+    fontWeight: 650,
+  },
+
   fotoPreview: {
     display: "flex",
     alignItems: "center",
@@ -1650,6 +2186,7 @@ const ui = {
   iconBtn: {
     width: 38,
     height: 38,
+    padding: 0,
     borderRadius: 12,
     border: "1px solid #E7E9F2",
     background: "#F8FAFC",
@@ -1729,6 +2266,47 @@ const ui = {
     padding: 10,
   },
   viewerImg: { width: "100%", height: "60vh", objectFit: "contain", borderRadius: 12 },
+  /** Factura: altura flexible para evitar doble scroll en el modal */
+  viewerFacturaImg: {
+    width: "100%",
+    height: "auto",
+    maxHeight: "min(65vh, 780px)",
+    objectFit: "contain",
+    borderRadius: 12,
+    display: "block",
+  },
+
+  viewerAlbumWrap: {
+    display: "flex",
+    alignItems: "stretch",
+    gap: 10,
+    width: "100%",
+  },
+  viewerAlbumMain: {
+    flex: 1,
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewerNavBtn: {
+    width: 44,
+    height: 44,
+    padding: 0,
+    flexShrink: 0,
+    alignSelf: "center",
+    borderRadius: 14,
+    border: "1px solid #E7E9F2",
+    background: "#F8FAFC",
+    color: "#475569",
+    cursor: "pointer",
+    display: "grid",
+    placeItems: "center",
+  },
+  viewerNavBtnDisabled: {
+    opacity: 0.4,
+    cursor: "not-allowed",
+  },
 
   // Taskbar
   taskbar: {
