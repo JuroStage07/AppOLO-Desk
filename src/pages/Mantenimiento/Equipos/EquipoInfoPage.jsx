@@ -14,13 +14,13 @@ import {
   limit,
   getDocs,
 } from "firebase/firestore";
-import { db } from "../../firebase";
-import { AuthCtx } from "../../auth/AuthProvider";
+import { db } from "../../../firebase";
+import { AuthCtx } from "../../../auth/AuthProvider";
 import {
   isEquipoInScope,
   isInUserScope,
   normalizeScopeValue,
-} from "../../utils/dataScope";
+} from "../../../utils/dataScope";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -31,9 +31,9 @@ import {
   Pencil,
 } from "lucide-react";
 
-import ApiladorPng from "../../assets/equipos/apilador_icon.png";
-import CarretillaPng from "../../assets/equipos/carretilla_icon.png";
-import MontacargasPng from "../../assets/equipos/montacargas_icon.png";
+import ApiladorPng from "../../../assets/equipos/apilador_icon.png";
+import CarretillaPng from "../../../assets/equipos/carretilla_icon.png";
+import MontacargasPng from "../../../assets/equipos/montacargas_icon.png";
 
 const ACCENT = "#089F8A";
 

@@ -3,13 +3,13 @@ import { onSnapshot, collection, query, where } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 
-import { db, auth } from "../../firebase";
-import { AuthCtx } from "../../auth/AuthProvider";
+import { db, auth } from "../../../firebase";
+import { AuthCtx } from "../../../auth/AuthProvider";
 import {
   registrarEntradaPorCedula,
   registrarSalidaPorCedula,
-} from "../../services/controlTerceros";
-import { filterByUserScope } from "../../utils/dataScope";
+} from "../../../services/controlTerceros";
+import { filterByUserScope } from "../../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 

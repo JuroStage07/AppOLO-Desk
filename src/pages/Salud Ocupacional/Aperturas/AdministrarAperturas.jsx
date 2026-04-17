@@ -10,11 +10,11 @@ import {
   LogOut,
   User,
 } from "lucide-react";
-import { auth } from "../../firebase";
+import { auth } from "../../../firebase";
 
-import imgProceso from "../../assets/aperturas.png";
-import imgFinalizadas from "../../assets/revisionEquipos.png";
-import imgRechazadas from "../../assets/ingresoTerceros.png";
+import imgProceso from "../../../assets/aperturas.png";
+import imgFinalizadas from "../../../assets/revisionEquipos.png";
+import imgRechazadas from "../../../assets/ingresoTerceros.png";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";

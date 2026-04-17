@@ -20,11 +20,11 @@ import {
   SlidersHorizontal,
   User,
 } from "lucide-react";
-import { auth } from "../../firebase";
-import useIsMobile from "../../hooks/useIsMobile";
-import { AuthCtx } from "../../auth/AuthProvider";
+import { auth } from "../../../firebase";
+import useIsMobile from "../../../hooks/useIsMobile";
+import { AuthCtx } from "../../../auth/AuthProvider";
 
-import { listenAperturasFinalizadasGlobal } from "../../services/aperturas";
+import { listenAperturasFinalizadasGlobal } from "../../../services/aperturas";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";

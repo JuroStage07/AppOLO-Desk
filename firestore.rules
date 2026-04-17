@@ -62,6 +62,79 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // =========================
+    // Control de marcas (ControlMarcas.jsx)
+    // controlMarcas/{YYYY-MM-DD} + subcolección marcas
+    // =========================
+    match /controlMarcas/{dayId} {
+      allow get: if authed();
+
+      // fecha debe coincidir con el id del doc (YYYY-MM-DD). No exigir createdAt == resource:
+      // cada setDoc manda serverTimestamp() nuevos y nunca serían iguales al doc anterior.
+      allow create: if authed()
+        && request.resource.data.keys().hasOnly(['fecha', 'createdAt', 'updatedAt'])
+        && request.resource.data.fecha is string
+        && request.resource.data.fecha == dayId
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+
+      allow update: if authed()
+        && request.resource.data.keys().hasAll(['fecha', 'createdAt', 'updatedAt'])
+        && request.resource.data.fecha is string
+        && request.resource.data.fecha == dayId
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.fecha == resource.data.fecha;
+
+      allow delete: if false;
+
+      match /marcas/{marcaId} {
+        allow get, list: if authed();
+
+        allow create: if authed()
+          && request.resource.data.keys().hasOnly([
+            'usuarioId',
+            'cedula',
+            'nombre',
+            'empresa',
+            'company',
+            'motivo',
+            'tenantId',
+            'tipo',
+            'createdAt',
+            'fecha',
+            'horaTexto'
+          ])
+          && request.resource.data.usuarioId is string
+          && request.resource.data.cedula is string
+          && request.resource.data.nombre is string
+          && request.resource.data.empresa is string
+          && request.resource.data.company is string
+          && request.resource.data.motivo is string
+          && request.resource.data.tenantId is string
+          && request.resource.data.tipo is string
+          && request.resource.data.tipo in ['entrada', 'salida']
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.fecha is string
+          && request.resource.data.horaTexto is string;
+
+        allow update, delete: if false;
+      }
+    }
+
+    // --- usuariosTerceros (ControlMarcas busca por cédula) ---
+    // En tu rules completo, si `allow get, list: if canSaludOcupacional();` bloquea a quienes no
+    // tienen permiso salud, ampliá a (misma empresa/tenant que el perfil):
+    //   allow get, list: if canSaludOcupacional()
+    //     || (authed() && userExists(request.auth.uid) && sameTenantCompanyData(resource.data));
+
     // Otras colecciones: agregá acá tus match existentes o fusioná este archivo con tu rules actual en la consola.
+    //
+    // OT / Servicios generales (`solicitudesOT`): si en consola tenés
+    //   allow create: if canSolicitudesOT() && ...
+    // reemplazá solo el predicado de create por
+    //   allow create: if authed() && ...
+    // así cualquier usuario con sesión puede crear la solicitud; dejá get/list/update/delete con
+    // canSolicitudesOT() si solo mantenimiento debe gestionar el resto.
   }
 }

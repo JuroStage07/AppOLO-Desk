@@ -20,19 +20,20 @@ import DespachoFinalizadosPage from "./pages/Despacho/DespachoFinalizadosPage";
 
 //SaludOcupacional
 import SaludOcupacional from "./pages/Salud Ocupacional/SaludOcupacional";
-import ControlTercerosManual from "./pages/Salud Ocupacional/ControlTercerosManual";
-import Visados from "./pages/Salud Ocupacional/Visados";
-import NuevoVisado from "./pages/Salud Ocupacional/NuevoVisado";
-import AdministrarVisados from "./pages/Salud Ocupacional/AdministrarVisados";
-import AdministrarAperturas from "./pages/Salud Ocupacional/AdministrarAperturas";
-import AperturasFinalizadas from "./pages/Salud Ocupacional/AperturasFinalizadas";
-import AperturaDetalle from "./pages/Salud Ocupacional/AperturaDetalle";
-import AperturasRechazadas from "./pages/Salud Ocupacional/AperturasRechazdas";
+import ControlTercerosManual from "./pages/Salud Ocupacional/ControlTerceros/ControlTercerosManual";
+import ControlMarcas from "./pages/Salud Ocupacional/ControlMarcas/ControlMarcas";
+import Visados from "./pages/Salud Ocupacional/Visados/Visados";
+import NuevoVisado from "./pages/Salud Ocupacional/Visados/NuevoVisado";
+import AdministrarVisados from "./pages/Salud Ocupacional/Visados/AdministrarVisados";
+import AdministrarAperturas from "./pages/Salud Ocupacional/Aperturas/AdministrarAperturas";
+import AperturasFinalizadas from "./pages/Salud Ocupacional/Aperturas/AperturasFinalizadas";
+import AperturaDetalle from "./pages/Salud Ocupacional/Aperturas/AperturaDetalle";
+import AperturasRechazadas from "./pages/Salud Ocupacional/Aperturas/AperturasRechazdas";
 import MetricaSaludOcupacional from "./pages/Salud Ocupacional/MetricaSaludOcupacional";
 
 //Mantenimiento
-import PanelEquiposMantenimiento from "./pages/Mantenimiento/PanelEquiposMantenimiento";
-import EquipoInfoPage from "./pages/Mantenimiento/EquipoInfoPage";
+import PanelEquiposMantenimiento from "./pages/Mantenimiento/Equipos/PanelEquiposMantenimiento";
+import EquipoInfoPage from "./pages/Mantenimiento/Equipos/EquipoInfoPage";
 import Mantenimiento from "./pages/Mantenimiento/Mantenimiento";
 import OTsPage from "./pages/Mantenimiento/OTs/OTsPage";
 import OTsHubMantenimiento from "./pages/Mantenimiento/OTs/OTsHubMantenimiento";
@@ -164,6 +165,15 @@ export default function App() {
             element={
               <PrivateRoute>
                 <ControlTercerosManual />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/salud/control-marcas"
+            element={
+              <PrivateRoute>
+                <ControlMarcas />
               </PrivateRoute>
             }
           />

@@ -31,18 +31,15 @@ import {
 
 import JSZip from "jszip";
 
-import { auth, db } from "../../firebase";
-import { AuthCtx } from "../../auth/AuthProvider";
-import { listenApertura } from "../../services/aperturas";
-import { isInUserScope } from "../../utils/dataScope";
+import { auth, db } from "../../../firebase";
+import { AuthCtx } from "../../../auth/AuthProvider";
+import { listenApertura } from "../../../services/aperturas";
+import { isInUserScope } from "../../../utils/dataScope";
+import { isEpaRestrictedUser } from "../../../config/epaOnlyUids";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
 const SLATE = "#64748B";
-
-/** Sin acceso a ver formulario / RS en detalle (solo lectura de esas secciones vía esta pantalla). */
-const RESTRICTED_FORM_RS_VIEW_UID = "kN48Rzyk5BcFOwKxAohqR0uY0tc2";
-const RESTRICTED_FORM_RS_VIEW_EMAIL = "epa@user.com";
 
 /* ===================== Helpers RS (igual RN) ===================== */
 const RS_KEY_BY_FORM = {
@@ -443,9 +440,9 @@ function orderedFormEntries(formData, tipoFormulario) {
 export default function AperturaDetalle() {
   const nav = useNavigate();
   const { id } = useParams(); // /salud/aperturas/detalle/:id
-  const user = auth.currentUser;
   const authCtx = useContext(AuthCtx);
-  const profile = authCtx?.profile || {};
+  const { profile = {}, epaAdmin, user: ctxUser } = authCtx || {};
+  const user = ctxUser ?? auth.currentUser;
 
   const [busyLogout, setBusyLogout] = useState(false);
 
@@ -468,9 +465,7 @@ export default function AperturaDetalle() {
   const [rfDownloadAllBusy, setRfDownloadAllBusy] = useState(false);
   const [restrictedFormRsOpen, setRestrictedFormRsOpen] = useState(false);
 
-  const isRestrictedFormRsView =
-    user?.uid === RESTRICTED_FORM_RS_VIEW_UID ||
-    (user?.email && user.email.toLowerCase() === RESTRICTED_FORM_RS_VIEW_EMAIL);
+  const isRestrictedFormRsView = isEpaRestrictedUser({ epaAdmin, profile, user });
 
   const formKey = FORM_KEY_BY_FORM[apertura?.tipoFormulario] || null;
 
@@ -1445,17 +1440,29 @@ export default function AperturaDetalle() {
               <Modal
                 open={restrictedFormRsOpen}
                 onClose={() => setRestrictedFormRsOpen(false)}
-                title="Acceso restringido"
-                subtitle="Formulario y revisión de seguridad"
-                maxWidth={460}
+                title="Vistas no habilitadas"
+                subtitle="Perfil EPA (solo lectura de expediente)"
+                maxWidth={480}
+                footer={
+                  <button
+                    type="button"
+                    onClick={() => setRestrictedFormRsOpen(false)}
+                    style={ui.restrictedModalPrimaryBtn}
+                  >
+                    Entendido
+                  </button>
+                }
               >
                 <div style={{ display: "grid", gap: 14 }}>
-                  <div style={{ display: "grid", placeItems: "center", gap: 12, textAlign: "center" }}>
+                  <div style={ui.restrictedModalHero}>
                     <div style={ui.restrictedModalIcon} aria-hidden>
                       <ShieldAlert size={30} strokeWidth={2.1} color="#C2410C" />
                     </div>
                     <p style={ui.restrictedModalLead}>
-                      No podés abrir el contenido del formulario ni de la revisión de seguridad desde esta pantalla.
+                      Tu perfil puede consultar el expediente, pero{" "}
+                      <strong style={{ fontWeight: 900, color: "#0F172A" }}>no incluye</strong> las vistas de{" "}
+                      <strong style={{ fontWeight: 900, color: "#0F172A" }}>Formulario</strong> ni{" "}
+                      <strong style={{ fontWeight: 900, color: "#0F172A" }}>Revisión de seguridad (RS)</strong>.
                     </p>
                   </div>
 
@@ -1488,7 +1495,8 @@ export default function AperturaDetalle() {
                       <LifeBuoy size={20} strokeWidth={2.2} color={ACCENT} />
                     </div>
                     <p style={ui.restrictedModalCalloutText}>
-                      Si necesitás acceso, contactá al <strong style={{ fontWeight: 900 }}>equipo de desarrollo</strong>.
+                      Si necesitás estas vistas, contactá al <strong style={{ fontWeight: 900 }}>equipo de desarrollo</strong>{" "}
+                      o a <strong style={{ fontWeight: 900 }}>administración</strong>.
                     </p>
                   </div>
                 </div>
@@ -2052,6 +2060,18 @@ const ui = {
   emptyMiniTitle: { fontWeight: 980, color: "#0F172A" },
   emptyMiniText: { color: SLATE, fontWeight: 650, marginTop: 6, fontSize: 13 },
 
+  restrictedModalHero: {
+    display: "grid",
+    placeItems: "center",
+    gap: 12,
+    textAlign: "center",
+    padding: "16px 14px",
+    borderRadius: 18,
+    border: "1px solid rgba(251, 146, 60, 0.28)",
+    background:
+      "linear-gradient(135deg, rgba(255,247,237,0.95) 0%, rgba(248,250,252,0.98) 55%, rgba(241,245,249,0.95) 100%)",
+    boxShadow: "0 14px 36px rgba(15,23,42,0.06)",
+  },
   restrictedModalIcon: {
     width: 56,
     height: 56,
@@ -2068,8 +2088,20 @@ const ui = {
     lineHeight: 1.55,
     color: SLATE,
     fontWeight: 650,
-    maxWidth: 400,
+    maxWidth: 420,
     justifySelf: "center",
+  },
+  restrictedModalPrimaryBtn: {
+    width: "100%",
+    borderRadius: 14,
+    border: `1px solid ${ACCENT}`,
+    background: ACCENT,
+    color: "#fff",
+    fontWeight: 950,
+    fontSize: 14,
+    padding: "12px 16px",
+    cursor: "pointer",
+    boxShadow: "0 10px 24px rgba(8, 159, 138, 0.22)",
   },
   restrictedModalScope: {
     padding: "12px 14px",

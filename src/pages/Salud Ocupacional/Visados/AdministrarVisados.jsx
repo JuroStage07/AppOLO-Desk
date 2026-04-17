@@ -11,14 +11,14 @@ import {
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { db, storage } from "../../firebase";
+import { db, storage } from "../../../firebase";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import LogoPng from "../../assets/Logo.png";
+import LogoPng from "../../../assets/Logo.png";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAuth } from "firebase/auth";
-import { AuthCtx } from "../../auth/AuthProvider";
-import { filterByUserScope } from "../../utils/dataScope";
+import { AuthCtx } from "../../../auth/AuthProvider";
+import { filterByUserScope } from "../../../utils/dataScope";
 
 // Convierte un import de imagen (url) a DataURL para jsPDF
 async function loadImageAsDataURL(src) {

@@ -22,9 +22,9 @@ import {
   User,
 } from "lucide-react";
 
-import { auth, db } from "../../firebase";
-import { AuthCtx } from "../../auth/AuthProvider";
-import { filterByUserScope } from "../../utils/dataScope";
+import { auth, db } from "../../../firebase";
+import { AuthCtx } from "../../../auth/AuthProvider";
+import { filterByUserScope } from "../../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";

@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
-import { auth } from "../../firebase";
+import { auth } from "../../../firebase";
 import {
   addDoc,
   collection,
@@ -11,9 +11,9 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { db } from "../../firebase";
-import { AuthCtx } from "../../auth/AuthProvider";
-import { isInUserScope } from "../../utils/dataScope";
+import { db } from "../../../firebase";
+import { AuthCtx } from "../../../auth/AuthProvider";
+import { isInUserScope } from "../../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 

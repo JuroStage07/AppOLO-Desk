@@ -9,10 +9,10 @@ import {
   LogOut,
   User,
 } from "lucide-react";
-import { auth } from "../../firebase";
+import { auth } from "../../../firebase";
 
-import imgGenVisado from "../../assets/genVisado.png";
-import imgAdminVisado from "../../assets/adminVisado.png";
+import imgGenVisado from "../../../assets/genVisado.png";
+import imgAdminVisado from "../../../assets/adminVisado.png";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";

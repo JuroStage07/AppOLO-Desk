@@ -9,14 +9,14 @@ import {
   LayoutGrid,
   RotateCcw,
 } from "lucide-react";
-import { db } from "../../firebase";
-import { AuthCtx } from "../../auth/AuthProvider";
-import { filterEquiposByScope } from "../../utils/dataScope";
+import { db } from "../../../firebase";
+import { AuthCtx } from "../../../auth/AuthProvider";
+import { filterEquiposByScope } from "../../../utils/dataScope";
 
 // 👇 Ajustá rutas reales de tus imágenes
-import ApiladorPng from "../../assets/equipos/apilador_icon.png";
-import CarretillaPng from "../../assets/equipos/carretilla_icon.png";
-import MontacargasPng from "../../assets/equipos/montacargas_icon.png";
+import ApiladorPng from "../../../assets/equipos/apilador_icon.png";
+import CarretillaPng from "../../../assets/equipos/carretilla_icon.png";
+import MontacargasPng from "../../../assets/equipos/montacargas_icon.png";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";

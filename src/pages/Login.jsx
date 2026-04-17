@@ -7,6 +7,7 @@ import {
   GoogleAuthProvider,
   fetchSignInMethodsForEmail,
   linkWithPopup,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -50,6 +51,13 @@ export default function Login() {
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [linkEmail, setLinkEmail] = useState("");
   const [linkPass, setLinkPass] = useState("");
+
+  // modal olvido contraseña
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [forgotErr, setForgotErr] = useState("");
+  const [forgotOk, setForgotOk] = useState("");
 
   const can = useMemo(() => {
     return !!String(email).trim() && !!String(pass).trim() && !busy;
@@ -193,6 +201,57 @@ export default function Login() {
     setErr("");
   };
 
+  const openForgot = () => {
+    setForgotErr("");
+    setForgotOk("");
+    setForgotEmail(String(email || "").trim());
+    setForgotOpen(true);
+  };
+
+  const closeForgot = () => {
+    setForgotOpen(false);
+    setForgotBusy(false);
+    setForgotErr("");
+    setForgotOk("");
+  };
+
+  const onForgotSubmit = async () => {
+    const mail = String(forgotEmail || "").trim().toLowerCase();
+    setForgotErr("");
+    setForgotOk("");
+
+    if (!mail || !mail.includes("@") || !mail.includes(".")) {
+      setForgotErr("Ingresá un correo válido.");
+      return;
+    }
+
+    setForgotBusy(true);
+    try {
+      const methods = await fetchSignInMethodsForEmail(auth, mail);
+      // Si el usuario existe pero entra con Google (u otro provider), no hay contraseña para resetear.
+      if (methods?.length && !methods.includes("password")) {
+        setForgotErr("Este correo no usa contraseña. Ingresá con Google (u otro método asociado).");
+        return;
+      }
+
+      await sendPasswordResetEmail(auth, mail);
+      // Mensaje genérico (no enumerar usuarios)
+      setForgotOk("Si el correo existe en el sistema, te enviamos un link para cambiar la contraseña. Revisá también la carpeta de Spam.");
+    } catch (e) {
+      console.log(e);
+      if (e?.code === "auth/operation-not-allowed") {
+        setForgotErr("La recuperación por correo no está habilitada en Firebase (Email/Password).");
+      } else if (e?.code === "auth/invalid-email") {
+        setForgotErr("Ingresá un correo válido.");
+      } else {
+        // Incluye auth/user-not-found (mensaje genérico por seguridad)
+        setForgotOk("Si el correo existe en el sistema, te enviamos un link para cambiar la contraseña. Revisá también la carpeta de Spam.");
+      }
+    } finally {
+      setForgotBusy(false);
+    }
+  };
+
   return (
     <div style={{ ...styles.page, ...(isMobile ? styles.pageMobile : {}) }}>
       <div style={{ ...styles.card, ...(isMobile ? styles.cardMobile : {}) }}>
@@ -235,6 +294,15 @@ export default function Login() {
               onBlur={onBlurInput}
             />
           </div>
+
+          <button
+            type="button"
+            onClick={openForgot}
+            disabled={busy}
+            style={styles.forgotBtn}
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
 
           {err && <div style={styles.errBox}>{err}</div>}
 
@@ -308,6 +376,48 @@ export default function Login() {
                 disabled={!linkPass || busy}
               >
                 {busy ? "Vinculando..." : "Vincular"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Modal forgot password */}
+      {forgotOpen && (
+        <div style={modal.backdrop} onClick={closeForgot}>
+          <div style={modal.card} onClick={(e) => e.stopPropagation()}>
+            <div style={modal.title}>Recuperar contraseña</div>
+            <div style={modal.text}>
+              Ingresá tu correo. Si existe un usuario, te enviaremos el link para restablecer la contraseña.
+            </div>
+
+            <input
+              type="email"
+              placeholder="correo@empresa.com"
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+              style={modal.input}
+              disabled={forgotBusy}
+              autoComplete="email"
+            />
+
+            {!!forgotErr && <div style={modal.err}>{forgotErr}</div>}
+            {!!forgotOk && <div style={modal.ok}>{forgotOk}</div>}
+
+            <div style={modal.actions}>
+              <button style={modal.btnGhost} onClick={closeForgot} disabled={forgotBusy}>
+                Cerrar
+              </button>
+
+              <button
+                style={{
+                  ...modal.btnPrimary,
+                  ...(!forgotBusy && String(forgotEmail).trim() ? {} : { opacity: 0.6, cursor: "not-allowed" }),
+                }}
+                onClick={onForgotSubmit}
+                disabled={forgotBusy || !String(forgotEmail).trim()}
+              >
+                {forgotBusy ? "Enviando..." : "Enviar correo"}
               </button>
             </div>
           </div>
@@ -442,6 +552,18 @@ const styles = {
     color: "#12131a",
   },
 
+  forgotBtn: {
+    marginTop: -2,
+    border: "none",
+    background: "transparent",
+    color: ACCENT,
+    fontWeight: 950,
+    fontSize: 12,
+    cursor: "pointer",
+    textAlign: "left",
+    padding: 0,
+  },
+
   footerHint: {
     marginTop: 12,
     borderRadius: 14,
@@ -495,6 +617,26 @@ const modal = {
     fontSize: 13,
     color: "#5a6072",
     fontWeight: 650,
+    lineHeight: 1.35,
+  },
+  err: {
+    borderRadius: 12,
+    border: "1px solid rgba(220,38,38,0.25)",
+    background: "rgba(220,38,38,0.06)",
+    padding: 10,
+    fontWeight: 800,
+    color: "#B91C1C",
+    fontSize: 12,
+    lineHeight: 1.35,
+  },
+  ok: {
+    borderRadius: 12,
+    border: "1px solid rgba(22,163,74,0.25)",
+    background: "rgba(22,163,74,0.06)",
+    padding: 10,
+    fontWeight: 800,
+    color: "#166534",
+    fontSize: 12,
     lineHeight: 1.35,
   },
   input: {

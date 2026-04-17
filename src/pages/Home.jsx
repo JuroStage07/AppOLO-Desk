@@ -19,6 +19,7 @@ import imgMantenimiento from "../assets/mantenimiento.png";
 import imgRecepcion from "../assets/recepcion.png";
 import imgServiciosGenerales from "../assets/serviciosGenerales.png";
 import imgEpa from "../assets/epalogo.jpeg";
+import { isEpaRestrictedUser } from "../config/epaOnlyUids";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -26,8 +27,8 @@ const SLATE = "#64748B";
 
 export default function Home() {
   const nav = useNavigate();
-  const { profile } = useContext(AuthCtx);
-  const user = auth.currentUser;
+  const { profile, epaAdmin, user: ctxUser } = useContext(AuthCtx);
+  const user = ctxUser ?? auth.currentUser;
   const [hovered, setHovered] = useState(null);
   const [busyLogout, setBusyLogout] = useState(false);
 
@@ -68,7 +69,7 @@ export default function Home() {
         path: "/despacho",
         img: imgDespacho,
         tag: "Operación",
-        blocked: true,
+        blocked: false,
         blockedDesc: "Acceso al módulo deshabilitado temporalmente.",
       },
       {
@@ -134,11 +135,12 @@ export default function Home() {
   );
 
   const areas = useMemo(() => {
-    if (profile?.epaAdmin === true) {
+    // Solo mostrar EPA si epaAdmin + uid en whitelist (ver isEpaRestrictedUser)
+    if (isEpaRestrictedUser({ epaAdmin, profile, user })) {
       return allAreas.filter((a) => a.key === "epa");
     }
     return allAreas;
-  }, [allAreas, profile?.epaAdmin]);
+  }, [allAreas, epaAdmin, profile, user]);
 
   return (
     <div style={ui.shell}>

@@ -95,8 +95,8 @@ export default function SaludOcupacional() {
       {
         key: "terceros",
         title: "Ingreso de terceros",
-        desc: "Registrar entradas y salidas por cédula",
-        path: "/salud/terceros",
+        desc: "Control de marcas: entrada y salida automática por cédula",
+        path: "/salud/control-marcas",
         tone: "accent",
         img: imgTerceros,
         tag: "Prioritario",
@@ -230,11 +230,11 @@ export default function SaludOcupacional() {
                 <div style={ui.quickBtns}>
                   <button
                     type="button"
-                    onClick={() => go("/salud/terceros")}
+                    onClick={() => go("/salud/control-marcas")}
                     style={{ ...ui.quickBtn, ...ui.quickBtnAccent }}
                     disabled={busyLogout}
                   >
-                    Control terceros
+                    Control de marcas
                   </button>
                   <button
                     type="button"

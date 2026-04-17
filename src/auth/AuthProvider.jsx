@@ -64,7 +64,9 @@ export default function AuthProvider({ children }) {
       profile,                 // ✅ tu doc profiles/{uid}
       permisos: profile?.permisos || {},  // ✅ map permisos
       role: profile?.role || null,
-      epaAdmin: profile?.epaAdmin === true,
+      epaAdmin:
+        profile?.epaAdmin === true ||
+        String(profile?.epaAdmin || "").toLowerCase() === "true",
       loading,
       error,
     }),
