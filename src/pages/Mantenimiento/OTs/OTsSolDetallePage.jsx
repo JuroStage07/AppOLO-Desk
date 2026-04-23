@@ -298,6 +298,8 @@ export default function OTsDetallePage() {
 
   const [ot, setOt] = useState(null);
   const [note, setNote] = useState("");
+  const [noteSaved, setNoteSaved] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -344,7 +346,9 @@ export default function OTsDetallePage() {
         }));
 
         setOt(normalized);
-        setNote(normalized?.note || "");
+        const n = String(normalized?.note || "");
+        setNote(n);
+        setNoteSaved(n);
         setTasks(normalized?.tasks || []);
         setSubtasks(subtareasData);
       } catch (err) {
@@ -416,9 +420,30 @@ export default function OTsDetallePage() {
     );
   };
 
-  const handleSave = () => {
-    console.log("Guardar cambios", { id, note });
-    // Acá después podés hacer updateDoc(...)
+  const noteDirty =
+    String(note ?? "").replace(/\r\n/g, "\n") !==
+    String(noteSaved ?? "").replace(/\r\n/g, "\n");
+
+  const handleSaveNote = async () => {
+    if (!id?.trim()) return;
+    if (readOnlyOt) return;
+    const next = String(note ?? "").replace(/\s+$/g, ""); // conserva saltos de línea, recorta espacios al final
+    try {
+      setSavingNote(true);
+      const ref = doc(db, "solicitudesOT", id);
+      await updateDoc(ref, {
+        notas: next,
+        updatedAt: serverTimestamp(),
+      });
+      setNote(next);
+      setNoteSaved(next);
+      setOt((prev) => (prev ? { ...prev, note: next } : prev));
+    } catch (err) {
+      console.error(err);
+      window.alert("No se pudo guardar la nota. Revisá permisos o intentá de nuevo.");
+    } finally {
+      setSavingNote(false);
+    }
   };
 
   const readOnlyOt = ot?.estado === OT_STATE_FINALIZADA;
@@ -772,19 +797,6 @@ export default function OTsDetallePage() {
             <ArrowLeft size={16} />
             Volver
           </button>
-
-          <button
-            type="button"
-            onClick={handleSave}
-            style={{
-              ...ui.btnPrimary,
-              ...(readOnlyOt ? ui.btnPrimaryDisabled : {}),
-            }}
-            disabled={readOnlyOt}
-          >
-            <Save size={16} />
-            Guardar
-          </button>
         </div>
       </div>
 
@@ -886,6 +898,30 @@ export default function OTsDetallePage() {
                 rows={4}
                 readOnly={readOnlyOt}
               />
+
+              <div style={ui.noteActions}>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveNote()}
+                  style={{
+                    ...ui.noteSaveBtn,
+                    ...(readOnlyOt || !noteDirty || savingNote
+                      ? ui.noteSaveBtnDisabled
+                      : {}),
+                  }}
+                  disabled={readOnlyOt || !noteDirty || savingNote}
+                  title={
+                    readOnlyOt
+                      ? "La OT está finalizada (solo lectura)"
+                      : !noteDirty
+                        ? "No hay cambios para guardar"
+                        : "Guardar nota"
+                  }
+                >
+                  <Save size={16} />
+                  {savingNote ? "Guardando…" : "Guardar nota"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1799,6 +1835,29 @@ const ui = {
     borderRadius: 14,
     minHeight: 90,
     boxSizing: "border-box",
+  },
+  noteActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+  noteSaveBtn: {
+    borderRadius: 14,
+    border: `1px solid ${ACCENT}`,
+    background: ACCENT,
+    color: "#fff",
+    padding: "10px 12px",
+    cursor: "pointer",
+    fontWeight: 950,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 10,
+    boxShadow: "0 12px 24px rgba(8,159,138,0.18)",
+    fontFamily: "inherit",
+  },
+  noteSaveBtnDisabled: {
+    opacity: 0.55,
+    cursor: "not-allowed",
+    boxShadow: "none",
   },
   sectionHeaderBlock: {
     display: "grid",

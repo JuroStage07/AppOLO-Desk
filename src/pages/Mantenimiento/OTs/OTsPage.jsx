@@ -62,6 +62,63 @@ const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
 const BLUE = "#2563EB";
 const AMBER = "#F59E0B";
 const RED = "#FF4D73";
+const PRIORITY_HIGH = "Alta";
+const PRIORITY_MED = "Media";
+const PRIORITY_LOW = "Baja";
+
+function normalizeOtPriority(v) {
+  const s = String(v || "").trim().toLowerCase();
+  if (s === "alta") return PRIORITY_HIGH;
+  if (s === "media") return PRIORITY_MED;
+  if (s === "baja") return PRIORITY_LOW;
+  return "";
+}
+
+function priorityToneFromLabel(label) {
+  const p = normalizeOtPriority(label);
+  if (p === PRIORITY_HIGH) return "high";
+  if (p === PRIORITY_MED) return "med";
+  if (p === PRIORITY_LOW) return "low";
+  return "none";
+}
+
+function priorityColor(tone) {
+  if (tone === "high") return RED;
+  if (tone === "med") return AMBER;
+  if (tone === "low") return "#00DDB5";
+  return "#94A3B8";
+}
+
+function PriorityLevelChip({ text }) {
+  const tone = priorityToneFromLabel(text);
+  if (!tone || tone === "none") return null;
+  const c = priorityColor(tone);
+  return (
+    <span
+      style={{
+        ...ui.priorityLevelChip,
+        borderColor: `rgba(15,23,42,0.08)`,
+        boxShadow: `0 10px 20px rgba(15,23,42,0.06)`,
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 999,
+          background: c,
+          boxShadow: `0 0 0 5px ${tone === "high"
+            ? "rgba(255,77,115,0.14)"
+            : tone === "med"
+              ? "rgba(245,158,11,0.14)"
+              : "rgba(0,221,181,0.14)"}`,
+        }}
+      />
+      {text}
+    </span>
+  );
+}
 
 /** Estados persistidos en Firestore (colección solicitudesOT, campo OTState) */
 const OT_STATE_SOLICITADA = "Solicitada";
@@ -329,12 +386,17 @@ function mapSnapshotToPendingItem(
 ) {
   const { total, completed } = normalizeSubtaskStats(subtaskStats);
   const data = d.data();
+  const createdAtMs =
+    data?.createdAt?.toMillis?.() ??
+    (typeof data?.createdAt === "number" ? data.createdAt : 0) ??
+    0;
   return {
     id: d.id,
     type: "pending",
     checked: false,
     subtaskCount: total,
     subtaskCompletedCount: completed,
+    createdAtMs,
     priority:
       data.OTState === OT_STATE_SOLICITADA
         ? "SOLICITADA"
@@ -353,6 +415,7 @@ function mapSnapshotToPendingItem(
     descripcionOT: data.descripcionOT || "",
     estadoOT: data.OTState || OT_STATE_SOLICITADA,
     notas: data.notas || "",
+    prioridadOT: normalizeOtPriority(data.prioridadOT || data.prioridad || ""),
     responsableNombre: "",
     assigneeUids: Array.isArray(assigneeUids) ? assigneeUids : [],
   };
@@ -368,12 +431,17 @@ function mapSnapshotToSolicitudCardItem(
   const { total, completed } = normalizeSubtaskStats(subtaskStats);
   const data = d.data();
   const isProceso = phase === "proceso";
+  const createdAtMs =
+    data?.createdAt?.toMillis?.() ??
+    (typeof data?.createdAt === "number" ? data.createdAt : 0) ??
+    0;
   return {
     id: d.id,
     type: "solicitud",
     checked: false,
     subtaskCount: total,
     subtaskCompletedCount: completed,
+    createdAtMs,
     priority: isProceso ? "EN PROCESO" : "EN REVISIÓN",
     priorityTone: isProceso ? "proceso" : "revision",
     taskTitle: data.nombreOT || "Sin nombre OT",
@@ -389,6 +457,7 @@ function mapSnapshotToSolicitudCardItem(
     descripcionOT: data.descripcionOT || "",
     estadoOT: data.OTState || (isProceso ? OT_STATE_EN_PROCESO : OT_STATE_REVISION),
     notas: data.notas || "",
+    prioridadOT: normalizeOtPriority(data.prioridadOT || data.prioridad || ""),
     responsableNombre: responsablesDisplayFromFirestoreData(data),
     assigneeUids: Array.isArray(assigneeUids) ? assigneeUids : [],
   };
@@ -656,12 +725,15 @@ function PendingCard({
   const canMoveToNextColumn =
     columnIndex < totalColumns - 1 &&
     (columnIndex !== 1 || isProcesoOtSubtasksComplete(item));
+  const prTone = priorityToneFromLabel(item.prioridadOT);
+  const prColor = priorityColor(prTone);
 
   return (
     <div
       style={{
         ...ui.card,
         ...(dragEnabled ? ui.cardDraggable : {}),
+        ...(prTone !== "none" ? { borderColor: `rgba(15,23,42,0.12)` } : {}),
       }}
       draggable={dragEnabled}
       title={
@@ -695,7 +767,15 @@ function PendingCard({
         onBoardDragEnd?.();
       }}
     >
-      <div style={ui.cardTopAccent} />
+      <div
+        style={{
+          ...ui.cardTopAccent,
+          background:
+            prTone !== "none"
+              ? `linear-gradient(90deg, ${prColor} 0%, rgba(15,23,42,0) 100%)`
+              : ui.cardTopAccent.background,
+        }}
+      />
 
       <div style={ui.pendingHead}>
         <button
@@ -712,6 +792,7 @@ function PendingCard({
             text={item.priority || "PENDIENTE"}
             tone={item.priorityTone || "solicitada"}
           />
+          <PriorityLevelChip text={item.prioridadOT} />
           <SubtasksChip
             count={item.subtaskCount}
             onOpenList={
@@ -873,12 +954,26 @@ function OTCard({
   setOpenMenuId,
 }) {
   const menuOpen = openMenuId === item.id;
+  const prTone = priorityToneFromLabel(item.prioridadOT);
+  const prColor = priorityColor(prTone);
 
   return (
     <div style={ui.card}>
-      <div style={ui.cardTopAccent} />
+      <div
+        style={{
+          ...ui.cardTopAccent,
+          background:
+            prTone !== "none"
+              ? `linear-gradient(90deg, ${prColor} 0%, rgba(15,23,42,0) 100%)`
+              : ui.cardTopAccent.background,
+        }}
+      />
 
       <div style={ui.otCode}>{item.ot}</div>
+
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <PriorityLevelChip text={item.prioridadOT} />
+      </div>
 
       <div style={ui.statGrid}>
         <div style={ui.statBox}>
@@ -970,6 +1065,9 @@ function Column({
   assigneeFilterListLoading = false,
   filterAssigneeUid = "",
   onAssigneeFilterChange,
+  solicitanteFilterList = [],
+  filterSolicitanteValue = "",
+  onSolicitanteFilterChange,
   unfilteredCount = 0,
   isMobile = false,
   onRefreshBoard,
@@ -978,6 +1076,8 @@ function Column({
 }) {
   const isProceso = column.id === "proceso";
   const isRevision = column.id === "revision";
+  const isPendientes = column.id === "pendientes";
+  const showSolicitanteFilter = isProceso || isRevision;
   const showProcesoHint = isProceso && highlightProcesoDrop;
   const showRevisionHint = isRevision && highlightRevisionDrop;
 
@@ -1031,7 +1131,7 @@ function Column({
             style={ui.columnFilterLabel}
           >
             <Users size={12} strokeWidth={2.5} style={{ verticalAlign: "middle", marginRight: 4 }} />
-            Responsable
+            {isPendientes ? "Solicitante" : "Responsable"}
           </label>
           <select
             id={`ots-col-filter-${column.id}`}
@@ -1051,13 +1151,50 @@ function Column({
               <option key={r.uid} value={r.uid}>
                 {r.displayName}
                 {r.numeroFicha ? ` · Ficha ${r.numeroFicha}` : ""}
+                {typeof r.count === "number" ? ` (${r.count})` : ""}
               </option>
             ))}
           </select>
+
+          {showSolicitanteFilter ? (
+            <>
+              <label
+                htmlFor={`ots-col-filter-solicitante-${column.id}`}
+                style={ui.columnFilterLabel}
+              >
+                <Users
+                  size={12}
+                  strokeWidth={2.5}
+                  style={{ verticalAlign: "middle", marginRight: 4 }}
+                />
+                Solicitante
+              </label>
+              <select
+                id={`ots-col-filter-solicitante-${column.id}`}
+                value={String(filterSolicitanteValue || "")}
+                onChange={(e) => onSolicitanteFilterChange?.(e.target.value)}
+                style={{
+                  ...ui.columnFilterSelect,
+                  ...(isMobile ? ui.mColumnFilterSelect : {}),
+                }}
+                disabled={assigneeFilterListLoading}
+              >
+                <option value="">
+                  Todos
+                  {unfilteredCount > 0 ? ` (${unfilteredCount})` : ""}
+                </option>
+                {solicitanteFilterList.map((r) => (
+                  <option key={r.uid} value={r.uid}>
+                    {r.displayName}
+                    {r.numeroFicha ? ` · Ficha ${r.numeroFicha}` : ""}
+                    {typeof r.count === "number" ? ` (${r.count})` : ""}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
           {filterUsesResponsableNombre ? (
             <div style={ui.columnFilterHint}>
-              Lista: solo perfiles con <b>permiso de mantenimiento</b>. El filtro coincide con el
-              texto de <b>responsables asignados</b> en la OT (responsableNombre).
             </div>
           ) : null}
         </div>
@@ -2310,6 +2447,7 @@ function AssignResponsableModal({
   nombreOT,
   tenantId,
   company,
+  initialPriority,
 }) {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -2318,6 +2456,7 @@ function AssignResponsableModal({
   /** Orden de selección (uids). */
   const [selectedUids, setSelectedUids] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [priority, setPriority] = useState(PRIORITY_MED);
 
   useEffect(() => {
     if (!open) return;
@@ -2326,6 +2465,7 @@ function AssignResponsableModal({
     setLoadError("");
     setSelectedUids([]);
     setCandidates([]);
+    setPriority(normalizeOtPriority(initialPriority) || PRIORITY_MED);
 
     let cancelled = false;
 
@@ -2387,7 +2527,7 @@ function AssignResponsableModal({
     }));
     try {
       setSaving(true);
-      await onConfirm(solicitudId, responsables);
+      await onConfirm(solicitudId, responsables, priority);
       onClose();
     } catch (e) {
       console.error(e);
@@ -2441,6 +2581,44 @@ function AssignResponsableModal({
           <div style={{ fontSize: 12, fontWeight: 800, color: "#64748B" }}>
             {nroSolicitud || solicitudId}
             {nombreOT ? ` · ${nombreOT}` : ""}
+          </div>
+          <div style={ui.priorityPicker}>
+            <div style={ui.priorityPickerLabel}>Prioridad</div>
+            <div style={ui.priorityPickerRow}>
+              <button
+                type="button"
+                onClick={() => setPriority(PRIORITY_HIGH)}
+                disabled={saving}
+                style={{
+                  ...ui.priorityBtn,
+                  ...(priority === PRIORITY_HIGH ? ui.priorityBtnActiveHigh : {}),
+                }}
+              >
+                Alta
+              </button>
+              <button
+                type="button"
+                onClick={() => setPriority(PRIORITY_MED)}
+                disabled={saving}
+                style={{
+                  ...ui.priorityBtn,
+                  ...(priority === PRIORITY_MED ? ui.priorityBtnActiveMed : {}),
+                }}
+              >
+                Media
+              </button>
+              <button
+                type="button"
+                onClick={() => setPriority(PRIORITY_LOW)}
+                disabled={saving}
+                style={{
+                  ...ui.priorityBtn,
+                  ...(priority === PRIORITY_LOW ? ui.priorityBtnActiveLow : {}),
+                }}
+              >
+                Baja
+              </button>
+            </div>
           </div>
           {selectedRows.length > 0 ? (
             <div
@@ -2647,6 +2825,11 @@ export default function OTsPage() {
     proceso: "",
     revision: "",
   });
+  /** Filtro adicional por columna: solicitante (se usa en «En proceso» y «En revisión»). */
+  const [filterSolicitanteByColumnId, setFilterSolicitanteByColumnId] = useState({
+    proceso: "",
+    revision: "",
+  });
   const [assigneeFilterList, setAssigneeFilterList] = useState([]);
   /** Solo `permisos.mantenimiento`: opciones del filtro en columna En proceso. */
   const [assigneeFilterListProceso, setAssigneeFilterListProceso] = useState(
@@ -2700,6 +2883,11 @@ export default function OTsPage() {
         pendientes.push(mapSnapshotToPendingItem(d, subStats, assigneeUids));
       }
     }
+
+    // Pendientes: más nuevas arriba (por createdAt del doc)
+    pendientes.sort((a, b) => (b?.createdAtMs || 0) - (a?.createdAtMs || 0));
+    // Proceso: más nuevas arriba (por createdAt del doc)
+    procesoItems.sort((a, b) => (b?.createdAtMs || 0) - (a?.createdAtMs || 0));
 
     setColumns((prev) =>
       prev.map((col) => {
@@ -2837,31 +3025,268 @@ export default function OTsPage() {
     }
   }, [assigneeFilterListProceso, filterAssigneeByColumnId.proceso]);
 
+  /** Proceso: opciones del filtro de responsables = solo UIDs realmente asignados en esa columna. */
+  const responsableFilterListProcesoAsignados = useMemo(() => {
+    const col = columns.find((c) => c.id === "proceso");
+    const items = Array.isArray(col?.items) ? col.items : [];
+    const counts = new Map();
+    for (const it of items) {
+      const uids = Array.isArray(it?.assigneeUids) ? it.assigneeUids : [];
+      for (const raw of uids) {
+        const uid = String(raw || "").trim();
+        if (!uid) continue;
+        counts.set(uid, (counts.get(uid) || 0) + 1);
+      }
+    }
+    const out = [];
+    for (const [uid, count] of counts.entries()) {
+      const p = assigneeFilterListProceso.find((r) => r.uid === uid);
+      out.push({
+        uid,
+        displayName: p?.displayName || uid,
+        numeroFicha: p?.numeroFicha || "",
+        count,
+      });
+    }
+    out.sort((a, b) =>
+      String(a.displayName || "").localeCompare(String(b.displayName || ""), "es", {
+        sensitivity: "base",
+      })
+    );
+    return out;
+  }, [columns, assigneeFilterListProceso]);
+
+  // Si el filtro de proceso apunta a alguien que ya no está asignado, se limpia.
+  useEffect(() => {
+    const uid = String(filterAssigneeByColumnId.proceso || "").trim();
+    if (!uid) return;
+    if (!responsableFilterListProcesoAsignados.some((r) => r.uid === uid)) {
+      setFilterAssigneeByColumnId((p) => ({ ...p, proceso: "" }));
+    }
+  }, [responsableFilterListProcesoAsignados, filterAssigneeByColumnId.proceso]);
+
+  /** Revisión: opciones del filtro de responsables = solo UIDs realmente asignados en esa columna. */
+  const responsableFilterListRevisionAsignados = useMemo(() => {
+    const col = columns.find((c) => c.id === "revision");
+    const items = Array.isArray(col?.items) ? col.items : [];
+    const counts = new Map();
+    for (const it of items) {
+      const uids = Array.isArray(it?.assigneeUids) ? it.assigneeUids : [];
+      for (const raw of uids) {
+        const uid = String(raw || "").trim();
+        if (!uid) continue;
+        counts.set(uid, (counts.get(uid) || 0) + 1);
+      }
+    }
+
+    const lookup =
+      [...(assigneeFilterListProceso || []), ...(assigneeFilterList || [])] || [];
+
+    const out = [];
+    for (const [uid, count] of counts.entries()) {
+      const p = lookup.find((r) => r.uid === uid);
+      out.push({
+        uid,
+        displayName: p?.displayName || uid,
+        numeroFicha: p?.numeroFicha || "",
+        count,
+      });
+    }
+    out.sort((a, b) =>
+      String(a.displayName || "").localeCompare(String(b.displayName || ""), "es", {
+        sensitivity: "base",
+      })
+    );
+    return out;
+  }, [columns, assigneeFilterListProceso, assigneeFilterList]);
+
+  // Si el filtro de revisión apunta a alguien que ya no está asignado, se limpia.
+  useEffect(() => {
+    const uid = String(filterAssigneeByColumnId.revision || "").trim();
+    if (!uid) return;
+    if (!responsableFilterListRevisionAsignados.some((r) => r.uid === uid)) {
+      setFilterAssigneeByColumnId((p) => ({ ...p, revision: "" }));
+    }
+  }, [responsableFilterListRevisionAsignados, filterAssigneeByColumnId.revision]);
+
+  /** Proceso: opciones del filtro = solicitantes presentes en esa columna. */
+  const solicitanteFilterListProceso = useMemo(() => {
+    const col = columns.find((c) => c.id === "proceso");
+    const items = Array.isArray(col?.items) ? col.items : [];
+    const map = new Map();
+    for (const it of items) {
+      const ficha = String(it?.solicitanteFicha || "").trim();
+      const nombre = String(it?.solicitanteNombre || "").trim();
+      const key = ficha || nombre;
+      if (!key) continue;
+      if (map.has(key)) {
+        const prev = map.get(key);
+        map.set(key, { ...prev, count: (prev?.count || 0) + 1 });
+        continue;
+      }
+      map.set(key, {
+        uid: key,
+        displayName: nombre || (ficha ? `Ficha ${ficha}` : key),
+        numeroFicha: ficha,
+        count: 1,
+      });
+    }
+    const rows = Array.from(map.values());
+    rows.sort((a, b) =>
+      String(a.displayName || "").localeCompare(String(b.displayName || ""), "es", {
+        sensitivity: "base",
+      })
+    );
+    return rows;
+  }, [columns]);
+
+  // Si el filtro de solicitante de proceso apunta a alguien que ya no está, se limpia.
+  useEffect(() => {
+    const v = String(filterSolicitanteByColumnId.proceso || "").trim();
+    if (!v) return;
+    if (!solicitanteFilterListProceso.some((r) => r.uid === v)) {
+      setFilterSolicitanteByColumnId((p) => ({ ...p, proceso: "" }));
+    }
+  }, [solicitanteFilterListProceso, filterSolicitanteByColumnId.proceso]);
+
+  /** Revisión: opciones del filtro = solicitantes presentes en esa columna. */
+  const solicitanteFilterListRevision = useMemo(() => {
+    const col = columns.find((c) => c.id === "revision");
+    const items = Array.isArray(col?.items) ? col.items : [];
+    const map = new Map();
+    for (const it of items) {
+      const ficha = String(it?.solicitanteFicha || "").trim();
+      const nombre = String(it?.solicitanteNombre || "").trim();
+      const key = ficha || nombre;
+      if (!key) continue;
+      if (map.has(key)) {
+        const prev = map.get(key);
+        map.set(key, { ...prev, count: (prev?.count || 0) + 1 });
+        continue;
+      }
+      map.set(key, {
+        uid: key,
+        displayName: nombre || (ficha ? `Ficha ${ficha}` : key),
+        numeroFicha: ficha,
+        count: 1,
+      });
+    }
+    const rows = Array.from(map.values());
+    rows.sort((a, b) =>
+      String(a.displayName || "").localeCompare(String(b.displayName || ""), "es", {
+        sensitivity: "base",
+      })
+    );
+    return rows;
+  }, [columns]);
+
+  // Si el filtro de solicitante de revisión apunta a alguien que ya no está, se limpia.
+  useEffect(() => {
+    const v = String(filterSolicitanteByColumnId.revision || "").trim();
+    if (!v) return;
+    if (!solicitanteFilterListRevision.some((r) => r.uid === v)) {
+      setFilterSolicitanteByColumnId((p) => ({ ...p, revision: "" }));
+    }
+  }, [solicitanteFilterListRevision, filterSolicitanteByColumnId.revision]);
+
+  /** Pendientes: opciones del filtro = solicitantes presentes en esa columna. */
+  const solicitanteFilterListPendientes = useMemo(() => {
+    const col = columns.find((c) => c.id === "pendientes");
+    const items = Array.isArray(col?.items) ? col.items : [];
+    const map = new Map();
+    for (const it of items) {
+      const ficha = String(it?.solicitanteFicha || "").trim();
+      const nombre = String(it?.solicitanteNombre || "").trim();
+      const key = ficha || nombre;
+      if (!key) continue;
+      if (map.has(key)) {
+        const prev = map.get(key);
+        map.set(key, { ...prev, count: (prev?.count || 0) + 1 });
+        continue;
+      }
+      map.set(key, {
+        uid: key,
+        displayName: nombre || (ficha ? `Ficha ${ficha}` : key),
+        numeroFicha: ficha,
+        count: 1,
+      });
+    }
+    const rows = Array.from(map.values());
+    rows.sort((a, b) =>
+      String(a.displayName || "").localeCompare(String(b.displayName || ""), "es", {
+        sensitivity: "base",
+      })
+    );
+    return rows;
+  }, [columns]);
+
+  // Si el filtro de pendientes apunta a alguien que ya no está, se limpia.
+  useEffect(() => {
+    const v = String(filterAssigneeByColumnId.pendientes || "").trim();
+    if (!v) return;
+    if (!solicitanteFilterListPendientes.some((r) => r.uid === v)) {
+      setFilterAssigneeByColumnId((p) => ({ ...p, pendientes: "" }));
+    }
+  }, [solicitanteFilterListPendientes, filterAssigneeByColumnId.pendientes]);
+
   const displayColumns = useMemo(() => {
     return columns.map((col) => {
       const uid = (filterAssigneeByColumnId[col.id] ?? "").trim();
-      if (!uid) return col;
-      if (col.id === "proceso") {
-        const person = assigneeFilterListProceso.find((r) => r.uid === uid);
-        const displayName = person?.displayName || "";
+      // Pendientes: filtro por solicitante
+      if (col.id === "pendientes") {
+        if (!uid) return col;
         return {
           ...col,
           items: col.items.filter((item) => {
-            if (
-              displayName &&
-              matchesResponsableNombreAssigneeFilter(
-                item.responsableNombre,
-                displayName
-              )
-            ) {
-              return true;
-            }
-            const uids = item.assigneeUids;
-            if (Array.isArray(uids) && uids.includes(uid)) return true;
-            return false;
+            const ficha = String(item?.solicitanteFicha || "").trim();
+            const nombre = String(item?.solicitanteNombre || "").trim();
+            const key = ficha || nombre;
+            return key === uid;
           }),
         };
       }
+      // Proceso: 1) filtro por responsable (si aplica) 2) filtro por solicitante (si aplica)
+      if (col.id === "proceso") {
+        const solicitanteKey = String(filterSolicitanteByColumnId.proceso || "").trim();
+        const itemsBase = !uid
+          ? col.items
+          : col.items.filter((item) => {
+              const uids = item.assigneeUids;
+              return Array.isArray(uids) && uids.includes(uid);
+            });
+        const itemsFinal = !solicitanteKey
+          ? itemsBase
+          : itemsBase.filter((item) => {
+              const ficha = String(item?.solicitanteFicha || "").trim();
+              const nombre = String(item?.solicitanteNombre || "").trim();
+              const key = ficha || nombre;
+              return key === solicitanteKey;
+            });
+        return { ...col, items: itemsFinal };
+      }
+
+      // Revisión: 1) filtro por responsable (si aplica) 2) filtro por solicitante (si aplica)
+      if (col.id === "revision") {
+        const solicitanteKey = String(filterSolicitanteByColumnId.revision || "").trim();
+        const itemsBase = !uid
+          ? col.items
+          : col.items.filter((item) => {
+              const uids = item.assigneeUids;
+              return Array.isArray(uids) && uids.includes(uid);
+            });
+        const itemsFinal = !solicitanteKey
+          ? itemsBase
+          : itemsBase.filter((item) => {
+              const ficha = String(item?.solicitanteFicha || "").trim();
+              const nombre = String(item?.solicitanteNombre || "").trim();
+              const key = ficha || nombre;
+              return key === solicitanteKey;
+            });
+        return { ...col, items: itemsFinal };
+      }
+
+      // Otras columnas: filtro por UID responsable/asignado
+      if (!uid) return col;
       return {
         ...col,
         items: col.items.filter((item) => {
@@ -2870,7 +3295,7 @@ export default function OTsPage() {
         }),
       };
     });
-  }, [columns, filterAssigneeByColumnId, assigneeFilterListProceso]);
+  }, [columns, filterAssigneeByColumnId, filterSolicitanteByColumnId, assigneeFilterListProceso]);
 
   const selectedCount = useMemo(() => {
     return columns.reduce(
@@ -2990,7 +3415,7 @@ export default function OTsPage() {
     });
   }, []);
 
-  const executeMovePendingToProceso = async (solicitudId, responsables) => {
+  const executeMovePendingToProceso = async (solicitudId, responsables, prioridadOT) => {
     const raw = Array.isArray(responsables) ? responsables : [];
     const cleaned = raw
       .filter((r) => r?.uid)
@@ -3045,12 +3470,13 @@ export default function OTsPage() {
         responsableNombre: nombres.join(", "),
         responsablesUids: uids,
         responsablesNombres: nombres,
+        prioridadOT: normalizeOtPriority(prioridadOT) || PRIORITY_MED,
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
       console.error(err);
       alert(
-        "❌ No se pudo guardar «En proceso» ni los responsables. Revisá las reglas de Firestore: en solicitudesOT/update deben permitirse OTState, updatedAt, responsableUid, responsableNombre, responsablesUids y responsablesNombres. Se recargará el tablero."
+        "❌ No se pudo guardar «En proceso» ni los responsables/prioridad. Revisá las reglas de Firestore: en solicitudesOT/update deben permitirse OTState, updatedAt, responsableUid, responsableNombre, responsablesUids, responsablesNombres y prioridadOT. Se recargará el tablero."
       );
       void refetchSolicitudesOnce();
       throw err;
@@ -3380,9 +3806,13 @@ export default function OTsPage() {
                     setRevisionToProcesoDragActive(false);
                   }}
                   assigneeFilterList={
-                    column.id === "proceso"
-                      ? assigneeFilterListProceso
-                      : assigneeFilterList
+                    column.id === "pendientes"
+                      ? solicitanteFilterListPendientes
+                      : column.id === "proceso"
+                        ? responsableFilterListProcesoAsignados
+                        : column.id === "revision"
+                          ? responsableFilterListRevisionAsignados
+                        : assigneeFilterList
                   }
                   assigneeFilterListLoading={assigneeFilterListLoading}
                   filterAssigneeUid={filterAssigneeByColumnId[column.id] ?? ""}
@@ -3390,6 +3820,26 @@ export default function OTsPage() {
                     setFilterAssigneeByColumnId((p) => ({
                       ...p,
                       [column.id]: uid,
+                    }))
+                  }
+                  solicitanteFilterList={
+                    column.id === "proceso"
+                      ? solicitanteFilterListProceso
+                      : column.id === "revision"
+                        ? solicitanteFilterListRevision
+                        : []
+                  }
+                  filterSolicitanteValue={
+                    column.id === "proceso"
+                      ? filterSolicitanteByColumnId.proceso
+                      : column.id === "revision"
+                        ? filterSolicitanteByColumnId.revision
+                        : ""
+                  }
+                  onSolicitanteFilterChange={(v) =>
+                    setFilterSolicitanteByColumnId((p) => ({
+                      ...p,
+                      [column.id]: v,
                     }))
                   }
                   unfilteredCount={columns[index].items.length}
@@ -3469,6 +3919,11 @@ export default function OTsPage() {
         nombreOT={assignModal.nombreOT}
         tenantId={profile?.tenantId || ""}
         company={profile?.company || ""}
+        initialPriority={
+          columns.find((c) => c.id === "pendientes")?.items?.find(
+            (i) => i?.id === assignModal.solicitudId
+          )?.prioridadOT || ""
+        }
         onConfirm={executeMovePendingToProceso}
       />
 
@@ -3954,6 +4409,59 @@ const ui = {
     fontWeight: 900,
     letterSpacing: 0.2,
     border: "1px solid rgba(37, 99, 235, 0.25)",
+  },
+  priorityLevelChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#fff",
+    border: "1px solid #E7E9F2",
+    fontSize: 11,
+    fontWeight: 950,
+    color: "#0F172A",
+    letterSpacing: 0.2,
+    whiteSpace: "nowrap",
+  },
+  priorityPicker: {
+    marginTop: 6,
+    padding: 10,
+    borderRadius: 16,
+    border: "1px solid #E7E9F2",
+    background: "#fff",
+    display: "grid",
+    gap: 8,
+  },
+  priorityPickerLabel: {
+    fontSize: 11,
+    fontWeight: 950,
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  priorityPickerRow: { display: "flex", gap: 8, flexWrap: "wrap" },
+  priorityBtn: {
+    borderRadius: 14,
+    border: "1px solid #E7E9F2",
+    background: "#FBFCFF",
+    padding: "9px 12px",
+    cursor: "pointer",
+    fontWeight: 950,
+    color: "#0F172A",
+    fontFamily: "inherit",
+  },
+  priorityBtnActiveHigh: {
+    borderColor: "rgba(255,77,115,0.40)",
+    background: "rgba(255,77,115,0.12)",
+  },
+  priorityBtnActiveMed: {
+    borderColor: "rgba(245,158,11,0.45)",
+    background: "rgba(245,158,11,0.14)",
+  },
+  priorityBtnActiveLow: {
+    borderColor: "rgba(0,221,181,0.55)",
+    background: "rgba(0,221,181,0.14)",
   },
   pendingBodyBox: {
     background: "#FBFCFF",

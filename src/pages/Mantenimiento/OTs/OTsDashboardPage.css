@@ -1,0 +1,247 @@
+.otsDashboard {
+  max-width: 1280px;
+}
+
+.otsDashboard__header {
+  margin-bottom: 1.25rem;
+}
+
+.otsDashboard__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.otsDashboard__subtitle {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+}
+
+.otsDashboard__badge {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(8, 159, 138, 0.12);
+  color: #0f766e;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.otsDashboard__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
+}
+
+.otsDashboard__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.otsDashboard__field label {
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.otsDashboard__field input,
+.otsDashboard__field select {
+  font: inherit;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  min-width: 160px;
+}
+
+.otsDashboard__period-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.otsDashboard__period-btns button {
+  padding: 0.45rem 0.85rem;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #f9fafb;
+  font-weight: 800;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.otsDashboard__toolbar button {
+  font: inherit;
+}
+
+.otsDashboard__toolbar button:focus-visible,
+.otsDashboard__toolbar input:focus-visible,
+.otsDashboard__toolbar select:focus-visible {
+  outline: 3px solid rgba(8, 159, 138, 0.18);
+  outline-offset: 2px;
+}
+
+.otsDashboard__period-btns button.is-active {
+  background: #0f172a;
+  color: #fff;
+  border-color: #0f172a;
+}
+
+.otsDashboard__kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.otsDashboard__kpi {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
+}
+
+.otsDashboard__kpi-label {
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.35rem;
+}
+
+.otsDashboard__kpi-value {
+  font-size: 1.35rem;
+  font-weight: 950;
+  color: #0f172a;
+}
+
+.otsDashboard__highlight {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.otsDashboard__highlight-box {
+  flex: 1;
+  min-width: 220px;
+  padding: 1rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+}
+
+.otsDashboard__highlight-box strong {
+  display: block;
+  font-size: 0.75rem;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 0.35rem;
+}
+
+.otsDashboard__highlight-box span {
+  font-size: 1.1rem;
+  font-weight: 950;
+  color: #0f172a;
+}
+
+.otsDashboard__grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.otsDashboard__card {
+  grid-column: span 12;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 1rem 1rem 0.5rem;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
+}
+
+@media (min-width: 900px) {
+  .otsDashboard__card--half {
+    grid-column: span 6;
+  }
+  .otsDashboard__card--third {
+    grid-column: span 4;
+  }
+}
+
+.otsDashboard__card-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.otsDashboard__card-hint {
+  margin: -0.35rem 0 0.75rem;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.otsDashboard__chart {
+  width: 100%;
+  height: 280px;
+}
+
+.otsDashboard__muted {
+  color: #64748b;
+  font-size: 0.875rem;
+  margin: 0 0 1rem;
+}
+
+.otsDashboard__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.otsDashboard__table th,
+.otsDashboard__table td {
+  text-align: left;
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.otsDashboard__table th {
+  color: #64748b;
+  font-weight: 900;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.otsDashboard__alerts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.otsDashboard__alerts li {
+  padding: 0.65rem 0.75rem;
+  border-radius: 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: #78350f;
+}
+

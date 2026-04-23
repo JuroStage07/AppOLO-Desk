@@ -67,6 +67,16 @@ export default function OTsHubMantenimiento() {
   const modules = useMemo(
     () => [
       {
+        key: "dashboard",
+        title: "Dashboard OTs",
+        desc: "Métricas por período: volumen, estados, líderes y días de baja demanda.",
+        path: "/mantenimiento/ots/dashboard",
+        img: imgEquipos,
+        tag: "OT",
+        status: "Listo",
+        tone: "accent",
+      },
+      {
         key: "gestion",
         title: "Gestión de OT",
         desc: "Tablero: pendientes, en proceso y en revisión. Arrastrá y asigná responsables.",
@@ -176,8 +186,16 @@ export default function OTsHubMantenimiento() {
                 <div style={ui.quickBtns}>
                   <button
                     type="button"
-                    onClick={() => go("/mantenimiento/OTsPage")}
+                    onClick={() => go("/mantenimiento/ots/dashboard")}
                     style={{ ...ui.quickBtn, ...ui.quickBtnAccent }}
+                    disabled={busyLogout}
+                  >
+                    Dashboard OTs
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => go("/mantenimiento/OTsPage")}
+                    style={ui.quickBtn}
                     disabled={busyLogout}
                   >
                     Gestión de OT (tablero)

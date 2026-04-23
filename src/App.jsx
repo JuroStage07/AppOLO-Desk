@@ -38,6 +38,7 @@ import Mantenimiento from "./pages/Mantenimiento/Mantenimiento";
 import OTsPage from "./pages/Mantenimiento/OTs/OTsPage";
 import OTsHubMantenimiento from "./pages/Mantenimiento/OTs/OTsHubMantenimiento";
 import OTsFinalizadasPage from "./pages/Mantenimiento/OTs/OTsFinalizadasPage";
+import OTsDashboardPage from "./pages/Mantenimiento/OTs/OTsDashboardPage";
 import OTsSolDetallePage from "./pages/Mantenimiento/OTs/OTsSolDetallePage";
 
 //Recepcion
@@ -438,6 +439,15 @@ export default function App() {
             element={
               <PrivateRoute>
                 <OTsPage />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/mantenimiento/ots/dashboard"
+            element={
+              <PrivateRoute>
+                <OTsDashboardPage />
               </PrivateRoute>
             }
           />
