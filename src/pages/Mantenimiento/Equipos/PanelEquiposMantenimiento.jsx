@@ -1,15 +1,23 @@
 // PanelEquiposMantenimiento.jsx
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, onSnapshot, query } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  where,
+} from "firebase/firestore";
 import {
   AlertTriangle,
   ArrowLeft,
   Filter,
   LayoutGrid,
+  Plus,
   RotateCcw,
 } from "lucide-react";
-import { db } from "../../../firebase";
+import { auth, db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { filterEquiposByScope } from "../../../utils/dataScope";
 
@@ -43,6 +51,18 @@ export default function PanelEquiposMantenimiento() {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
 
+    const [addOpen, setAddOpen] = useState(false);
+    const [addSaving, setAddSaving] = useState(false);
+    const [addError, setAddError] = useState("");
+    const [fCodigo, setFCodigo] = useState("");
+    const [fEquipo, setFEquipo] = useState("");
+    const [fFamilia, setFFamilia] = useState("");
+    const [fMarca, setFMarca] = useState("n/a");
+    const [fPropiedad, setFPropiedad] = useState("Propio");
+    const [fResponsable, setFResponsable] = useState("");
+    const [fSuplente, setFSuplente] = useState("N/A");
+    const [fEstado, setFEstado] = useState("Activo");
+
     const [showFilters, setShowFilters] = useState(false);
     const [familiaActiva, setFamiliaActiva] = useState("Todas");
     const [revisionFiltro, setRevisionFiltro] = useState("Todas"); // Todas | Pendientes | Al día
@@ -50,17 +70,28 @@ export default function PanelEquiposMantenimiento() {
 
     useEffect(() => {
         if (authLoading) return;
-        const qRef = query(collection(db, "equipos"));
+        const tenantId = safe(profile?.tenantId);
+        const company = safe(profile?.company);
+        if (!tenantId || !company) {
+            setEquipos([]);
+            setLoading(false);
+            setLoadError("No se pudo determinar tenantId/company del perfil.");
+            return;
+        }
+
+        // Importante: Firestore falla la query si intenta devolver docs fuera de permiso.
+        // Por eso filtramos en servidor por tenantId/company.
+        const qRef = query(
+            collection(db, "equipos"),
+            where("tenantId", "==", tenantId),
+            where("company", "==", company)
+        );
 
         setLoadError("");
         const unsub = onSnapshot(
             qRef,
             (snap) => {
-                const rows = filterEquiposByScope(
-                    snap.docs.map((d) => ({ id: d.id, ...d.data() })),
-                    profile?.tenantId,
-                    profile?.company
-                );
+                const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                 setEquipos(rows);
                 setLoading(false);
                 setLoadError("");
@@ -150,6 +181,76 @@ export default function PanelEquiposMantenimiento() {
         setFamiliaActiva("Todas");
     };
 
+    const openAddEquipo = () => {
+        setAddError("");
+        setFCodigo("");
+        setFEquipo("");
+        setFFamilia("");
+        setFMarca("n/a");
+        setFPropiedad("Propio");
+        setFResponsable("");
+        setFSuplente("N/A");
+        setFEstado("Activo");
+        setAddOpen(true);
+    };
+
+    const closeAddEquipo = () => {
+        if (addSaving) return;
+        setAddOpen(false);
+    };
+
+    const saveEquipo = async () => {
+        const tenantId = safe(profile?.tenantId);
+        const company = safe(profile?.company);
+        const uid = safe(auth.currentUser?.uid);
+        if (!tenantId || !company) {
+            setAddError("No se pudo determinar tenantId/company del perfil.");
+            return;
+        }
+        if (!uid) {
+            setAddError("No hay usuario autenticado.");
+            return;
+        }
+
+        const payload = {
+            checklistD: false,
+            checklistD_fallas: [],
+            checklistD_hasFallas: false,
+            checklistD_lastAt: null,
+            codigo: safe(fCodigo),
+            company,
+            equipo: safe(fEquipo),
+            estado: safe(fEstado) || "Activo",
+            fallaActiva: false,
+            fallaUpdatedAt: null,
+            familia: safe(fFamilia),
+            marca: safe(fMarca) || "n/a",
+            propiedad: safe(fPropiedad) || "Propio",
+            responsable: safe(fResponsable),
+            suplente: safe(fSuplente) || "N/A",
+            tenantId,
+            uid,
+            updatedAt: serverTimestamp(),
+        };
+
+        if (!payload.codigo || !payload.equipo || !payload.familia) {
+            setAddError("Completá al menos Código, Equipo y Familia.");
+            return;
+        }
+
+        try {
+            setAddSaving(true);
+            setAddError("");
+            await addDoc(collection(db, "equipos"), payload);
+            setAddOpen(false);
+        } catch (e) {
+            console.error("Error creando equipo:", e);
+            setAddError("No se pudo guardar el equipo. Revisá permisos en Firestore.");
+        } finally {
+            setAddSaving(false);
+        }
+    };
+
     useEffect(() => {
         const style = document.createElement("style");
         style.setAttribute("data-panel-equipos-spin", "1");
@@ -219,6 +320,17 @@ export default function PanelEquiposMantenimiento() {
                     >
                         <Filter size={17} strokeWidth={2} aria-hidden />
                         {showFilters ? "Ocultar filtros" : "Filtros"}
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={openAddEquipo}
+                        style={ui.btnPrimary}
+                        disabled={authLoading}
+                        title="Agregar equipo"
+                    >
+                        <Plus size={17} strokeWidth={2} aria-hidden />
+                        Agregar equipo
                     </button>
 
                     {hasActiveFilters ? (
@@ -526,6 +638,88 @@ export default function PanelEquiposMantenimiento() {
                     </div>
                 </div>
             </div>
+
+            {addOpen && (
+                <div style={modal.backdrop} onClick={closeAddEquipo} role="dialog" aria-modal="true">
+                    <div style={modal.sheet} onClick={(e) => e.stopPropagation()}>
+                        <div style={modal.header}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                <div style={modal.icon} aria-hidden="true">
+                                    <Plus size={18} strokeWidth={2.5} />
+                                </div>
+                                <div>
+                                    <div style={modal.title}>Agregar equipo</div>
+                                    <div style={modal.sub}>
+                                        Se guardará en <b>equipos</b> con tu ámbito:{" "}
+                                        <b>{safe(profile?.tenantId) || "—"}</b> ·{" "}
+                                        <b>{safe(profile?.company) || "—"}</b>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" style={modal.close} onClick={closeAddEquipo} disabled={addSaving}>
+                                ✕
+                            </button>
+                        </div>
+
+                        <div style={modal.body}>
+                            {addError ? <div style={modal.error}>{addError}</div> : null}
+
+                            <div style={modal.grid}>
+                                <div style={modal.field}>
+                                    <div style={modal.label}>Código *</div>
+                                    <input value={fCodigo} onChange={(e) => setFCodigo(e.target.value)} style={modal.input} placeholder="Ej: M3" />
+                                </div>
+                                <div style={modal.field}>
+                                    <div style={modal.label}>Equipo *</div>
+                                    <input value={fEquipo} onChange={(e) => setFEquipo(e.target.value)} style={modal.input} placeholder="Ej: Montacargas 3" />
+                                </div>
+                                <div style={modal.field}>
+                                    <div style={modal.label}>Familia *</div>
+                                    <select value={fFamilia} onChange={(e) => setFFamilia(e.target.value)} style={modal.input}>
+                                        <option value="">Seleccionar…</option>
+                                        <option value="Montacargas">Montacargas</option>
+                                        <option value="Apilador">Apilador</option>
+                                        <option value="Carretilla">Carretilla</option>
+                                    </select>
+                                </div>
+                                <div style={modal.field}>
+                                    <div style={modal.label}>Marca</div>
+                                    <input value={fMarca} onChange={(e) => setFMarca(e.target.value)} style={modal.input} placeholder="n/a" />
+                                </div>
+                                <div style={modal.field}>
+                                    <div style={modal.label}>Propiedad</div>
+                                    <input value={fPropiedad} onChange={(e) => setFPropiedad(e.target.value)} style={modal.input} placeholder="Propio" />
+                                </div>
+                                <div style={modal.field}>
+                                    <div style={modal.label}>Responsable</div>
+                                    <input value={fResponsable} onChange={(e) => setFResponsable(e.target.value)} style={modal.input} placeholder="Nombre responsable" />
+                                </div>
+                                <div style={modal.field}>
+                                    <div style={modal.label}>Suplente</div>
+                                    <input value={fSuplente} onChange={(e) => setFSuplente(e.target.value)} style={modal.input} placeholder="N/A" />
+                                </div>
+                                <div style={modal.field}>
+                                    <div style={modal.label}>Estado</div>
+                                    <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} style={modal.input}>
+                                        <option value="Activo">Activo</option>
+                                        <option value="Inactivo">Inactivo</option>
+                                        <option value="Mantenimiento">Mantenimiento</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={modal.actions}>
+                            <button type="button" style={ui.btnGhost} onClick={closeAddEquipo} disabled={addSaving}>
+                                Cancelar
+                            </button>
+                            <button type="button" style={ui.btnPrimary} onClick={() => void saveEquipo()} disabled={addSaving}>
+                                {addSaving ? "Guardando…" : "Guardar equipo"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -636,6 +830,23 @@ const ui = {
         background: ACCENT_SOFT,
         color: ACCENT,
         boxShadow: "0 10px 24px rgba(8,159,138,0.12)",
+    },
+
+    btnPrimary: {
+        border: `1px solid ${ACCENT}`,
+        background: ACCENT,
+        color: "#fff",
+        borderRadius: 14,
+        padding: "10px 12px",
+        cursor: "pointer",
+        fontWeight: 950,
+        boxShadow: "0 12px 28px rgba(8,159,138,0.18)",
+        whiteSpace: "nowrap",
+        transition: "transform 120ms ease, box-shadow 120ms ease",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        fontFamily: "inherit",
     },
 
     main: {
@@ -941,5 +1152,87 @@ const ui = {
         width: "78%",
         background: "linear-gradient(90deg, #F1F5F9 0%, #E8EDF4 50%, #F1F5F9 100%)",
         backgroundSize: "200% 100%",
+    },
+};
+
+const modal = {
+    backdrop: {
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15,23,42,0.45)",
+        display: "grid",
+        placeItems: "center",
+        padding: 16,
+        zIndex: 9999,
+    },
+    sheet: {
+        width: "min(720px, 100%)",
+        background: "#fff",
+        border: "1px solid #E7E9F2",
+        borderRadius: 20,
+        overflow: "hidden",
+        boxShadow: "0 18px 46px rgba(15,23,42,0.22)",
+    },
+    header: {
+        padding: 14,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 10,
+        borderBottom: "1px solid #EEF1F7",
+        background: "#FBFCFF",
+    },
+    icon: {
+        width: 44,
+        height: 44,
+        borderRadius: 16,
+        background: ACCENT_SOFT,
+        border: "1px solid rgba(8,159,138,0.25)",
+        color: ACCENT,
+        display: "grid",
+        placeItems: "center",
+    },
+    title: { fontWeight: 980, color: "#0F172A" },
+    sub: { marginTop: 2, fontWeight: 850, color: "#64748B", fontSize: 12 },
+    close: {
+        border: "1px solid #E7E9F2",
+        background: "#fff",
+        borderRadius: 14,
+        width: 36,
+        height: 36,
+        cursor: "pointer",
+        display: "grid",
+        placeItems: "center",
+        fontWeight: 950,
+        color: "#0F172A",
+    },
+    body: { padding: 14, background: "#fff" },
+    actions: { padding: 14, display: "flex", gap: 10, justifyContent: "flex-end", background: "#fff" },
+    error: {
+        borderRadius: 14,
+        padding: "10px 12px",
+        background: "#FFF6F6",
+        border: "1px solid rgba(239,68,68,0.22)",
+        color: "#9A1D1D",
+        fontWeight: 800,
+        fontSize: 13,
+        marginBottom: 10,
+    },
+    grid: {
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+        gap: 12,
+    },
+    field: { display: "grid", gap: 6 },
+    label: { fontWeight: 900, fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.4 },
+    input: {
+        borderRadius: 14,
+        border: "1px solid #E7E9F2",
+        background: "#fff",
+        padding: "10px 12px",
+        outline: "none",
+        fontWeight: 850,
+        color: "#0F172A",
+        fontFamily: "inherit",
     },
 };
