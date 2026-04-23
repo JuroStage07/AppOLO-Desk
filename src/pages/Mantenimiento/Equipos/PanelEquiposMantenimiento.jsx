@@ -688,7 +688,14 @@ export default function PanelEquiposMantenimiento() {
                                 </div>
                                 <div style={modal.field}>
                                     <div style={modal.label}>Propiedad</div>
-                                    <input value={fPropiedad} onChange={(e) => setFPropiedad(e.target.value)} style={modal.input} placeholder="Propio" />
+                                    <select
+                                        value={fPropiedad}
+                                        onChange={(e) => setFPropiedad(e.target.value)}
+                                        style={modal.input}
+                                    >
+                                        <option value="Propio">Propio</option>
+                                        <option value="Alquilado">Alquilado</option>
+                                    </select>
                                 </div>
                                 <div style={modal.field}>
                                     <div style={modal.label}>Responsable</div>

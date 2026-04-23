@@ -784,12 +784,6 @@ const ui = {
     boxShadow: "none",
   },
 
-  kpiEyeBtnDisabled: {
-    opacity: 0.55,
-    cursor: "not-allowed",
-    boxShadow: "none",
-  },
-
   btnGhost: {
     border: "1px solid #E7E9F2",
     background: "#fff",
@@ -837,11 +831,9 @@ const ui = {
     minHeight: 130,
     overflow: "hidden",
     height: "100%",
-    minHeight: 0,
     display: "grid",
     alignContent: "center",
     gap: 10,
-    paddingRight: 90,
   },
   kpiTopAccent: {
     position: "absolute",
@@ -861,7 +853,6 @@ const ui = {
     height: "100%",
     minHeight: 0,
     position: "relative",
-    overflow: "hidden",
   },
 
   cardHead: {
@@ -1081,33 +1072,6 @@ const ui = {
     placeItems: "center",
     zIndex: 9998,
   },
-
-  activosBody: {
-    padding: 14,
-    maxHeight: "60vh",
-    overflow: "auto",
-    background: "#fff",
-  },
-
-  activosList: {
-    display: "grid",
-    gap: 10,
-  },
-
-  activoRow: {
-    border: "1px solid #E7E9F2",
-    borderRadius: 16,
-    padding: 12,
-    background: "#FBFCFF",
-    display: "grid",
-    gridTemplateColumns: "1fr auto",
-    gap: 12,
-    alignItems: "center",
-  },
-
-  activoMain: { display: "grid", gap: 4 },
-  activoNombre: { fontWeight: 980, color: "#0F172A" },
-  activoEmpresa: { fontWeight: 850, color: "#64748B", fontSize: 13 },
 
   activoUidWrap: {
     textAlign: "right",
@@ -1477,33 +1441,6 @@ const modal = {
     placeItems: "center",
     zIndex: 9998,
   },
-
-  activosBody: {
-    padding: 14,
-    maxHeight: "60vh",
-    overflow: "auto",
-    background: "#fff",
-  },
-
-  activosList: {
-    display: "grid",
-    gap: 10,
-  },
-
-  activoRow: {
-    border: "1px solid #E7E9F2",
-    borderRadius: 16,
-    padding: 12,
-    background: "#FBFCFF",
-    display: "grid",
-    gridTemplateColumns: "1fr auto",
-    gap: 12,
-    alignItems: "center",
-  },
-
-  activoMain: { display: "grid", gap: 4 },
-  activoNombre: { fontWeight: 980, color: "#0F172A" },
-  activoEmpresa: { fontWeight: 850, color: "#64748B", fontSize: 13 },
 
   activoUidWrap: {
     textAlign: "right",

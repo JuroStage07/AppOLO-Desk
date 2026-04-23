@@ -874,6 +874,8 @@ allow create: if authed()
       allow delete: if isAdminRequester() && sameTenantCompanyData(resource.data);
     }
 
+    // (mail outbox removida: ahora envío de QR se hace por Cloud Function callable)
+
     // =========================
     // Checklists diarias
     // =========================

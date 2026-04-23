@@ -14,7 +14,8 @@ import {
   limit,
   getDocs,
 } from "firebase/firestore";
-import { db } from "../../../firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import {
   isEquipoInScope,
@@ -29,6 +30,7 @@ import {
   Fingerprint,
   History,
   Pencil,
+  QrCode,
 } from "lucide-react";
 
 import ApiladorPng from "../../../assets/equipos/apilador_icon.png";
@@ -129,6 +131,13 @@ export default function EquipoInfoPage() {
   const [editResponsable, setEditResponsable] = useState("");
   const [editSuplente, setEditSuplente] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // QR / envío
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrEmail, setQrEmail] = useState("");
+  const [qrSending, setQrSending] = useState(false);
+  const [qrError, setQrError] = useState("");
+  const [qrSent, setQrSent] = useState(false);
 
   // ✅ traer equipo (onSnapshot para UI “viva”)
   useEffect(() => {
@@ -399,6 +408,76 @@ export default function EquipoInfoPage() {
 
   const closeEdit = () => setEditOpen(false);
 
+  const openQr = () => {
+    setQrError("");
+    setQrSent(false);
+    setQrEmail("");
+    setQrOpen(true);
+  };
+
+  const closeQr = () => {
+    if (qrSending) return;
+    setQrOpen(false);
+  };
+
+  const isValidEmail = (s) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || "").trim());
+
+  const buildQrEmailHtml = ({ equipoNombre, codigo, qrDataUrl }) => {
+    const title = safe(equipoNombre) || "Equipo";
+    const code = safe(codigo) || "—";
+
+    const block = `
+      <div style="border:1px solid #E7E9F2;border-radius:16px;padding:18px;margin:0 0 18px 0;font-family:Arial,Helvetica,sans-serif;">
+        <div style="font-size:18px;font-weight:800;color:#0F172A;margin:0 0 10px 0;">${title}</div>
+        <div style="font-size:22px;font-weight:900;letter-spacing:1px;color:#0F172A;margin:0 0 14px 0;">${code}</div>
+        <div style="display:flex;justify-content:center;align-items:center;">
+          <img alt="QR ${code}" src="${qrDataUrl}" style="width:260px;height:260px;image-rendering:pixelated;border:1px solid #EEF1F7;border-radius:14px;padding:10px;background:#fff;" />
+        </div>
+      </div>
+    `;
+
+    return `
+      <div style="background:#FFFFFF;padding:10px;">
+        ${block}
+        ${block}
+      </div>
+    `;
+  };
+
+  const sendQrEmail = async () => {
+    const to = safe(qrEmail);
+    if (!isValidEmail(to)) {
+      setQrError("Ingresá un correo válido.");
+      return;
+    }
+    const codigo = safe(equipo?.codigo);
+    if (!codigo) {
+      setQrError("Este equipo no tiene código.");
+      return;
+    }
+
+    setQrSending(true);
+    setQrError("");
+    setQrSent(false);
+    try {
+      const call = httpsCallable(functions, "sendEquipoQrLabel");
+      await call({ equipoId: safe(equipo?.id || id), emailTo: to });
+
+      setQrSent(true);
+    } catch (e) {
+      console.error("sendQrEmail error:", e);
+      const msg = e?.message || "";
+      setQrError(
+        msg.includes("permission")
+          ? "No tenés permisos para enviar QR."
+          : "No se pudo enviar el QR. Revisá configuración de Functions/correo."
+      );
+    } finally {
+      setQrSending(false);
+    }
+  };
+
   const saveEdit = async () => {
     if (!id) return;
 
@@ -519,10 +598,21 @@ export default function EquipoInfoPage() {
                     </div>
                   </div>
 
-                  <button type="button" onClick={openEdit} style={ui.editBtn}>
-                    <Pencil size={16} strokeWidth={2.2} aria-hidden />
-                    Editar
-                  </button>
+                  <div style={ui.heroActions}>
+                    <button
+                      type="button"
+                      onClick={openQr}
+                      style={ui.qrBtn}
+                      title="Generar y enviar QR"
+                      aria-label="Generar y enviar QR"
+                    >
+                      <QrCode size={18} strokeWidth={2.2} aria-hidden />
+                    </button>
+                    <button type="button" onClick={openEdit} style={ui.editBtn}>
+                      <Pencil size={16} strokeWidth={2.2} aria-hidden />
+                      Editar
+                    </button>
+                  </div>
                 </div>
 
                 <div style={ui.heroBottom}>
@@ -803,6 +893,69 @@ export default function EquipoInfoPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL QR */}
+      {qrOpen && (
+        <div style={ui.modalBackdrop} onMouseDown={closeQr}>
+          <div
+            style={ui.modalCard}
+            onMouseDown={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div style={ui.modalHeader}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={ui.modalTitle}>Enviar QR por correo</div>
+                <div style={ui.modalSub}>
+                  Se enviarán <b>2 copias</b> con: nombre del equipo, código y QR del código.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeQr}
+                style={ui.modalCloseBtn}
+                aria-label="Cerrar"
+                disabled={qrSending}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={ui.modalDivider} />
+
+            <div style={ui.modalBody}>
+              {qrError ? <div style={ui.qrMsgErr}>{qrError}</div> : null}
+              {qrSent ? <div style={ui.qrMsgOk}>Correo encolado para envío.</div> : null}
+
+              <div>
+                <div style={ui.inputLabel}>Correo destino</div>
+                <input
+                  value={qrEmail}
+                  onChange={(e) => setQrEmail(e.target.value)}
+                  placeholder="nombre@empresa.com"
+                  style={ui.input}
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div style={ui.modalActions}>
+              <button type="button" onClick={closeQr} style={ui.btnGhost} disabled={qrSending}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void sendQrEmail()}
+                style={{ ...ui.modalPrimaryBtn, opacity: qrSending ? 0.65 : 1 }}
+                disabled={qrSending}
+              >
+                {qrSending ? "Enviando…" : "Enviar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -999,6 +1152,20 @@ const ui = {
   chipWarn: { background: "#FFF4E5", border: "1px solid #FFE1B8" },
   chipInfo: { background: "#EEF6FF", border: "1px solid #D7E7FF" },
 
+  heroActions: { display: "flex", gap: 10, alignItems: "center", flexShrink: 0 },
+  qrBtn: {
+    borderRadius: 999,
+    border: "1px solid rgba(15,23,42,0.12)",
+    background: "rgba(255,255,255,0.92)",
+    width: 44,
+    height: 44,
+    cursor: "pointer",
+    display: "grid",
+    placeItems: "center",
+    color: "#0F172A",
+    boxShadow: "0 12px 26px rgba(15,23,42,0.10)",
+  },
+
   editBtn: {
     borderRadius: 999,
     border: `1px solid rgba(8,159,138,0.35)`,
@@ -1175,5 +1342,22 @@ const ui = {
     color: "#12131A",
     fontWeight: 850,
     outline: "none",
+  },
+
+  qrMsgErr: {
+    borderRadius: 14,
+    border: "1px solid rgba(239,68,68,0.30)",
+    background: "rgba(239,68,68,0.08)",
+    padding: 12,
+    fontWeight: 900,
+    color: "#991B1B",
+  },
+  qrMsgOk: {
+    borderRadius: 14,
+    border: "1px solid rgba(8,159,138,0.30)",
+    background: "rgba(8,159,138,0.10)",
+    padding: 12,
+    fontWeight: 900,
+    color: "#0F172A",
   },
 };
