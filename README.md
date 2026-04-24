@@ -1,16 +1,55 @@
-# React + Vite
+# AppOLO-Desk
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Launching the Project
 
-Currently, two official plugins are available:
+Follow these instructions to successfully launch the AppOLO-Desk project:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### Prerequisites
+- Ensure you have the following installed:
+  - Node.js (v14 or higher)
+  - npm (Node Package Manager)
+  - A code editor (like Visual Studio Code) for editing files
 
-## React Compiler
+### Getting Started
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. **Clone the Repository**  
+   Clone the repository using git:
+git clone https://github.com/JuroStage07/AppOLO-Desk.git
 
-## Expanding the ESLint configuration
+Code
+Navigate to the project directory:
+cd AppOLO-Desk
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Code
+
+2. **Install Dependencies**  
+Run the following command to install the necessary dependencies:
+npm install
+
+Code
+
+3. **Configuration**  
+Configure the application settings in the `.env` file. You may need to create this file based on the provided `.env.example`. 
+Fill in your specific environment variables.
+
+4. **Running the Project**  
+Start the server using the command:
+npm run dev
+
+Code
+The application should now be running on `http://localhost:3000`.
+
+### Additional Notes
+- **Testing:** To run tests, use:
+npm test
+
+Code
+- If you encounter any issues, check the `issues` section on the GitHub repository or consult the documentation.
+
+### Contributing
+Feel free to submit pull requests or report issues. Contributions are welcome!
+
+### License
+This project is licensed under the MIT License. See the LICENSE file for more information.
+
+Happy Coding!
