@@ -4,13 +4,13 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
-  CheckCircle2,
+  BarChart3,
+  ClipboardList,
+  PackageOpen,
   Package,
   Truck,
 } from "lucide-react";
 import { auth } from "../../firebase";
-
-import imgAccionDescarga from "../../assets/accionDescarga.png";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -30,8 +30,6 @@ export default function Recepcion() {
   const canCofersa =
     location?.state?.canCofersa === true ||
     new URLSearchParams(location.search).get("canCofersa") === "true";
-
-  const hasAnyRecepcion = useMemo(() => canEPA || canCofersa, [canEPA, canCofersa]);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -59,7 +57,8 @@ export default function Recepcion() {
         desc: "Registro y seguimiento de descargas",
         path: "/recepcion/accion-descarga",
         tone: "accent",
-        img: imgAccionDescarga,
+        img: null,
+        icon: Truck,
         tag: "Operativo",
         show: true,
       },
@@ -69,8 +68,20 @@ export default function Recepcion() {
         desc: "Panel de métricas de recepción",
         path: "/recepcion/metricas",
         tone: "accent",
-        img: imgAccionDescarga,
+        img: null,
+        icon: BarChart3,
         tag: "Dashboard",
+        show: true,
+      },
+      {
+        key: "aperturas",
+        title: "Aperturas",
+        desc: "Gestión y seguimiento de aperturas de recepción",
+        path: "/recepcion/aperturas",
+        tone: "accent",
+        img: null,
+        icon: ClipboardList,
+        tag: "Operativo",
         show: true,
       },
       {
@@ -80,6 +91,7 @@ export default function Recepcion() {
         path: "/recepcion/epa",
         tone: "neutral",
         img: null,
+        icon: PackageOpen,
         tag: "Módulo",
         show: canEPA,
       },
@@ -90,6 +102,7 @@ export default function Recepcion() {
         path: "/recepcion/cofersa",
         tone: "neutral",
         img: null,
+        icon: Package,
         tag: "Módulo",
         show: canCofersa,
       },
@@ -169,6 +182,13 @@ export default function Recepcion() {
                 >
                   Estadísticas
                 </button>
+                <button
+                  type="button"
+                  onClick={() => go("/recepcion/aperturas")}
+                  style={{ ...ui.quickBtn, ...ui.quickBtnAccent }}
+                >
+                  Aperturas
+                </button>
                 {(canEPA || canCofersa) && (
                   <button
                     type="button"
@@ -186,6 +206,7 @@ export default function Recepcion() {
             {visibleModules.map((m) => {
               const isHover = hovered === m.key;
               const accent = m.tone === "accent";
+              const Icon = m.icon || Package;
 
               return (
                 <div
@@ -216,7 +237,7 @@ export default function Recepcion() {
                   ) : (
                     <div style={ui.simpleHeader}>
                       <div style={{ ...ui.iconBox, ...(accent ? ui.iconBoxAccent : {}) }}>
-                        <Package size={22} strokeWidth={2.2} color={accent ? ACCENT : SLATE} />
+                        <Icon size={22} strokeWidth={2.2} color={accent ? ACCENT : SLATE} />
                       </div>
                       <div style={ui.simpleHeaderRight}>
                         <span style={{ ...ui.pillSolid, ...(accent ? ui.pillSolidAccent : {}) }}>{m.tag}</span>
@@ -243,20 +264,6 @@ export default function Recepcion() {
               );
             })}
 
-            {!hasAnyRecepcion && (
-              <div style={ui.emptyWrap}>
-                <div style={ui.emptyIconWrap}>
-                  <Package size={24} strokeWidth={2} color={SLATE} />
-                </div>
-                <div style={ui.emptyTitle}>Sin accesos EPA / Cofersa</div>
-                <div style={ui.emptyText}>
-                  No tenés permisos para Recepción EPA ni Cofersa. Podés usar descargas y estadísticas si aplican.
-                </div>
-                <div style={ui.emptyChipsRow}>
-                  <span style={ui.emptyChip}>Contactá a un administrador</span>
-                </div>
-              </div>
-            )}
           </div>
 
           <div style={ui.footerNote}>
@@ -591,38 +598,6 @@ const ui = {
   link: { color: "#0F172A", fontWeight: 850, fontSize: 13, display: "inline-flex", alignItems: "center" },
   linkAccent: { color: ACCENT },
   metaHint: { color: "#94A3B8", fontWeight: 700, fontSize: 12 },
-
-  emptyWrap: {
-    gridColumn: "1 / -1",
-    borderRadius: 18,
-    border: "1px solid #E7E9F2",
-    background: "#fff",
-    padding: 20,
-    boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
-    borderTop: `3px solid ${ACCENT_SOFT}`,
-  },
-  emptyIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    border: "1px solid #E7E9F2",
-    display: "grid",
-    placeItems: "center",
-    marginBottom: 12,
-    background: "#F8FAFC",
-  },
-  emptyTitle: { color: "#0F172A", fontWeight: 950, fontSize: 16 },
-  emptyText: { color: SLATE, marginTop: 8, fontWeight: 650, fontSize: 14, lineHeight: 1.5 },
-  emptyChipsRow: { marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 },
-  emptyChip: {
-    border: "1px solid #E7E9F2",
-    background: "#F8FAFC",
-    padding: "8px 12px",
-    borderRadius: 999,
-    fontWeight: 800,
-    color: "#334155",
-    fontSize: 12,
-  },
 
   footerNote: {
     borderRadius: 18,

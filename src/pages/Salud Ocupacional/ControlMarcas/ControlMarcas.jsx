@@ -388,6 +388,7 @@ export default function ControlMarcas() {
         .cm-field-row { grid-template-columns: 1fr !important; }
         .cm-info-strip { grid-template-columns: 1fr !important; }
         .cm-info-strip .cm-divider { display: none !important; }
+        .cm-list-actions { width: 100%; justify-content: flex-start !important; }
       }
     `;
     document.head.appendChild(style);
@@ -674,14 +675,24 @@ export default function ControlMarcas() {
                 <div style={ui.listSectionKicker}>Hoy · {getTodayId()}</div>
                 <div style={ui.listSectionTitle}>Últimas marcas</div>
               </div>
-              <button
-                type="button"
-                onClick={cargarUltimasMarcasDelDia}
-                style={ui.btnGhostSmall}
-                disabled={loading}
-              >
-                Recargar
-              </button>
+              <div className="cm-list-actions" style={ui.listActions}>
+                <button
+                  type="button"
+                  onClick={cargarUltimasMarcasDelDia}
+                  style={ui.btnGhostSmall}
+                  disabled={loading}
+                >
+                  Recargar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => nav("/salud/control-marcas/historial")}
+                  style={ui.btnGhostSmall}
+                  disabled={loading}
+                >
+                  Historial
+                </button>
+              </div>
             </div>
 
             <div style={ui.listScroll}>
@@ -1202,6 +1213,14 @@ const ui = {
     background: "#FBFCFF",
     borderBottom: "1px solid #EEF1F7",
     flexShrink: 0,
+    flexWrap: "wrap",
+  },
+  listActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 8,
+    flexWrap: "wrap",
   },
   listSectionKicker: {
     fontSize: 11,

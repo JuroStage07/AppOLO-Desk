@@ -18,6 +18,7 @@ import imgDespacho from "../assets/despacho.png";
 import imgMantenimiento from "../assets/mantenimiento.png";
 import imgRecepcion from "../assets/recepcion.png";
 import imgServiciosGenerales from "../assets/serviciosGenerales.png";
+import imgPesado from "../assets/revisionEquipos.png";
 import imgEpa from "../assets/epalogo.jpeg";
 import { isEpaRestrictedUser } from "../config/epaOnlyUids";
 
@@ -104,6 +105,14 @@ export default function Home() {
         path: "/servicios-generales",
         img: imgServiciosGenerales, // cambiá esta imagen si luego creás una propia
         tag: "Servicios",
+      },
+      {
+        key: "pesado",
+        title: "Pesado",
+        desc: "Listas de trabajo del área Pesado. Creá listas e ítems; se guardan en la nube.",
+        path: "/pesado",
+        img: imgPesado,
+        tag: "Operación",
       },
       {
         key: "epa",

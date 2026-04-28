@@ -3,10 +3,10 @@ import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Truck, User } from "lucide-react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { AuthCtx } from "../../auth/AuthProvider";
-import { auth, db } from "../../firebase";
-import { filterByUserScope } from "../../utils/dataScope";
-import imgAccionDescarga from "../../assets/accionDescarga.png";
+import { AuthCtx } from "../../../auth/AuthProvider";
+import { auth, db } from "../../../firebase";
+import { filterByUserScope } from "../../../utils/dataScope";
+import imgAccionDescarga from "../../../assets/accionDescarga.png";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";

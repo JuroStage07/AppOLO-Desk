@@ -22,6 +22,7 @@ import DespachoFinalizadosPage from "./pages/Despacho/DespachoFinalizadosPage";
 import SaludOcupacional from "./pages/Salud Ocupacional/SaludOcupacional";
 import ControlTercerosManual from "./pages/Salud Ocupacional/ControlTerceros/ControlTercerosManual";
 import ControlMarcas from "./pages/Salud Ocupacional/ControlMarcas/ControlMarcas";
+import HistorialMarcas from "./pages/Salud Ocupacional/ControlMarcas/HistorialMarcas";
 import Visados from "./pages/Salud Ocupacional/Visados/Visados";
 import NuevoVisado from "./pages/Salud Ocupacional/Visados/NuevoVisado";
 import AdministrarVisados from "./pages/Salud Ocupacional/Visados/AdministrarVisados";
@@ -43,8 +44,8 @@ import OTsSolDetallePage from "./pages/Mantenimiento/OTs/OTsSolDetallePage";
 
 //Recepcion
 import Recepcion from "./pages/Recepcion/Recepcion";
-import AccionDescarga from "./pages/Recepcion/AccionDescarga";
-import AccionDetalle from "./pages/Recepcion/AccionDetalle";
+import AccionDescarga from "./pages/Recepcion/AccionDescarga/AccionDescarga";
+import AccionDetalle from "./pages/Recepcion/AccionDescarga/AccionDetalle";
 import MetricaRecepcion from "./pages/Recepcion/MetricaRecepcion";
 
 import EPAHubPage from "./pages/EPA/EPAHubPage";
@@ -57,6 +58,7 @@ import ValidarIngreso from "./pages/ServiciosGenerales/ValidarIngreso";
 import PesajeTarimas from "./pages/Zona Franca/PesajeTarimas";
 import RegistrarTarimas from "./pages/Zona Franca/RegistrarTarimas";
 import ConsultarTarimas from "./pages/Zona Franca/ConsultarTarimas";
+
 import useIsMobile from "./hooks/useIsMobile";
 
 function TenantScopeBadge() {
@@ -175,6 +177,15 @@ export default function App() {
             element={
               <PrivateRoute>
                 <ControlMarcas />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/salud/control-marcas/historial"
+            element={
+              <PrivateRoute>
+                <HistorialMarcas />
               </PrivateRoute>
             }
           />

@@ -10,9 +10,9 @@ import {
   updateDoc,
   Timestamp,
 } from "firebase/firestore";
-import { auth, db } from "../../firebase";
-import { AuthCtx } from "../../auth/AuthProvider";
-import { isInUserScope } from "../../utils/dataScope";
+import { auth, db } from "../../../firebase";
+import { AuthCtx } from "../../../auth/AuthProvider";
+import { isInUserScope } from "../../../utils/dataScope";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
