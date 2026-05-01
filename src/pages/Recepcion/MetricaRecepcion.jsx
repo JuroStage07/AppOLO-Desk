@@ -36,6 +36,7 @@ const SLATE = "#64748B";
 const ANDEN_SETTINGS_KEY = "recepcion.metrica.andenes.settings.v1";
 const EXCLUDED_ANDEN_USERS_LEGACY_KEY =
   "recepcion.metrica.andenes.excludedUsers.v1";
+const EXCLUDED_ACTIONS_KEY = "recepcion.metrica.excludedActions.v1";
 
 function fmtMinutesFromMs(ms) {
   const n = Number(ms || 0);
@@ -109,8 +110,89 @@ function actionStarterIdentity(row) {
   return { uid, label: label || "Usuario" };
 }
 
+function actionDurationMs(row) {
+  const stored = Number(row?.totalTimeMs ?? row?.tiempoTotalMs ?? row?.durationMs ?? 0);
+  if (Number.isFinite(stored) && stored > 0) return stored;
+
+  const started = toDateSafe(row?.startedAt);
+  const completed = toDateSafe(row?.completedAt ?? row?.completeAt);
+  if (!started || !completed) return 0;
+
+  const diff = completed.getTime() - started.getTime();
+  return diff > 0 ? diff : 0;
+}
+
 function normalizeExcludedUserToken(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function starterMatchesExcludedUsers(starter, excludedUsersSet) {
+  if (!excludedUsersSet || excludedUsersSet.size === 0) return false;
+  const uidKey = normalizeExcludedUserToken(
+    starter?.starterUid ?? starter?.uid ?? starter?.userId
+  );
+  const nameKey = normalizeExcludedUserToken(
+    starter?.starter ??
+      starter?.label ??
+      starter?.displayName ??
+      starter?.nombre ??
+      starter?.userName
+  );
+  return excludedUsersSet.has(uidKey) || excludedUsersSet.has(nameKey);
+}
+
+function filterDashboardDocsByExcludedUsers(docs = [], excludedUsersSet) {
+  if (!excludedUsersSet || excludedUsersSet.size === 0) return docs;
+
+  return docs.map((d) => {
+    const starters = Array.isArray(d?.starters)
+      ? d.starters.filter((s) => !starterMatchesExcludedUsers(s, excludedUsersSet))
+      : [];
+    const hasStarterMetrics = starters.length > 0 || Array.isArray(d?.starters);
+
+    const andenes = Array.isArray(d?.andenes)
+      ? d.andenes.map((a) => {
+          const rawStarters = Array.isArray(a?.starters)
+            ? a.starters
+            : Array.isArray(a?.usuarios)
+              ? a.usuarios
+              : Array.isArray(a?.operators)
+                ? a.operators
+                : null;
+
+          if (!rawStarters) return a;
+
+          const filteredStarters = rawStarters.filter(
+            (s) => !starterMatchesExcludedUsers(s, excludedUsersSet)
+          );
+
+          return {
+            ...a,
+            starters: filteredStarters,
+            accionesDia: sum(filteredStarters, (s) =>
+              Number(s?.iniciadasDia ?? s?.accionesDia ?? s?.iniciadas ?? s?.acciones ?? 0)
+            ),
+            finalizadasDia: sum(filteredStarters, (s) =>
+              Number(s?.finalizadasDia ?? s?.finalizadas ?? s?.cerradas ?? 0)
+            ),
+          };
+        })
+      : d?.andenes;
+
+    if (!hasStarterMetrics) {
+      return { ...d, andenes };
+    }
+
+    return {
+      ...d,
+      starters,
+      andenes,
+      accionesIniciadas: sum(starters, (s) => Number(s?.iniciadasDia || 0)),
+      accionesFinalizadas: sum(starters, (s) => Number(s?.finalizadasDia || 0)),
+      accionesBultosTotales: sum(starters, (s) => Number(s?.bultosTotalesDia || 0)),
+      accionesTiempoTotalMs: sum(starters, (s) => Number(s?.tiempoTotalMsDia || 0)),
+    };
+  });
 }
 
 function parseYMD(s) {
@@ -129,6 +211,30 @@ function formatSelectedDateLabel(value) {
     month: "long",
     year: "numeric",
   });
+}
+
+function defaultRangeDates() {
+  const hasta = new Date();
+  const desde = new Date(hasta);
+  desde.setDate(desde.getDate() - 6);
+  return {
+    desde: ymd(desde),
+    hasta: ymd(hasta),
+  };
+}
+
+function formatRangeLabel(range = {}) {
+  const desde = parseYMD(range.desde);
+  const hasta = parseYMD(range.hasta);
+  if (!desde || !hasta) return "Rango personalizado";
+  return `${desde.toLocaleDateString("es-CR", {
+    day: "2-digit",
+    month: "short",
+  })} - ${hasta.toLocaleDateString("es-CR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })}`;
 }
 
 function startOfDayDate(date) {
@@ -154,7 +260,7 @@ function startOfWeekMonday(date = new Date()) {
   return d;
 }
 
-function buildDayKeysForFilter(filterKey, selectedDate = "") {
+function buildDayKeysForFilter(filterKey, selectedDate = "", range = null) {
   const now = new Date();
 
   if (filterKey === "fecha") {
@@ -188,7 +294,21 @@ function buildDayKeysForFilter(filterKey, selectedDate = "") {
     return out;
   }
 
-  // rango temporal: por ahora últimos 5 días
+  if (filterKey === "rango") {
+    const startRaw = parseYMD(range?.desde);
+    const endRaw = parseYMD(range?.hasta);
+    if (!startRaw || !endRaw) return [];
+    const start = startRaw <= endRaw ? startRaw : endRaw;
+    const end = startRaw <= endRaw ? endRaw : startRaw;
+    const out = [];
+    const cur = new Date(start);
+    while (cur <= end && out.length < 370) {
+      out.push(ymd(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return out;
+  }
+
   const out = [];
   const cur = new Date(now);
   cur.setDate(cur.getDate() - 4);
@@ -368,6 +488,7 @@ function buildTeamTimes(docs = []) {
   return buildTeamProductivity(docs)
     .map((x) => ({
       label: x.label,
+      starterUid: x.starterUid,
       finalizadas: x.finalizadas,
       tiempoPromedioMs: x.tiempoPromedioMs,
       tiempoTotalMs: x.tiempoTotalMs,
@@ -743,12 +864,19 @@ function buildAndenesData(docs = []) {
     .sort((a, b) => b.acciones - a.acciones);
 }
 
-function buildDashboardFromDailyDocs(filterKey, docs = [], selectedDate = "") {
+function buildDashboardFromDailyDocs(
+  filterKey,
+  docs = [],
+  selectedDate = "",
+  customRange = null,
+  excludedUsersSet = new Set()
+) {
+  const metricDocs = filterDashboardDocsByExcludedUsers(docs, excludedUsersSet);
   const labelMap = {
     hoy: "Hoy",
     semana: "Semana actual",
     mes: "Mes actual",
-    rango: "Rango personalizado",
+    rango: formatRangeLabel(customRange),
     fecha: formatSelectedDateLabel(selectedDate),
   };
 
@@ -760,15 +888,15 @@ function buildDashboardFromDailyDocs(filterKey, docs = [], selectedDate = "") {
     fecha: "Fecha específica",
   };
 
-  const accionesFinalizadas = sum(docs, (d) => d.accionesFinalizadas);
-  const accionesIniciadas = sum(docs, (d) => d.accionesIniciadas);
-  const accionesCreadas = sum(docs, (d) => d.accionesCreadas);
-  const tiempoTotalMs = sum(docs, (d) => d.accionesTiempoTotalMs);
+  const accionesFinalizadas = sum(metricDocs, (d) => d.accionesFinalizadas);
+  const accionesIniciadas = sum(metricDocs, (d) => d.accionesIniciadas);
+  const accionesCreadas = sum(metricDocs, (d) => d.accionesCreadas);
+  const tiempoTotalMs = sum(metricDocs, (d) => d.accionesTiempoTotalMs);
 
   const tiempoPromedioMs =
     accionesFinalizadas > 0 ? Math.round(tiempoTotalMs / accionesFinalizadas) : 0;
 
-  const andenesEnUso = countAndenesInUse(docs);
+  const andenesEnUso = countAndenesInUse(metricDocs);
 
   const compliance =
     accionesIniciadas > 0 ? Math.round((accionesFinalizadas / accionesIniciadas) * 100) : 0;
@@ -776,10 +904,10 @@ function buildDashboardFromDailyDocs(filterKey, docs = [], selectedDate = "") {
   const { alerts, pendingUsers: pendingUsersCount } = buildAlertsFromDocs({
     compliance,
     tiempoPromedioMs,
-    docs,
+    docs: metricDocs,
   });
 
-  const bultosTotales = sum(docs, (d) => d.accionesBultosTotales);
+  const bultosTotales = sum(metricDocs, (d) => d.accionesBultosTotales);
   const bultosPorDescarga =
     accionesFinalizadas > 0 ? Math.round(bultosTotales / accionesFinalizadas) : 0;
 
@@ -787,14 +915,14 @@ function buildDashboardFromDailyDocs(filterKey, docs = [], selectedDate = "") {
   const bultosPorHora =
     horasTotales > 0 ? Math.round(bultosTotales / horasTotales) : 0;
 
-  const typeMix = buildTypeMix(docs);
-  const andenesData = buildAndenesData(docs);
+  const typeMix = buildTypeMix(metricDocs);
+  const andenesData = buildAndenesData(metricDocs);
 
-  const teamProductivity = buildTeamProductivity(docs).slice(0, 6);
-  const teamTimes = buildTeamTimes(docs).slice(0, 6);
+  const teamProductivity = buildTeamProductivity(metricDocs).slice(0, 6);
+  const teamTimes = buildTeamTimes(metricDocs).slice(0, 6);
 
-  const barData = buildBarData(filterKey, docs);
-  const lineData = buildLineData(filterKey, docs);
+  const barData = buildBarData(filterKey, metricDocs);
+  const lineData = buildLineData(filterKey, metricDocs);
 
   const executiveSummary = buildExecutiveSummary({
     label: labelMap[filterKey] || "Semana actual",
@@ -810,7 +938,7 @@ function buildDashboardFromDailyDocs(filterKey, docs = [], selectedDate = "") {
     lineData,
     barData,
     typeMix,
-    docs,
+    docs: metricDocs,
     pendingUsersCount,
   });
 
@@ -1132,7 +1260,7 @@ function FilterTabs({
     { key: "hoy", label: "Hoy", hint: "Corte diario" },
     { key: "semana", label: "Semana", hint: "Vista semanal" },
     { key: "mes", label: "Mes", hint: "Vista mensual" },
-    { key: "rango", label: "Rango personalizado", hint: "Últimos cortes" },
+    { key: "rango", label: "Rango personalizado", hint: "Desde / hasta" },
     { key: "fecha", label: "Por fecha", hint: "Seleccionar día" },
   ];
 
@@ -1670,7 +1798,12 @@ function AndenesChart({ data = [], periodLabel = "", onOpenDetalleAnden }) {
   );
 }
 
-function TeamProductivityCard({ data = [], periodLabel = "" }) {
+function TeamProductivityCard({
+  data = [],
+  periodLabel = "",
+  excludedUsersCount = 0,
+  onOpenSettings,
+}) {
   const max = Math.max(...data.map((d) => d.finalizadas), 1);
 
   return (
@@ -1681,8 +1814,25 @@ function TeamProductivityCard({ data = [], periodLabel = "" }) {
           <div style={ui.chartSubtitle}>
             Cierres, volumen y ritmo de ejecución · {periodLabel}
           </div>
+          {excludedUsersCount > 0 ? (
+            <div style={ui.chartMetaRow}>
+              {excludedUsersCount} usuario{excludedUsersCount === 1 ? "" : "s"} excluido
+              {excludedUsersCount === 1 ? "" : "s"} de las métricas
+            </div>
+          ) : null}
         </div>
-        <span style={ui.chartBadge}>Equipo</span>
+        <div style={ui.cardHeaderActions}>
+          <button
+            type="button"
+            style={ui.kpiEyeBtn}
+            title="Excluir usuarios de las métricas"
+            aria-label="Configurar usuarios excluidos de productividad"
+            onClick={onOpenSettings}
+          >
+            <Settings size={16} strokeWidth={2.25} color={ACCENT} />
+          </button>
+          <span style={ui.chartBadge}>Equipo</span>
+        </div>
       </div>
 
       <div style={ui.teamList}>
@@ -1725,7 +1875,7 @@ function TeamProductivityCard({ data = [], periodLabel = "" }) {
   );
 }
 
-function TeamTimesCard({ data = [], periodLabel = "" }) {
+function TeamTimesCard({ data = [], periodLabel = "", onOpenUserDetail }) {
   const valid = data.filter((d) => Number(d.tiempoPromedioMs || 0) > 0);
   const max = Math.max(...valid.map((d) => d.tiempoPromedioMs), 1);
 
@@ -1761,10 +1911,21 @@ function TeamTimesCard({ data = [], periodLabel = "" }) {
                     </div>
                   </div>
 
-                  <div style={ui.teamTimeValue}>
-                    {item.tiempoPromedioMs > 0
-                      ? fmtMinutesFromMs(item.tiempoPromedioMs)
-                      : "—"}
+                  <div style={ui.mixValueWrap}>
+                    <div style={ui.teamTimeValue}>
+                      {item.tiempoPromedioMs > 0
+                        ? fmtMinutesFromMs(item.tiempoPromedioMs)
+                        : "—"}
+                    </div>
+                    <button
+                      type="button"
+                      style={ui.kpiEyeBtn}
+                      title="Ver descargas contadas"
+                      aria-label={`Ver descargas contadas para ${item.label}`}
+                      onClick={() => onOpenUserDetail?.(item)}
+                    >
+                      <Eye size={16} strokeWidth={2.2} color={ACCENT} />
+                    </button>
                   </div>
                 </div>
 
@@ -1795,6 +1956,10 @@ export default function MetricaRecepcion() {
   const isMobile = useIsMobile();
   const [activeFilter, setActiveFilter] = useState("hoy");
   const [selectedDate, setSelectedDate] = useState(ymd(new Date()));
+  const [customRange, setCustomRange] = useState(() => defaultRangeDates());
+  const [customRangeDraft, setCustomRangeDraft] = useState(() => defaultRangeDates());
+  const [customRangeModalOpen, setCustomRangeModalOpen] = useState(false);
+  const [customRangeError, setCustomRangeError] = useState("");
   const [dashboardData, setDashboardData] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -1813,6 +1978,7 @@ export default function MetricaRecepcion() {
   const [executiveSummaryOpen, setExecutiveSummaryOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [excludedAndenUsers, setExcludedAndenUsers] = useState([]);
+  const [excludedActions, setExcludedActions] = useState([]);
   const [minAndenStartedActions, setMinAndenStartedActions] = useState(1);
   const [andenUsersCatalog, setAndenUsersCatalog] = useState([]);
   const [showUsersCatalog, setShowUsersCatalog] = useState(false);
@@ -1826,6 +1992,13 @@ export default function MetricaRecepcion() {
     loading: false,
     error: "",
     starters: [],
+  });
+  const [userTimeDetailModal, setUserTimeDetailModal] = useState({
+    open: false,
+    user: null,
+    loading: false,
+    error: "",
+    items: [],
   });
 
   useEffect(() => {
@@ -1865,6 +2038,21 @@ export default function MetricaRecepcion() {
   }, []);
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem(EXCLUDED_ACTIONS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const clean = Array.isArray(parsed)
+          ? parsed.map((x) => String(x || "").trim()).filter(Boolean)
+          : [];
+        setExcludedActions(clean);
+      }
+    } catch (e) {
+      console.warn("No se pudo leer configuración local de acciones excluidas.", e);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!andenSettingsHydrated) return;
     try {
       localStorage.setItem(ANDEN_SETTINGS_KEY, JSON.stringify({
@@ -1876,9 +2064,21 @@ export default function MetricaRecepcion() {
     }
   }, [excludedAndenUsers, minAndenStartedActions, andenSettingsHydrated]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(EXCLUDED_ACTIONS_KEY, JSON.stringify(excludedActions));
+    } catch (e) {
+      console.warn("No se pudo guardar configuración local de acciones excluidas.", e);
+    }
+  }, [excludedActions]);
+
   const excludedAndenUsersSet = useMemo(
     () => new Set(excludedAndenUsers.map(normalizeExcludedUserToken).filter(Boolean)),
     [excludedAndenUsers]
+  );
+  const excludedActionsSet = useMemo(
+    () => new Set(excludedActions.map((id) => String(id || "").trim()).filter(Boolean)),
+    [excludedActions]
   );
   const minAndenStartedActionsSafe = Math.max(
     0,
@@ -2018,6 +2218,37 @@ export default function MetricaRecepcion() {
       }
     );
   }, [dashboardData, loadError]);
+
+  const handleFilterChange = useCallback(
+    (nextFilter) => {
+      if (nextFilter === "rango") {
+        setCustomRangeDraft(customRange);
+        setCustomRangeError("");
+        setCustomRangeModalOpen(true);
+        return;
+      }
+      setActiveFilter(nextFilter);
+    },
+    [customRange]
+  );
+
+  const applyCustomRange = useCallback(() => {
+    const desde = parseYMD(customRangeDraft.desde);
+    const hasta = parseYMD(customRangeDraft.hasta);
+    if (!desde || !hasta) {
+      setCustomRangeError("Seleccioná una fecha desde y una fecha hasta válidas.");
+      return;
+    }
+
+    const normalized = desde <= hasta
+      ? { desde: ymd(desde), hasta: ymd(hasta) }
+      : { desde: ymd(hasta), hasta: ymd(desde) };
+
+    setCustomRange(normalized);
+    setActiveFilter("rango");
+    setCustomRangeModalOpen(false);
+    setCustomRangeError("");
+  }, [customRangeDraft]);
 
   const handleExportReport = useCallback(() => {
     if (loadingData || loadError || !dashboardData) return;
@@ -2233,7 +2464,7 @@ export default function MetricaRecepcion() {
     });
 
     try {
-      const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate);
+      const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate, customRange);
       const allowed = new Set(dayKeys);
       const andenId = String(item?.idAnden || item?.label?.replace("Andén ", "") || "").trim();
 
@@ -2305,6 +2536,112 @@ export default function MetricaRecepcion() {
     }
   };
 
+  const openUserTimeDetail = async (item) => {
+    if (!item) return;
+    if (!tenantScope.tenantId || !tenantScope.company) {
+      setUserTimeDetailModal({
+        open: true,
+        user: item,
+        loading: false,
+        error: "No se pudo determinar el tenant para cargar las descargas.",
+        items: [],
+      });
+      return;
+    }
+
+    setUserTimeDetailModal({
+      open: true,
+      user: item,
+      loading: true,
+      error: "",
+      items: [],
+    });
+
+    try {
+      const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate, customRange);
+      const allowed = new Set(dayKeys);
+      const selectedUid = normalizeExcludedUserToken(item?.starterUid);
+      const selectedName = normalizeExcludedUserToken(item?.label);
+
+      const q = query(
+        collection(db, "accion_descarga"),
+        orderBy("creadoAt", "desc"),
+        limit(2500)
+      );
+      const snap = await getDocs(q);
+      const rows = filterByUserScope(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        tenantScope.tenantId,
+        tenantScope.company
+      );
+
+      const items = rows
+        .filter((row) => {
+          const completedAt = row?.completedAt ?? row?.completeAt;
+          const completedDate = toDateSafe(completedAt);
+          if (!completedDate || !allowed.has(ymd(completedDate))) return false;
+
+          // Filter out excluded actions
+          if (excludedActionsSet.has(String(row?.id || "").trim())) {
+            return false;
+          }
+
+          const who = actionStarterIdentity(row);
+          const uidKey = normalizeExcludedUserToken(who.uid);
+          const nameKey = normalizeExcludedUserToken(who.label);
+          if (excludedAndenUsersSet.has(uidKey) || excludedAndenUsersSet.has(nameKey)) {
+            return false;
+          }
+
+          return (
+            (selectedUid && uidKey === selectedUid) ||
+            (selectedName && nameKey === selectedName)
+          );
+        })
+        .map((row) => ({
+          ...row,
+          _durationMs: actionDurationMs(row),
+        }))
+        .sort((a, b) => {
+          const ad = toDateSafe(a?.completedAt ?? a?.completeAt)?.getTime() || 0;
+          const bd = toDateSafe(b?.completedAt ?? b?.completeAt)?.getTime() || 0;
+          return bd - ad;
+        });
+
+      setUserTimeDetailModal({
+        open: true,
+        user: item,
+        loading: false,
+        error: "",
+        items,
+      });
+    } catch (e) {
+      console.error("openUserTimeDetail:", e);
+      setUserTimeDetailModal({
+        open: true,
+        user: item,
+        loading: false,
+        error: "No se pudieron cargar las descargas de este usuario.",
+        items: [],
+      });
+    }
+  };
+
+  const toggleActionExclusion = (actionId) => {
+    const id = String(actionId || "").trim();
+    if (!id) return;
+
+    setExcludedActions((prev) => {
+      const set = new Set(prev);
+      if (set.has(id)) {
+        set.delete(id);
+      } else {
+        set.add(id);
+      }
+      return Array.from(set);
+    });
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -2338,7 +2675,7 @@ export default function MetricaRecepcion() {
           return;
         }
 
-        const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate);
+        const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate, customRange);
 
         const q = query(
           collection(db, "dashboard_salud_daily"),
@@ -2355,7 +2692,13 @@ export default function MetricaRecepcion() {
         const built = buildDashboardFromDailyDocs(
           activeFilter,
           filteredDocs,
-          selectedDate
+          selectedDate,
+          customRange,
+          excludedAndenUsersSet
+        );
+        const metricDocsForDailySlice = filterDashboardDocsByExcludedUsers(
+          filteredDocs,
+          excludedAndenUsersSet
         );
 
         const withData = new Set(
@@ -2379,7 +2722,7 @@ export default function MetricaRecepcion() {
                 : null,
           };
         }
-        built.dailySlice = filteredDocs
+        built.dailySlice = metricDocsForDailySlice
           .slice()
           .sort((a, b) =>
             String(a.dayKey || "").localeCompare(String(b.dayKey || ""))
@@ -2426,7 +2769,7 @@ export default function MetricaRecepcion() {
     return () => {
       mounted = false;
     };
-  }, [activeFilter, selectedDate]);
+  }, [activeFilter, selectedDate, customRange, excludedAndenUsersSet]);
 
   useEffect(() => {
     if (!aperturasModalOpen) return;
@@ -2441,7 +2784,7 @@ export default function MetricaRecepcion() {
       setAperturasModalLoading(true);
       setAperturasModalError("");
       try {
-        const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate);
+        const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate, customRange);
         const allowed = new Set(dayKeys);
         const q = query(
           collection(db, "accion_descarga"),
@@ -2475,6 +2818,7 @@ export default function MetricaRecepcion() {
     aperturasModalOpen,
     activeFilter,
     selectedDate,
+    customRange,
     tenantScope.tenantId,
     tenantScope.company,
   ]);
@@ -2600,7 +2944,7 @@ export default function MetricaRecepcion() {
 
               <FilterTabs
                 active={activeFilter}
-                onChange={setActiveFilter}
+                onChange={handleFilterChange}
                 selectedDate={selectedDate}
                 onChangeDate={setSelectedDate}
                 onExport={handleExportReport}
@@ -2850,11 +3194,14 @@ export default function MetricaRecepcion() {
             <TeamProductivityCard
               data={currentData.teamProductivity}
               periodLabel={currentData.label}
+              excludedUsersCount={excludedAndenUsers.length}
+              onOpenSettings={() => setSettingsModalOpen(true)}
             />
 
             <TeamTimesCard
               data={currentData.teamTimes}
               periodLabel={currentData.label}
+              onOpenUserDetail={openUserTimeDetail}
             />
           </div>
 
@@ -2883,6 +3230,100 @@ export default function MetricaRecepcion() {
           </div>
         </div>
       </main>
+
+      {customRangeModalOpen && (
+        <div
+          style={ui.aperturasModalRoot}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="custom-range-modal-title"
+        >
+          <button
+            type="button"
+            style={ui.aperturasModalBackdrop}
+            onClick={() => setCustomRangeModalOpen(false)}
+            aria-label="Cerrar"
+          />
+
+          <div style={ui.infoHelpSheet}>
+            <div style={ui.aperturasSheetHeader}>
+              <div style={{ minWidth: 0 }}>
+                <div id="custom-range-modal-title" style={ui.aperturasSheetTitle}>
+                  Rango personalizado
+                </div>
+                <div style={ui.aperturasSheetSubtitle}>
+                  Seleccioná fecha desde y hasta para recalcular las métricas del panel.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCustomRangeModalOpen(false)}
+                style={ui.aperturasSheetCloseBtn}
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div style={ui.settingsSection}>
+              <div style={ui.aperturasFiltersRow}>
+                <label style={ui.aperturasFilterField}>
+                  <span style={ui.aperturasFilterLabel}>Desde</span>
+                  <input
+                    type="date"
+                    value={customRangeDraft.desde}
+                    onChange={(e) =>
+                      setCustomRangeDraft((prev) => ({
+                        ...prev,
+                        desde: e.target.value,
+                      }))
+                    }
+                    style={ui.aperturasFilterInput}
+                  />
+                </label>
+                <label style={ui.aperturasFilterField}>
+                  <span style={ui.aperturasFilterLabel}>Hasta</span>
+                  <input
+                    type="date"
+                    value={customRangeDraft.hasta}
+                    onChange={(e) =>
+                      setCustomRangeDraft((prev) => ({
+                        ...prev,
+                        hasta: e.target.value,
+                      }))
+                    }
+                    style={ui.aperturasFilterInput}
+                  />
+                </label>
+              </div>
+
+              {customRangeError ? (
+                <div style={ui.settingsError}>{customRangeError}</div>
+              ) : (
+                <div style={ui.settingsText}>
+                  El rango activo será: <b>{formatRangeLabel(customRangeDraft)}</b>
+                </div>
+              )}
+
+              <div style={ui.rangeModalActions}>
+                <button
+                  type="button"
+                  style={ui.settingsShowUsersBtn}
+                  onClick={() => setCustomRangeDraft(defaultRangeDates())}
+                >
+                  Últimos 7 días
+                </button>
+                <button
+                  type="button"
+                  style={ui.settingsAddBtn}
+                  onClick={applyCustomRange}
+                >
+                  Aplicar rango
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {settingsModalOpen && (
         <div
@@ -2918,12 +3359,13 @@ export default function MetricaRecepcion() {
             </div>
 
             <div style={ui.settingsSection}>
-              <div style={ui.settingsTitle}>Usuarios excluidos: Uso de andenes</div>
+              <div style={ui.settingsTitle}>Usuarios excluidos de métricas</div>
               <div style={ui.settingsText}>
-                Agregá nombre o UID a una lista negra para que no aparezcan en el detalle del ojito por andén.
+                Agregá nombre o UID para que ese usuario no aporte en productividad, bultos,
+                tiempos, descargas cerradas, iniciadas y cumplimiento del panel.
               </div>
               <div style={ui.settingsWarningText}>
-                Esta lista es definitiva: todo usuario agregado aquí quedará oculto en los listados del ojito.
+                Esta lista también se aplica al detalle por andén. La configuración se guarda localmente en este navegador.
               </div>
 
               <div style={ui.settingsRowCompact}>
@@ -3242,6 +3684,189 @@ export default function MetricaRecepcion() {
                   ))}
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {userTimeDetailModal.open && (
+        <div
+          style={ui.aperturasModalRoot}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="user-time-detail-modal-title"
+        >
+          <button
+            type="button"
+            style={ui.aperturasModalBackdrop}
+            onClick={() =>
+              setUserTimeDetailModal({
+                open: false,
+                user: null,
+                loading: false,
+                error: "",
+                items: [],
+              })
+            }
+            aria-label="Cerrar"
+          />
+
+          <div style={ui.aperturasSheet}>
+            <div style={ui.aperturasSheetHeader}>
+              <div style={{ minWidth: 0 }}>
+                <div id="user-time-detail-modal-title" style={ui.aperturasSheetTitle}>
+                  {userTimeDetailModal.user?.label || "Usuario"}
+                </div>
+                <div style={ui.aperturasSheetSubtitle}>
+                  Descargas cerradas contadas en tiempos · <b>{currentData.label}</b>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setUserTimeDetailModal({
+                    open: false,
+                    user: null,
+                    loading: false,
+                    error: "",
+                    items: [],
+                  })
+                }
+                style={ui.aperturasSheetCloseBtn}
+              >
+                Cerrar
+              </button>
+            </div>
+
+            {userTimeDetailModal.loading ? (
+              <div style={ui.aperturasModalLoadingBox}>
+                <Loader2
+                  size={22}
+                  strokeWidth={2.25}
+                  color={ACCENT}
+                  style={{ animation: "metricaRecepcionSpin 0.75s linear infinite" }}
+                />
+                <span style={{ color: "#64748B", fontWeight: 800, fontSize: 13 }}>
+                  Cargando descargas…
+                </span>
+              </div>
+            ) : userTimeDetailModal.error ? (
+              <div style={ui.aperturasModalEmpty}>{userTimeDetailModal.error}</div>
+            ) : !userTimeDetailModal.items?.length ? (
+              <div style={ui.aperturasModalEmpty}>
+                No se encontraron descargas cerradas para este usuario en el período seleccionado.
+              </div>
+            ) : (
+              <>
+                <div style={ui.userTimeSummary}>
+                  <div style={ui.statusMiniCard}>
+                    <div style={ui.statusMiniLabel}>Descargas</div>
+                    <div style={ui.statusMiniValue}>
+                      {fmtInt(userTimeDetailModal.items.length)}
+                    </div>
+                  </div>
+                  <div style={ui.statusMiniCard}>
+                    <div style={ui.statusMiniLabel}>Tiempo total</div>
+                    <div style={ui.statusMiniValue}>
+                      {fmtMinutesFromMs(sum(userTimeDetailModal.items, (row) => row._durationMs))}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={ui.aperturasListWrap}>
+                  <div style={ui.aperturasList}>
+                    {userTimeDetailModal.items.map((row) => {
+                      const isExcluded = excludedActionsSet.has(String(row?.id || "").trim());
+                      const title =
+                        String(row?.nombreAccion || "").trim() ||
+                        [row?.proveedorNombre, row?.idAnden ? `Andén ${row.idAnden}` : ""]
+                          .filter(Boolean)
+                          .join(" · ") ||
+                        row?.id;
+                      const duration = row?._durationMs
+                        ? fmtMinutesFromMs(row._durationMs)
+                        : row?.totalTimeTxt || "—";
+
+                      return (
+                        <div 
+                          key={row.id} 
+                          style={{
+                            ...ui.aperturasRow,
+                            ...(isExcluded ? { opacity: 0.5, background: "#F8F9FA" } : {})
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{
+                              ...ui.aperturasRowTitle,
+                              ...(isExcluded ? { textDecoration: "line-through" } : {})
+                            }}>
+                              {title}
+                              {isExcluded && (
+                                <span style={{
+                                  marginLeft: "8px",
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  color: "#94A3B8",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.5px"
+                                }}>
+                                  Excluida
+                                </span>
+                              )}
+                            </div>
+                            <div style={ui.aperturasRowMeta}>
+                              Cerrada {formatDateTimeShort(row?.completedAt ?? row?.completeAt)}
+                              {row?.idAnden ? ` · Andén ${row.idAnden}` : ""}
+                              {row?.cantidadBultos != null
+                                ? ` · ${fmtInt(row.cantidadBultos)} bultos`
+                                : ""}
+                            </div>
+                          </div>
+                          <div style={ui.userTimeRowActions}>
+                            <span style={{ ...ui.estadoPill, ...ui.estadoPillCompleta }}>
+                              {duration}
+                            </span>
+                            <button
+                              type="button"
+                              style={{
+                                ...ui.kpiEyeBtn,
+                                marginLeft: "8px",
+                                padding: "6px 10px",
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                background: isExcluded ? ACCENT_SOFT : "#FEF2F2",
+                                color: isExcluded ? ACCENT : "#DC2626",
+                                border: `1px solid ${isExcluded ? ACCENT : "#FCA5A5"}`,
+                                borderRadius: "6px",
+                              }}
+                              title={isExcluded ? "Incluir en métricas" : "Excluir de métricas"}
+                              onClick={() => toggleActionExclusion(row.id)}
+                            >
+                              {isExcluded ? "Incluir" : "Excluir"}
+                            </button>
+                            <button
+                              type="button"
+                              style={ui.aperturasRowLink}
+                              onClick={() => {
+                                setUserTimeDetailModal({
+                                  open: false,
+                                  user: null,
+                                  loading: false,
+                                  error: "",
+                                  items: [],
+                                });
+                                nav(`/recepcion/accion-descarga/${encodeURIComponent(row.id)}`);
+                              }}
+                            >
+                              Abrir
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -4972,6 +5597,11 @@ const ui = {
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 10,
   },
+  userTimeSummary: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
 
   statusMiniCard: {
     padding: 12,
@@ -5112,6 +5742,12 @@ const ui = {
     lineHeight: 0,
     fontFamily: "inherit",
   },
+  cardHeaderActions: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+  },
   mixValueWrap: {
     display: "inline-flex",
     alignItems: "center",
@@ -5240,6 +5876,13 @@ const ui = {
   settingsRowCompact: {
     display: "grid",
     gap: 8,
+  },
+  rangeModalActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 10,
+    flexWrap: "wrap",
   },
   settingsShowUsersBtn: {
     borderRadius: 10,
@@ -5494,6 +6137,12 @@ const ui = {
     borderRadius: 16,
     border: "1px solid #E7E9F2",
     background: "#FBFCFF",
+  },
+  userTimeRowActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
   },
   aperturasRowTitle: {
     fontWeight: 950,
