@@ -1436,6 +1436,7 @@ function ExecutiveSummaryPanel({ summary }) {
 }
 
 function MiniBarChart({ data = [], periodLabel = "Semana actual" }) {
+  const [hoveredIndex, setHoveredIndex] = React.useState(null);
   const max = Math.max(...data.map((d) => d.value), 1);
   const total = data.reduce((s, d) => s + (Number(d.value) || 0), 0);
   const avg = data.length && total > 0 ? Math.round(total / data.length) : 0;
@@ -1473,21 +1474,48 @@ function MiniBarChart({ data = [], periodLabel = "Semana actual" }) {
               ))}
             </div>
             <div style={ui.barChartWrap}>
-              {data.map((item) => (
-                <div key={item.label} style={ui.barItem}>
-                  <div
-                    style={{
-                      ...ui.bar,
-                      height: `${Math.max((item.value / max) * 118, 10)}px`,
-                    }}
-                    title={`${item.label}: ${fmtInt(item.value)} descargas`}
-                  />
-                  <div style={ui.barValue}>{fmtInt(item.value)}</div>
-                  <div style={ui.barLabel} title={String(item.label)}>
-                    {item.label}
+              {data.map((item, idx) => {
+                const isHovered = hoveredIndex === idx;
+                return (
+                  <div 
+                    key={item.label} 
+                    style={ui.barItem}
+                    onMouseEnter={() => setHoveredIndex(idx)}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                  >
+                    <div
+                      style={{
+                        ...ui.bar,
+                        height: `${Math.max((item.value / max) * 118, 10)}px`,
+                        transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+                        transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+                        cursor: 'pointer',
+                        boxShadow: isHovered 
+                          ? '0 12px 24px rgba(8,159,138,0.28)' 
+                          : '0 8px 16px rgba(8,159,138,0.16)',
+                      }}
+                      title={`${item.label}: ${fmtInt(item.value)} descargas`}
+                    />
+                    <div style={{
+                      ...ui.barValue,
+                      transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+                      transition: 'transform 200ms ease',
+                      color: isHovered ? ACCENT : '#0F172A',
+                      fontWeight: isHovered ? 950 : 900,
+                    }}>
+                      {fmtInt(item.value)}
+                    </div>
+                    <div style={{
+                      ...ui.barLabel,
+                      color: isHovered ? '#0F172A' : '#64748B',
+                      fontWeight: isHovered ? 900 : 800,
+                      transition: 'all 200ms ease',
+                    }} title={String(item.label)}>
+                      {item.label}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -1497,6 +1525,7 @@ function MiniBarChart({ data = [], periodLabel = "Semana actual" }) {
 }
 
 function MiniLineChart({ data = [], periodLabel = "Últimos cortes" }) {
+  const [hoveredIndex, setHoveredIndex] = React.useState(null);
   const lineGradId = useId().replace(/:/g, "");
   const w = 100;
   const h = 44;
@@ -1567,6 +1596,9 @@ function MiniLineChart({ data = [], periodLabel = "Últimos cortes" }) {
               fill={`url(#${lineGradId})`}
               points={areaPoints}
               opacity={0.92}
+              style={{
+                transition: 'opacity 300ms ease',
+              }}
             />
             <defs>
               <linearGradient id={lineGradId} x1="0" y1="0" x2="0" y2="1">
@@ -1581,13 +1613,46 @@ function MiniLineChart({ data = [], periodLabel = "Últimos cortes" }) {
               points={linePoints}
               strokeLinecap="round"
               strokeLinejoin="round"
+              style={{
+                transition: 'stroke-width 200ms ease',
+              }}
             />
             {data.map((d, i) => {
               const x = (i / Math.max(data.length - 1, 1)) * w;
               const v = Math.max(0, Math.min(100, Number(d.value) || 0));
               const y = padT + (1 - v / 100) * chartH;
+              const isHovered = hoveredIndex === i;
               return (
-                <circle key={`${d.label}-${i}`} cx={x} cy={y} r="1.1" fill="#fff" stroke={ACCENT} strokeWidth="0.45" />
+                <g key={`${d.label}-${i}`}>
+                  <circle 
+                    cx={x} 
+                    cy={y} 
+                    r={isHovered ? "1.8" : "1.1"} 
+                    fill="#fff" 
+                    stroke={ACCENT} 
+                    strokeWidth={isHovered ? "0.6" : "0.45"}
+                    style={{
+                      transition: 'all 200ms ease',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={() => setHoveredIndex(i)}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                  >
+                    <title>{d.label}: {d.value}%</title>
+                  </circle>
+                  {isHovered && (
+                    <text
+                      x={x}
+                      y={y - 3}
+                      textAnchor="middle"
+                      fill={ACCENT}
+                      fontSize="3"
+                      fontWeight="900"
+                    >
+                      {d.value}%
+                    </text>
+                  )}
+                </g>
               );
             })}
           </svg>
@@ -1596,14 +1661,36 @@ function MiniLineChart({ data = [], periodLabel = "Últimos cortes" }) {
 
       {!compactLegend && data.length > 0 ? (
         <div style={ui.lineLegend}>
-          {data.map((d) => (
-            <div key={d.label} style={ui.legendItem}>
-              <span style={ui.legendDot} />
-              <span style={ui.legendText}>
-                {d.label}: {d.value}%
-              </span>
-            </div>
-          ))}
+          {data.map((d, idx) => {
+            const isHovered = hoveredIndex === idx;
+            return (
+              <div 
+                key={d.label} 
+                style={{
+                  ...ui.legendItem,
+                  transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+                  transition: 'transform 200ms ease',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={() => setHoveredIndex(idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                <span style={{
+                  ...ui.legendDot,
+                  transform: isHovered ? 'scale(1.3)' : 'scale(1)',
+                  transition: 'transform 200ms ease',
+                }} />
+                <span style={{
+                  ...ui.legendText,
+                  color: isHovered ? ACCENT : '#64748B',
+                  fontWeight: isHovered ? 900 : 800,
+                  transition: 'all 200ms ease',
+                }}>
+                  {d.label}: {d.value}%
+                </span>
+              </div>
+            );
+          })}
         </div>
       ) : data.length > 0 ? (
         <div style={ui.lineLegendCompact}>
@@ -1649,6 +1736,7 @@ function DonutPlaceholder({
 }
 
 function MiniUserChart({ data = [], periodLabel = "Semana actual" }) {
+  const [hoveredIndex, setHoveredIndex] = React.useState(null);
   const max = Math.max(...data.map((d) => d.value), 1);
 
   return (
@@ -1667,23 +1755,56 @@ function MiniUserChart({ data = [], periodLabel = "Semana actual" }) {
         {data.length === 0 ? (
           <div style={ui.emptyMiniText}>Sin datos de usuarios para el período.</div>
         ) : (
-          data.map((item) => (
-            <div key={item.label} style={ui.userRow}>
-              <div style={ui.userRowTop}>
-                <div style={ui.userRowName}>{item.label}</div>
-                <div style={ui.userRowValue}>{item.value}</div>
-              </div>
+          data.map((item, idx) => {
+            const isHovered = hoveredIndex === idx;
+            return (
+              <div 
+                key={item.label} 
+                style={{
+                  ...ui.userRow,
+                  transform: isHovered ? 'translateX(4px)' : 'translateX(0)',
+                  transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+                  cursor: 'pointer',
+                  background: isHovered ? '#F8FAFC' : 'transparent',
+                  borderRadius: '12px',
+                  padding: isHovered ? '10px' : '8px',
+                }}
+                onMouseEnter={() => setHoveredIndex(idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                <div style={ui.userRowTop}>
+                  <div style={{
+                    ...ui.userRowName,
+                    color: isHovered ? ACCENT : '#0F172A',
+                    transition: 'color 200ms ease',
+                  }}>
+                    {item.label}
+                  </div>
+                  <div style={{
+                    ...ui.userRowValue,
+                    transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+                    transition: 'transform 200ms ease',
+                    color: isHovered ? ACCENT : '#0F172A',
+                  }}>
+                    {item.value}
+                  </div>
+                </div>
 
-              <div style={ui.userTrack}>
-                <div
-                  style={{
-                    ...ui.userFill,
-                    width: `${Math.max((item.value / max) * 100, 8)}%`,
-                  }}
-                />
+                <div style={ui.userTrack}>
+                  <div
+                    style={{
+                      ...ui.userFill,
+                      width: `${Math.max((item.value / max) * 100, 8)}%`,
+                      transition: 'width 400ms cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: isHovered 
+                        ? '0 4px 12px rgba(8,159,138,0.3)' 
+                        : '0 2px 6px rgba(8,159,138,0.15)',
+                    }}
+                  />
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
@@ -1691,6 +1812,7 @@ function MiniUserChart({ data = [], periodLabel = "Semana actual" }) {
 }
 
 function MixTypeChart({ data = [], periodLabel = "" }) {
+  const [hoveredIndex, setHoveredIndex] = React.useState(null);
   const max = Math.max(...data.map((d) => d.value), 1);
   const totalMix = data.reduce((s, d) => s + (Number(d.value) || 0), 0);
 
@@ -1717,25 +1839,56 @@ function MixTypeChart({ data = [], periodLabel = "" }) {
         {data.length === 0 ? (
           <div style={ui.emptyMiniText}>Sin datos disponibles.</div>
         ) : (
-          data.map((item) => (
-            <div key={item.label} style={ui.mixRow}>
-              <div style={ui.mixRowTop}>
-                <div style={ui.mixLabel}>{item.label}</div>
-                <div style={ui.mixValue}>
-                  {fmtInt(item.value)} · {item.percent}%
+          data.map((item, idx) => {
+            const isHovered = hoveredIndex === idx;
+            return (
+              <div 
+                key={item.label} 
+                style={{
+                  ...ui.mixRow,
+                  transform: isHovered ? 'translateX(4px)' : 'translateX(0)',
+                  transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+                  cursor: 'pointer',
+                  background: isHovered ? '#F8FAFC' : 'transparent',
+                  borderRadius: '12px',
+                  padding: isHovered ? '10px' : '8px',
+                }}
+                onMouseEnter={() => setHoveredIndex(idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                <div style={ui.mixRowTop}>
+                  <div style={{
+                    ...ui.mixLabel,
+                    color: isHovered ? ACCENT : '#0F172A',
+                    transition: 'color 200ms ease',
+                  }}>
+                    {item.label}
+                  </div>
+                  <div style={{
+                    ...ui.mixValue,
+                    transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'transform 200ms ease',
+                    color: isHovered ? ACCENT : '#0F172A',
+                  }}>
+                    {fmtInt(item.value)} · {item.percent}%
+                  </div>
+                </div>
+
+                <div style={ui.mixTrack}>
+                  <div
+                    style={{
+                      ...ui.mixFill,
+                      width: `${Math.max((item.value / max) * 100, 6)}%`,
+                      transition: 'width 400ms cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: isHovered 
+                        ? '0 4px 12px rgba(8,159,138,0.3)' 
+                        : '0 2px 6px rgba(8,159,138,0.15)',
+                    }}
+                  />
                 </div>
               </div>
-
-              <div style={ui.mixTrack}>
-                <div
-                  style={{
-                    ...ui.mixFill,
-                    width: `${Math.max((item.value / max) * 100, 6)}%`,
-                  }}
-                />
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
@@ -1743,6 +1896,7 @@ function MixTypeChart({ data = [], periodLabel = "" }) {
 }
 
 function AndenesChart({ data = [], periodLabel = "", onOpenDetalleAnden }) {
+  const [hoveredIndex, setHoveredIndex] = React.useState(null);
   const max = Math.max(...data.map((d) => d.acciones), 1);
 
   return (
@@ -1761,37 +1915,69 @@ function AndenesChart({ data = [], periodLabel = "", onOpenDetalleAnden }) {
         {data.length === 0 ? (
           <div style={ui.emptyMiniText}>Sin datos disponibles.</div>
         ) : (
-          data.map((item) => (
-            <div key={item.label} style={ui.mixRow}>
-              <div style={ui.mixRowTop}>
-                <div style={ui.mixLabel}>{item.label}</div>
-                <div style={ui.mixValueWrap}>
-                  <div style={ui.mixValue}>
-                    {item.acciones} acc · {item.finalizadas} fin
+          data.map((item, idx) => {
+            const isHovered = hoveredIndex === idx;
+            return (
+              <div 
+                key={item.label} 
+                style={{
+                  ...ui.mixRow,
+                  transform: isHovered ? 'translateX(4px)' : 'translateX(0)',
+                  transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+                  cursor: 'pointer',
+                  background: isHovered ? '#F8FAFC' : 'transparent',
+                  borderRadius: '12px',
+                  padding: isHovered ? '10px' : '8px',
+                }}
+                onMouseEnter={() => setHoveredIndex(idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                <div style={ui.mixRowTop}>
+                  <div style={{
+                    ...ui.mixLabel,
+                    color: isHovered ? ACCENT : '#0F172A',
+                    transition: 'color 200ms ease',
+                  }}>
+                    {item.label}
                   </div>
-                  <button
-                    type="button"
+                  <div style={ui.mixValueWrap}>
+                    <div style={{
+                      ...ui.mixValue,
+                      color: isHovered ? ACCENT : '#0F172A',
+                      transition: 'color 200ms ease',
+                    }}>
+                      {item.acciones} acc · {item.finalizadas} fin
+                    </div>
+                    <button
+                      type="button"
+                      style={{
+                        ...ui.kpiEyeBtn,
+                        transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+                        transition: 'transform 200ms ease',
+                      }}
+                      title="Ver operadores del andén"
+                      onClick={() => onOpenDetalleAnden?.(item)}
+                    >
+                      <Eye size={16} strokeWidth={2.2} color={ACCENT} />
+                    </button>
+                  </div>
+                </div>
+
+                <div style={ui.mixTrack}>
+                  <div
                     style={{
-                      ...ui.kpiEyeBtn,
+                      ...ui.mixFill,
+                      width: `${Math.max((item.acciones / max) * 100, 6)}%`,
+                      transition: 'width 400ms cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: isHovered 
+                        ? '0 4px 12px rgba(8,159,138,0.3)' 
+                        : '0 2px 6px rgba(8,159,138,0.15)',
                     }}
-                    title="Ver operadores del andén"
-                    onClick={() => onOpenDetalleAnden?.(item)}
-                  >
-                    <Eye size={16} strokeWidth={2.2} color={ACCENT} />
-                  </button>
+                  />
                 </div>
               </div>
-
-              <div style={ui.mixTrack}>
-                <div
-                  style={{
-                    ...ui.mixFill,
-                    width: `${Math.max((item.acciones / max) * 100, 6)}%`,
-                  }}
-                />
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
@@ -1804,6 +1990,7 @@ function TeamProductivityCard({
   excludedUsersCount = 0,
   onOpenSettings,
 }) {
+  const [hoveredIndex, setHoveredIndex] = React.useState(null);
   const max = Math.max(...data.map((d) => d.finalizadas), 1);
 
   return (
@@ -1839,36 +2026,69 @@ function TeamProductivityCard({
         {data.length === 0 ? (
           <div style={ui.emptyMiniText}>Sin datos de usuarios para el período.</div>
         ) : (
-          data.map((item) => (
-            <div key={item.label} style={ui.teamRow}>
-              <div style={ui.teamRowTop}>
-                <div>
-                  <div style={ui.teamName}>{item.label}</div>
-                  <div style={ui.teamMeta}>
-                    {fmtInt(item.finalizadas)} cerradas · {fmtInt(item.iniciadas)} iniciadas
+          data.map((item, idx) => {
+            const isHovered = hoveredIndex === idx;
+            return (
+              <div 
+                key={item.label} 
+                style={{
+                  ...ui.teamRow,
+                  transform: isHovered ? 'translateX(4px)' : 'translateX(0)',
+                  transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+                  cursor: 'pointer',
+                  background: isHovered ? '#F8FAFC' : 'transparent',
+                  borderRadius: '12px',
+                  padding: isHovered ? '12px' : '10px',
+                }}
+                onMouseEnter={() => setHoveredIndex(idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                <div style={ui.teamRowTop}>
+                  <div>
+                    <div style={{
+                      ...ui.teamName,
+                      color: isHovered ? ACCENT : '#0F172A',
+                      transition: 'color 200ms ease',
+                    }}>
+                      {item.label}
+                    </div>
+                    <div style={ui.teamMeta}>
+                      {fmtInt(item.finalizadas)} cerradas · {fmtInt(item.iniciadas)} iniciadas
+                    </div>
+                  </div>
+
+                  <div style={ui.teamValueBox}>
+                    <div style={{
+                      ...ui.teamValue,
+                      transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+                      transition: 'transform 200ms ease',
+                      color: isHovered ? ACCENT : '#0F172A',
+                    }}>
+                      {fmtInt(item.bultos)}
+                    </div>
+                    <div style={ui.teamValueLabel}>bultos</div>
                   </div>
                 </div>
 
-                <div style={ui.teamValueBox}>
-                  <div style={ui.teamValue}>{fmtInt(item.bultos)}</div>
-                  <div style={ui.teamValueLabel}>bultos</div>
+                <div style={ui.teamTrack}>
+                  <div
+                    style={{
+                      ...ui.teamFill,
+                      width: `${Math.max((item.finalizadas / max) * 100, 6)}%`,
+                      transition: 'width 400ms cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: isHovered 
+                        ? '0 4px 12px rgba(8,159,138,0.3)' 
+                        : '0 2px 6px rgba(8,159,138,0.15)',
+                    }}
+                  />
+                </div>
+
+                <div style={ui.teamFoot}>
+                  <span>Tiempo promedio: {fmtMinutesFromMs(item.tiempoPromedioMs)}</span>
                 </div>
               </div>
-
-              <div style={ui.teamTrack}>
-                <div
-                  style={{
-                    ...ui.teamFill,
-                    width: `${Math.max((item.finalizadas / max) * 100, 6)}%`,
-                  }}
-                />
-              </div>
-
-              <div style={ui.teamFoot}>
-                <span>Tiempo promedio: {fmtMinutesFromMs(item.tiempoPromedioMs)}</span>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
@@ -1876,6 +2096,7 @@ function TeamProductivityCard({
 }
 
 function TeamTimesCard({ data = [], periodLabel = "", onOpenUserDetail }) {
+  const [hoveredIndex, setHoveredIndex] = React.useState(null);
   const valid = data.filter((d) => Number(d.tiempoPromedioMs || 0) > 0);
   const max = Math.max(...valid.map((d) => d.tiempoPromedioMs), 1);
 
@@ -1895,31 +2116,60 @@ function TeamTimesCard({ data = [], periodLabel = "", onOpenUserDetail }) {
         {data.length === 0 ? (
           <div style={ui.emptyMiniText}>Sin tiempos registrados para el período.</div>
         ) : (
-          data.map((item) => {
+          data.map((item, idx) => {
+            const isHovered = hoveredIndex === idx;
             const width =
               item.tiempoPromedioMs > 0
                 ? `${Math.max((item.tiempoPromedioMs / max) * 100, 6)}%`
                 : "6%";
 
             return (
-              <div key={item.label} style={ui.teamRow}>
+              <div 
+                key={item.label} 
+                style={{
+                  ...ui.teamRow,
+                  transform: isHovered ? 'translateX(4px)' : 'translateX(0)',
+                  transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+                  cursor: 'pointer',
+                  background: isHovered ? '#F8FAFC' : 'transparent',
+                  borderRadius: '12px',
+                  padding: isHovered ? '12px' : '10px',
+                }}
+                onMouseEnter={() => setHoveredIndex(idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
                 <div style={ui.teamRowTop}>
                   <div>
-                    <div style={ui.teamName}>{item.label}</div>
+                    <div style={{
+                      ...ui.teamName,
+                      color: isHovered ? ACCENT : '#0F172A',
+                      transition: 'color 200ms ease',
+                    }}>
+                      {item.label}
+                    </div>
                     <div style={ui.teamMeta}>
                       {fmtInt(item.finalizadas)} cerradas
                     </div>
                   </div>
 
                   <div style={ui.mixValueWrap}>
-                    <div style={ui.teamTimeValue}>
+                    <div style={{
+                      ...ui.teamTimeValue,
+                      transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+                      transition: 'transform 200ms ease',
+                      color: isHovered ? ACCENT : '#0F172A',
+                    }}>
                       {item.tiempoPromedioMs > 0
                         ? fmtMinutesFromMs(item.tiempoPromedioMs)
                         : "—"}
                     </div>
                     <button
                       type="button"
-                      style={ui.kpiEyeBtn}
+                      style={{
+                        ...ui.kpiEyeBtn,
+                        transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+                        transition: 'transform 200ms ease',
+                      }}
                       title="Ver descargas contadas"
                       aria-label={`Ver descargas contadas para ${item.label}`}
                       onClick={() => onOpenUserDetail?.(item)}
@@ -1934,6 +2184,10 @@ function TeamTimesCard({ data = [], periodLabel = "", onOpenUserDetail }) {
                     style={{
                       ...ui.teamFillSoft,
                       width,
+                      transition: 'width 400ms cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: isHovered 
+                        ? '0 4px 12px rgba(8,159,138,0.3)' 
+                        : '0 2px 6px rgba(8,159,138,0.15)',
                     }}
                   />
                 </div>
