@@ -9,7 +9,6 @@ import {
     orderBy,
     query,
     serverTimestamp,
-    where,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, db, storage } from "../../firebase";
@@ -92,22 +91,14 @@ export default function DocumentacionPage() {
         return data;
     };
 
-    const loadDocs = async (profileArg = profile) => {
+    /** Lista global: sin filtro por tenant ni company; todos los roles ven la misma biblioteca. */
+    const loadDocs = async () => {
         setLoadingDocs(true);
         setErr("");
 
         try {
-            const tenantId = profileArg?.tenantId;
-            const company = profileArg?.company;
-
-            if (!tenantId || !company) {
-                throw new Error("Falta tenantId o company en el profile.");
-            }
-
             const q = query(
                 collection(db, "documentacion"),
-                where("tenantId", "==", tenantId),
-                where("company", "==", company),
                 orderBy("createdAt", "desc")
             );
 
@@ -137,11 +128,16 @@ export default function DocumentacionPage() {
 
         (async () => {
             try {
-                const p = await loadProfile();
-                await loadDocs(p);
+                await loadDocs();
             } catch (e) {
                 console.error(e);
-                setErr(e?.message || "No se pudo cargar el perfil del usuario.");
+                setErr("No se pudo cargar la biblioteca documental.");
+            }
+            try {
+                await loadProfile();
+            } catch (e) {
+                console.error(e);
+                setErr((prev) => prev || e?.message || "No se pudo cargar el perfil del usuario.");
             }
         })();
 
@@ -286,7 +282,7 @@ export default function DocumentacionPage() {
             });
             setPdfFile(null);
 
-            await loadDocs(currentProfile);
+            await loadDocs();
             setShowUploadModal(false);
         } catch (e) {
             console.error(e);

@@ -889,6 +889,40 @@ async function buildWorkbook(data, ctx, ExcelJS) {
     }
   });
 
+  addDataSheet("Tiempos_proveedor", "FF0D9488", (ws) => {
+    ws.columns = [{ width: 32 }, { width: 18 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }];
+    const hdr = [
+      "Proveedor",
+      "Descargas cerradas",
+      "Tiempo prom. (min)",
+      "Tiempo total (min)",
+      "Tiempo prom.",
+      "Tiempo total",
+    ];
+    const hRow = ws.getRow(1);
+    hdr.forEach((t, i) => {
+      hRow.getCell(i + 1).value = t;
+    });
+    styleHeaderRow(hRow, hdr.length);
+    let i = 2;
+    for (const t of data?.providerTimes || []) {
+      const tpm = t.tiempoPromedioMs || 0;
+      const ttm = t.tiempoTotalMs || 0;
+      const R = ws.getRow(i);
+      R.getCell(1).value = t.label || "—";
+      R.getCell(2).value = t.finalizadas ?? "";
+      R.getCell(3).value = tpm > 0 ? Math.round((tpm / 60000) * 100) / 100 : 0;
+      R.getCell(4).value = ttm > 0 ? Math.round((ttm / 60000) * 100) / 100 : 0;
+      R.getCell(5).value = fmtMinutesFromMs(tpm);
+      R.getCell(6).value = fmtMinutesFromMs(ttm);
+      zebraRow(R, hdr.length, i % 2 === 0);
+      i += 1;
+    }
+    if (i > 2) {
+      ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: i - 1, column: hdr.length } };
+    }
+  });
+
   addDataSheet("Metadatos", "FF94A3B8", (ws) => {
     ws.columns = [{ width: 34 }, { width: 48 }];
     let r = 1;

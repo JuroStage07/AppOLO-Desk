@@ -496,6 +496,81 @@ function buildTeamTimes(docs = []) {
     .sort((a, b) => b.tiempoPromedioMs - a.tiempoPromedioMs);
 }
 
+function actionProveedorLabel(row) {
+  const name = String(row?.proveedorNombre ?? "").trim();
+  return name || "Sin proveedor";
+}
+
+/** Acciones cerradas en el período, listas para métricas por proveedor (sin agregar). */
+function filterAccionesParaMetricaProveedor(rows = [], options = {}) {
+  const allowedDayKeys = options.allowedDayKeys || [];
+  const excludedActionsSet = options.excludedActionsSet;
+  const excludedAndenUsersSet = options.excludedAndenUsersSet;
+  const allowed = new Set(allowedDayKeys);
+  const out = [];
+
+  for (const row of rows) {
+    const completedAt = row?.completedAt ?? row?.completeAt;
+    const completedDate = toDateSafe(completedAt);
+    if (!completedDate || !allowed.has(ymd(completedDate))) continue;
+
+    if (excludedActionsSet?.has(String(row?.id || "").trim())) continue;
+
+    const who = actionStarterIdentity(row);
+    const uidKey = normalizeExcludedUserToken(who.uid);
+    const nameKey = normalizeExcludedUserToken(who.label);
+    if (
+      excludedAndenUsersSet?.has(uidKey) ||
+      excludedAndenUsersSet?.has(nameKey)
+    ) {
+      continue;
+    }
+
+    out.push(row);
+  }
+
+  return out;
+}
+
+function aggregateProviderTimesByProveedor(rows = []) {
+  const map = new Map();
+
+  for (const row of rows) {
+    const dur = actionDurationMs(row);
+    const label = actionProveedorLabel(row);
+
+    if (!map.has(label)) {
+      map.set(label, {
+        label,
+        finalizadas: 0,
+        tiempoTotalMs: 0,
+        tiempoPromedioMs: 0,
+      });
+    }
+
+    const agg = map.get(label);
+    agg.finalizadas += 1;
+    agg.tiempoTotalMs += Number(dur || 0);
+  }
+
+  return Array.from(map.values())
+    .map((x) => ({
+      ...x,
+      tiempoPromedioMs:
+        x.finalizadas > 0 ? Math.round(x.tiempoTotalMs / x.finalizadas) : 0,
+    }))
+    .sort((a, b) => b.tiempoPromedioMs - a.tiempoPromedioMs);
+}
+
+/** Clave estable para filtrar/agrupar starters en la misma acción. */
+function starterFilterKeyForRow(row) {
+  const who = actionStarterIdentity(row);
+  const uid = String(who.uid || "").trim();
+  if (uid && uid !== "sin_uid") return `uid:${uid}`;
+  const nk = normalizeExcludedUserToken(who.label);
+  return nk ? `name:${nk}` : "__unknown__";
+}
+
 function countActiveUsers(docs = []) {
   const set = new Set();
 
@@ -1009,6 +1084,8 @@ function buildDashboardFromDailyDocs(
     andenesData,
     teamProductivity,
     teamTimes,
+    providerTimes: [],
+    providerTimesAcciones: [],
     notes: [
       `Se registran ${fmtInt(accionesFinalizadas)} descargas completadas durante ${labelMap[filterKey] || "el período seleccionado"}.`,
       `El cumplimiento operativo actual se ubica en ${compliance}% sobre ${fmtInt(accionesIniciadas)} acciones iniciadas (${fmtInt(accionesCreadas)} creadas en el período).`,
@@ -1222,6 +1299,18 @@ function buildMetricaRecepcionExportRows({
   push(["Tiempos por usuario (ordenados)"]);
   push(["Usuario", "Finalizadas", "Tiempo promedio", "Tiempo total"]);
   for (const t of data?.teamTimes || []) {
+    push([
+      t.label || "—",
+      String(t.finalizadas ?? ""),
+      fmtMinutesFromMs(t.tiempoPromedioMs),
+      fmtMinutesFromMs(t.tiempoTotalMs),
+    ]);
+  }
+  blank();
+
+  push(["Tiempos por proveedor (accion_descarga, por fecha de cierre)"]);
+  push(["Proveedor", "Descargas cerradas", "Tiempo promedio", "Tiempo total"]);
+  for (const t of data?.providerTimes || []) {
     push([
       t.label || "—",
       String(t.finalizadas ?? ""),
@@ -2095,8 +2184,19 @@ function TeamProductivityCard({
   );
 }
 
-function TeamTimesCard({ data = [], periodLabel = "", onOpenUserDetail }) {
+function TeamTimesCard({
+  data = [],
+  periodLabel = "",
+  onOpenUserDetail,
+  chartTitle = "Tiempos por usuario",
+  chartSubtitle,
+  badgeLabel = "Tiempo",
+  detailable = true,
+}) {
   const [hoveredIndex, setHoveredIndex] = React.useState(null);
+  const subtitle =
+    chartSubtitle ??
+    `Comparativo de duración promedio por operador · ${periodLabel}`;
   const valid = data.filter((d) => Number(d.tiempoPromedioMs || 0) > 0);
   const max = Math.max(...valid.map((d) => d.tiempoPromedioMs), 1);
 
@@ -2104,12 +2204,10 @@ function TeamTimesCard({ data = [], periodLabel = "", onOpenUserDetail }) {
     <div style={ui.teamCard}>
       <div style={ui.chartHeader}>
         <div>
-          <div style={ui.chartTitle}>Tiempos por usuario</div>
-          <div style={ui.chartSubtitle}>
-            Comparativo de duración promedio por operador · {periodLabel}
-          </div>
+          <div style={ui.chartTitle}>{chartTitle}</div>
+          <div style={ui.chartSubtitle}>{subtitle}</div>
         </div>
-        <span style={ui.chartBadge}>Tiempo</span>
+        <span style={ui.chartBadge}>{badgeLabel}</span>
       </div>
 
       <div style={ui.teamList}>
@@ -2125,7 +2223,7 @@ function TeamTimesCard({ data = [], periodLabel = "", onOpenUserDetail }) {
 
             return (
               <div 
-                key={item.label} 
+                key={item.label + String(idx)}
                 style={{
                   ...ui.teamRow,
                   transform: isHovered ? 'translateX(4px)' : 'translateX(0)',
@@ -2163,19 +2261,21 @@ function TeamTimesCard({ data = [], periodLabel = "", onOpenUserDetail }) {
                         ? fmtMinutesFromMs(item.tiempoPromedioMs)
                         : "—"}
                     </div>
-                    <button
-                      type="button"
-                      style={{
-                        ...ui.kpiEyeBtn,
-                        transform: isHovered ? 'scale(1.1)' : 'scale(1)',
-                        transition: 'transform 200ms ease',
-                      }}
-                      title="Ver descargas contadas"
-                      aria-label={`Ver descargas contadas para ${item.label}`}
-                      onClick={() => onOpenUserDetail?.(item)}
-                    >
-                      <Eye size={16} strokeWidth={2.2} color={ACCENT} />
-                    </button>
+                    {detailable ? (
+                      <button
+                        type="button"
+                        style={{
+                          ...ui.kpiEyeBtn,
+                          transform: isHovered ? 'scale(1.1)' : 'scale(1)',
+                          transition: 'transform 200ms ease',
+                        }}
+                        title="Ver descargas contadas"
+                        aria-label={`Ver descargas contadas para ${item.label}`}
+                        onClick={() => onOpenUserDetail?.(item)}
+                      >
+                        <Eye size={16} strokeWidth={2.2} color={ACCENT} />
+                      </button>
+                    ) : null}
                   </div>
                 </div>
 
@@ -2198,6 +2298,255 @@ function TeamTimesCard({ data = [], periodLabel = "", onOpenUserDetail }) {
               </div>
             );
           })
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProviderTimesModal({ open, onClose, sourceAcciones = [], periodLabel = "" }) {
+  const [hoveredIndex, setHoveredIndex] = React.useState(null);
+  const [starterKey, setStarterKey] = React.useState("__all__");
+  const [starterSearch, setStarterSearch] = React.useState("");
+
+  React.useEffect(() => {
+    if (open) {
+      setStarterKey("__all__");
+      setStarterSearch("");
+    }
+  }, [open]);
+
+  const starterOptions = useMemo(() => {
+    const m = new Map();
+    for (const row of sourceAcciones) {
+      const k = starterFilterKeyForRow(row);
+      if (k === "__unknown__") continue;
+      const who = actionStarterIdentity(row);
+      if (!m.has(k)) {
+        const label =
+          String(who.label || "").trim() ||
+          String(who.uid || "").trim() ||
+          k.replace(/^uid:/, "").replace(/^name:/, "");
+        m.set(k, label);
+      }
+    }
+    return Array.from(m.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) =>
+        a.label.localeCompare(b.label, "es", { sensitivity: "base" })
+      );
+  }, [sourceAcciones]);
+
+  const starterOptionsFiltered = useMemo(() => {
+    const q = normalizeExcludedUserToken(starterSearch);
+    if (!q) return starterOptions;
+    return starterOptions.filter(
+      (o) =>
+        normalizeExcludedUserToken(o.label).includes(q) ||
+        normalizeExcludedUserToken(o.value).includes(q)
+    );
+  }, [starterOptions, starterSearch]);
+
+  React.useEffect(() => {
+    if (starterKey === "__all__") return;
+    if (!starterOptionsFiltered.some((o) => o.value === starterKey)) {
+      setStarterKey("__all__");
+    }
+  }, [starterSearch, starterOptionsFiltered, starterKey]);
+
+  const filteredRows = useMemo(() => {
+    if (starterKey === "__all__") return sourceAcciones;
+    return sourceAcciones.filter((row) => starterFilterKeyForRow(row) === starterKey);
+  }, [sourceAcciones, starterKey]);
+
+  const data = useMemo(
+    () => aggregateProviderTimesByProveedor(filteredRows),
+    [filteredRows]
+  );
+
+  const maxProm = useMemo(() => {
+    const v = data.filter((d) => Number(d.tiempoPromedioMs || 0) > 0);
+    return Math.max(...v.map((d) => d.tiempoPromedioMs), 1);
+  }, [data]);
+
+  const totalCerradas = useMemo(
+    () => sum(data, (d) => Number(d.finalizadas || 0)),
+    [data]
+  );
+  const totalMs = useMemo(
+    () => sum(data, (d) => Number(d.tiempoTotalMs || 0)),
+    [data]
+  );
+
+  if (!open) return null;
+
+  const emptyMaster = sourceAcciones.length === 0;
+  const emptyFiltered = !emptyMaster && filteredRows.length === 0;
+
+  return (
+    <div
+      style={ui.aperturasModalRoot}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="provider-times-modal-title"
+    >
+      <button type="button" style={ui.aperturasModalBackdrop} onClick={onClose} aria-label="Cerrar" />
+
+      <div style={ui.providerTimesSheet}>
+        <div style={ui.aperturasSheetHeader}>
+          <div style={{ minWidth: 0 }}>
+            <div id="provider-times-modal-title" style={ui.aperturasSheetTitle}>
+              Tiempos por proveedor
+            </div>
+            <div style={ui.aperturasSheetSubtitle}>
+              Duración media por proveedor (<code style={ui.inlineCodeHint}>proveedorNombre</code>)
+              filtrable por quien inició la descarga (
+              <code style={ui.inlineCodeHint}>starter</code> /{" "}
+              <code style={ui.inlineCodeHint}>starterUid</code>) · período <b>{periodLabel}</b>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} style={ui.aperturasSheetCloseBtn}>
+            Cerrar
+          </button>
+        </div>
+
+        {emptyMaster ? (
+          <div style={ui.aperturasModalEmpty}>
+            No hay descargas cerradas con proveedor registrado para este período (o los datos aún se
+            están cargando).
+          </div>
+        ) : (
+          <>
+            <div style={ui.providerTimesFilterBar}>
+              <div style={ui.providerTimesFilterField}>
+                <span style={ui.providerTimesFilterLabel}>Buscar starter</span>
+                <input
+                  type="search"
+                  value={starterSearch}
+                  onChange={(e) => setStarterSearch(e.target.value)}
+                  placeholder="Nombre o parte del identificador…"
+                  style={ui.providerTimesSearchInput}
+                  autoComplete="off"
+                />
+              </div>
+              <div style={ui.providerTimesFilterField}>
+                <label htmlFor="metrica-provider-starter-select" style={ui.providerTimesFilterLabel}>
+                  Starter
+                </label>
+                <select
+                  id="metrica-provider-starter-select"
+                  value={starterKey}
+                  onChange={(e) => setStarterKey(e.target.value)}
+                  style={ui.providerTimesSelect}
+                >
+                  <option value="__all__">Todos los starters ({fmtInt(sourceAcciones.length)} descargas)</option>
+                  {starterOptionsFiltered.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                {starterSearch.trim() && starterOptionsFiltered.length === 0 ? (
+                  <div style={ui.providerTimesFilterHint}>
+                    Ningún starter coincide con la búsqueda.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {emptyFiltered ? (
+              <div style={ui.aperturasModalEmpty}>
+                No hay descargas cerradas para el starter seleccionado en este período.
+              </div>
+            ) : data.length === 0 ? (
+              <div style={ui.aperturasModalEmpty}>
+                Sin filas para mostrar.
+              </div>
+            ) : (
+              <>
+                <div style={ui.userTimeSummary}>
+                  <div style={ui.statusMiniCard}>
+                    <div style={ui.statusMiniLabel}>Proveedores</div>
+                    <div style={ui.statusMiniValue}>{fmtInt(data.length)}</div>
+                  </div>
+                  <div style={ui.statusMiniCard}>
+                    <div style={ui.statusMiniLabel}>Descargas cerradas</div>
+                    <div style={ui.statusMiniValue}>{fmtInt(totalCerradas)}</div>
+                  </div>
+                  <div style={ui.statusMiniCard}>
+                    <div style={ui.statusMiniLabel}>Tiempo total</div>
+                    <div style={ui.statusMiniValue}>{fmtMinutesFromMs(totalMs)}</div>
+                  </div>
+                </div>
+
+                <div style={ui.providerTimesListOuter}>
+                  <div style={ui.teamList}>
+                    {data.map((item, idx) => {
+                      const isHovered = hoveredIndex === idx;
+                      const width =
+                        item.tiempoPromedioMs > 0
+                          ? `${Math.max((item.tiempoPromedioMs / maxProm) * 100, 6)}%`
+                          : "6%";
+
+                      return (
+                        <div
+                          key={`${item.label}-${idx}`}
+                          style={{
+                            ...ui.teamRow,
+                            transform: isHovered ? "translateX(4px)" : "translateX(0)",
+                            transition: "all 250ms cubic-bezier(0.4, 0, 0.2, 1)",
+                            cursor: "default",
+                            background: isHovered ? "#F8FAFC" : "transparent",
+                            borderRadius: "12px",
+                            padding: isHovered ? "12px" : "10px",
+                          }}
+                          onMouseEnter={() => setHoveredIndex(idx)}
+                          onMouseLeave={() => setHoveredIndex(null)}
+                        >
+                          <div style={ui.teamRowTop}>
+                            <div>
+                              <div
+                                style={{
+                                  ...ui.teamName,
+                                  color: isHovered ? ACCENT : "#0F172A",
+                                  transition: "color 200ms ease",
+                                }}
+                              >
+                                {item.label}
+                              </div>
+                              <div style={ui.teamMeta}>
+                                {fmtInt(item.finalizadas)} cerradas
+                              </div>
+                            </div>
+
+                            <div style={ui.teamTimeValue}>
+                              {item.tiempoPromedioMs > 0
+                                ? fmtMinutesFromMs(item.tiempoPromedioMs)
+                                : "—"}
+                            </div>
+                          </div>
+
+                          <div style={ui.teamTrack}>
+                            <div
+                              style={{
+                                ...ui.teamFillSoft,
+                                width,
+                                transition: "width 400ms cubic-bezier(0.4, 0, 0.2, 1)",
+                              }}
+                            />
+                          </div>
+
+                          <div style={ui.teamFoot}>
+                            <span>Total acumulado: {fmtMinutesFromMs(item.tiempoTotalMs)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -2254,6 +2603,7 @@ export default function MetricaRecepcion() {
     error: "",
     items: [],
   });
+  const [providerTimesModalOpen, setProviderTimesModalOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -2466,6 +2816,8 @@ export default function MetricaRecepcion() {
         andenesData: [],
         teamProductivity: [],
         teamTimes: [],
+        providerTimes: [],
+        providerTimesAcciones: [],
         notes: loadError
           ? [loadError]
           : ["Todavía no hay información disponible para el período seleccionado."],
@@ -2991,6 +3343,31 @@ export default function MetricaRecepcion() {
             accionesTiempoTotalMs: Number(d.accionesTiempoTotalMs || 0),
           }));
 
+        try {
+          const aq = query(
+            collection(db, "accion_descarga"),
+            orderBy("creadoAt", "desc"),
+            limit(2500)
+          );
+          const accSnap = await getDocs(aq);
+          const accRows = filterByUserScope(
+            accSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+            tenantId,
+            company
+          );
+          const providerAcciones = filterAccionesParaMetricaProveedor(accRows, {
+            allowedDayKeys: dayKeys,
+            excludedActionsSet,
+            excludedAndenUsersSet,
+          });
+          built.providerTimesAcciones = providerAcciones;
+          built.providerTimes = aggregateProviderTimesByProveedor(providerAcciones);
+        } catch (provErr) {
+          console.error("loadDashboard providerTimes:", provErr);
+          built.providerTimes = [];
+          built.providerTimesAcciones = [];
+        }
+
         if (!filteredDocs.length) {
           const msg =
             activeFilter === "fecha"
@@ -3023,7 +3400,13 @@ export default function MetricaRecepcion() {
     return () => {
       mounted = false;
     };
-  }, [activeFilter, selectedDate, customRange, excludedAndenUsersSet]);
+  }, [
+    activeFilter,
+    selectedDate,
+    customRange,
+    excludedAndenUsersSet,
+    excludedActionsSet,
+  ]);
 
   useEffect(() => {
     if (!aperturasModalOpen) return;
@@ -3436,12 +3819,39 @@ export default function MetricaRecepcion() {
             />
           </div>
 
-          <div style={ui.sectionHeaderBlock}>
-            <div style={ui.sectionOverline}>Equipo</div>
-            <div style={ui.sectionTitle}>Desempeño del equipo</div>
-            <div style={ui.sectionText}>
-              Comparativo de productividad y tiempos promedio por operador para el período seleccionado.
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 12,
+              marginTop: 8,
+              marginBottom: 6,
+            }}
+          >
+            <div style={{ ...ui.sectionHeaderBlock, marginTop: 0, marginBottom: 0, flex: "1 1 260px", minWidth: 0 }}>
+              <div style={ui.sectionOverline}>Equipo</div>
+              <div style={ui.sectionTitle}>Desempeño del equipo</div>
+              <div style={ui.sectionText}>
+                Comparativo de productividad y tiempos por operador. Abrí{" "}
+                <b>Tiempos por proveedor</b> para ver duración media agrupada por{" "}
+                <code style={ui.inlineCodeHint}>proveedorNombre</code> (descargas cerradas en el período).
+              </div>
             </div>
+            <button
+              type="button"
+              style={{
+                ...ui.providerTimesOpenBtn,
+                ...(m ? { width: "100%", justifyContent: "center" } : {}),
+                ...(loadingData || loadError ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+              }}
+              disabled={loadingData || !!loadError}
+              onClick={() => setProviderTimesModalOpen(true)}
+            >
+              <BarChart3 size={18} strokeWidth={2.2} color={ACCENT} aria-hidden />
+              Tiempos por proveedor
+            </button>
           </div>
 
           <div style={{ ...ui.teamGrid, ...(m ? ui.mTeamGrid : {}) }}>
@@ -4124,6 +4534,15 @@ export default function MetricaRecepcion() {
             )}
           </div>
         </div>
+      )}
+
+      {providerTimesModalOpen && (
+        <ProviderTimesModal
+          open
+          onClose={() => setProviderTimesModalOpen(false)}
+          sourceAcciones={currentData.providerTimesAcciones || []}
+          periodLabel={currentData.label}
+        />
       )}
 
       {aperturasModalOpen && (
@@ -6040,6 +6459,116 @@ const ui = {
     flexDirection: "column",
     gap: 12,
     overflow: "hidden",
+  },
+
+  providerTimesSheet: {
+    position: "relative",
+    zIndex: 1,
+    width: "min(780px, calc(100vw - 32px))",
+    maxHeight: "min(calc(100vh - 32px), 760px)",
+    background: "#fff",
+    borderRadius: 22,
+    border: "1px solid #E7E9F2",
+    boxShadow: "0 24px 64px rgba(15,23,42,0.2)",
+    padding: 16,
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+    overflow: "hidden",
+  },
+
+  providerTimesListOuter: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    overflowX: "hidden",
+    paddingRight: 4,
+    WebkitOverflowScrolling: "touch",
+  },
+
+  providerTimesOpenBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: "12px 18px",
+    borderRadius: 16,
+    border: "1px solid rgba(8,159,138,0.28)",
+    background: "#fff",
+    color: "#0F172A",
+    fontWeight: 950,
+    fontSize: 13,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+    flexShrink: 0,
+  },
+
+  inlineCodeHint: {
+    fontSize: 11,
+    fontWeight: 800,
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    background: "#F1F5F9",
+    padding: "2px 6px",
+    borderRadius: 6,
+    color: "#334155",
+  },
+
+  providerTimesFilterBar: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+    gap: 12,
+    alignItems: "end",
+  },
+
+  providerTimesFilterField: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+  },
+
+  providerTimesFilterLabel: {
+    fontSize: 11,
+    fontWeight: 950,
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+
+  providerTimesSearchInput: {
+    width: "100%",
+    boxSizing: "border-box",
+    borderRadius: 14,
+    border: "1px solid #E7E9F2",
+    background: "#FBFCFF",
+    padding: "10px 12px",
+    fontWeight: 850,
+    fontSize: 13,
+    color: "#0F172A",
+    outline: "none",
+    fontFamily: "inherit",
+  },
+
+  providerTimesSelect: {
+    width: "100%",
+    boxSizing: "border-box",
+    borderRadius: 14,
+    border: "1px solid #E7E9F2",
+    background: "#fff",
+    padding: "10px 12px",
+    fontWeight: 850,
+    fontSize: 13,
+    color: "#0F172A",
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+
+  providerTimesFilterHint: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: "#94A3B8",
+    lineHeight: 1.35,
   },
 
   infoHelpSheet: {
