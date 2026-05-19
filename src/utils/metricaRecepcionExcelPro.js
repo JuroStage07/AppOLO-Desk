@@ -36,6 +36,15 @@ function formatDayKeyForLocale(dayKey) {
   }
 }
 
+function medianOfNumbers(values = []) {
+  const nums = values.map((v) => Number(v)).filter((n) => Number.isFinite(n));
+  if (!nums.length) return 0;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return Math.round(sorted[mid]);
+  return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
 function fmtMinutesFromMs(ms) {
   const n = Number(ms || 0);
   if (!n) return "0 min";
@@ -461,12 +470,9 @@ async function buildWorkbook(data, ctx, ExcelJS) {
       ? `Total ${barTotal} descargas · Promedio ${Math.round(barTotal / barLabels.length)} por intervalo`
       : "";
 
-  const lineAvg =
-    lineVals.length > 0
-      ? Math.round(lineVals.reduce((a, v) => a + (Number(v) || 0), 0) / lineVals.length)
-      : 0;
+  const lineMed = lineVals.length > 0 ? medianOfNumbers(lineVals) : 0;
   const lineSubtitle = lineVals.length
-    ? `Promedio ${lineAvg}% en el período · Línea de referencia al 85%`
+    ? `Mediana ${lineMed}% en el período · Línea de referencia al 85%`
     : "";
 
   const imgBar = canvasToBase64Png(
@@ -578,7 +584,7 @@ async function buildWorkbook(data, ctx, ExcelJS) {
     ["Tenant", tenantId || "—"],
     ["Filtro", String(activeFilter || "—")],
     ["Fecha selector", String(selectedDate || "—")],
-    ["Cumplimiento global", `${Number(data?.compliance ?? 0)} %`],
+    ["Cumplimiento (mediana diaria)", `${Number(data?.compliance ?? 0)} %`],
     ["Acciones creadas (período)", Number(data?.accionesCreadas ?? 0)],
   ];
   metaLines.forEach(([a, b], idx) => {
