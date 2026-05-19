@@ -323,6 +323,29 @@ function sum(arr, getter) {
   return arr.reduce((acc, item) => acc + Number(getter(item) || 0), 0);
 }
 
+function medianOfNumbers(values = []) {
+  const nums = values.map((v) => Number(v)).filter((n) => Number.isFinite(n));
+  if (!nums.length) return 0;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return Math.round(sorted[mid]);
+  return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
+/** Cumplimiento % de un corte diario (null si no hubo iniciadas). */
+function dailyCompliancePercent(doc) {
+  const iniciadas = Number(doc?.accionesIniciadas || 0);
+  const finalizadas = Number(doc?.accionesFinalizadas || 0);
+  if (iniciadas <= 0) return null;
+  return Math.round((finalizadas / iniciadas) * 100);
+}
+
+/** Mediana del cumplimiento diario en el período (días con iniciadas > 0). */
+function medianDailyCompliance(docs = []) {
+  const rates = docs.map(dailyCompliancePercent).filter((v) => v != null);
+  return medianOfNumbers(rates);
+}
+
 function fmtInt(value) {
   return new Intl.NumberFormat("es-CR").format(Number(value || 0));
 }
@@ -365,19 +388,19 @@ function buildAlertsFromDocs({
     alerts.push({
       tone: "danger",
       title: "Cumplimiento bajo",
-      description: `El cierre operativo se encuentra en ${compliance}% para el período actual.`,
+      description: `La mediana diaria de cierre operativo es ${compliance}% en el período actual.`,
     });
   } else if (compliance < 85) {
     alerts.push({
       tone: "warn",
       title: "Cumplimiento en observación",
-      description: `El cumplimiento actual es de ${compliance}% y todavía puede mejorar.`,
+      description: `La mediana diaria de cumplimiento es ${compliance}% y todavía puede mejorar.`,
     });
   } else {
     alerts.push({
       tone: "good",
       title: "Cumplimiento saludable",
-      description: `La operación mantiene un cumplimiento de ${compliance}% en el período.`,
+      description: `La mediana diaria de cumplimiento es ${compliance}% en el período.`,
     });
   }
 
@@ -673,10 +696,10 @@ function buildLineData(filterKey, docs = []) {
     const chunks = [];
     for (let i = 0; i < rows.length; i += 7) {
       const chunk = rows.slice(i, i + 7);
-      const avg = chunk.length
-        ? Math.round(sum(chunk, (x) => x.value) / chunk.length)
+      const med = chunk.length
+        ? medianOfNumbers(chunk.map((x) => x.value))
         : 0;
-      chunks.push({ label: `S${chunks.length + 1}`, value: avg });
+      chunks.push({ label: `S${chunks.length + 1}`, value: med });
     }
     return chunks;
   }
@@ -727,18 +750,18 @@ function lineComplianceTrend(lineData = []) {
   const mid = Math.floor(lineData.length / 2);
   const first = lineData.slice(0, mid);
   const second = lineData.slice(mid);
-  const avg = (chunk) =>
-    chunk.length ? Math.round(sum(chunk, (x) => x.value) / chunk.length) : 0;
-  const a = avg(first);
-  const b = avg(second);
+  const med = (chunk) =>
+    chunk.length ? medianOfNumbers(chunk.map((x) => Number(x.value) || 0)) : 0;
+  const a = med(first);
+  const b = med(second);
   const diff = b - a;
   if (Math.abs(diff) < 4) {
     return "El cumplimiento se mantiene relativamente estable entre el inicio y el final del período mostrado.";
   }
   if (diff > 0) {
-    return `Tendencia favorable: la segunda mitad del período promedia ~${diff} puntos porcentuales más de cumplimiento que la primera.`;
+    return `Tendencia favorable: la mediana de cumplimiento en la segunda mitad del período es ~${diff} puntos porcentuales mayor que en la primera.`;
   }
-  return `Atención: la segunda mitad del período promedia ~${Math.abs(diff)} puntos porcentuales menos de cumplimiento que la primera.`;
+  return `Atención: la mediana de cumplimiento en la segunda mitad del período es ~${Math.abs(diff)} puntos porcentuales menor que en la primera.`;
 }
 
 function buildExecutiveSummary({
@@ -786,7 +809,7 @@ function buildExecutiveSummary({
     {
       title: "Cumplimiento",
       value: `${compliance}%`,
-      hint: "Finalizadas respecto a iniciadas en el período",
+      hint: "Mediana del cumplimiento diario (finalizadas ÷ iniciadas por día)",
     },
     {
       title: "Ritmo de muelle",
@@ -835,7 +858,7 @@ function buildExecutiveSummary({
       "Mantener tablero de pendientes por operador y revisar días con mayor desalineación inicio/cierre.";
   } else if (pendingUsersCount > 0) {
     recommendedFocus =
-      "Aun con buen cumplimiento global, hay operadores con iniciadas pendientes de cierre: conviene cerrar el detalle por usuario.";
+      "Aun con buena mediana de cumplimiento, hay operadores con iniciadas pendientes de cierre: conviene cerrar el detalle por usuario.";
   } else if (tiempoPromedioMs >= 6 * 60 * 60 * 1000) {
     recommendedFocus =
       "El tiempo promedio de descarga es elevado; revisar procesos o excepciones que alargan el ciclo.";
@@ -845,7 +868,7 @@ function buildExecutiveSummary({
   }
 
   const metricSnapshot = [
-    { label: "Cumplimiento global", value: `${compliance}%` },
+    { label: "Cumplimiento (mediana diaria)", value: `${compliance}%` },
     { label: "Descargas cerradas", value: fmtInt(accionesFinalizadas) },
     { label: "Descargas iniciadas", value: fmtInt(accionesIniciadas) },
     { label: "Tiempo promedio", value: fmtMinutesFromMs(tiempoPromedioMs) },
@@ -973,8 +996,7 @@ function buildDashboardFromDailyDocs(
 
   const andenesEnUso = countAndenesInUse(metricDocs);
 
-  const compliance =
-    accionesIniciadas > 0 ? Math.round((accionesFinalizadas / accionesIniciadas) * 100) : 0;
+  const compliance = medianDailyCompliance(metricDocs);
 
   const { alerts, pendingUsers: pendingUsersCount } = buildAlertsFromDocs({
     compliance,
@@ -1041,8 +1063,8 @@ function buildDashboardFromDailyDocs(
       {
         label: "Cumplimiento",
         value: `${compliance}%`,
-        hint: "Relación entre acciones iniciadas y finalizadas",
-        comparison: "Contra objetivo operativo",
+        hint: "Mediana del cumplimiento diario (finalizadas ÷ iniciadas por día)",
+        comparison: "Objetivo operativo 85% · mediana diaria",
         tone: compliance >= 85 ? "good" : compliance >= 70 ? "warn" : "danger",
       },
       {
@@ -1088,7 +1110,7 @@ function buildDashboardFromDailyDocs(
     providerTimesAcciones: [],
     notes: [
       `Se registran ${fmtInt(accionesFinalizadas)} descargas completadas durante ${labelMap[filterKey] || "el período seleccionado"}.`,
-      `El cumplimiento operativo actual se ubica en ${compliance}% sobre ${fmtInt(accionesIniciadas)} acciones iniciadas (${fmtInt(accionesCreadas)} creadas en el período).`,
+      `La mediana diaria de cumplimiento operativo es ${compliance}% (${fmtInt(accionesIniciadas)} iniciadas y ${fmtInt(accionesCreadas)} creadas en total en el período).`,
       `El tiempo promedio de descarga es de ${fmtMinutesFromMs(tiempoPromedioMs)} y el volumen procesado alcanza ${fmtInt(bultosTotales)} bultos.`,
     ],
   };
@@ -1170,7 +1192,7 @@ function buildMetricaRecepcionExportRows({
     push(["Titular", ""]);
   }
   blank();
-  push(["Cumplimiento global %", String(data?.compliance ?? "")]);
+  push(["Cumplimiento mediana diaria %", String(data?.compliance ?? "")]);
   push(["Acciones creadas (período)", String(data?.accionesCreadas ?? "")]);
   blank();
 
@@ -1204,6 +1226,7 @@ function buildMetricaRecepcionExportRows({
     "accionesFinalizadas",
     "accionesIniciadas",
     "accionesCreadas",
+    "cumplimientoDiaPct",
     "accionesBultosTotales",
     "accionesTiempoTotalMs",
     "tiempoPromedioDescarga",
@@ -1212,12 +1235,15 @@ function buildMetricaRecepcionExportRows({
     const af = row.accionesFinalizadas;
     const tpMs =
       af > 0 ? Math.round(row.accionesTiempoTotalMs / af) : 0;
+    const diaPct =
+      row.cumplimientoDiaPct != null ? String(row.cumplimientoDiaPct) : "—";
     push([
       row.dayKey,
       row.docId,
       String(row.accionesFinalizadas),
       String(row.accionesIniciadas),
       String(row.accionesCreadas),
+      diaPct,
       String(row.accionesBultosTotales),
       String(row.accionesTiempoTotalMs),
       fmtMinutesFromMs(tpMs),
@@ -1623,8 +1649,7 @@ function MiniLineChart({ data = [], periodLabel = "Últimos cortes" }) {
   const chartH = h - padT - padB;
 
   const nums = data.map((d) => Math.max(0, Math.min(100, Number(d.value) || 0)));
-  const avg =
-    nums.length > 0 ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : 0;
+  const med = medianOfNumbers(nums);
   const minV = nums.length ? Math.min(...nums) : 0;
   const maxV = nums.length ? Math.max(...nums) : 0;
   const refY = padT + (1 - 85 / 100) * chartH;
@@ -1649,13 +1674,13 @@ function MiniLineChart({ data = [], periodLabel = "Últimos cortes" }) {
         <div>
           <div style={ui.chartTitle}>Cumplimiento operativo</div>
           <div style={ui.chartSubtitle}>
-            Finalizadas ÷ iniciadas por intervalo (0–100%) · {periodLabel}
+            Cumplimiento diario por intervalo (0–100%) · {periodLabel}
           </div>
           {data.length > 0 && (
             <div style={ui.chartMetaRow}>
               Mín. <b>{minV}%</b>
               <span style={ui.chartMetaSep}>·</span>
-              Prom. <b>{avg}%</b>
+              Mediana <b>{med}%</b>
               <span style={ui.chartMetaSep}>·</span>
               Máx. <b>{maxV}%</b>
               <span style={ui.chartMetaSep}>·</span>
@@ -2553,6 +2578,291 @@ function ProviderTimesModal({ open, onClose, sourceAcciones = [], periodLabel = 
   );
 }
 
+/**
+ * VolumenPorFechaChart — Line chart showing number of completed actions per day.
+ * Styled like the OTs dashboard "Volumen por fecha" card.
+ */
+function VolumenPorFechaChart({ actions = [], accentColor = "#0F172A", accentSoft = "rgba(15,23,42,0.06)", periodLabel = "" }) {
+  const volGradId = useId().replace(/:/g, "");
+
+  // Group actions by completion date
+  const dailyMap = useMemo(() => {
+    const map = new Map();
+    for (const row of actions) {
+      const completedAt = row?.completedAt ?? row?.completeAt;
+      const d = toDateSafe(completedAt);
+      if (!d) continue;
+      const key = ymd(d);
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    // Sort by date
+    const sorted = Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    return sorted.map(([dayKey, count]) => {
+      const dt = new Date(`${dayKey}T00:00:00`);
+      const label = dt.toLocaleDateString("es-CR", { weekday: "short", day: "numeric", month: "short" }).replace(".", "");
+      return { dayKey, label, value: count };
+    });
+  }, [actions]);
+
+  const total = dailyMap.reduce((s, d) => s + d.value, 0);
+  const maxVal = dailyMap.length > 0 ? Math.max(...dailyMap.map((d) => d.value)) : 0;
+  const avg = dailyMap.length > 0 ? Math.round(total / dailyMap.length) : 0;
+  const peak = maxVal;
+
+  // SVG line chart dimensions
+  const w = 100;
+  const h = 50;
+  const padT = 8;
+  const padB = 6;
+  const padL = 0;
+  const padR = 0;
+  const chartH = h - padT - padB;
+  const chartW = w - padL - padR;
+
+  const points = dailyMap.map((d, i) => {
+    const x = padL + (i / Math.max(dailyMap.length - 1, 1)) * chartW;
+    const y = padT + (1 - d.value / Math.max(maxVal, 1)) * chartH;
+    return { x, y };
+  });
+
+  const linePoints = points.map((p) => `${p.x},${p.y}`).join(" ");
+  const areaPoints = points.length > 0
+    ? `${padL},${padT + chartH} ${points.map((p) => `${p.x},${p.y}`).join(" ")} ${padL + chartW},${padT + chartH}`
+    : "";
+
+  // Y-axis reference lines
+  const ySteps = maxVal > 0 ? [0, Math.round(maxVal * 0.33), Math.round(maxVal * 0.66), maxVal] : [];
+
+  if (dailyMap.length === 0) {
+    return (
+      <div style={volStyles.card}>
+        <div style={volStyles.titleRow}>
+          <div>
+            <div style={volStyles.title}>Volumen por fecha</div>
+            <div style={volStyles.subtitle}>Evolución de descargas en el rango · {periodLabel}</div>
+          </div>
+        </div>
+        <div style={{ padding: "32px 0", textAlign: "center", color: "#64748B", fontSize: 13, fontWeight: 800 }}>
+          Sin datos para graficar.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={volStyles.card}>
+      <div style={volStyles.titleRow}>
+        <div>
+          <div style={volStyles.title}>Volumen por fecha</div>
+          <div style={volStyles.subtitle}>Evolución de descargas en el rango · {periodLabel}</div>
+        </div>
+      </div>
+
+      <div style={volStyles.metaRow}>
+        Total <b>{fmtInt(total)}</b>
+        <span style={volStyles.sep}>·</span>
+        Promedio <b>{fmtInt(avg)}/día</b>
+        <span style={volStyles.sep}>·</span>
+        Pico <b>{fmtInt(peak)}</b>
+        <span style={volStyles.sep}>·</span>
+        {dailyMap.length} días
+      </div>
+
+      <div style={volStyles.chartWrap}>
+        <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={volStyles.svg}>
+          <defs>
+            <linearGradient id={volGradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={accentColor} stopOpacity="0.18" />
+              <stop offset="100%" stopColor={accentColor} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+
+          {/* Grid lines */}
+          {ySteps.map((step, i) => {
+            const y = padT + (1 - step / Math.max(maxVal, 1)) * chartH;
+            return (
+              <g key={`grid-${i}`}>
+                <line x1={padL} y1={y} x2={padL + chartW} y2={y} stroke="#E2E8F0" strokeWidth="0.25" strokeDasharray="1.5 1.5" />
+                <text x={padL + 1} y={y - 1} fill="#64748B" fontSize="2.8" fontWeight="800">{step}</text>
+              </g>
+            );
+          })}
+
+          {/* Area fill */}
+          {areaPoints && (
+            <polygon fill={`url(#${volGradId})`} points={areaPoints} />
+          )}
+
+          {/* Line */}
+          <polyline
+            fill="none"
+            stroke={accentColor}
+            strokeWidth="1.2"
+            points={linePoints}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Dots */}
+          {points.map((p, i) => (
+            <circle
+              key={i}
+              cx={p.x}
+              cy={p.y}
+              r="0.9"
+              fill="#fff"
+              stroke={accentColor}
+              strokeWidth="0.4"
+            >
+              <title>{dailyMap[i].label}: {dailyMap[i].value} descargas</title>
+            </circle>
+          ))}
+        </svg>
+      </div>
+
+      {/* X-axis labels */}
+      <div style={volStyles.xAxis}>
+        {dailyMap.length <= 14 ? (
+          dailyMap.map((d) => (
+            <div key={d.dayKey} style={volStyles.xLabel}>{d.label}</div>
+          ))
+        ) : (
+          // Show every Nth label to avoid crowding
+          dailyMap.filter((_, i) => i % Math.ceil(dailyMap.length / 8) === 0 || i === dailyMap.length - 1).map((d) => (
+            <div key={d.dayKey} style={volStyles.xLabel}>{d.label}</div>
+          ))
+        )}
+      </div>
+
+      {/* Daily breakdown table */}
+      <details style={volStyles.details}>
+        <summary style={volStyles.summary}>Ver tabla de datos ({dailyMap.length} días)</summary>
+        <div style={volStyles.tableWrap}>
+          <table style={volStyles.table}>
+            <thead>
+              <tr>
+                <th style={volStyles.th}>Fecha</th>
+                <th style={{ ...volStyles.th, textAlign: "right" }}>Descargas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dailyMap.map((d, i) => (
+                <tr key={d.dayKey} style={{ background: i % 2 === 0 ? "#FAFBFE" : "#fff" }}>
+                  <td style={volStyles.td}>{d.label}</td>
+                  <td style={{ ...volStyles.td, textAlign: "right", fontWeight: 950 }}>{d.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+const volStyles = {
+  card: {
+    background: "#fff",
+    border: "1px solid #E5E7EB",
+    borderRadius: 14,
+    padding: "20px 20px 16px",
+    boxShadow: "0 12px 26px rgba(15,23,42,0.06)",
+  },
+  titleRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: 900,
+    color: "#0F172A",
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: "#64748B",
+    fontWeight: 700,
+    lineHeight: 1.4,
+  },
+  metaRow: {
+    fontSize: 12,
+    fontWeight: 750,
+    color: "#64748B",
+    marginBottom: 14,
+  },
+  sep: {
+    margin: "0 6px",
+    color: "#CBD5E1",
+  },
+  chartWrap: {
+    width: "100%",
+    height: 220,
+    marginBottom: 8,
+  },
+  svg: {
+    width: "100%",
+    height: "100%",
+    display: "block",
+  },
+  xAxis: {
+    display: "flex",
+    justifyContent: "space-between",
+    padding: "0 2px",
+    marginBottom: 12,
+  },
+  xLabel: {
+    fontSize: 10,
+    fontWeight: 800,
+    color: "#64748B",
+    textAlign: "center",
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  details: {
+    marginTop: 8,
+    borderTop: "1px solid #F1F5F9",
+    paddingTop: 10,
+  },
+  summary: {
+    fontSize: 12,
+    fontWeight: 900,
+    color: "#64748B",
+    cursor: "pointer",
+    padding: "4px 0",
+  },
+  tableWrap: {
+    maxHeight: 200,
+    overflowY: "auto",
+    marginTop: 8,
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: 13,
+  },
+  th: {
+    textAlign: "left",
+    padding: "6px 8px",
+    borderBottom: "1px solid #E2E8F0",
+    color: "#64748B",
+    fontWeight: 900,
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+  },
+  td: {
+    padding: "6px 8px",
+    borderBottom: "1px solid #F8FAFC",
+    color: "#0F172A",
+    fontWeight: 800,
+    fontSize: 13,
+  },
+};
+
 export default function MetricaRecepcion() {
   const nav = useNavigate();
   const user = auth.currentUser;
@@ -2612,6 +2922,16 @@ export default function MetricaRecepcion() {
     providerActions: [],
   });
   const [providerTimesModalOpen, setProviderTimesModalOpen] = useState(false);
+  const [tendenciasEpaModal, setTendenciasEpaModal] = useState({
+    open: false,
+    loading: false,
+    error: "",
+    providers: [],
+    selectedProvider: null,
+    providerActions: [],
+  });
+  const [cofersaActiveTab, setCofersaActiveTab] = useState("proveedores");
+  const [epaActiveTab, setEpaActiveTab] = useState("proveedores");
 
   useEffect(() => {
     try {
@@ -2776,7 +3096,7 @@ export default function MetricaRecepcion() {
           {
             label: "Cumplimiento",
             value: "0%",
-            hint: "Relación entre acciones iniciadas y finalizadas",
+            hint: "Mediana del cumplimiento diario (finalizadas ÷ iniciadas por día)",
             comparison: "—",
             tone: "default",
           },
@@ -3294,6 +3614,7 @@ export default function MetricaRecepcion() {
   };
 
   const openTendenciasCofersa = async () => {
+    setCofersaActiveTab("proveedores");
     if (!tenantScope.tenantId || !tenantScope.company) {
       setTendenciasCofersaModal({
         open: true,
@@ -3414,6 +3735,223 @@ export default function MetricaRecepcion() {
     }));
   };
 
+  const EPA_ANDENES = ["4", "5", "6", "7"];
+
+  const openTendenciasEpa = async () => {
+    setEpaActiveTab("proveedores");
+    if (!tenantScope.tenantId || !tenantScope.company) {
+      setTendenciasEpaModal({
+        open: true,
+        loading: false,
+        error: "No se pudo determinar el tenant para cargar las tendencias.",
+        providers: [],
+        selectedProvider: null,
+        providerActions: [],
+      });
+      return;
+    }
+
+    setTendenciasEpaModal({
+      open: true,
+      loading: true,
+      error: "",
+      providers: [],
+      selectedProvider: null,
+      providerActions: [],
+    });
+
+    try {
+      const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate, customRange);
+      const allowed = new Set(dayKeys);
+
+      const q = query(
+        collection(db, "accion_descarga"),
+        orderBy("creadoAt", "desc"),
+        limit(3000)
+      );
+      const snap = await getDocs(q);
+      const rows = filterByUserScope(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        tenantScope.tenantId,
+        tenantScope.company
+      );
+
+      // Filter by date range, completed actions, and andenes 4-7
+      const filteredRows = rows.filter((row) => {
+        const completedAt = row?.completedAt ?? row?.completeAt;
+        const completedDate = toDateSafe(completedAt);
+        if (!completedDate || !allowed.has(ymd(completedDate))) return false;
+        if (!completedAt) return false;
+        const anden = String(row?.idAnden ?? "").trim();
+        if (!EPA_ANDENES.includes(anden)) return false;
+        // Exclude providers that belong to Tendencias Cofersa
+        const provName = String(row?.proveedorNombre || "").trim();
+        if (COFERSA_PROVIDERS.some((cp) => matchesProvider(provName, cp))) return false;
+        return true;
+      });
+
+      // --- Fuzzy provider name fusion ---
+      // Normalize: lowercase, strip trailing numbers/suffixes, collapse spaces
+      const normalizeForFusion = (name) => {
+        return String(name || "")
+          .trim()
+          .toLowerCase()
+          .replace(/\s+\d+$/g, "")       // "Conducen 2" → "conducen"
+          .replace(/\s*s\.?a\.?$/gi, "")  // "Empresa S.A." → "empresa"
+          .replace(/\s*s\.?r\.?l\.?$/gi, "")
+          .replace(/[.,\-_]+$/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      };
+
+      // Check if two normalized names are similar enough to merge
+      const areSimilarProviders = (a, b) => {
+        if (a === b) return true;
+        // One contains the other
+        if (a.includes(b) || b.includes(a)) return true;
+        // Levenshtein-like: if names differ by ≤2 chars and are at least 4 chars long
+        if (a.length >= 4 && b.length >= 4) {
+          const longer = a.length >= b.length ? a : b;
+          const shorter = a.length >= b.length ? b : a;
+          if (longer.length - shorter.length <= 2 && longer.startsWith(shorter.slice(0, Math.max(4, shorter.length - 2)))) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // Build groups with fusion
+      const fusionGroups = []; // Array of { canonicalKey, canonicalName, variations: Set, count, totalTimeMs, actions }
+
+      for (const row of filteredRows) {
+        const rawName = String(row?.proveedorNombre || "").trim();
+        const normalized = normalizeForFusion(rawName) || "sin proveedor";
+
+        // Find existing group that matches
+        let matchedGroup = null;
+        for (const group of fusionGroups) {
+          if (areSimilarProviders(group.canonicalKey, normalized)) {
+            matchedGroup = group;
+            break;
+          }
+          // Also check against all known variations in the group
+          for (const v of group.variationKeys) {
+            if (areSimilarProviders(v, normalized)) {
+              matchedGroup = group;
+              break;
+            }
+          }
+          if (matchedGroup) break;
+        }
+
+        if (!matchedGroup) {
+          matchedGroup = {
+            canonicalKey: normalized,
+            canonicalName: rawName || "Sin proveedor",
+            variations: new Set(),
+            variationKeys: new Set([normalized]),
+            count: 0,
+            totalTimeMs: 0,
+            actions: [],
+          };
+          fusionGroups.push(matchedGroup);
+        }
+
+        if (rawName) matchedGroup.variations.add(rawName);
+        matchedGroup.variationKeys.add(normalized);
+        matchedGroup.count += 1;
+        const dur = actionDurationMs(row);
+        matchedGroup.totalTimeMs += dur;
+        matchedGroup.actions.push({ ...row, _durationMs: dur });
+      }
+
+      const providersRaw = fusionGroups
+        .map((g) => {
+          // Pick the shortest variation as the display name (most "canonical")
+          const variationsArr = Array.from(g.variations);
+          const displayName = variationsArr.length > 0
+            ? variationsArr.sort((a, b) => a.length - b.length)[0]
+            : g.canonicalName;
+
+          return {
+            name: displayName,
+            variations: variationsArr,
+            count: g.count,
+            totalTimeMs: g.totalTimeMs,
+            avgTimeMs: g.count > 0 ? Math.round(g.totalTimeMs / g.count) : 0,
+            actions: g.actions.sort((a, b) => {
+              const ad = toDateSafe(a?.completedAt ?? a?.completeAt)?.getTime() || 0;
+              const bd = toDateSafe(b?.completedAt ?? b?.completeAt)?.getTime() || 0;
+              return bd - ad;
+            }),
+          };
+        });
+
+      // Merge providers that ended up with the same display name
+      const mergedMap = new Map();
+      for (const p of providersRaw) {
+        const key = p.name.toLowerCase().trim();
+        if (mergedMap.has(key)) {
+          const existing = mergedMap.get(key);
+          existing.count += p.count;
+          existing.totalTimeMs += p.totalTimeMs;
+          existing.actions = [...existing.actions, ...p.actions].sort((a, b) => {
+            const ad = toDateSafe(a?.completedAt ?? a?.completeAt)?.getTime() || 0;
+            const bd = toDateSafe(b?.completedAt ?? b?.completeAt)?.getTime() || 0;
+            return bd - ad;
+          });
+          for (const v of p.variations) existing.variations.add(v);
+        } else {
+          mergedMap.set(key, {
+            name: p.name,
+            variations: new Set(p.variations),
+            count: p.count,
+            totalTimeMs: p.totalTimeMs,
+            actions: p.actions,
+          });
+        }
+      }
+
+      const providers = Array.from(mergedMap.values())
+        .map((p) => ({
+          name: p.name,
+          variations: Array.from(p.variations),
+          count: p.count,
+          totalTimeMs: p.totalTimeMs,
+          avgTimeMs: p.count > 0 ? Math.round(p.totalTimeMs / p.count) : 0,
+          actions: p.actions,
+        }))
+        .sort((a, b) => b.count - a.count);
+
+      setTendenciasEpaModal({
+        open: true,
+        loading: false,
+        error: "",
+        providers,
+        selectedProvider: null,
+        providerActions: [],
+      });
+    } catch (e) {
+      console.error("openTendenciasEpa:", e);
+      setTendenciasEpaModal({
+        open: true,
+        loading: false,
+        error: "No se pudieron cargar las tendencias EPA.",
+        providers: [],
+        selectedProvider: null,
+        providerActions: [],
+      });
+    }
+  };
+
+  const selectProviderInTendenciasEpa = (provider) => {
+    setTendenciasEpaModal((prev) => ({
+      ...prev,
+      selectedProvider: provider,
+      providerActions: provider?.actions || [],
+    }));
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -3505,6 +4043,7 @@ export default function MetricaRecepcion() {
             accionesFinalizadas: Number(d.accionesFinalizadas || 0),
             accionesIniciadas: Number(d.accionesIniciadas || 0),
             accionesCreadas: Number(d.accionesCreadas || 0),
+            cumplimientoDiaPct: dailyCompliancePercent(d),
             accionesBultosTotales: Number(d.accionesBultosTotales || 0),
             accionesTiempoTotalMs: Number(d.accionesTiempoTotalMs || 0),
           }));
@@ -4033,6 +4572,20 @@ export default function MetricaRecepcion() {
                 <TrendingUp size={18} strokeWidth={2.2} color="#7C3AED" aria-hidden />
                 Tendencias Cofersa
               </button>
+              <button
+                type="button"
+                style={{
+                  ...ui.tendenciasEpaBtn,
+                  ...(m ? { flex: 1 } : {}),
+                  ...(loadingData || loadError ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                }}
+                disabled={loadingData || !!loadError}
+                onClick={openTendenciasEpa}
+                title="Análisis de tendencias EPA — Andenes 4, 5, 6 y 7"
+              >
+                <TrendingUp size={18} strokeWidth={2.2} color="#0369A1" aria-hidden />
+                Tendencia EPA
+              </button>
             </div>
           </div>
 
@@ -4412,6 +4965,10 @@ export default function MetricaRecepcion() {
                   <div style={ui.heroMiniItem}>
                     <span style={ui.heroMiniDot} />
                     Tiempo promedio = duración desde inicio hasta cierre
+                  </div>
+                  <div style={ui.heroMiniItem}>
+                    <span style={ui.heroMiniDot} />
+                    Cumplimiento = mediana del % diario (finalizadas ÷ iniciadas por día)
                   </div>
                   <div style={ui.heroMiniItem}>
                     <span style={ui.heroMiniDot} />
@@ -4860,11 +5417,176 @@ export default function MetricaRecepcion() {
                         allProviderActions.set(provider.name, actions);
                       }
                       
-                      // Crear una hoja por cada proveedor
+                      // === HOJA RESUMEN (primera hoja) ===
+                      const wsResumen = wb.addWorksheet("Resumen", {
+                        properties: { tabColor: { argb: "FF7C3AED" } },
+                      });
+                      wsResumen.columns = [
+                        { width: 32 }, { width: 18 }, { width: 18 }, { width: 18 }, { width: 18 },
+                      ];
+
+                      // Título
+                      wsResumen.mergeCells("A1:E1");
+                      const resTitleCell = wsResumen.getCell("A1");
+                      resTitleCell.value = `Tendencias Cofersa — Resumen`;
+                      resTitleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+                      resTitleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF7C3AED" } };
+                      resTitleCell.alignment = { vertical: "middle", horizontal: "center" };
+                      wsResumen.getRow(1).height = 32;
+
+                      wsResumen.mergeCells("A2:E2");
+                      wsResumen.getCell("A2").value = `Período: ${currentData.label}`;
+                      wsResumen.getCell("A2").font = { size: 11, color: { argb: "FF64748B" } };
+                      wsResumen.getRow(2).height = 20;
+
+                      // KPIs globales
+                      let rRes = 4;
+                      wsResumen.mergeCells(`A${rRes}:E${rRes}`);
+                      wsResumen.getCell(`A${rRes}`).value = "Indicadores globales";
+                      wsResumen.getCell(`A${rRes}`).font = { bold: true, size: 13, color: { argb: "FF7C3AED" } };
+                      rRes += 1;
+
+                      const allActions = tendenciasCofersaModal.providers.flatMap((p) => p.actions || []);
+                      const totalDescargas = allActions.length;
+                      const totalProveedores = tendenciasCofersaModal.providers.length;
+                      const totalTimeGlobal = allActions.reduce((s, a) => s + Number(a?._durationMs || 0), 0);
+                      const avgTimeGlobal = totalDescargas > 0 ? Math.round(totalTimeGlobal / totalDescargas) : 0;
+
+                      const resKpis = [
+                        ["Total descargas cerradas", totalDescargas],
+                        ["Proveedores identificados", totalProveedores],
+                        ["Tiempo promedio global", fmtMinutesFromMs(avgTimeGlobal)],
+                      ];
+                      for (const [label, value] of resKpis) {
+                        const row = wsResumen.getRow(rRes);
+                        row.getCell(1).value = label;
+                        row.getCell(1).font = { bold: true, color: { argb: "FF475569" } };
+                        row.getCell(2).value = value;
+                        row.height = 20;
+                        rRes += 1;
+                      }
+
+                      // Ranking de proveedores
+                      rRes += 2;
+                      wsResumen.mergeCells(`A${rRes}:E${rRes}`);
+                      wsResumen.getCell(`A${rRes}`).value = "Ranking de proveedores";
+                      wsResumen.getCell(`A${rRes}`).font = { bold: true, size: 13, color: { argb: "FF7C3AED" } };
+                      rRes += 1;
+
+                      const hdrRanking = wsResumen.getRow(rRes);
+                      hdrRanking.getCell(1).value = "Proveedor";
+                      hdrRanking.getCell(2).value = "Descargas";
+                      hdrRanking.getCell(3).value = "Tiempo promedio";
+                      styleHeaderRow(hdrRanking, 3);
+                      rRes += 1;
+
                       for (const provider of tendenciasCofersaModal.providers) {
-                        const safeSheetName = provider.name
+                        const row = wsResumen.getRow(rRes);
+                        row.getCell(1).value = provider.name;
+                        row.getCell(2).value = provider.count;
+                        row.getCell(3).value = fmtMinutesFromMs(provider.avgTimeMs);
+                        zebraRow(row, 3, rRes % 2 === 0);
+                        rRes += 1;
+                      }
+
+                      // Volumen por fecha
+                      rRes += 2;
+                      wsResumen.mergeCells(`A${rRes}:E${rRes}`);
+                      wsResumen.getCell(`A${rRes}`).value = "Tiempo promedio por fecha";
+                      wsResumen.getCell(`A${rRes}`).font = { bold: true, size: 13, color: { argb: "FF7C3AED" } };
+                      rRes += 1;
+
+                      wsResumen.getCell(`A${rRes}`).value = "Evolución del tiempo promedio de descarga en el rango";
+                      wsResumen.getCell(`A${rRes}`).font = { size: 11, color: { argb: "FF64748B" } };
+                      rRes += 1;
+
+                      // Group actions by day and compute avg time per day
+                      const volDayMap = new Map();
+                      for (const act of allActions) {
+                        const completedAt = act?.completedAt ?? act?.completeAt;
+                        const d = toDateSafe(completedAt);
+                        if (!d) continue;
+                        const key = ymd(d);
+                        if (!volDayMap.has(key)) volDayMap.set(key, { totalMs: 0, count: 0 });
+                        const entry = volDayMap.get(key);
+                        entry.totalMs += Number(act?._durationMs || 0);
+                        entry.count += 1;
+                      }
+                      const volSorted = Array.from(volDayMap.entries())
+                        .map(([dayKey, { totalMs, count }]) => ({
+                          dayKey,
+                          avgMs: count > 0 ? Math.round(totalMs / count) : 0,
+                          count,
+                        }))
+                        .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+                      const volMaxMs = volSorted.length > 0 ? Math.max(...volSorted.map((d) => d.avgMs)) : 1;
+
+                      rRes += 1;
+
+                      // Visual bar chart using cells
+                      const BAR_COLS = 20;
+                      wsResumen.columns = [
+                        { width: 20 }, { width: 14 }, { width: 3 }, { width: 3 }, { width: 3 },
+                        { width: 3 }, { width: 3 }, { width: 3 }, { width: 3 }, { width: 3 },
+                        { width: 3 }, { width: 3 }, { width: 3 }, { width: 3 }, { width: 3 },
+                        { width: 3 }, { width: 3 }, { width: 3 }, { width: 3 }, { width: 3 },
+                        { width: 3 }, { width: 3 },
+                      ];
+
+                      const hdrVol = wsResumen.getRow(rRes);
+                      hdrVol.getCell(1).value = "Fecha";
+                      hdrVol.getCell(2).value = "Tiempo promedio";
+                      hdrVol.getCell(3).value = "Gráfico";
+                      styleHeaderRow(hdrVol, 2);
+                      wsResumen.mergeCells(rRes, 3, rRes, 2 + BAR_COLS);
+                      const grafCell = hdrVol.getCell(3);
+                      grafCell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+                      grafCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF7C3AED" } };
+                      grafCell.alignment = { vertical: "middle", horizontal: "center" };
+                      rRes += 1;
+
+                      for (const item of volSorted) {
+                        const dt = new Date(`${item.dayKey}T00:00:00`);
+                        const label = dt.toLocaleDateString("es-CR", { weekday: "short", day: "2-digit", month: "short" });
+                        const row = wsResumen.getRow(rRes);
+                        row.height = 16;
+                        row.getCell(1).value = label;
+                        row.getCell(1).font = { size: 10, color: { argb: "FF475569" } };
+                        row.getCell(2).value = fmtMinutesFromMs(item.avgMs);
+                        row.getCell(2).font = { size: 10, bold: true, color: { argb: "FF0F172A" } };
+                        row.getCell(2).alignment = { horizontal: "center" };
+
+                        // Draw bar using filled cells
+                        const barLength = volMaxMs > 0 ? Math.max(1, Math.round((item.avgMs / volMaxMs) * BAR_COLS)) : 1;
+                        for (let c = 0; c < BAR_COLS; c++) {
+                          const cell = row.getCell(3 + c);
+                          if (c < barLength) {
+                            cell.fill = {
+                              type: "pattern",
+                              pattern: "solid",
+                              fgColor: { argb: c < barLength * 0.7 ? "FF7C3AED" : "FFA78BFA" },
+                            };
+                          }
+                          cell.border = {
+                            top: { style: "hair", color: { argb: "FFF1F5F9" } },
+                            bottom: { style: "hair", color: { argb: "FFF1F5F9" } },
+                          };
+                        }
+                        rRes += 1;
+                      }
+
+                      // Crear una hoja por cada proveedor
+                      const usedSheetNames = new Set(["Resumen"]);
+                      for (const provider of tendenciasCofersaModal.providers) {
+                        let safeSheetName = provider.name
                           .replace(/[:\\\/\?\*\[\]]/g, "_")
                           .slice(0, 28) + "_PR";
+                        if (usedSheetNames.has(safeSheetName)) {
+                          let suffix = 2;
+                          while (usedSheetNames.has(`${safeSheetName.slice(0, 26)}_${suffix}_PR`)) suffix++;
+                          safeSheetName = `${safeSheetName.slice(0, 26)}_${suffix}_PR`;
+                        }
+                        usedSheetNames.add(safeSheetName);
                         
                         const ws = wb.addWorksheet(safeSheetName, {
                           properties: { tabColor: { argb: "FF7C3AED" } },
@@ -4902,7 +5624,6 @@ export default function MetricaRecepcion() {
                           ["Descargas totales", provider.count],
                           ["Tiempo promedio", fmtMinutesFromMs(provider.avgTimeMs)],
                           ["Tiempo total", fmtMinutesFromMs(provider.totalTimeMs)],
-                          ["Variaciones detectadas", provider.variations?.length || 0],
                         ];
                         
                         for (const [label, value] of metricsData) {
@@ -4913,24 +5634,6 @@ export default function MetricaRecepcion() {
                           ws.mergeCells(r, 2, r, 4);
                           row.height = 20;
                           r += 1;
-                        }
-                        
-                        // Variaciones
-                        if (provider.variations && provider.variations.length > 0) {
-                          r += 2;
-                          ws.mergeCells(`A${r}:D${r}`);
-                          const varTitle = ws.getCell(`A${r}`);
-                          varTitle.value = "Variaciones del nombre";
-                          varTitle.font = { bold: true, size: 13, color: { argb: "FF7C3AED" } };
-                          r += 1;
-                          
-                          for (const variation of provider.variations) {
-                            const row = ws.getRow(r);
-                            row.getCell(1).value = variation;
-                            ws.mergeCells(r, 1, r, 4);
-                            row.height = 18;
-                            r += 1;
-                          }
                         }
                         
                         // Detalle de descargas
@@ -4946,7 +5649,6 @@ export default function MetricaRecepcion() {
                           
                           // Expandir columnas para el detalle
                           ws.columns = [
-                            { width: 32 },
                             { width: 28 },
                             { width: 18 },
                             { width: 14 },
@@ -4956,14 +5658,13 @@ export default function MetricaRecepcion() {
                           ];
                           
                           const hdrAcciones = ws.getRow(r);
-                          hdrAcciones.getCell(1).value = "Variación nombre";
-                          hdrAcciones.getCell(2).value = "Fecha cerrada";
-                          hdrAcciones.getCell(3).value = "Duración";
-                          hdrAcciones.getCell(4).value = "Andén";
-                          hdrAcciones.getCell(5).value = "Bultos";
-                          hdrAcciones.getCell(6).value = "Iniciado por";
-                          hdrAcciones.getCell(7).value = "ID Acción";
-                          styleHeaderRow(hdrAcciones, 7);
+                          hdrAcciones.getCell(1).value = "Fecha cerrada";
+                          hdrAcciones.getCell(2).value = "Duración";
+                          hdrAcciones.getCell(3).value = "Andén";
+                          hdrAcciones.getCell(4).value = "Bultos";
+                          hdrAcciones.getCell(5).value = "Iniciado por";
+                          hdrAcciones.getCell(6).value = "ID Acción";
+                          styleHeaderRow(hdrAcciones, 6);
                           r += 1;
                           
                           // Ordenar acciones por fecha de completado (más reciente primero)
@@ -4985,7 +5686,6 @@ export default function MetricaRecepcion() {
                           for (const accion of accionesOrdenadas) {
                             const row = ws.getRow(r);
                             
-                            const variacionNombre = String(accion?.proveedorNombre || "—");
                             const fechaCerrada = formatFecha(accion?.completedAt ?? accion?.completeAt);
                             const durMs = Number(accion?.totalTimeMs ?? accion?.tiempoTotalMs ?? accion?.durationMs ?? 0);
                             const anden = String(accion?.idAnden ?? accion?.anden ?? "—");
@@ -4999,15 +5699,14 @@ export default function MetricaRecepcion() {
                             );
                             const idAccion = String(accion?.id || "—");
                             
-                            row.getCell(1).value = variacionNombre;
-                            row.getCell(2).value = fechaCerrada;
-                            row.getCell(3).value = fmtMinutesFromMs(durMs);
-                            row.getCell(4).value = anden;
-                            row.getCell(5).value = bultos || "—";
-                            row.getCell(6).value = iniciador;
-                            row.getCell(7).value = idAccion;
+                            row.getCell(1).value = fechaCerrada;
+                            row.getCell(2).value = fmtMinutesFromMs(durMs);
+                            row.getCell(3).value = anden;
+                            row.getCell(4).value = bultos || "—";
+                            row.getCell(5).value = iniciador;
+                            row.getCell(6).value = idAccion;
                             
-                            zebraRow(row, 7, r % 2 === 0);
+                            zebraRow(row, 6, r % 2 === 0);
                             r += 1;
                           }
                           
@@ -5016,7 +5715,7 @@ export default function MetricaRecepcion() {
                             const startRow = r - accionesOrdenadas.length;
                             ws.autoFilter = {
                               from: { row: startRow - 1, column: 1 },
-                              to: { row: r - 1, column: 7 },
+                              to: { row: r - 1, column: 6 },
                             };
                           }
                         }
@@ -5098,6 +5797,41 @@ export default function MetricaRecepcion() {
               </div>
             ) : (
               <>
+                {/* Tab chips */}
+                <div style={ui.tendenciasTabBar}>
+                  <button
+                    type="button"
+                    onClick={() => setCofersaActiveTab("proveedores")}
+                    style={{
+                      ...ui.tendenciasChip,
+                      ...(cofersaActiveTab === "proveedores" ? ui.tendenciasChipActiveCofersa : {}),
+                    }}
+                  >
+                    Proveedores
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCofersaActiveTab("volumen")}
+                    style={{
+                      ...ui.tendenciasChip,
+                      ...(cofersaActiveTab === "volumen" ? ui.tendenciasChipActiveCofersa : {}),
+                    }}
+                  >
+                    Volumen
+                  </button>
+                </div>
+
+                {cofersaActiveTab === "volumen" ? (
+                  <div style={{ padding: "0 18px 18px" }}>
+                    <VolumenPorFechaChart
+                      actions={tendenciasCofersaModal.providers.flatMap((p) => p.actions || [])}
+                      accentColor="#7C3AED"
+                      accentSoft="rgba(124,58,237,0.08)"
+                      periodLabel={currentData.label}
+                    />
+                  </div>
+                ) : (
+                <>
                 {!tendenciasCofersaModal.selectedProvider ? (
                   <div style={{ padding: "0 18px 18px" }}>
                     <div style={{
@@ -5313,6 +6047,690 @@ export default function MetricaRecepcion() {
                     </div>
                   </div>
                 )}
+              </>
+              )}
+              </>
+            )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tendenciasEpaModal.open && (
+        <div style={ui.aperturasModalRoot} role="dialog" aria-modal="true" aria-labelledby="tendencias-epa-modal-title">
+          <button
+            type="button"
+            style={ui.aperturasModalBackdrop}
+            onClick={() => setTendenciasEpaModal({
+              open: false,
+              loading: false,
+              error: "",
+              providers: [],
+              selectedProvider: null,
+              providerActions: [],
+            })}
+            aria-label="Cerrar"
+          />
+
+          <div style={ui.aperturasSheet}>
+            <div style={ui.aperturasSheetHeader}>
+              <div style={{ minWidth: 0 }}>
+                <div id="tendencias-epa-modal-title" style={{
+                  ...ui.aperturasSheetTitle,
+                  background: "linear-gradient(135deg, #0369A1 0%, #38BDF8 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}>
+                  Tendencia EPA
+                </div>
+                <div style={ui.aperturasSheetSubtitle}>
+                  Análisis de tiempos por proveedor en Andenes 4, 5, 6 y 7 · {currentData.label}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (tendenciasEpaModal.loading || tendenciasEpaModal.providers.length === 0) return;
+                    
+                    try {
+                      const ExcelJS = (await import("exceljs")).default;
+                      const wb = new ExcelJS.Workbook();
+                      wb.creator = "AppoloDesk";
+                      wb.created = new Date();
+                      wb.modified = new Date();
+                      wb.subject = `Tendencia EPA - ${currentData.label}`;
+                      
+                      const formatFecha = (value) => {
+                        if (!value) return "—";
+                        try {
+                          let fecha;
+                          if (typeof value?.toDate === "function") fecha = value.toDate();
+                          else if (typeof value === "number") fecha = new Date(value);
+                          else if (typeof value === "string") fecha = new Date(value);
+                          else return "—";
+                          if (isNaN(fecha.getTime())) return "—";
+                          return fecha.toLocaleString("es-CR", {
+                            day: "2-digit", month: "short", year: "numeric",
+                            hour: "2-digit", minute: "2-digit",
+                          });
+                        } catch { return String(value); }
+                      };
+                      
+                      const styleHeaderRow = (row, cols) => {
+                        row.height = 22;
+                        for (let c = 1; c <= cols; c++) {
+                          const cell = row.getCell(c);
+                          cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+                          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0369A1" } };
+                          cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+                          cell.border = {
+                            top: { style: "thin", color: { argb: "FF0369A1" } },
+                            left: { style: "thin", color: { argb: "FF0369A1" } },
+                            bottom: { style: "thin", color: { argb: "FF075985" } },
+                            right: { style: "thin", color: { argb: "FF0369A1" } },
+                          };
+                        }
+                      };
+                      
+                      const zebraRow = (row, cols, odd) => {
+                        row.height = 19;
+                        const fill = odd ? "FFF0F9FF" : "FFFFFFFF";
+                        for (let c = 1; c <= cols; c++) {
+                          const cell = row.getCell(c);
+                          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+                          cell.border = {
+                            top: { style: "hair", color: { argb: "FFE2E8F0" } },
+                            left: { style: "hair", color: { argb: "FFE2E8F0" } },
+                            bottom: { style: "hair", color: { argb: "FFE2E8F0" } },
+                            right: { style: "hair", color: { argb: "FFE2E8F0" } },
+                          };
+                          cell.alignment = { vertical: "middle", wrapText: true };
+                          cell.font = { size: 11, color: { argb: "FF0F172A" } };
+                        }
+                      };
+                      
+                      // === HOJA RESUMEN (primera hoja) ===
+                      const wsResumen = wb.addWorksheet("Resumen", {
+                        properties: { tabColor: { argb: "FF0369A1" } },
+                      });
+                      wsResumen.columns = [
+                        { width: 32 }, { width: 18 }, { width: 18 }, { width: 18 }, { width: 18 },
+                      ];
+
+                      wsResumen.mergeCells("A1:E1");
+                      const resTitleCell = wsResumen.getCell("A1");
+                      resTitleCell.value = `Tendencia EPA — Resumen (Andenes 4-7)`;
+                      resTitleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+                      resTitleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0369A1" } };
+                      resTitleCell.alignment = { vertical: "middle", horizontal: "center" };
+                      wsResumen.getRow(1).height = 32;
+
+                      wsResumen.mergeCells("A2:E2");
+                      wsResumen.getCell("A2").value = `Período: ${currentData.label}`;
+                      wsResumen.getCell("A2").font = { size: 11, color: { argb: "FF64748B" } };
+                      wsResumen.getRow(2).height = 20;
+
+                      let rRes = 4;
+                      wsResumen.mergeCells(`A${rRes}:E${rRes}`);
+                      wsResumen.getCell(`A${rRes}`).value = "Indicadores globales";
+                      wsResumen.getCell(`A${rRes}`).font = { bold: true, size: 13, color: { argb: "FF0369A1" } };
+                      rRes += 1;
+
+                      const allActions = tendenciasEpaModal.providers.flatMap((p) => p.actions || []);
+                      const totalDescargas = allActions.length;
+                      const totalProveedores = tendenciasEpaModal.providers.length;
+                      const totalTimeGlobal = allActions.reduce((s, a) => s + Number(a?._durationMs || 0), 0);
+                      const avgTimeGlobal = totalDescargas > 0 ? Math.round(totalTimeGlobal / totalDescargas) : 0;
+
+                      const resKpis = [
+                        ["Total descargas cerradas", totalDescargas],
+                        ["Proveedores identificados", totalProveedores],
+                        ["Tiempo promedio global", fmtMinutesFromMs(avgTimeGlobal)],
+                        ["Andenes incluidos", "4, 5, 6, 7"],
+                      ];
+                      for (const [label, value] of resKpis) {
+                        const row = wsResumen.getRow(rRes);
+                        row.getCell(1).value = label;
+                        row.getCell(1).font = { bold: true, color: { argb: "FF475569" } };
+                        row.getCell(2).value = value;
+                        row.height = 20;
+                        rRes += 1;
+                      }
+
+                      rRes += 2;
+                      wsResumen.mergeCells(`A${rRes}:E${rRes}`);
+                      wsResumen.getCell(`A${rRes}`).value = "Ranking de proveedores";
+                      wsResumen.getCell(`A${rRes}`).font = { bold: true, size: 13, color: { argb: "FF0369A1" } };
+                      rRes += 1;
+
+                      const hdrRanking = wsResumen.getRow(rRes);
+                      hdrRanking.getCell(1).value = "Proveedor";
+                      hdrRanking.getCell(2).value = "Descargas";
+                      hdrRanking.getCell(3).value = "Tiempo promedio";
+                      styleHeaderRow(hdrRanking, 3);
+                      rRes += 1;
+
+                      for (const provider of tendenciasEpaModal.providers) {
+                        const row = wsResumen.getRow(rRes);
+                        row.getCell(1).value = provider.name;
+                        row.getCell(2).value = provider.count;
+                        row.getCell(3).value = fmtMinutesFromMs(provider.avgTimeMs);
+                        zebraRow(row, 3, rRes % 2 === 0);
+                        rRes += 1;
+                      }
+
+                      rRes += 2;
+                      wsResumen.mergeCells(`A${rRes}:E${rRes}`);
+                      wsResumen.getCell(`A${rRes}`).value = "Tiempo promedio por fecha";
+                      wsResumen.getCell(`A${rRes}`).font = { bold: true, size: 13, color: { argb: "FF0369A1" } };
+                      rRes += 1;
+
+                      wsResumen.getCell(`A${rRes}`).value = "Evolución del tiempo promedio de descarga (Andenes 4-7)";
+                      wsResumen.getCell(`A${rRes}`).font = { size: 11, color: { argb: "FF64748B" } };
+                      rRes += 1;
+
+                      // Group actions by day and compute avg time per day
+                      const volDayMap = new Map();
+                      for (const act of allActions) {
+                        const completedAt = act?.completedAt ?? act?.completeAt;
+                        const d = toDateSafe(completedAt);
+                        if (!d) continue;
+                        const key = ymd(d);
+                        if (!volDayMap.has(key)) volDayMap.set(key, { totalMs: 0, count: 0 });
+                        const entry = volDayMap.get(key);
+                        entry.totalMs += Number(act?._durationMs || 0);
+                        entry.count += 1;
+                      }
+                      const volSorted = Array.from(volDayMap.entries())
+                        .map(([dayKey, { totalMs, count }]) => ({
+                          dayKey,
+                          avgMs: count > 0 ? Math.round(totalMs / count) : 0,
+                          count,
+                        }))
+                        .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+                      const volMaxMs = volSorted.length > 0 ? Math.max(...volSorted.map((d) => d.avgMs)) : 1;
+
+                      rRes += 1;
+
+                      // Visual bar chart using cells
+                      const BAR_COLS = 20;
+                      wsResumen.columns = [
+                        { width: 20 }, { width: 14 }, { width: 3 }, { width: 3 }, { width: 3 },
+                        { width: 3 }, { width: 3 }, { width: 3 }, { width: 3 }, { width: 3 },
+                        { width: 3 }, { width: 3 }, { width: 3 }, { width: 3 }, { width: 3 },
+                        { width: 3 }, { width: 3 }, { width: 3 }, { width: 3 }, { width: 3 },
+                        { width: 3 }, { width: 3 },
+                      ];
+
+                      const hdrVol = wsResumen.getRow(rRes);
+                      hdrVol.getCell(1).value = "Fecha";
+                      hdrVol.getCell(2).value = "Tiempo promedio";
+                      hdrVol.getCell(3).value = "Gráfico";
+                      styleHeaderRow(hdrVol, 2);
+                      wsResumen.mergeCells(rRes, 3, rRes, 2 + BAR_COLS);
+                      const grafCell = hdrVol.getCell(3);
+                      grafCell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+                      grafCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0369A1" } };
+                      grafCell.alignment = { vertical: "middle", horizontal: "center" };
+                      rRes += 1;
+
+                      for (const item of volSorted) {
+                        const dt = new Date(`${item.dayKey}T00:00:00`);
+                        const label = dt.toLocaleDateString("es-CR", { weekday: "short", day: "2-digit", month: "short" });
+                        const row = wsResumen.getRow(rRes);
+                        row.height = 16;
+                        row.getCell(1).value = label;
+                        row.getCell(1).font = { size: 10, color: { argb: "FF475569" } };
+                        row.getCell(2).value = fmtMinutesFromMs(item.avgMs);
+                        row.getCell(2).font = { size: 10, bold: true, color: { argb: "FF0F172A" } };
+                        row.getCell(2).alignment = { horizontal: "center" };
+
+                        const barLength = volMaxMs > 0 ? Math.max(1, Math.round((item.avgMs / volMaxMs) * BAR_COLS)) : 1;
+                        for (let c = 0; c < BAR_COLS; c++) {
+                          const cell = row.getCell(3 + c);
+                          if (c < barLength) {
+                            cell.fill = {
+                              type: "pattern",
+                              pattern: "solid",
+                              fgColor: { argb: c < barLength * 0.7 ? "FF0369A1" : "FF7DD3FC" },
+                            };
+                          }
+                          cell.border = {
+                            top: { style: "hair", color: { argb: "FFF1F5F9" } },
+                            bottom: { style: "hair", color: { argb: "FFF1F5F9" } },
+                          };
+                        }
+                        rRes += 1;
+                      }
+
+                      // Crear una hoja por cada proveedor
+                      const usedSheetNames = new Set(["Resumen"]);
+                      for (const provider of tendenciasEpaModal.providers) {
+                        let safeSheetName = provider.name
+                          .replace(/[:\\\/\?\*\[\]]/g, "_")
+                          .slice(0, 28) + "_EP";
+                        // Avoid duplicate sheet names
+                        if (usedSheetNames.has(safeSheetName)) {
+                          let suffix = 2;
+                          while (usedSheetNames.has(`${safeSheetName.slice(0, 26)}_${suffix}_EP`)) suffix++;
+                          safeSheetName = `${safeSheetName.slice(0, 26)}_${suffix}_EP`;
+                        }
+                        usedSheetNames.add(safeSheetName);
+                        
+                        const ws = wb.addWorksheet(safeSheetName, {
+                          properties: { tabColor: { argb: "FF0369A1" } },
+                        });
+                        
+                        ws.columns = [
+                          { width: 28 }, { width: 18 }, { width: 18 }, { width: 18 },
+                        ];
+                        
+                        ws.mergeCells("A1:D1");
+                        const titleCell = ws.getCell("A1");
+                        titleCell.value = `Proveedor: ${provider.name}`;
+                        titleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+                        titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0369A1" } };
+                        titleCell.alignment = { vertical: "middle", horizontal: "center" };
+                        ws.getRow(1).height = 32;
+                        
+                        let r = 3;
+                        ws.mergeCells(`A${r}:D${r}`);
+                        const summaryTitle = ws.getCell(`A${r}`);
+                        summaryTitle.value = "Resumen de métricas (Andenes 4-7)";
+                        summaryTitle.font = { bold: true, size: 13, color: { argb: "FF0369A1" } };
+                        r += 1;
+                        
+                        const metricsData = [
+                          ["Descargas totales", provider.count],
+                          ["Tiempo promedio", fmtMinutesFromMs(provider.avgTimeMs)],
+                          ["Tiempo total", fmtMinutesFromMs(provider.totalTimeMs)],
+                        ];
+                        
+                        for (const [label, value] of metricsData) {
+                          const row = ws.getRow(r);
+                          row.getCell(1).value = label;
+                          row.getCell(1).font = { bold: true, color: { argb: "FF64748B" } };
+                          row.getCell(2).value = value;
+                          ws.mergeCells(r, 2, r, 4);
+                          row.height = 20;
+                          r += 1;
+                        }
+                        
+                        const actions = provider.actions || [];
+                        if (actions.length > 0) {
+                          r += 2;
+                          ws.mergeCells(`A${r}:G${r}`);
+                          const detailTitle = ws.getCell(`A${r}`);
+                          detailTitle.value = "Detalle de descargas";
+                          detailTitle.font = { bold: true, size: 13, color: { argb: "FF0369A1" } };
+                          r += 1;
+                          
+                          ws.columns = [
+                            { width: 28 }, { width: 18 },
+                            { width: 14 }, { width: 14 }, { width: 18 }, { width: 18 },
+                          ];
+                          
+                          const hdrAcciones = ws.getRow(r);
+                          hdrAcciones.getCell(1).value = "Fecha cerrada";
+                          hdrAcciones.getCell(2).value = "Duración";
+                          hdrAcciones.getCell(3).value = "Andén";
+                          hdrAcciones.getCell(4).value = "Bultos";
+                          hdrAcciones.getCell(5).value = "Iniciado por";
+                          hdrAcciones.getCell(6).value = "ID Acción";
+                          styleHeaderRow(hdrAcciones, 6);
+                          r += 1;
+                          
+                          for (const accion of actions) {
+                            const row = ws.getRow(r);
+                            row.getCell(1).value = formatFecha(accion?.completedAt ?? accion?.completeAt);
+                            row.getCell(2).value = fmtMinutesFromMs(Number(accion?.totalTimeMs ?? accion?.tiempoTotalMs ?? accion?.durationMs ?? 0));
+                            row.getCell(3).value = String(accion?.idAnden ?? "—");
+                            row.getCell(4).value = Number(accion?.bultos ?? accion?.cantidadBultos ?? 0) || "—";
+                            row.getCell(5).value = String(accion?.starter ?? accion?.startedByName ?? accion?.creadoPorNombre ?? accion?.responsableNombre ?? "—");
+                            row.getCell(6).value = String(accion?.id || "—");
+                            zebraRow(row, 6, r % 2 === 0);
+                            r += 1;
+                          }
+                          
+                          if (actions.length > 0) {
+                            const startRow = r - actions.length;
+                            ws.autoFilter = {
+                              from: { row: startRow - 1, column: 1 },
+                              to: { row: r - 1, column: 6 },
+                            };
+                          }
+                        }
+                      }
+                      
+                      const buffer = await wb.xlsx.writeBuffer();
+                      const blob = new Blob([buffer], {
+                        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `tendencia-epa_${currentData.label.replace(/\s+/g, "_")}_${Date.now()}.xlsx`;
+                      a.rel = "noopener";
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    } catch (e) {
+                      console.error("Error exportando tendencias EPA:", e);
+                      window.alert("No se pudo generar el archivo Excel. Revisa la consola.");
+                    }
+                  }}
+                  disabled={tendenciasEpaModal.loading || tendenciasEpaModal.providers.length === 0}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 14px",
+                    borderRadius: 12,
+                    border: "1px solid #0369A1",
+                    background: "linear-gradient(135deg, #0369A1 0%, #38BDF8 100%)",
+                    color: "#fff",
+                    fontWeight: 900,
+                    fontSize: 13,
+                    cursor: tendenciasEpaModal.loading || tendenciasEpaModal.providers.length === 0 ? "not-allowed" : "pointer",
+                    fontFamily: "inherit",
+                    opacity: tendenciasEpaModal.loading || tendenciasEpaModal.providers.length === 0 ? 0.5 : 1,
+                    transition: "all 200ms ease",
+                  }}
+                  title="Exportar tendencias EPA a Excel"
+                >
+                  <FileSpreadsheet size={16} strokeWidth={2.2} />
+                  Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTendenciasEpaModal({
+                    open: false,
+                    loading: false,
+                    error: "",
+                    providers: [],
+                    selectedProvider: null,
+                    providerActions: [],
+                  })}
+                  style={ui.aperturasSheetCloseBtn}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+
+            <div style={{
+              maxHeight: "calc(85vh - 100px)",
+              overflowY: "auto",
+              overflowX: "hidden",
+            }}>
+            {tendenciasEpaModal.loading ? (
+              <div style={ui.aperturasModalLoadingBox}>
+                <Loader2 size={22} strokeWidth={2.25} color="#0369A1" style={{ animation: "metricaRecepcionSpin 0.75s linear infinite" }} />
+                <span style={{ color: "#64748B", fontWeight: 800, fontSize: 13 }}>Analizando tendencias EPA…</span>
+              </div>
+            ) : tendenciasEpaModal.error ? (
+              <div style={ui.aperturasModalEmpty}>{tendenciasEpaModal.error}</div>
+            ) : tendenciasEpaModal.providers.length === 0 ? (
+              <div style={ui.aperturasModalEmpty}>
+                No se encontraron descargas en Andenes 4, 5, 6 y 7 para este período.
+              </div>
+            ) : (
+              <>
+                {/* Tab chips */}
+                <div style={ui.tendenciasTabBar}>
+                  <button
+                    type="button"
+                    onClick={() => setEpaActiveTab("proveedores")}
+                    style={{
+                      ...ui.tendenciasChip,
+                      ...(epaActiveTab === "proveedores" ? ui.tendenciasChipActiveEpa : {}),
+                    }}
+                  >
+                    Proveedores
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEpaActiveTab("volumen")}
+                    style={{
+                      ...ui.tendenciasChip,
+                      ...(epaActiveTab === "volumen" ? ui.tendenciasChipActiveEpa : {}),
+                    }}
+                  >
+                    Volumen
+                  </button>
+                </div>
+
+                {epaActiveTab === "volumen" ? (
+                  <div style={{ padding: "0 18px 18px" }}>
+                    <VolumenPorFechaChart
+                      actions={tendenciasEpaModal.providers.flatMap((p) => p.actions || [])}
+                      accentColor="#0369A1"
+                      accentSoft="rgba(3,105,161,0.08)"
+                      periodLabel={currentData.label}
+                    />
+                  </div>
+                ) : (
+                <>
+                {!tendenciasEpaModal.selectedProvider ? (
+                  <div style={{ padding: "0 18px 18px" }}>
+                    <div style={{
+                      marginBottom: 16,
+                      padding: 14,
+                      borderRadius: 14,
+                      background: "linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)",
+                      border: "1px solid rgba(3,105,161,0.2)",
+                    }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#075985", marginBottom: 4 }}>
+                        {tendenciasEpaModal.providers.length} proveedores encontrados
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 750, color: "#0369A1" }}>
+                        Descargas en Andenes 4, 5, 6 y 7 — Haz clic en un proveedor para ver el detalle
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 10 }}>
+                      {tendenciasEpaModal.providers.map((provider, provIdx) => (
+                        <button
+                          key={`${provider.name}-${provIdx}`}
+                          type="button"
+                          onClick={() => selectProviderInTendenciasEpa(provider)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "14px 16px",
+                            borderRadius: 14,
+                            border: "1px solid #E7E9F2",
+                            background: "#fff",
+                            cursor: "pointer",
+                            transition: "all 200ms ease",
+                            fontFamily: "inherit",
+                            textAlign: "left",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = "translateX(4px)";
+                            e.currentTarget.style.background = "#F0F9FF";
+                            e.currentTarget.style.borderColor = "rgba(3,105,161,0.3)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = "translateX(0)";
+                            e.currentTarget.style.background = "#fff";
+                            e.currentTarget.style.borderColor = "#E7E9F2";
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 950, color: "#0F172A", marginBottom: 4 }}>
+                              {provider.name}
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: "#64748B", marginBottom: 4 }}>
+                              {provider.count} descargas · Promedio: {fmtMinutesFromMs(provider.avgTimeMs)}
+                            </div>
+                            {provider.variations && provider.variations.length > 1 && (
+                              <div style={{ 
+                                fontSize: 11, 
+                                fontWeight: 750, 
+                                color: "#0369A1",
+                                marginTop: 4,
+                              }}>
+                                Incluye: {provider.variations.join(", ")}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div style={{
+                              padding: "6px 12px",
+                              borderRadius: 999,
+                              background: "rgba(3,105,161,0.1)",
+                              color: "#0369A1",
+                              fontSize: 12,
+                              fontWeight: 900,
+                            }}>
+                              {fmtMinutesFromMs(provider.totalTimeMs)}
+                            </div>
+                            <ChevronDown size={18} strokeWidth={2.5} color="#0369A1" style={{ transform: "rotate(-90deg)" }} />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: "0 18px 18px" }}>
+                    <button
+                      type="button"
+                      onClick={() => selectProviderInTendenciasEpa(null)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "8px 12px",
+                        borderRadius: 12,
+                        border: "1px solid #E7E9F2",
+                        background: "#fff",
+                        color: "#0F172A",
+                        fontSize: 12,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        marginBottom: 16,
+                      }}
+                    >
+                      <ArrowLeft size={14} strokeWidth={2.5} />
+                      Volver a proveedores
+                    </button>
+
+                    <div style={{
+                      marginBottom: 16,
+                      padding: 16,
+                      borderRadius: 16,
+                      background: "linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)",
+                      border: "1px solid rgba(3,105,161,0.2)",
+                    }}>
+                      <div style={{ fontSize: 16, fontWeight: 950, color: "#075985", marginBottom: 4 }}>
+                        {tendenciasEpaModal.selectedProvider.name}
+                      </div>
+                      {tendenciasEpaModal.selectedProvider.variations && 
+                       tendenciasEpaModal.selectedProvider.variations.length > 1 && (
+                        <div style={{ 
+                          fontSize: 12, 
+                          fontWeight: 750, 
+                          color: "#0369A1",
+                          marginBottom: 12,
+                        }}>
+                          Incluye: {tendenciasEpaModal.selectedProvider.variations.join(", ")}
+                        </div>
+                      )}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 900, color: "#0369A1", textTransform: "uppercase", marginBottom: 4 }}>
+                            Descargas
+                          </div>
+                          <div style={{ fontSize: 20, fontWeight: 950, color: "#0F172A" }}>
+                            {tendenciasEpaModal.selectedProvider.count}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 900, color: "#0369A1", textTransform: "uppercase", marginBottom: 4 }}>
+                            Tiempo promedio
+                          </div>
+                          <div style={{ fontSize: 20, fontWeight: 950, color: "#0F172A" }}>
+                            {fmtMinutesFromMs(tendenciasEpaModal.selectedProvider.avgTimeMs)}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 900, color: "#0369A1", textTransform: "uppercase", marginBottom: 4 }}>
+                            Tiempo total
+                          </div>
+                          <div style={{ fontSize: 20, fontWeight: 950, color: "#0F172A" }}>
+                            {fmtMinutesFromMs(tendenciasEpaModal.selectedProvider.totalTimeMs)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={ui.aperturasListWrap}>
+                      <div style={ui.aperturasList}>
+                        {tendenciasEpaModal.providerActions.map((row) => {
+                          const title =
+                            String(row?.nombreAccion || "").trim() ||
+                            [row?.proveedorNombre, row?.idAnden ? `Andén ${row.idAnden}` : ""]
+                              .filter(Boolean)
+                              .join(" · ") ||
+                            row?.id;
+                          const duration = row?._durationMs
+                            ? fmtMinutesFromMs(row._durationMs)
+                            : "—";
+
+                          return (
+                            <div key={row.id} style={ui.aperturasRow}>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={ui.aperturasRowTitle}>{title}</div>
+                                <div style={ui.aperturasRowMeta}>
+                                  Cerrada {formatDateTimeShort(row?.completedAt ?? row?.completeAt)}
+                                  {row?.idAnden ? ` · Andén ${row.idAnden}` : ""}
+                                  {row?.cantidadBultos != null
+                                    ? ` · ${fmtInt(row.cantidadBultos)} bultos`
+                                    : ""}
+                                </div>
+                              </div>
+                              <div style={ui.userTimeRowActions}>
+                                <span style={{
+                                  ...ui.estadoPill,
+                                  background: "rgba(3,105,161,0.1)",
+                                  color: "#0369A1",
+                                  border: "1px solid rgba(3,105,161,0.2)",
+                                }}>
+                                  {duration}
+                                </span>
+                                <button
+                                  type="button"
+                                  style={ui.aperturasRowLink}
+                                  onClick={() => {
+                                    setTendenciasEpaModal({
+                                      open: false,
+                                      loading: false,
+                                      error: "",
+                                      providers: [],
+                                      selectedProvider: null,
+                                      providerActions: [],
+                                    });
+                                    nav(`/recepcion/accion-descarga/${encodeURIComponent(row.id)}`);
+                                  }}
+                                >
+                                  Abrir
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+              )}
               </>
             )}
             </div>
@@ -7290,24 +8708,6 @@ const ui = {
     color: "#334155",
   },
 
-  providerTimesOpenBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    padding: "12px 18px",
-    borderRadius: 16,
-    border: "1px solid rgba(8,159,138,0.28)",
-    background: "#fff",
-    color: "#0F172A",
-    fontWeight: 950,
-    fontSize: 13,
-    cursor: "pointer",
-    fontFamily: "inherit",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
-    flexShrink: 0,
-  },
-
   tendenciasCofersaBtn: {
     display: "inline-flex",
     alignItems: "center",
@@ -7325,6 +8725,56 @@ const ui = {
     boxShadow: "0 10px 24px rgba(124,58,237,0.12)",
     flexShrink: 0,
     transition: "all 200ms ease",
+  },
+
+  tendenciasEpaBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: "12px 18px",
+    borderRadius: 16,
+    border: "1px solid rgba(3,105,161,0.28)",
+    background: "linear-gradient(135deg, #F8FDFF 0%, #F0F9FF 100%)",
+    color: "#0F172A",
+    fontWeight: 950,
+    fontSize: 13,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    boxShadow: "0 10px 24px rgba(3,105,161,0.12)",
+    flexShrink: 0,
+    transition: "all 200ms ease",
+  },
+
+  tendenciasTabBar: {
+    display: "flex",
+    gap: 8,
+    padding: "12px 18px 0",
+    marginBottom: 14,
+  },
+  tendenciasChip: {
+    padding: "8px 16px",
+    borderRadius: 999,
+    border: "1px solid #D1D5DB",
+    background: "#F9FAFB",
+    color: "#475569",
+    fontWeight: 800,
+    fontSize: 13,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    transition: "all 180ms ease",
+  },
+  tendenciasChipActiveCofersa: {
+    background: "#7C3AED",
+    color: "#fff",
+    borderColor: "#7C3AED",
+    boxShadow: "0 4px 12px rgba(124,58,237,0.25)",
+  },
+  tendenciasChipActiveEpa: {
+    background: "#0369A1",
+    color: "#fff",
+    borderColor: "#0369A1",
+    boxShadow: "0 4px 12px rgba(3,105,161,0.25)",
   },
 
   providerTimesFilterBar: {
