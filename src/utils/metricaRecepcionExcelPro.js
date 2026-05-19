@@ -1020,6 +1020,274 @@ async function buildWorkbook(data, ctx, ExcelJS) {
     }
   });
 
+  // Crear hojas individuales por proveedor con tendencias y acciones
+  const providerTimes = data?.providerTimes || [];
+  const providerTimesAcciones = data?.providerTimesAcciones || [];
+  
+  if (providerTimes.length > 0 && providerTimesAcciones.length > 0) {
+    // Agrupar acciones por proveedor
+    const accionesPorProveedor = new Map();
+    
+    for (const accion of providerTimesAcciones) {
+      const proveedorNombre = String(accion?.proveedorNombre || "Sin proveedor").trim();
+      if (!accionesPorProveedor.has(proveedorNombre)) {
+        accionesPorProveedor.set(proveedorNombre, []);
+      }
+      accionesPorProveedor.get(proveedorNombre).push(accion);
+    }
+    
+    // Crear una hoja por cada proveedor
+    for (const providerData of providerTimes) {
+      const proveedorNombre = String(providerData.label || "Sin proveedor").trim();
+      const acciones = accionesPorProveedor.get(proveedorNombre) || [];
+      
+      if (acciones.length === 0) continue;
+      
+      // Nombre seguro para la hoja (máximo 31 caracteres, sin caracteres especiales)
+      const safeSheetName = proveedorNombre
+        .replace(/[:\\\/\?\*\[\]]/g, "_")
+        .slice(0, 28) + "_PR";
+      
+      addDataSheet(safeSheetName, "FF0EA5E9", (ws) => {
+        ws.columns = [
+          { width: 28 },
+          { width: 18 },
+          { width: 18 },
+          { width: 18 },
+        ];
+        
+        // Título del proveedor
+        ws.mergeCells("A1:D1");
+        const titleCell = ws.getCell("A1");
+        titleCell.value = `Proveedor: ${proveedorNombre}`;
+        titleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+        titleCell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF0EA5E9" },
+        };
+        titleCell.alignment = { vertical: "middle", horizontal: "center" };
+        ws.getRow(1).height = 32;
+        
+        // Resumen de métricas
+        let r = 3;
+        ws.mergeCells(`A${r}:D${r}`);
+        const summaryTitle = ws.getCell(`A${r}`);
+        summaryTitle.value = "Resumen de métricas";
+        summaryTitle.font = { bold: true, size: 13, color: { argb: "FF0EA5E9" } };
+        r += 1;
+        
+        const tpm = providerData.tiempoPromedioMs || 0;
+        const ttm = providerData.tiempoTotalMs || 0;
+        const finalizadas = providerData.finalizadas || 0;
+        
+        const metricsData = [
+          ["Descargas cerradas", finalizadas],
+          ["Tiempo promedio", fmtMinutesFromMs(tpm)],
+          ["Tiempo promedio (minutos)", tpm > 0 ? Math.round((tpm / 60000) * 100) / 100 : 0],
+          ["Tiempo total", fmtMinutesFromMs(ttm)],
+          ["Tiempo total (minutos)", ttm > 0 ? Math.round((ttm / 60000) * 100) / 100 : 0],
+        ];
+        
+        for (const [label, value] of metricsData) {
+          const row = ws.getRow(r);
+          row.getCell(1).value = label;
+          row.getCell(1).font = { bold: true, color: { argb: "FF64748B" } };
+          row.getCell(2).value = value;
+          ws.mergeCells(r, 2, r, 4);
+          row.height = 20;
+          r += 1;
+        }
+        
+        // Tendencia temporal (agrupar por fecha)
+        r += 2;
+        ws.mergeCells(`A${r}:D${r}`);
+        const trendTitle = ws.getCell(`A${r}`);
+        trendTitle.value = "Tendencia temporal";
+        trendTitle.font = { bold: true, size: 13, color: { argb: "FF0EA5E9" } };
+        r += 1;
+        
+        // Agrupar acciones por fecha
+        const accionesPorFecha = new Map();
+        for (const accion of acciones) {
+          const completedAt = accion?.completedAt ?? accion?.completeAt;
+          if (!completedAt) continue;
+          
+          let fecha;
+          if (typeof completedAt?.toDate === "function") {
+            fecha = completedAt.toDate();
+          } else if (typeof completedAt === "number") {
+            fecha = new Date(completedAt);
+          } else if (typeof completedAt === "string") {
+            fecha = new Date(completedAt);
+          } else {
+            continue;
+          }
+          
+          if (isNaN(fecha.getTime())) continue;
+          
+          const fechaKey = fecha.toISOString().split("T")[0];
+          
+          if (!accionesPorFecha.has(fechaKey)) {
+            accionesPorFecha.set(fechaKey, {
+              fecha: fechaKey,
+              count: 0,
+              tiempoTotal: 0,
+            });
+          }
+          
+          const durMs = Number(accion?.totalTimeMs ?? accion?.tiempoTotalMs ?? accion?.durationMs ?? 0);
+          const grupo = accionesPorFecha.get(fechaKey);
+          grupo.count += 1;
+          grupo.tiempoTotal += durMs;
+        }
+        
+        const tendenciaArray = Array.from(accionesPorFecha.values())
+          .sort((a, b) => a.fecha.localeCompare(b.fecha));
+        
+        if (tendenciaArray.length > 0) {
+          const hdrTrend = ws.getRow(r);
+          hdrTrend.getCell(1).value = "Fecha";
+          hdrTrend.getCell(2).value = "Descargas";
+          hdrTrend.getCell(3).value = "Tiempo prom.";
+          hdrTrend.getCell(4).value = "Tiempo total";
+          styleHeaderRow(hdrTrend, 4);
+          r += 1;
+          
+          for (const item of tendenciaArray) {
+            const row = ws.getRow(r);
+            const tiempoProm = item.count > 0 ? Math.round(item.tiempoTotal / item.count) : 0;
+            row.getCell(1).value = formatDayKeyForLocale(item.fecha);
+            row.getCell(2).value = item.count;
+            row.getCell(3).value = fmtMinutesFromMs(tiempoProm);
+            row.getCell(4).value = fmtMinutesFromMs(item.tiempoTotal);
+            zebraRow(row, 4, r % 2 === 0);
+            r += 1;
+          }
+        } else {
+          const row = ws.getRow(r);
+          row.getCell(1).value = "No hay datos de tendencia temporal disponibles";
+          ws.mergeCells(r, 1, r, 4);
+          r += 1;
+        }
+        
+        // Listado completo de acciones
+        r += 2;
+        ws.mergeCells(`A${r}:D${r}`);
+        const accionesTitle = ws.getCell(`A${r}`);
+        accionesTitle.value = "Todas las acciones de descarga";
+        accionesTitle.font = { bold: true, size: 13, color: { argb: "FF0EA5E9" } };
+        r += 1;
+        
+        // Expandir columnas para el detalle
+        ws.columns = [
+          { width: 22 },
+          { width: 32 },
+          { width: 18 },
+          { width: 18 },
+          { width: 18 },
+          { width: 14 },
+          { width: 14 },
+          { width: 28 },
+        ];
+        
+        const hdrAcciones = ws.getRow(r);
+        hdrAcciones.getCell(1).value = "ID Acción";
+        hdrAcciones.getCell(2).value = "Fecha completado";
+        hdrAcciones.getCell(3).value = "Duración";
+        hdrAcciones.getCell(4).value = "Duración (min)";
+        hdrAcciones.getCell(5).value = "Bultos";
+        hdrAcciones.getCell(6).value = "Andén";
+        hdrAcciones.getCell(7).value = "Estado";
+        hdrAcciones.getCell(8).value = "Iniciado por";
+        styleHeaderRow(hdrAcciones, 8);
+        r += 1;
+        
+        // Ordenar acciones por fecha de completado (más reciente primero)
+        const accionesOrdenadas = [...acciones].sort((a, b) => {
+          const dateA = a?.completedAt ?? a?.completeAt;
+          const dateB = b?.completedAt ?? b?.completeAt;
+          
+          const getTime = (d) => {
+            if (!d) return 0;
+            if (typeof d?.toDate === "function") return d.toDate().getTime();
+            if (typeof d === "number") return d;
+            if (typeof d === "string") return new Date(d).getTime();
+            return 0;
+          };
+          
+          return getTime(dateB) - getTime(dateA);
+        });
+        
+        for (const accion of accionesOrdenadas) {
+          const row = ws.getRow(r);
+          
+          const completedAt = accion?.completedAt ?? accion?.completeAt;
+          let fechaStr = "—";
+          if (completedAt) {
+            try {
+              let fecha;
+              if (typeof completedAt?.toDate === "function") {
+                fecha = completedAt.toDate();
+              } else if (typeof completedAt === "number") {
+                fecha = new Date(completedAt);
+              } else if (typeof completedAt === "string") {
+                fecha = new Date(completedAt);
+              }
+              
+              if (fecha && !isNaN(fecha.getTime())) {
+                fechaStr = fecha.toLocaleString("es-CR", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+              }
+            } catch (e) {
+              fechaStr = String(completedAt);
+            }
+          }
+          
+          const durMs = Number(accion?.totalTimeMs ?? accion?.tiempoTotalMs ?? accion?.durationMs ?? 0);
+          const durMin = durMs > 0 ? Math.round((durMs / 60000) * 100) / 100 : 0;
+          const bultos = Number(accion?.bultos ?? accion?.cantidadBultos ?? 0);
+          const anden = String(accion?.idAnden ?? accion?.anden ?? "—");
+          const estado = accion?.completedAt || accion?.completeAt ? "Completa" : 
+                        accion?.startedAt ? "En proceso" : "Creada";
+          const iniciador = String(
+            accion?.starter ?? 
+            accion?.startedByName ?? 
+            accion?.creadoPorNombre ?? 
+            accion?.responsableNombre ?? 
+            "—"
+          );
+          
+          row.getCell(1).value = String(accion?.id || "—");
+          row.getCell(2).value = fechaStr;
+          row.getCell(3).value = fmtMinutesFromMs(durMs);
+          row.getCell(4).value = durMin;
+          row.getCell(5).value = bultos || "—";
+          row.getCell(6).value = anden;
+          row.getCell(7).value = estado;
+          row.getCell(8).value = iniciador;
+          
+          zebraRow(row, 8, r % 2 === 0);
+          r += 1;
+        }
+        
+        // Agregar autofiltro si hay datos
+        if (r > (ws.rowCount - acciones.length)) {
+          const startRow = r - acciones.length;
+          ws.autoFilter = {
+            from: { row: startRow - 1, column: 1 },
+            to: { row: r - 1, column: 8 },
+          };
+        }
+      });
+    }
+  }
+
   return wb.xlsx.writeBuffer();
 }
 

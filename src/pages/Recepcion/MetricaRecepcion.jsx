@@ -2603,6 +2603,14 @@ export default function MetricaRecepcion() {
     error: "",
     items: [],
   });
+  const [tendenciasCofersaModal, setTendenciasCofersaModal] = useState({
+    open: false,
+    loading: false,
+    error: "",
+    providers: [],
+    selectedProvider: null,
+    providerActions: [],
+  });
   const [providerTimesModalOpen, setProviderTimesModalOpen] = useState(false);
 
   useEffect(() => {
@@ -3248,6 +3256,164 @@ export default function MetricaRecepcion() {
     });
   };
 
+  const COFERSA_PROVIDERS = [
+    "Conducen",
+    "Bosch",
+    "Lorenzetti",
+    "Metalco",
+    "Eagle",
+    "Bticino",
+    "Schneider",
+    "Bia alambres",
+    "Termoencogibles",
+    "Pinos de occidente",
+    "Amanco",
+    "Henekl",
+    "Tres m",
+    "Espartaco",
+    "Perfex",
+    "Sur quimical",
+    "Garabito",
+  ];
+
+  const normalizeProviderName = (providerName) => {
+    const name = String(providerName || "").trim().toLowerCase();
+    // Remove numbers, extra spaces, and common suffixes
+    return name
+      .replace(/\s+\d+$/g, "") // Remove trailing numbers like "2", "3"
+      .replace(/\s+/g, " ") // Normalize spaces
+      .trim();
+  };
+
+  const matchesProvider = (actionProviderName, baseProviderName) => {
+    const normalized = normalizeProviderName(actionProviderName);
+    const baseNormalized = baseProviderName.toLowerCase().trim();
+    
+    // Check if the normalized name starts with or contains the base name
+    return normalized.includes(baseNormalized) || baseNormalized.includes(normalized);
+  };
+
+  const openTendenciasCofersa = async () => {
+    if (!tenantScope.tenantId || !tenantScope.company) {
+      setTendenciasCofersaModal({
+        open: true,
+        loading: false,
+        error: "No se pudo determinar el tenant para cargar las tendencias.",
+        providers: [],
+        selectedProvider: null,
+        providerActions: [],
+      });
+      return;
+    }
+
+    setTendenciasCofersaModal({
+      open: true,
+      loading: true,
+      error: "",
+      providers: [],
+      selectedProvider: null,
+      providerActions: [],
+    });
+
+    try {
+      const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate, customRange);
+      const allowed = new Set(dayKeys);
+
+      const q = query(
+        collection(db, "accion_descarga"),
+        orderBy("creadoAt", "desc"),
+        limit(3000)
+      );
+      const snap = await getDocs(q);
+      const rows = filterByUserScope(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        tenantScope.tenantId,
+        tenantScope.company
+      );
+
+      // Filter by date range and completed actions
+      const filteredRows = rows.filter((row) => {
+        const completedAt = row?.completedAt ?? row?.completeAt;
+        const completedDate = toDateSafe(completedAt);
+        if (!completedDate || !allowed.has(ymd(completedDate))) return false;
+        if (!completedAt) return false; // Only completed actions
+        return true;
+      });
+
+      // Group by provider
+      const providerMap = new Map();
+
+      COFERSA_PROVIDERS.forEach((providerName) => {
+        const providerActions = filteredRows.filter((row) => {
+          const proveedor = String(row?.proveedorNombre || "").trim();
+          return matchesProvider(proveedor, providerName);
+        });
+
+        if (providerActions.length > 0) {
+          const totalTime = providerActions.reduce((sum, row) => {
+            return sum + actionDurationMs(row);
+          }, 0);
+
+          const avgTime = providerActions.length > 0 
+            ? Math.round(totalTime / providerActions.length) 
+            : 0;
+
+          // Get all unique provider name variations found
+          const variations = new Set();
+          providerActions.forEach((row) => {
+            const name = String(row?.proveedorNombre || "").trim();
+            if (name) variations.add(name);
+          });
+
+          providerMap.set(providerName, {
+            name: providerName,
+            variations: Array.from(variations),
+            count: providerActions.length,
+            totalTimeMs: totalTime,
+            avgTimeMs: avgTime,
+            actions: providerActions.map((row) => ({
+              ...row,
+              _durationMs: actionDurationMs(row),
+            })).sort((a, b) => {
+              const ad = toDateSafe(a?.completedAt ?? a?.completeAt)?.getTime() || 0;
+              const bd = toDateSafe(b?.completedAt ?? b?.completeAt)?.getTime() || 0;
+              return bd - ad;
+            }),
+          });
+        }
+      });
+
+      const providers = Array.from(providerMap.values()).sort((a, b) => b.count - a.count);
+
+      setTendenciasCofersaModal({
+        open: true,
+        loading: false,
+        error: "",
+        providers,
+        selectedProvider: null,
+        providerActions: [],
+      });
+    } catch (e) {
+      console.error("openTendenciasCofersa:", e);
+      setTendenciasCofersaModal({
+        open: true,
+        loading: false,
+        error: "No se pudieron cargar las tendencias de proveedores.",
+        providers: [],
+        selectedProvider: null,
+        providerActions: [],
+      });
+    }
+  };
+
+  const selectProviderInTendencias = (provider) => {
+    setTendenciasCofersaModal((prev) => ({
+      ...prev,
+      selectedProvider: provider,
+      providerActions: provider?.actions || [],
+    }));
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -3839,19 +4005,35 @@ export default function MetricaRecepcion() {
                 <code style={ui.inlineCodeHint}>proveedorNombre</code> (descargas cerradas en el período).
               </div>
             </div>
-            <button
-              type="button"
-              style={{
-                ...ui.providerTimesOpenBtn,
-                ...(m ? { width: "100%", justifyContent: "center" } : {}),
-                ...(loadingData || loadError ? { opacity: 0.5, cursor: "not-allowed" } : {}),
-              }}
-              disabled={loadingData || !!loadError}
-              onClick={() => setProviderTimesModalOpen(true)}
-            >
-              <BarChart3 size={18} strokeWidth={2.2} color={ACCENT} aria-hidden />
-              Tiempos por proveedor
-            </button>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", ...(m ? { width: "100%" } : {}) }}>
+              <button
+                type="button"
+                style={{
+                  ...ui.providerTimesOpenBtn,
+                  ...(m ? { flex: 1 } : {}),
+                  ...(loadingData || loadError ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                }}
+                disabled={loadingData || !!loadError}
+                onClick={() => setProviderTimesModalOpen(true)}
+              >
+                <BarChart3 size={18} strokeWidth={2.2} color={ACCENT} aria-hidden />
+                Tiempos por proveedor
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...ui.tendenciasCofersaBtn,
+                  ...(m ? { flex: 1 } : {}),
+                  ...(loadingData || loadError ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                }}
+                disabled={loadingData || !!loadError}
+                onClick={openTendenciasCofersa}
+                title="Análisis de tendencias para proveedores Cofersa"
+              >
+                <TrendingUp size={18} strokeWidth={2.2} color="#7C3AED" aria-hidden />
+                Tendencias Cofersa
+              </button>
+            </div>
           </div>
 
           <div style={{ ...ui.teamGrid, ...(m ? ui.mTeamGrid : {}) }}>
@@ -4543,6 +4725,599 @@ export default function MetricaRecepcion() {
           sourceAcciones={currentData.providerTimesAcciones || []}
           periodLabel={currentData.label}
         />
+      )}
+
+      {tendenciasCofersaModal.open && (
+        <div style={ui.aperturasModalRoot} role="dialog" aria-modal="true" aria-labelledby="tendencias-cofersa-modal-title">
+          <button
+            type="button"
+            style={ui.aperturasModalBackdrop}
+            onClick={() => setTendenciasCofersaModal({
+              open: false,
+              loading: false,
+              error: "",
+              providers: [],
+              selectedProvider: null,
+              providerActions: [],
+            })}
+            aria-label="Cerrar"
+          />
+
+          <div style={ui.aperturasSheet}>
+            <div style={ui.aperturasSheetHeader}>
+              <div style={{ minWidth: 0 }}>
+                <div id="tendencias-cofersa-modal-title" style={{
+                  ...ui.aperturasSheetTitle,
+                  background: "linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}>
+                  Tendencias Cofersa
+                </div>
+                <div style={ui.aperturasSheetSubtitle}>
+                  Análisis de tiempos por proveedor · {currentData.label}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (tendenciasCofersaModal.loading || tendenciasCofersaModal.providers.length === 0) return;
+                    
+                    try {
+                      // Importar dinámicamente ExcelJS
+                      const ExcelJS = (await import("exceljs")).default;
+                      const wb = new ExcelJS.Workbook();
+                      wb.creator = "AppoloDesk";
+                      wb.created = new Date();
+                      wb.modified = new Date();
+                      wb.subject = `Tendencias Cofersa - ${currentData.label}`;
+                      
+                      // Función auxiliar para formatear fecha
+                      const formatFecha = (value) => {
+                        if (!value) return "—";
+                        try {
+                          let fecha;
+                          if (typeof value?.toDate === "function") {
+                            fecha = value.toDate();
+                          } else if (typeof value === "number") {
+                            fecha = new Date(value);
+                          } else if (typeof value === "string") {
+                            fecha = new Date(value);
+                          } else {
+                            return "—";
+                          }
+                          
+                          if (isNaN(fecha.getTime())) return "—";
+                          
+                          return fecha.toLocaleString("es-CR", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          });
+                        } catch {
+                          return String(value);
+                        }
+                      };
+                      
+                      // Función para estilo de encabezado
+                      const styleHeaderRow = (row, cols) => {
+                        row.height = 22;
+                        for (let c = 1; c <= cols; c++) {
+                          const cell = row.getCell(c);
+                          cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+                          cell.fill = {
+                            type: "pattern",
+                            pattern: "solid",
+                            fgColor: { argb: "FF7C3AED" },
+                          };
+                          cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+                          cell.border = {
+                            top: { style: "thin", color: { argb: "FF7C3AED" } },
+                            left: { style: "thin", color: { argb: "FF7C3AED" } },
+                            bottom: { style: "thin", color: { argb: "FF6D28D9" } },
+                            right: { style: "thin", color: { argb: "FF7C3AED" } },
+                          };
+                        }
+                      };
+                      
+                      // Función para estilo zebra
+                      const zebraRow = (row, cols, odd) => {
+                        row.height = 19;
+                        const fill = odd ? "FFF5F3FF" : "FFFFFFFF";
+                        for (let c = 1; c <= cols; c++) {
+                          const cell = row.getCell(c);
+                          cell.fill = {
+                            type: "pattern",
+                            pattern: "solid",
+                            fgColor: { argb: fill },
+                          };
+                          cell.border = {
+                            top: { style: "hair", color: { argb: "FFE2E8F0" } },
+                            left: { style: "hair", color: { argb: "FFE2E8F0" } },
+                            bottom: { style: "hair", color: { argb: "FFE2E8F0" } },
+                            right: { style: "hair", color: { argb: "FFE2E8F0" } },
+                          };
+                          cell.alignment = { vertical: "middle", wrapText: true };
+                          cell.font = { size: 11, color: { argb: "FF0F172A" } };
+                        }
+                      };
+                      
+                      // Obtener todas las acciones de todos los proveedores
+                      const allProviderActions = new Map();
+                      
+                      for (const provider of tendenciasCofersaModal.providers) {
+                        // Filtrar acciones que coincidan con las variaciones del proveedor
+                        const providerVariations = new Set(provider.variations || [provider.name]);
+                        const actions = (currentData.providerTimesAcciones || []).filter((accion) => {
+                          const provNombre = String(accion?.proveedorNombre || "").trim();
+                          return providerVariations.has(provNombre);
+                        });
+                        
+                        allProviderActions.set(provider.name, actions);
+                      }
+                      
+                      // Crear una hoja por cada proveedor
+                      for (const provider of tendenciasCofersaModal.providers) {
+                        const safeSheetName = provider.name
+                          .replace(/[:\\\/\?\*\[\]]/g, "_")
+                          .slice(0, 28) + "_PR";
+                        
+                        const ws = wb.addWorksheet(safeSheetName, {
+                          properties: { tabColor: { argb: "FF7C3AED" } },
+                        });
+                        
+                        ws.columns = [
+                          { width: 28 },
+                          { width: 18 },
+                          { width: 18 },
+                          { width: 18 },
+                        ];
+                        
+                        // Título
+                        ws.mergeCells("A1:D1");
+                        const titleCell = ws.getCell("A1");
+                        titleCell.value = `Proveedor: ${provider.name}`;
+                        titleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+                        titleCell.fill = {
+                          type: "pattern",
+                          pattern: "solid",
+                          fgColor: { argb: "FF7C3AED" },
+                        };
+                        titleCell.alignment = { vertical: "middle", horizontal: "center" };
+                        ws.getRow(1).height = 32;
+                        
+                        // Resumen
+                        let r = 3;
+                        ws.mergeCells(`A${r}:D${r}`);
+                        const summaryTitle = ws.getCell(`A${r}`);
+                        summaryTitle.value = "Resumen de métricas";
+                        summaryTitle.font = { bold: true, size: 13, color: { argb: "FF7C3AED" } };
+                        r += 1;
+                        
+                        const metricsData = [
+                          ["Descargas totales", provider.count],
+                          ["Tiempo promedio", fmtMinutesFromMs(provider.avgTimeMs)],
+                          ["Tiempo total", fmtMinutesFromMs(provider.totalTimeMs)],
+                          ["Variaciones detectadas", provider.variations?.length || 0],
+                        ];
+                        
+                        for (const [label, value] of metricsData) {
+                          const row = ws.getRow(r);
+                          row.getCell(1).value = label;
+                          row.getCell(1).font = { bold: true, color: { argb: "FF64748B" } };
+                          row.getCell(2).value = value;
+                          ws.mergeCells(r, 2, r, 4);
+                          row.height = 20;
+                          r += 1;
+                        }
+                        
+                        // Variaciones
+                        if (provider.variations && provider.variations.length > 0) {
+                          r += 2;
+                          ws.mergeCells(`A${r}:D${r}`);
+                          const varTitle = ws.getCell(`A${r}`);
+                          varTitle.value = "Variaciones del nombre";
+                          varTitle.font = { bold: true, size: 13, color: { argb: "FF7C3AED" } };
+                          r += 1;
+                          
+                          for (const variation of provider.variations) {
+                            const row = ws.getRow(r);
+                            row.getCell(1).value = variation;
+                            ws.mergeCells(r, 1, r, 4);
+                            row.height = 18;
+                            r += 1;
+                          }
+                        }
+                        
+                        // Detalle de descargas
+                        const actions = allProviderActions.get(provider.name) || [];
+                        
+                        if (actions.length > 0) {
+                          r += 2;
+                          ws.mergeCells(`A${r}:G${r}`);
+                          const detailTitle = ws.getCell(`A${r}`);
+                          detailTitle.value = "Detalle de descargas";
+                          detailTitle.font = { bold: true, size: 13, color: { argb: "FF7C3AED" } };
+                          r += 1;
+                          
+                          // Expandir columnas para el detalle
+                          ws.columns = [
+                            { width: 32 },
+                            { width: 28 },
+                            { width: 18 },
+                            { width: 14 },
+                            { width: 14 },
+                            { width: 18 },
+                            { width: 18 },
+                          ];
+                          
+                          const hdrAcciones = ws.getRow(r);
+                          hdrAcciones.getCell(1).value = "Variación nombre";
+                          hdrAcciones.getCell(2).value = "Fecha cerrada";
+                          hdrAcciones.getCell(3).value = "Duración";
+                          hdrAcciones.getCell(4).value = "Andén";
+                          hdrAcciones.getCell(5).value = "Bultos";
+                          hdrAcciones.getCell(6).value = "Iniciado por";
+                          hdrAcciones.getCell(7).value = "ID Acción";
+                          styleHeaderRow(hdrAcciones, 7);
+                          r += 1;
+                          
+                          // Ordenar acciones por fecha de completado (más reciente primero)
+                          const accionesOrdenadas = [...actions].sort((a, b) => {
+                            const dateA = a?.completedAt ?? a?.completeAt;
+                            const dateB = b?.completedAt ?? b?.completeAt;
+                            
+                            const getTime = (d) => {
+                              if (!d) return 0;
+                              if (typeof d?.toDate === "function") return d.toDate().getTime();
+                              if (typeof d === "number") return d;
+                              if (typeof d === "string") return new Date(d).getTime();
+                              return 0;
+                            };
+                            
+                            return getTime(dateB) - getTime(dateA);
+                          });
+                          
+                          for (const accion of accionesOrdenadas) {
+                            const row = ws.getRow(r);
+                            
+                            const variacionNombre = String(accion?.proveedorNombre || "—");
+                            const fechaCerrada = formatFecha(accion?.completedAt ?? accion?.completeAt);
+                            const durMs = Number(accion?.totalTimeMs ?? accion?.tiempoTotalMs ?? accion?.durationMs ?? 0);
+                            const anden = String(accion?.idAnden ?? accion?.anden ?? "—");
+                            const bultos = Number(accion?.bultos ?? accion?.cantidadBultos ?? 0);
+                            const iniciador = String(
+                              accion?.starter ?? 
+                              accion?.startedByName ?? 
+                              accion?.creadoPorNombre ?? 
+                              accion?.responsableNombre ?? 
+                              "—"
+                            );
+                            const idAccion = String(accion?.id || "—");
+                            
+                            row.getCell(1).value = variacionNombre;
+                            row.getCell(2).value = fechaCerrada;
+                            row.getCell(3).value = fmtMinutesFromMs(durMs);
+                            row.getCell(4).value = anden;
+                            row.getCell(5).value = bultos || "—";
+                            row.getCell(6).value = iniciador;
+                            row.getCell(7).value = idAccion;
+                            
+                            zebraRow(row, 7, r % 2 === 0);
+                            r += 1;
+                          }
+                          
+                          // Agregar autofiltro
+                          if (accionesOrdenadas.length > 0) {
+                            const startRow = r - accionesOrdenadas.length;
+                            ws.autoFilter = {
+                              from: { row: startRow - 1, column: 1 },
+                              to: { row: r - 1, column: 7 },
+                            };
+                          }
+                        }
+                      }
+                      
+                      // Generar y descargar
+                      const buffer = await wb.xlsx.writeBuffer();
+                      const blob = new Blob([buffer], {
+                        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `tendencias-cofersa_${currentData.label.replace(/\s+/g, "_")}_${Date.now()}.xlsx`;
+                      a.rel = "noopener";
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    } catch (e) {
+                      console.error("Error exportando tendencias:", e);
+                      window.alert("No se pudo generar el archivo Excel. Revisa la consola.");
+                    }
+                  }}
+                  disabled={tendenciasCofersaModal.loading || tendenciasCofersaModal.providers.length === 0}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 14px",
+                    borderRadius: 12,
+                    border: "1px solid #7C3AED",
+                    background: "linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)",
+                    color: "#fff",
+                    fontWeight: 900,
+                    fontSize: 13,
+                    cursor: tendenciasCofersaModal.loading || tendenciasCofersaModal.providers.length === 0 ? "not-allowed" : "pointer",
+                    fontFamily: "inherit",
+                    opacity: tendenciasCofersaModal.loading || tendenciasCofersaModal.providers.length === 0 ? 0.5 : 1,
+                    transition: "all 200ms ease",
+                  }}
+                  title="Exportar tendencias a Excel"
+                >
+                  <FileSpreadsheet size={16} strokeWidth={2.2} />
+                  Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTendenciasCofersaModal({
+                    open: false,
+                    loading: false,
+                    error: "",
+                    providers: [],
+                    selectedProvider: null,
+                    providerActions: [],
+                  })}
+                  style={ui.aperturasSheetCloseBtn}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+
+            <div style={{
+              maxHeight: "calc(85vh - 100px)",
+              overflowY: "auto",
+              overflowX: "hidden",
+            }}>
+            {tendenciasCofersaModal.loading ? (
+              <div style={ui.aperturasModalLoadingBox}>
+                <Loader2 size={22} strokeWidth={2.25} color="#7C3AED" style={{ animation: "metricaRecepcionSpin 0.75s linear infinite" }} />
+                <span style={{ color: "#64748B", fontWeight: 800, fontSize: 13 }}>Analizando tendencias…</span>
+              </div>
+            ) : tendenciasCofersaModal.error ? (
+              <div style={ui.aperturasModalEmpty}>{tendenciasCofersaModal.error}</div>
+            ) : tendenciasCofersaModal.providers.length === 0 ? (
+              <div style={ui.aperturasModalEmpty}>
+                No se encontraron descargas de proveedores Cofersa en este período.
+              </div>
+            ) : (
+              <>
+                {!tendenciasCofersaModal.selectedProvider ? (
+                  <div style={{ padding: "0 18px 18px" }}>
+                    <div style={{
+                      marginBottom: 16,
+                      padding: 14,
+                      borderRadius: 14,
+                      background: "linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)",
+                      border: "1px solid rgba(124,58,237,0.2)",
+                    }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#6B21A8", marginBottom: 4 }}>
+                        {tendenciasCofersaModal.providers.length} proveedores encontrados
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 750, color: "#7C3AED" }}>
+                        Haz clic en un proveedor para ver el detalle de sus descargas
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 10 }}>
+                      {tendenciasCofersaModal.providers.map((provider) => (
+                        <button
+                          key={provider.name}
+                          type="button"
+                          onClick={() => selectProviderInTendencias(provider)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "14px 16px",
+                            borderRadius: 14,
+                            border: "1px solid #E7E9F2",
+                            background: "#fff",
+                            cursor: "pointer",
+                            transition: "all 200ms ease",
+                            fontFamily: "inherit",
+                            textAlign: "left",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = "translateX(4px)";
+                            e.currentTarget.style.background = "#F5F3FF";
+                            e.currentTarget.style.borderColor = "rgba(124,58,237,0.3)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = "translateX(0)";
+                            e.currentTarget.style.background = "#fff";
+                            e.currentTarget.style.borderColor = "#E7E9F2";
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 950, color: "#0F172A", marginBottom: 4 }}>
+                              {provider.name}
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: "#64748B", marginBottom: 4 }}>
+                              {provider.count} descargas · Promedio: {fmtMinutesFromMs(provider.avgTimeMs)}
+                            </div>
+                            {provider.variations && provider.variations.length > 1 && (
+                              <div style={{ 
+                                fontSize: 11, 
+                                fontWeight: 750, 
+                                color: "#7C3AED",
+                                marginTop: 4,
+                              }}>
+                                Incluye: {provider.variations.join(", ")}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div style={{
+                              padding: "6px 12px",
+                              borderRadius: 999,
+                              background: "rgba(124,58,237,0.1)",
+                              color: "#7C3AED",
+                              fontSize: 12,
+                              fontWeight: 900,
+                            }}>
+                              {fmtMinutesFromMs(provider.totalTimeMs)}
+                            </div>
+                            <ChevronDown size={18} strokeWidth={2.5} color="#7C3AED" style={{ transform: "rotate(-90deg)" }} />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: "0 18px 18px" }}>
+                    <button
+                      type="button"
+                      onClick={() => selectProviderInTendencias(null)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "8px 12px",
+                        borderRadius: 12,
+                        border: "1px solid #E7E9F2",
+                        background: "#fff",
+                        color: "#0F172A",
+                        fontSize: 12,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        marginBottom: 16,
+                      }}
+                    >
+                      <ArrowLeft size={14} strokeWidth={2.5} />
+                      Volver a proveedores
+                    </button>
+
+                    <div style={{
+                      marginBottom: 16,
+                      padding: 16,
+                      borderRadius: 16,
+                      background: "linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)",
+                      border: "1px solid rgba(124,58,237,0.2)",
+                    }}>
+                      <div style={{ fontSize: 16, fontWeight: 950, color: "#6B21A8", marginBottom: 4 }}>
+                        {tendenciasCofersaModal.selectedProvider.name}
+                      </div>
+                      {tendenciasCofersaModal.selectedProvider.variations && 
+                       tendenciasCofersaModal.selectedProvider.variations.length > 1 && (
+                        <div style={{ 
+                          fontSize: 12, 
+                          fontWeight: 750, 
+                          color: "#7C3AED",
+                          marginBottom: 12,
+                        }}>
+                          Incluye: {tendenciasCofersaModal.selectedProvider.variations.join(", ")}
+                        </div>
+                      )}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 900, color: "#7C3AED", textTransform: "uppercase", marginBottom: 4 }}>
+                            Descargas
+                          </div>
+                          <div style={{ fontSize: 20, fontWeight: 950, color: "#0F172A" }}>
+                            {tendenciasCofersaModal.selectedProvider.count}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 900, color: "#7C3AED", textTransform: "uppercase", marginBottom: 4 }}>
+                            Tiempo promedio
+                          </div>
+                          <div style={{ fontSize: 20, fontWeight: 950, color: "#0F172A" }}>
+                            {fmtMinutesFromMs(tendenciasCofersaModal.selectedProvider.avgTimeMs)}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 900, color: "#7C3AED", textTransform: "uppercase", marginBottom: 4 }}>
+                            Tiempo total
+                          </div>
+                          <div style={{ fontSize: 20, fontWeight: 950, color: "#0F172A" }}>
+                            {fmtMinutesFromMs(tendenciasCofersaModal.selectedProvider.totalTimeMs)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={ui.aperturasListWrap}>
+                      <div style={ui.aperturasList}>
+                        {tendenciasCofersaModal.providerActions.map((row) => {
+                          const title =
+                            String(row?.nombreAccion || "").trim() ||
+                            [row?.proveedorNombre, row?.idAnden ? `Andén ${row.idAnden}` : ""]
+                              .filter(Boolean)
+                              .join(" · ") ||
+                            row?.id;
+                          const duration = row?._durationMs
+                            ? fmtMinutesFromMs(row._durationMs)
+                            : "—";
+
+                          return (
+                            <div key={row.id} style={ui.aperturasRow}>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={ui.aperturasRowTitle}>{title}</div>
+                                <div style={ui.aperturasRowMeta}>
+                                  Cerrada {formatDateTimeShort(row?.completedAt ?? row?.completeAt)}
+                                  {row?.idAnden ? ` · Andén ${row.idAnden}` : ""}
+                                  {row?.cantidadBultos != null
+                                    ? ` · ${fmtInt(row.cantidadBultos)} bultos`
+                                    : ""}
+                                </div>
+                              </div>
+                              <div style={ui.userTimeRowActions}>
+                                <span style={{
+                                  ...ui.estadoPill,
+                                  background: "rgba(124,58,237,0.1)",
+                                  color: "#7C3AED",
+                                  border: "1px solid rgba(124,58,237,0.2)",
+                                }}>
+                                  {duration}
+                                </span>
+                                <button
+                                  type="button"
+                                  style={ui.aperturasRowLink}
+                                  onClick={() => {
+                                    setTendenciasCofersaModal({
+                                      open: false,
+                                      loading: false,
+                                      error: "",
+                                      providers: [],
+                                      selectedProvider: null,
+                                      providerActions: [],
+                                    });
+                                    nav(`/recepcion/accion-descarga/${encodeURIComponent(row.id)}`);
+                                  }}
+                                >
+                                  Abrir
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            </div>
+          </div>
+        </div>
       )}
 
       {aperturasModalOpen && (
@@ -6513,6 +7288,43 @@ const ui = {
     padding: "2px 6px",
     borderRadius: 6,
     color: "#334155",
+  },
+
+  providerTimesOpenBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: "12px 18px",
+    borderRadius: 16,
+    border: "1px solid rgba(8,159,138,0.28)",
+    background: "#fff",
+    color: "#0F172A",
+    fontWeight: 950,
+    fontSize: 13,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+    flexShrink: 0,
+  },
+
+  tendenciasCofersaBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: "12px 18px",
+    borderRadius: 16,
+    border: "1px solid rgba(124,58,237,0.28)",
+    background: "linear-gradient(135deg, #FDFBFF 0%, #F5F3FF 100%)",
+    color: "#0F172A",
+    fontWeight: 950,
+    fontSize: 13,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    boxShadow: "0 10px 24px rgba(124,58,237,0.12)",
+    flexShrink: 0,
+    transition: "all 200ms ease",
   },
 
   providerTimesFilterBar: {

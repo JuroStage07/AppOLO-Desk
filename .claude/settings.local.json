@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Out-Null *)",
+      "PowerShell(& \"C:\\\\Users\\\\jcampos\\\\AppData\\\\Roaming\\\\npm\\\\firebase.cmd\" deploy --only hosting)"
+    ]
+  }
+}

@@ -22,6 +22,7 @@ const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
 const SLATE = "#64748B";
 const OT_STATE_EN_PROCESO = "En proceso";
+const OT_STATE_SOLICITADA = "Solicitada";
 
 function norm(s) {
   return String(s ?? "")
@@ -115,27 +116,48 @@ export default function ServiciosGeneralesOTGestion() {
   useEffect(() => {
     if (authLoading) return;
     setListLoading(true);
-    const q = query(
+    
+    // Query para OTs en proceso
+    const qEnProceso = query(
       collection(db, "solicitudesOT"),
       where("OTState", "==", OT_STATE_EN_PROCESO)
     );
-    const unsub = onSnapshot(
-      q,
-      async (snap) => {
-        const data = filterSolicitudesOtByScope(
-          snap.docs.map((d) => ({
-            id: d.id,
-            ...d.data(),
-          })),
-          profile?.tenantId,
-          profile?.company
-        );
-        data.sort((a, b) => {
-          const ta = a.updatedAt?.toMillis?.() ?? a.createdAt?.toMillis?.() ?? 0;
-          const tb = b.updatedAt?.toMillis?.() ?? b.createdAt?.toMillis?.() ?? 0;
-          return tb - ta;
-        });
+    
+    // Query para OTs solicitadas
+    const qSolicitada = query(
+      collection(db, "solicitudesOT"),
+      where("OTState", "==", OT_STATE_SOLICITADA)
+    );
+    
+    // Suscribirse a ambas queries
+    const unsubEnProceso = onSnapshot(
+      qEnProceso,
+      async (snapEnProceso) => {
         try {
+          // Obtener también las solicitadas
+          const snapSolicitada = await getDocs(qSolicitada);
+          
+          // Combinar ambos resultados
+          const allDocs = [
+            ...snapEnProceso.docs,
+            ...snapSolicitada.docs
+          ];
+          
+          const data = filterSolicitudesOtByScope(
+            allDocs.map((d) => ({
+              id: d.id,
+              ...d.data(),
+            })),
+            profile?.tenantId,
+            profile?.company
+          );
+          
+          data.sort((a, b) => {
+            const ta = a.updatedAt?.toMillis?.() ?? a.createdAt?.toMillis?.() ?? 0;
+            const tb = b.updatedAt?.toMillis?.() ?? b.createdAt?.toMillis?.() ?? 0;
+            return tb - ta;
+          });
+          
           const withProgress = await Promise.all(
             data.map(async (row) => {
               const subSnap = await getDocs(
@@ -160,7 +182,6 @@ export default function ServiciosGeneralesOTGestion() {
           setListLoading(false);
         } catch (err) {
           console.error(err);
-          setRows(data);
           setLoadError("No se pudo calcular el progreso de subtareas.");
           setListLoading(false);
         }
@@ -168,11 +189,12 @@ export default function ServiciosGeneralesOTGestion() {
       (err) => {
         console.error(err);
         setRows([]);
-        setLoadError("No se pudo cargar el listado de OTs en proceso.");
+        setLoadError("No se pudo cargar el listado de OTs.");
         setListLoading(false);
       }
     );
-    return () => unsub();
+    
+    return () => unsubEnProceso();
   }, [authLoading, profile?.tenantId, profile?.company]);
 
   const logout = async () => {
@@ -185,6 +207,8 @@ export default function ServiciosGeneralesOTGestion() {
   };
 
   const totalRows = rows.length;
+  const enProcesoCount = rows.filter((r) => r.OTState === OT_STATE_EN_PROCESO).length;
+  const solicitadaCount = rows.filter((r) => r.OTState === OT_STATE_SOLICITADA).length;
   const misEnProceso = useMemo(
     () => rows.filter((r) => isMiSolicitud(r, user)),
     [rows, user]
@@ -269,9 +293,9 @@ export default function ServiciosGeneralesOTGestion() {
             <div style={ui.heroAccent} aria-hidden />
             <div style={ui.heroTop}>
               <div>
-                <h1 style={ui.pageTitle}>Órdenes en proceso</h1>
+                <h1 style={ui.pageTitle}>Órdenes en proceso y solicitadas</h1>
                 <p style={ui.pageLead}>
-                  Seguimiento de OT en estado <b>En proceso</b>. Filtrá por todas o solo las que
+                  Seguimiento de OT en estado <b>En proceso</b> y <b>Solicitada</b>. Filtrá por todas o solo las que
                   registraste. El detalle técnico requiere permiso de mantenimiento o rol dev.
                 </p>
               </div>
@@ -282,14 +306,26 @@ export default function ServiciosGeneralesOTGestion() {
                 <ClipboardList size={18} color={ACCENT} strokeWidth={2.2} />
                 <div style={ui.statCardText}>
                   <span style={ui.statCardValue}>{totalRows}</span>
-                  <span style={ui.statCardLabel}>OTs en proceso (ámbito)</span>
+                  <span style={ui.statCardLabel}>OTs totales (ámbito)</span>
+                </div>
+              </div>
+              <div style={ui.statCardSecondary}>
+                <div style={ui.statCardText}>
+                  <span style={ui.statCardValue}>{enProcesoCount}</span>
+                  <span style={ui.statCardLabel}>En proceso</span>
+                </div>
+              </div>
+              <div style={ui.statCardSecondary}>
+                <div style={ui.statCardText}>
+                  <span style={ui.statCardValue}>{solicitadaCount}</span>
+                  <span style={ui.statCardLabel}>Solicitadas</span>
                 </div>
               </div>
               <div style={ui.statCardSecondary}>
                 <UserCheck size={18} color={ACCENT} strokeWidth={2.2} />
                 <div style={ui.statCardText}>
                   <span style={ui.statCardValue}>{misEnProceso.length}</span>
-                  <span style={ui.statCardLabel}>Mis solicitudes aquí</span>
+                  <span style={ui.statCardLabel}>Mis solicitudes</span>
                 </div>
               </div>
               <div style={ui.statCardMuted}>
@@ -338,7 +374,7 @@ export default function ServiciosGeneralesOTGestion() {
             </div>
             <p style={ui.filtersHint}>
               {filterScope === "all"
-                ? `Mostrando ${filteredRows.length} de ${totalRows} OTs en proceso.`
+                ? `Mostrando ${filteredRows.length} de ${totalRows} OTs (${enProcesoCount} en proceso, ${solicitadaCount} solicitadas).`
                 : `Mostrando ${filteredRows.length} solicitud${filteredRows.length === 1 ? "" : "es"} que coinciden con tu usuario (creador o solicitante).`}
             </p>
           </div>
@@ -358,13 +394,13 @@ export default function ServiciosGeneralesOTGestion() {
             </div>
           ) : rows.length === 0 ? (
             <div style={ui.placeholder}>
-              <p style={ui.placeholderText}>No hay OTs en estado En proceso en tu ámbito.</p>
+              <p style={ui.placeholderText}>No hay OTs en estado En proceso o Solicitada en tu ámbito.</p>
             </div>
           ) : filteredRows.length === 0 ? (
             <div style={ui.placeholder}>
               <p style={ui.placeholderText}>
                 {filterScope === "mine"
-                  ? "No tenés solicitudes en proceso en este listado. Probá «Todas las OT» o creá una nueva desde Órdenes de trabajo."
+                  ? "No tenés solicitudes en proceso o solicitadas en este listado. Probá «Todas las OT» o creá una nueva desde Órdenes de trabajo."
                   : "No hay resultados para este filtro."}
               </p>
             </div>
@@ -384,7 +420,12 @@ export default function ServiciosGeneralesOTGestion() {
                             Tu solicitud
                           </span>
                         ) : null}
-                        <div style={ui.rowState}>{row.OTState || "—"}</div>
+                        <div style={{
+                          ...ui.rowState,
+                          ...(row.OTState === OT_STATE_SOLICITADA ? ui.rowStateSolicitada : {}),
+                        }}>
+                          {row.OTState || "—"}
+                        </div>
                       </div>
                     </div>
 
@@ -850,6 +891,11 @@ const ui = {
     border: "1px solid rgba(245, 158, 11, 0.35)",
     textTransform: "uppercase",
     letterSpacing: 0.2,
+  },
+  rowStateSolicitada: {
+    background: "#E0E7FF",
+    color: "#4338CA",
+    border: "1px solid rgba(99, 102, 241, 0.35)",
   },
   rowTitle: {
     fontSize: 16,
