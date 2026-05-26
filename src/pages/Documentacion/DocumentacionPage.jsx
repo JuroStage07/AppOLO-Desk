@@ -478,10 +478,7 @@ export default function DocumentacionPage() {
                             </div>
 
                             <h1 style={ui.title}>Centro de documentación empresarial</h1>
-                            <p style={ui.subtitle}>
-                                Una biblioteca corporativa para consolidar <b>normas</b>, <b>políticas</b>, <b>procesos</b>,
-                                <b> reglamentos</b> y documentos clave de la empresa.
-                            </p>
+
                         </div>
                     </div>
 
@@ -492,7 +489,7 @@ export default function DocumentacionPage() {
                                     <div>
                                         <div style={ui.panelTitle}>Gestión documental</div>
                                         <div style={ui.panelText}>
-                                            Centralizá normas, políticas, procesos y documentación oficial de la empresa.
+                    
                                         </div>
                                     </div>
 
@@ -502,9 +499,9 @@ export default function DocumentacionPage() {
                                                 type="button"
                                                 onClick={openUploadModal}
                                                 style={ui.heroActionBtn}
+                                                title="Nuevo documento"
                                             >
                                                 <span style={ui.heroActionIcon}>＋</span>
-                                                <span>Nuevo documento</span>
                                             </button>
                                         )}
 
@@ -515,18 +512,18 @@ export default function DocumentacionPage() {
                                                 ...ui.searchToggleBtn,
                                                 ...(showDocSearch ? ui.searchToggleBtnActive : {}),
                                             }}
+                                            title={showDocSearch ? "Ocultar búsqueda" : "Buscar documento"}
                                         >
                                             <span style={ui.searchToggleIcon}>⌕</span>
-                                            <span>{showDocSearch ? "Ocultar búsqueda" : "Buscar documento"}</span>
                                         </button>
 
                                         <button
                                             type="button"
                                             onClick={openColeccionesModal}
                                             style={ui.coleccionesBtn}
+                                            title="Colecciones"
                                         >
                                             <span style={ui.coleccionesBtnIcon}>📁</span>
-                                            <span>Colecciones</span>
                                         </button>
                                     </div>
                                 </div>
@@ -1508,24 +1505,23 @@ const ui = {
     empty: { padding: 14, color: "#64748B", fontWeight: 850, fontSize: 13 },
 
     heroActionBtn: {
+        width: 42,
+        height: 42,
         border: "1px solid #089F8A",
         background: "linear-gradient(180deg, #0AA791 0%, #089F8A 100%)",
         color: "#fff",
-        borderRadius: 18,
-        padding: "12px 16px",
-        minHeight: 48,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 10,
+        borderRadius: 12,
+        padding: 0,
+        display: "grid",
+        placeItems: "center",
         fontWeight: 980,
         cursor: "pointer",
-        boxShadow: "0 18px 34px rgba(8,159,138,0.24)",
-        whiteSpace: "nowrap",
+        boxShadow: "0 4px 14px rgba(8,159,138,0.24)",
     },
 
     heroActionIcon: {
-        width: 24,
-        height: 24,
+        width: 22,
+        height: 22,
         borderRadius: 999,
         background: "rgba(255,255,255,0.18)",
         display: "grid",
@@ -1900,26 +1896,25 @@ const ui = {
     },
 
     panelActions: {
-        display: "grid",
-        gap: 10,
-        justifyItems: "end",
+        display: "flex",
+        gap: 8,
+        alignItems: "center",
+        justifyContent: "flex-end",
     },
 
     searchToggleBtn: {
+        width: 42,
+        height: 42,
         border: "1px solid #E7E9F2",
         background: "#fff",
         color: "#0F172A",
-        borderRadius: 16,
-        padding: "12px 16px",
-        minHeight: 46,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 10,
+        borderRadius: 12,
+        padding: 0,
+        display: "grid",
+        placeItems: "center",
         fontWeight: 950,
         cursor: "pointer",
-        whiteSpace: "nowrap",
-        boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+        boxShadow: "0 4px 12px rgba(15,23,42,0.05)",
     },
 
     searchToggleBtnActive: {
@@ -1941,20 +1936,18 @@ const ui = {
 
     // Colecciones styles
     coleccionesBtn: {
+        width: 42,
+        height: 42,
         border: "1px solid #E7E9F2",
         background: "#fff",
         color: "#0F172A",
-        borderRadius: 16,
-        padding: "12px 16px",
-        minHeight: 46,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 10,
+        borderRadius: 12,
+        padding: 0,
+        display: "grid",
+        placeItems: "center",
         fontWeight: 950,
         cursor: "pointer",
-        whiteSpace: "nowrap",
-        boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+        boxShadow: "0 4px 12px rgba(15,23,42,0.05)",
     },
     coleccionesBtnIcon: {
         fontSize: 16,

@@ -104,7 +104,7 @@ export default function Login() {
       return;
     }
 
-    nav("/", { replace: true });
+    nav("/welcome", { replace: true });
   };
 
   /** Login tradicional */

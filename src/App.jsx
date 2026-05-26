@@ -8,6 +8,7 @@ import PrivateRoute from "./auth/PrivateRoute";
 
 import Login from "./pages/Login";
 import Home from "./pages/Home";
+import AreasTrabajoHubPage from "./pages/AreasTrabajoHubPage";
 import ConfigRegionPage from "./pages/ConfigRegionPage";
 
 //Documentacion
@@ -106,12 +107,40 @@ export default function App() {
             }
           />
 
-          {/* ================= Home ================= */}
+          {/* ================= Home (Welcome after login) ================= */}
+          <Route
+            path="/welcome"
+            element={
+              <PrivateRoute>
+                <Home />
+              </PrivateRoute>
+            }
+          />
+
+          {/* ================= Áreas de trabajo (main hub) ================= */}
           <Route
             path="/"
             element={
               <PrivateRoute>
-                <Home />
+                <AreasTrabajoHubPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/areas"
+            element={
+              <PrivateRoute>
+                <AreasTrabajoHubPage />
+              </PrivateRoute>
+            }
+          />
+
+          {/* ================= Pesado (Zona Franca) ================= */}
+          <Route
+            path="/pesado"
+            element={
+              <PrivateRoute>
+                <PesajeTarimas />
               </PrivateRoute>
             }
           />
