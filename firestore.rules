@@ -822,6 +822,19 @@ allow list: if isAdminDev() || canMantenimientoOT();
 
   allow delete: if isDev();
 
+  // Preferencias del usuario (p. ej. accesos rápidos "Mis Pin").
+  // Doc: profiles/{uid}/prefs/pinned con { modules: { moduleKey: [{label,path}] } }.
+  match /prefs/{prefId} {
+    allow read: if isSelfLocal();
+
+    allow create, update: if isSelfLocal()
+      && request.resource.data.keys().hasOnly(['modules', 'updatedAt'])
+      && request.resource.data.modules is map
+      && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp);
+
+    allow delete: if isSelfLocal();
+  }
+
   match /pushTokens/{token} {
     allow read: if isSelfLocal();
 
