@@ -29,7 +29,7 @@ import usePinnedModules from "../../hooks/usePinnedModules";
 export default function SaludOcupacional() {
   const nav = useNavigate();
   const user = auth.currentUser;
-  const { isPinned, togglePin } = usePinnedModules();
+  const { isPinned, togglePin } = usePinnedModules("salud");
 
   const go = (path) => nav(path);
 
@@ -105,9 +105,7 @@ export default function SaludOcupacional() {
             title="Módulos"
             subtitle="Seleccioná un módulo para ingresar. Las acciones quedan asociadas a tu usuario."
             badge={<Badge icon={Lock}>Operación</Badge>}
-            aside={
-              <QuickCard />
-            }
+            aside={<QuickCard moduleKey="salud" />}
           />
 
           <ModuleGrid>

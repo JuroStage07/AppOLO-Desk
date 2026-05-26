@@ -11,14 +11,15 @@ import {
   Main,
   ModuleCard,
   ModuleGrid,
-  QuickCard,
   Shell,
   Topbar,
 } from "../../components/ui";
+import usePinnedModules from "../../hooks/usePinnedModules";
 
 export default function PesajeTarimas() {
   const nav = useNavigate();
   const user = auth.currentUser;
+  const { isPinned, togglePin } = usePinnedModules("servicios-generales");
 
   const go = (path) => nav(path);
 
@@ -70,21 +71,6 @@ export default function PesajeTarimas() {
             title="Pesaje de tarimas"
             subtitle="Seleccioná una opción para registrar nuevos pesajes o consultar registros existentes."
             badge={<Badge icon={Lock}>Zona Franca</Badge>}
-            aside={
-              <QuickCard
-                actions={[
-                  {
-                    label: "Registrar tarimas",
-                    accent: true,
-                    onClick: () => go("/servicios-generales/pesaje-tarimas/registrar"),
-                  },
-                  {
-                    label: "Consultar tarimas",
-                    onClick: () => go("/servicios-generales/pesaje-tarimas/consultar"),
-                  },
-                ]}
-              />
-            }
           />
 
           <ModuleGrid>
@@ -98,9 +84,11 @@ export default function PesajeTarimas() {
                 tone="accent"
                 href={m.path}
                 onClick={() => go(m.path)}
+                pinned={isPinned(m.path)}
+                onTogglePin={() => togglePin(m.title, m.path)}
               />
             ))}
-          </ModuleGrid>
+          </ModuleGrid>
         </Container>
       </Main>
     </Shell>

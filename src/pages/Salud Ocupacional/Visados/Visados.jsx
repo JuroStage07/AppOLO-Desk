@@ -11,14 +11,15 @@ import {
   Main,
   ModuleCard,
   ModuleGrid,
-  QuickCard,
   Shell,
   Topbar,
 } from "../../../components/ui";
+import usePinnedModules from "../../../hooks/usePinnedModules";
 
 export default function Visados() {
   const nav = useNavigate();
   const user = auth.currentUser;
+  const { isPinned, togglePin } = usePinnedModules("salud");
 
   const go = (path) => nav(path);
 
@@ -70,21 +71,6 @@ export default function Visados() {
             title="Visados"
             subtitle="Elegí una opción para continuar. Todo queda auditado por usuario y fecha."
             badge={<Badge icon={Lock}>Operación</Badge>}
-            aside={
-              <QuickCard
-                actions={[
-                  {
-                    label: "Generar visado",
-                    accent: true,
-                    onClick: () => go("/salud/visado/generar"),
-                  },
-                  {
-                    label: "Administrar visados",
-                    onClick: () => go("/salud/visados"),
-                  },
-                ]}
-              />
-            }
           />
 
           <ModuleGrid>
@@ -98,6 +84,8 @@ export default function Visados() {
                 tone="accent"
                 href={m.path}
                 onClick={() => go(m.path)}
+                pinned={isPinned(m.path)}
+                onTogglePin={() => togglePin(m.title, m.path)}
               />
             ))}
           </ModuleGrid>

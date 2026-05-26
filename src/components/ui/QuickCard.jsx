@@ -11,9 +11,9 @@ import usePinnedModules from "../../hooks/usePinnedModules";
  * If no actions, renders pinned modules from localStorage with remove option.
  * Pass `children` for fully custom layout.
  */
-export default function QuickCard({ label = "Acceso rápido", actions, children, style }) {
+export default function QuickCard({ label = "Acceso rápido", actions, children, moduleKey = "global", style }) {
   const nav = useNavigate();
-  const { pinned, removePin } = usePinnedModules();
+  const { pinned, removePin } = usePinnedModules(moduleKey);
 
   // If explicit actions are passed, use legacy mode
   if (actions && actions.length > 0) {

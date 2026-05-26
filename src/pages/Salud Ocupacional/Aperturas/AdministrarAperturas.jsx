@@ -17,14 +17,15 @@ import {
   Main,
   ModuleCard,
   ModuleGrid,
-  QuickCard,
   Shell,
   Topbar,
 } from "../../../components/ui";
+import usePinnedModules from "../../../hooks/usePinnedModules";
 
 export default function AdministrarAperturas() {
   const nav = useNavigate();
   const user = auth.currentUser;
+  const { isPinned, togglePin } = usePinnedModules("salud");
 
   const go = (path) => nav(path);
 
@@ -84,25 +85,6 @@ export default function AdministrarAperturas() {
             title="Administrar aperturas"
             subtitle="Elegí una categoría para ver la lista y gestionar el flujo."
             badge={<Badge icon={Lock}>Aperturas</Badge>}
-            aside={
-              <QuickCard
-                actions={[
-                  {
-                    label: "Ir a en proceso",
-                    accent: true,
-                    onClick: () => go("/salud/aperturas/proceso"),
-                  },
-                  {
-                    label: "Ver rechazadas",
-                    onClick: () => go("/salud/aperturas/rechazadas"),
-                  },
-                  {
-                    label: "Finalizadas",
-                    onClick: () => go("/salud/aperturas/finalizadas"),
-                  },
-                ]}
-              />
-            }
           />
 
           <ModuleGrid>
@@ -116,6 +98,8 @@ export default function AdministrarAperturas() {
                 tone="accent"
                 href={m.path}
                 onClick={() => go(m.path)}
+                pinned={isPinned(m.path)}
+                onTogglePin={() => togglePin(m.title, m.path)}
               />
             ))}
           </ModuleGrid>

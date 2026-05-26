@@ -16,10 +16,12 @@ import {
   Shell,
   Topbar,
 } from "../../components/ui";
+import usePinnedModules from "../../hooks/usePinnedModules";
 
 export default function Mantenimiento() {
   const nav = useNavigate();
   const { user, permisos, loading } = useContext(AuthCtx);
+  const { isPinned, togglePin } = usePinnedModules("mantenimiento");
 
   useEffect(() => {
     if (loading) return;
@@ -81,21 +83,7 @@ export default function Mantenimiento() {
             title="Módulos"
             subtitle="Accedé al panel de equipos o a las órdenes de trabajo según tu rol."
             badge={<Badge icon={Lock}>Mantenimiento</Badge>}
-            aside={
-              <QuickCard
-                actions={[
-                  {
-                    label: "Panel de equipos",
-                    accent: true,
-                    onClick: () => go("/mantenimiento/equipos"),
-                  },
-                  {
-                    label: "Ver pendientes",
-                    onClick: () => go("/mantenimiento/equipos?rev=pendientes"),
-                  },
-                ]}
-              />
-            }
+            aside={<QuickCard moduleKey="mantenimiento" />}
           />
 
           <ModuleGrid>
@@ -109,6 +97,8 @@ export default function Mantenimiento() {
                 tone="accent"
                 href={m.path}
                 onClick={() => go(m.path)}
+                pinned={isPinned(m.path)}
+                onTogglePin={() => togglePin(m.title, m.path)}
               />
             ))}
           </ModuleGrid>

@@ -21,10 +21,12 @@ import {
   Shell,
   Topbar,
 } from "../../components/ui";
+import usePinnedModules from "../../hooks/usePinnedModules";
 
 export default function ServiciosGenerales() {
   const nav = useNavigate();
   const user = auth.currentUser;
+  const { isPinned, togglePin } = usePinnedModules("servicios-generales");
 
   const go = (path) => nav(path);
 
@@ -84,26 +86,7 @@ export default function ServiciosGenerales() {
             title="Módulos"
             subtitle="Elegí un módulo de trabajo para ingresar. Cada uno concentra sus pantallas y flujos propios."
             badge={<Badge icon={Lock}>Servicios Generales</Badge>}
-            aside={
-              <QuickCard
-                actions={[
-                  {
-                    label: "Órdenes de trabajo",
-                    accent: true,
-                    onClick: () => go("/servicios-generales/ordenes-trabajo"),
-                  },
-                  {
-                    label: "Pesaje Tarimas",
-                    accent: true,
-                    onClick: () => go("/servicios-generales/pesaje-tarimas"),
-                  },
-                  {
-                    label: "Validar ingreso",
-                    onClick: () => go("/servicios-generales/validar-ingreso"),
-                  },
-                ]}
-              />
-            }
+            aside={<QuickCard moduleKey="servicios-generales" />}
           />
 
           <ModuleGrid>
@@ -117,6 +100,8 @@ export default function ServiciosGenerales() {
                 tone="accent"
                 href={m.path}
                 onClick={() => go(m.path)}
+                pinned={isPinned(m.path)}
+                onTogglePin={() => togglePin(m.title, m.path)}
               />
             ))}
           </ModuleGrid>

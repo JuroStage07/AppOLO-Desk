@@ -15,10 +15,12 @@ import {
   Shell,
   Topbar,
 } from "../../components/ui";
+import usePinnedModules from "../../hooks/usePinnedModules";
 
 export default function Despacho() {
   const nav = useNavigate();
   const user = auth.currentUser;
+  const { isPinned, togglePin } = usePinnedModules("despacho");
 
   const go = (path) => nav(path);
 
@@ -67,24 +69,10 @@ export default function Despacho() {
         <Container>
           <Hero
             kicker="Centro de control"
-            title="Módulos de despacho"
+            title="Módulos"
             subtitle="Accedé a despachos activos o al historial de cierres según tu tarea operativa."
             badge={<Badge icon={Lock}>Operación</Badge>}
-            aside={
-              <QuickCard
-                actions={[
-                  {
-                    label: "Despachos en progreso",
-                    accent: true,
-                    onClick: () => go("/despacho/in-progress"),
-                  },
-                  {
-                    label: "Despachos finalizados",
-                    onClick: () => go("/despacho/finalizados"),
-                  },
-                ]}
-              />
-            }
+            aside={<QuickCard moduleKey="despacho" />}
           />
 
           <ModuleGrid>
@@ -98,6 +86,8 @@ export default function Despacho() {
                 tone="accent"
                 href={m.path}
                 onClick={() => go(m.path)}
+                pinned={isPinned(m.path)}
+                onTogglePin={() => togglePin(m.title, m.path)}
               />
             ))}
           </ModuleGrid>

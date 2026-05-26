@@ -18,14 +18,15 @@ import {
   Main,
   ModuleCard,
   ModuleGrid,
-  QuickCard,
   Shell,
   Topbar,
 } from "../../../components/ui";
+import usePinnedModules from "../../../hooks/usePinnedModules";
 
 export default function OTsHubMantenimiento() {
   const nav = useNavigate();
   const { user, permisos, loading } = useContext(AuthCtx);
+  const { isPinned, togglePin } = usePinnedModules("mantenimiento");
 
   useEffect(() => {
     if (loading) return;
@@ -95,25 +96,6 @@ export default function OTsHubMantenimiento() {
             title="Submódulos"
             subtitle="Elegí si trabajás el tablero operativo o consultás OT ya finalizadas."
             badge={<Badge icon={Lock}>Órdenes de trabajo</Badge>}
-            aside={
-              <QuickCard
-                actions={[
-                  {
-                    label: "Dashboard OTs",
-                    accent: true,
-                    onClick: () => go("/mantenimiento/ots/dashboard"),
-                  },
-                  {
-                    label: "Gestión de OT (tablero)",
-                    onClick: () => go("/mantenimiento/OTsPage"),
-                  },
-                  {
-                    label: "OT finalizadas",
-                    onClick: () => go("/mantenimiento/ots/finalizadas"),
-                  },
-                ]}
-              />
-            }
           />
 
           <ModuleGrid>
@@ -127,9 +109,11 @@ export default function OTsHubMantenimiento() {
                 tone="accent"
                 href={m.path}
                 onClick={() => go(m.path)}
+                pinned={isPinned(m.path)}
+                onTogglePin={() => togglePin(m.title, m.path)}
               />
             ))}
-          </ModuleGrid>
+          </ModuleGrid>
         </Container>
       </Main>
     </Shell>

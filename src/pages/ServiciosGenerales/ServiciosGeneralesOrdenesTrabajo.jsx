@@ -17,14 +17,15 @@ import {
   Main,
   ModuleCard,
   ModuleGrid,
-  QuickCard,
   Shell,
   Topbar,
 } from "../../components/ui";
+import usePinnedModules from "../../hooks/usePinnedModules";
 
 export default function ServiciosGeneralesOrdenesTrabajo() {
   const nav = useNavigate();
   const user = auth.currentUser;
+  const { isPinned, togglePin } = usePinnedModules("servicios-generales");
 
   const go = (path) => nav(path);
 
@@ -76,21 +77,6 @@ export default function ServiciosGeneralesOrdenesTrabajo() {
             title="Módulos"
             subtitle="Elegí cómo querés trabajar: crear nuevas OT o administrar las que ya están en curso."
             badge={<Badge icon={Lock}>Órdenes de trabajo</Badge>}
-            aside={
-              <QuickCard
-                actions={[
-                  {
-                    label: "Crear OT",
-                    accent: true,
-                    onClick: () => go("/servicios-generales/ordenes-trabajo/crear"),
-                  },
-                  {
-                    label: "Gestión de OTs",
-                    onClick: () => go("/servicios-generales/ordenes-trabajo/gestion"),
-                  },
-                ]}
-              />
-            }
           />
 
           <ModuleGrid>
@@ -104,6 +90,8 @@ export default function ServiciosGeneralesOrdenesTrabajo() {
                 tone="accent"
                 href={m.path}
                 onClick={() => go(m.path)}
+                pinned={isPinned(m.path)}
+                onTogglePin={() => togglePin(m.title, m.path)}
               />
             ))}
           </ModuleGrid>
