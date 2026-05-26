@@ -53,17 +53,38 @@ Two orthogonal axes on `profiles/{uid}`:
 
 ### Routing & module layout
 
-`src/App.jsx` declares every route in one place. Page modules live under `src/pages/<Module>/`:
+`src/App.jsx` declares every route in one place. Landing/navigation entry points:
+- `/` and `/areas` → `pages/AreasTrabajoHubPage.jsx` (the main hub — module grid + quick-access strip).
+- `/welcome` → `pages/Home.jsx` (post-login welcome screen, kept separate from the hub).
+- `/config-region` → tenant/region setup, the only protected route that skips `RequireTenant`.
+- `/pesado` → shortcut to `Zona Franca/PesajeTarimas` (also reachable under `/servicios-generales/pesaje-tarimas`).
+
+Page modules live under `src/pages/<Module>/`:
 - `Despacho/` — in-progress and finalized dispatch views.
 - `Documentacion/` — document library + `colecciones` grouping.
 - `EPA/` — EPA hub and finished openings.
-- `Mantenimiento/Equipos/` and `Mantenimiento/OTs/` — equipment registry and work orders (`solicitudesOT` with `subtareas` subcollection plus a global `subtaskList` catalog).
-- `Recepcion/AccionDescarga/` — unload actions; `MetricaRecepcion.jsx` is a large analytics page that queries `accion_descarga` directly.
-- `Salud Ocupacional/` (note the space in the path) — `Aperturas`, `ControlMarcas`, `ControlTerceros`, `Visados`, plus a metrics page.
+- `Mantenimiento/Equipos/` and `Mantenimiento/OTs/` — equipment registry and work orders (`solicitudesOT` with `subtareas` subcollection plus a global `subtaskList` catalog). The OTs dashboard at `/mantenimiento/ots/dashboard` is fed by helpers in `src/pages/Mantenimiento/OTs/dashboard/` (`computeOTsDashboardMetrics.js`, `periodUtils.js`, `useOTsDashboardMetrics.js`) — keep period math and metric aggregation in those files rather than inside the page component.
+- `Recepcion/AccionDescarga/` — unload actions; `MetricaRecepcion.jsx` is a large analytics page that queries `accion_descarga` directly and exports via `src/utils/metricaRecepcionExcelPro.js` (multi-sheet xlsx, incl. `Tiempos_proveedor` and the EPA trend section).
+- `Salud Ocupacional/` (note the space in the path) — `Aperturas`, `ControlMarcas`, `ControlTerceros`, `Visados`, plus `MetricaSaludOcupacional.jsx` at `/salud/metricas` (reads `dashboard_salud_daily` + `aperturas`).
 - `ServiciosGenerales/` — work orders + tarima validation.
 - `Zona Franca/` (note the space) — tarima weighing and lookup.
 
 Two directories have spaces (`Salud Ocupacional`, `Zona Franca`); quote them in shell commands.
+
+### Shared UI kit
+
+All pages render through a single design system under `src/components/ui/` (barrel-exported via `src/components/ui/index.js`). Design tokens (colors, radii, shadows, `CONTAINER_MAX`, `FONT_STACK`) live in `src/styles/theme.js` — the source of truth; do not hardcode hex codes in page styles. Key primitives:
+- **Layout:** `Shell` (locks body scroll + sets brand background), `Topbar` (sticky header with the global sidebar/area navigator), `Brand`, `Main` / `Container`, `Hero`.
+- **Cards & grids:** `Card`, `ModuleCard`, `ModuleGrid`, `KpiCard` / `KpiGrid`, `RowCard`, `QuickCard`, `IconBox`.
+- **Controls & status:** `Button` (+ `PrimaryButton`, `SecondaryButton`, `GhostButton`), `Badge`, `StatusPill`, `Chip` / `ChipsRow`, `SearchInput`, `Field`, `Sheet`, `EmptyState`, `Spinner`.
+
+The "Recepción style" was the reference look; commit `cc4abeb` migrated every page to this kit. When adding a page, compose these primitives instead of writing bespoke wrappers, and import tokens (`ACCENT`, `BORDER`, `SLATE`, `TEXT`, `CONTAINER_MAX`, …) from `src/styles/theme.js`.
+
+### Sidebar & pinned quick-access
+
+`Topbar.jsx` ships a global sidebar that lists every area + its sub-modules (filtered by `epaAdmin` / `isEpaRestrictedUser`) — keep the `AREAS` array in `Topbar.jsx` in sync when routes are added or renamed.
+
+`src/hooks/usePinnedModules.js` persists user-pinned modules to `localStorage["appolo_pinned_modules"]` as `[{ label, path }]`. `ModuleCard` exposes a pin toggle; the hub's quick-access strip reads from this hook. (All `FooterNote` / "Tip" cards were removed — don't reintroduce them.)
 
 ### Firestore collections (most relevant)
 
