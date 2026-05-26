@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 const STORAGE_KEY = "appolo_pinned_modules";
 const EMPTY = [];
@@ -89,4 +89,31 @@ export default function usePinnedModules(moduleKey = "global") {
   );
 
   return { pinned, isPinned, togglePin, removePin };
+}
+
+/**
+ * Read every pin across all modules, flattened into a single list.
+ * Each entry is { moduleKey, label, path }. Used by the global "Mis Pin"
+ * sidebar section.
+ */
+export function useAllPinnedModules() {
+  const snapshot = useSyncExternalStore(subscribe, getStore, getStore);
+
+  const pins = useMemo(() => {
+    const out = [];
+    for (const [moduleKey, list] of Object.entries(snapshot)) {
+      if (Array.isArray(list)) {
+        list.forEach((p) => out.push({ ...p, moduleKey }));
+      }
+    }
+    return out;
+  }, [snapshot]);
+
+  const removePin = useCallback((moduleKey, path) => {
+    const current = getStore();
+    const list = current[moduleKey] ?? [];
+    setStore({ ...current, [moduleKey]: list.filter((p) => p.path !== path) });
+  }, []);
+
+  return { pins, removePin };
 }

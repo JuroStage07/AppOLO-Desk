@@ -20,6 +20,7 @@ export { default as ModuleGrid } from "./ModuleGrid";
 export { default as KpiCard, KpiGrid } from "./KpiCard";
 export { default as RowCard } from "./RowCard";
 export { default as QuickCard } from "./QuickCard";
+export { default as PinsFlyout } from "./PinsFlyout";
 export { default as FooterNote } from "./FooterNote";
 export {
   default as Button,

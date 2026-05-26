@@ -7,6 +7,7 @@ import {
   Clock,
   LayoutDashboard,
   Menu,
+  Pin,
   Shield,
   Sparkles,
   User,
@@ -16,6 +17,8 @@ import {
 import { AuthCtx } from "../../auth/AuthProvider";
 import { auth } from "../../firebase";
 import { isEpaRestrictedUser } from "../../config/epaOnlyUids";
+import { useAllPinnedModules } from "../../hooks/usePinnedModules";
+import PinsFlyout from "./PinsFlyout";
 import { ACCENT, ACCENT_SOFT, BORDER, CONTAINER_MAX, SLATE, TEXT } from "../../styles/theme";
 
 const SURFACE = "#FFFFFF";
@@ -88,18 +91,28 @@ function Sidebar({ open, onClose }) {
   const { profile, epaAdmin, user: ctxUser } = useContext(AuthCtx);
   const user = ctxUser ?? auth.currentUser;
   const [expandedArea, setExpandedArea] = useState(null);
+  const [pinsOpen, setPinsOpen] = useState(false);
+  const { pins } = useAllPinnedModules();
+
+  const closeAll = () => { setPinsOpen(false); setExpandedArea(null); onClose(); };
+
+  const epaOnly = isEpaRestrictedUser({ epaAdmin, profile, user });
 
   const areas = useMemo(() => {
-    if (isEpaRestrictedUser({ epaAdmin, profile, user })) {
+    if (epaOnly) {
       return AREAS.filter((a) => a.key === "epa");
     }
     return AREAS;
-  }, [epaAdmin, profile, user]);
+  }, [epaOnly]);
+
+  const pinCount = epaOnly
+    ? pins.filter((p) => p.moduleKey === "epa").length
+    : pins.length;
 
   return (
     <>
       {open && (
-        <div style={sb.backdrop} onClick={onClose} aria-hidden="true" />
+        <div style={sb.backdrop} onClick={closeAll} aria-hidden="true" />
       )}
       <aside
         style={{ ...sb.panel, transform: open ? "translateX(0)" : "translateX(-100%)" }}
@@ -107,7 +120,7 @@ function Sidebar({ open, onClose }) {
       >
         <div style={sb.header}>
           <span style={sb.title}>Áreas de trabajo</span>
-          <button type="button" onClick={onClose} style={sb.closeBtn} aria-label="Cerrar menú">
+          <button type="button" onClick={closeAll} style={sb.closeBtn} aria-label="Cerrar menú">
             <X size={18} strokeWidth={2.2} />
           </button>
         </div>
@@ -161,8 +174,41 @@ function Sidebar({ open, onClose }) {
               </div>
             );
           })}
+
+          <div style={sb.pinTabWrap}>
+            <button
+              type="button"
+              onClick={() => setPinsOpen((v) => !v)}
+              style={{ ...sb.item, ...(pinsOpen ? sb.pinTabActive : {}) }}
+            >
+              <div style={sb.itemIcon}>
+                <Pin size={16} strokeWidth={2.2} style={{ transform: "rotate(-45deg)" }} />
+              </div>
+              <div style={sb.itemText}>
+                <span style={sb.itemTitle}>Mis Pin</span>
+                <span style={sb.itemTag}>{pinCount} fijados</span>
+              </div>
+              <ChevronRight
+                size={16}
+                strokeWidth={2}
+                style={{
+                  marginRight: 8,
+                  color: TEXT_MUTED,
+                  transition: "transform 200ms ease",
+                  transform: pinsOpen ? "rotate(90deg)" : "rotate(0deg)",
+                }}
+              />
+            </button>
+          </div>
         </nav>
       </aside>
+
+      <PinsFlyout
+        open={open && pinsOpen}
+        onClose={() => setPinsOpen(false)}
+        onNavigate={(path) => { closeAll(); nav(path); }}
+        restrictTo={epaOnly ? "epa" : undefined}
+      />
     </>
   );
 }
@@ -376,4 +422,7 @@ const sb = {
   },
   subDot: { width: 5, height: 5, borderRadius: 999, background: ACCENT, flexShrink: 0, opacity: 0.6 },
   subLabel: { fontSize: 12, fontWeight: 550, color: TEXT_SECONDARY, lineHeight: 1.2 },
+
+  pinTabWrap: { marginTop: 8, paddingTop: 8, borderTop: `1px solid ${BORDER}` },
+  pinTabActive: { background: ACCENT_SOFT },
 };

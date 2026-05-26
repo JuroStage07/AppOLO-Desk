@@ -12,6 +12,7 @@ import {
   Lock,
   LogOut,
   Menu,
+  Pin,
   Shield,
   Sparkles,
   User,
@@ -25,9 +26,10 @@ import imgDespacho from "../assets/despacho.png";
 import imgMantenimiento from "../assets/mantenimiento.png";
 import imgRecepcion from "../assets/recepcion.png";
 import imgServiciosGenerales from "../assets/serviciosGenerales.png";
-import imgPesado from "../assets/revisionEquipos.png";
 import imgEpa from "../assets/epalogo.jpeg";
 import { isEpaRestrictedUser } from "../config/epaOnlyUids";
+import { useAllPinnedModules } from "../hooks/usePinnedModules";
+import { PinsFlyout } from "../components/ui";
 
 /* ─── Design tokens ─── */
 const T = {
@@ -61,6 +63,8 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedArea, setExpandedArea] = useState(null);
+  const [pinsOpen, setPinsOpen] = useState(false);
+  const { pins } = useAllPinnedModules();
 
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
@@ -200,12 +204,18 @@ export default function Home() {
     []
   );
 
+  const epaOnly = isEpaRestrictedUser({ epaAdmin, profile, user });
+
   const areas = useMemo(() => {
-    if (isEpaRestrictedUser({ epaAdmin, profile, user })) {
+    if (epaOnly) {
       return allAreas.filter((a) => a.key === "epa");
     }
     return allAreas;
-  }, [allAreas, epaAdmin, profile, user]);
+  }, [allAreas, epaOnly]);
+
+  const pinCount = epaOnly
+    ? pins.filter((p) => p.moduleKey === "epa").length
+    : pins.length;
 
   return (
     <div style={styles.shell}>
@@ -215,7 +225,7 @@ export default function Home() {
       {sidebarOpen && (
         <div
           style={styles.sidebarBackdrop}
-          onClick={() => setSidebarOpen(false)}
+          onClick={() => { setPinsOpen(false); setSidebarOpen(false); }}
           aria-hidden="true"
         />
       )}
@@ -230,7 +240,7 @@ export default function Home() {
           <span style={styles.sidebarTitle}>Áreas de trabajo</span>
           <button
             type="button"
-            onClick={() => setSidebarOpen(false)}
+            onClick={() => { setPinsOpen(false); setSidebarOpen(false); }}
             style={styles.sidebarClose}
             aria-label="Cerrar menú"
           >
@@ -320,8 +330,36 @@ export default function Home() {
               </div>
             );
           })}
+
+          <div style={styles.sidebarPinTab}>
+            <button
+              type="button"
+              onClick={() => setPinsOpen((v) => !v)}
+              style={{ ...styles.sidebarItem, ...(pinsOpen ? { background: T.accentSoft } : {}) }}
+            >
+              <div style={styles.sidebarItemIcon}>
+                <Pin size={16} strokeWidth={2.2} style={{ transform: "rotate(-45deg)" }} />
+              </div>
+              <div style={styles.sidebarItemText}>
+                <span style={styles.sidebarItemTitle}>Mis Pin</span>
+                <span style={styles.sidebarItemTag}>{pinCount} fijados</span>
+              </div>
+              <ChevronRight
+                size={16}
+                strokeWidth={2}
+                style={{ marginRight: 8, color: T.textMuted, transition: "transform 200ms ease", transform: pinsOpen ? "rotate(90deg)" : "rotate(0deg)" }}
+              />
+            </button>
+          </div>
         </nav>
       </aside>
+
+      <PinsFlyout
+        open={sidebarOpen && pinsOpen}
+        onClose={() => setPinsOpen(false)}
+        onNavigate={(path) => { setPinsOpen(false); setSidebarOpen(false); go(path); }}
+        restrictTo={epaOnly ? "epa" : undefined}
+      />
 
       {/* ─── Header ─── */}
       <header style={styles.header}>
@@ -878,6 +916,11 @@ const styles = {
     fontWeight: 550,
     color: T.textSecondary,
     lineHeight: 1.2,
+  },
+  sidebarPinTab: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTop: `1px solid ${T.border}`,
   },
 
   /* Main */

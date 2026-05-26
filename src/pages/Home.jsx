@@ -12,6 +12,7 @@ import {
   Lock,
   LogOut,
   Menu,
+  Pin,
   Shield,
   Sparkles,
   User,
@@ -20,6 +21,8 @@ import {
 } from "lucide-react";
 import logoAppolo from "../assets/AppOLO_logo.png";
 import { isEpaRestrictedUser } from "../config/epaOnlyUids";
+import { useAllPinnedModules } from "../hooks/usePinnedModules";
+import { PinsFlyout } from "../components/ui";
 
 const T = {
   accent: "#06B6A0",
@@ -46,6 +49,8 @@ export default function Home() {
   const [btnHover, setBtnHover] = useState(false);
   const [busyLogout, setBusyLogout] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pinsOpen, setPinsOpen] = useState(false);
+  const { pins } = useAllPinnedModules();
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -87,12 +92,18 @@ export default function Home() {
     []
   );
 
+  const epaOnly = isEpaRestrictedUser({ epaAdmin, profile, user });
+
   const areas = useMemo(() => {
-    if (isEpaRestrictedUser({ epaAdmin, profile, user })) {
+    if (epaOnly) {
       return allAreas.filter((a) => a.key === "epa");
     }
     return allAreas;
-  }, [allAreas, epaAdmin, profile, user]);
+  }, [allAreas, epaOnly]);
+
+  const pinCount = epaOnly
+    ? pins.filter((p) => p.moduleKey === "epa").length
+    : pins.length;
 
   return (
     <div style={s.shell}>
@@ -104,7 +115,7 @@ export default function Home() {
       {sidebarOpen && (
         <div
           style={s.sidebarBackdrop}
-          onClick={() => setSidebarOpen(false)}
+          onClick={() => { setPinsOpen(false); setSidebarOpen(false); }}
           aria-hidden="true"
         />
       )}
@@ -119,7 +130,7 @@ export default function Home() {
           <span style={s.sidebarTitle}>Áreas de trabajo</span>
           <button
             type="button"
-            onClick={() => setSidebarOpen(false)}
+            onClick={() => { setPinsOpen(false); setSidebarOpen(false); }}
             style={s.sidebarClose}
             aria-label="Cerrar menú"
           >
@@ -145,8 +156,37 @@ export default function Home() {
               <ChevronRight size={14} strokeWidth={2} color={T.textMuted} />
             </button>
           ))}
+
+          <div style={s.sidebarPinTab}>
+            <button
+              type="button"
+              onClick={() => setPinsOpen((v) => !v)}
+              style={{ ...s.sidebarItem, ...(pinsOpen ? { background: T.accentSoft } : {}) }}
+            >
+              <div style={s.sidebarItemIcon}>
+                <Pin size={16} strokeWidth={2.2} style={{ transform: "rotate(-45deg)" }} />
+              </div>
+              <div style={s.sidebarItemText}>
+                <span style={s.sidebarItemTitle}>Mis Pin</span>
+                <span style={s.sidebarItemTag}>{pinCount} fijados</span>
+              </div>
+              <ChevronRight
+                size={14}
+                strokeWidth={2}
+                color={T.textMuted}
+                style={{ transition: "transform 200ms ease", transform: pinsOpen ? "rotate(90deg)" : "rotate(0deg)" }}
+              />
+            </button>
+          </div>
         </nav>
       </aside>
+
+      <PinsFlyout
+        open={sidebarOpen && pinsOpen}
+        onClose={() => setPinsOpen(false)}
+        onNavigate={(path) => { setPinsOpen(false); setSidebarOpen(false); nav(path); }}
+        restrictTo={epaOnly ? "epa" : undefined}
+      />
 
       {/* ─── Topbar ─── */}
       <header style={s.header}>
@@ -496,6 +536,11 @@ const s = {
     fontWeight: 500,
     color: T.textMuted,
     lineHeight: 1.2,
+  },
+  sidebarPinTab: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTop: `1px solid ${T.border}`,
   },
 
   /* Main */
