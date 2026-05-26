@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Pin } from "lucide-react";
 import Card from "./Card";
 import IconBox from "./IconBox";
 import { ACCENT, ACCENT_SOFT, BORDER_SOFT, MUTED, SLATE, TEXT } from "../../styles/theme";
@@ -21,11 +21,12 @@ export default function ModuleCard({
   image,
   imageFit = "cover", // "cover" | "contain"
   tag,
-  status = "Listo",
   tone = "neutral",
   href,
   onClick,
   cta = "Entrar",
+  pinned = false,
+  onTogglePin,
 }) {
   const accent = tone === "accent";
 
@@ -45,9 +46,17 @@ export default function ModuleCard({
             {tag ? (
               <span style={{ ...pillOnImg, ...(accent ? pillOnImgAccent : {}) }}>{tag}</span>
             ) : <span />}
-            {status ? (
-              <span style={{ ...statusOnImg, ...statusOnImgOk }}>{status}</span>
-            ) : null}
+            {onTogglePin && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onTogglePin(); }}
+                style={{ ...pinBtnOnImg, ...(pinned ? pinBtnOnImgActive : {}) }}
+                title={pinned ? "Quitar de acceso rápido" : "Fijar en acceso rápido"}
+                aria-label={pinned ? "Quitar pin" : "Fijar pin"}
+              >
+                <Pin size={13} strokeWidth={2.2} style={pinned ? { transform: "rotate(-45deg)" } : {}} />
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -57,9 +66,17 @@ export default function ModuleCard({
             {tag ? (
               <span style={{ ...pillSolid, ...(accent ? pillSolidAccent : {}) }}>{tag}</span>
             ) : null}
-            {status ? (
-              <span style={{ ...statusPillSolid, ...statusOkSolid }}>{status}</span>
-            ) : null}
+            {onTogglePin && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onTogglePin(); }}
+                style={{ ...pinBtn, ...(pinned ? pinBtnActive : {}) }}
+                title={pinned ? "Quitar de acceso rápido" : "Fijar en acceso rápido"}
+                aria-label={pinned ? "Quitar pin" : "Fijar pin"}
+              >
+                <Pin size={14} strokeWidth={2.2} style={pinned ? { transform: "rotate(-45deg)" } : {}} />
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -118,19 +135,8 @@ const pillOnImgAccent = {
   borderColor: "rgba(255,255,255,0.45)",
   background: "rgba(8,159,138,0.28)",
 };
-const statusOnImg = {
-  padding: "6px 10px",
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.35)",
-  background: "rgba(255,255,255,0.14)",
-  color: "#fff",
-  fontWeight: 800,
-  fontSize: 11,
-  backdropFilter: "blur(6px)",
-  display: "inline-flex",
-  alignItems: "center",
-};
-const statusOnImgOk = { background: "rgba(8,159,138,0.30)" };
+const statusOnImg = {};
+const statusOnImgOk = {};
 
 /* Icon header (no image) */
 const simpleHeader = {
@@ -159,24 +165,55 @@ const pillSolidAccent = {
   color: ACCENT,
 };
 
-const statusPillSolid = {
-  padding: "6px 10px",
-  borderRadius: 999,
-  border: `1px solid ${BORDER_SOFT}`,
-  background: "#fff",
-  fontWeight: 800,
-  fontSize: 11,
-};
-const statusOkSolid = {
-  borderColor: "rgba(8,159,138,0.30)",
-  background: ACCENT_SOFT,
-  color: ACCENT,
-};
+const statusPillSolid = {};
+const statusOkSolid = {};
 
 /* Body */
 const cardBody = { padding: 16 };
 const cardTitle = { fontWeight: 950, fontSize: 16, color: TEXT, marginBottom: 6 };
 const cardDesc = { color: SLATE, fontWeight: 650, fontSize: 13, lineHeight: 1.45, minHeight: 40 };
+
+const pinBtn = {
+  width: 30,
+  height: 30,
+  borderRadius: 8,
+  border: `1px solid ${BORDER_SOFT}`,
+  background: "#fff",
+  display: "grid",
+  placeItems: "center",
+  cursor: "pointer",
+  color: MUTED,
+  flexShrink: 0,
+  padding: 0,
+  fontFamily: "inherit",
+  transition: "all 150ms ease",
+};
+const pinBtnActive = {
+  background: ACCENT_SOFT,
+  borderColor: "rgba(8,159,138,0.3)",
+  color: ACCENT,
+};
+const pinBtnOnImg = {
+  width: 30,
+  height: 30,
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.3)",
+  background: "rgba(255,255,255,0.15)",
+  backdropFilter: "blur(6px)",
+  WebkitBackdropFilter: "blur(6px)",
+  display: "grid",
+  placeItems: "center",
+  cursor: "pointer",
+  color: "#fff",
+  flexShrink: 0,
+  padding: 0,
+  fontFamily: "inherit",
+  transition: "all 150ms ease",
+};
+const pinBtnOnImgActive = {
+  background: "rgba(8,159,138,0.4)",
+  borderColor: "rgba(255,255,255,0.5)",
+};
 
 const cardFooter = {
   marginTop: 12,

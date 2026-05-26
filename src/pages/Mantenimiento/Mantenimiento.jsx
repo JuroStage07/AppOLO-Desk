@@ -7,7 +7,6 @@ import {
   Badge,
   Brand,
   Container,
-  FooterNote,
   GhostButton,
   Hero,
   Main,
@@ -113,11 +112,6 @@ export default function Mantenimiento() {
               />
             ))}
           </ModuleGrid>
-
-          <FooterNote title="Tip">
-            Rutas principales: <b>/mantenimiento/equipos</b> y <b>/mantenimiento/ots</b>. Requiere permiso{" "}
-            <b>mantenimiento</b> en el perfil.
-          </FooterNote>
         </Container>
       </Main>
     </Shell>

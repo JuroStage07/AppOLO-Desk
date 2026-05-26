@@ -858,15 +858,6 @@ export default function AdministrarVisados() {
               {rows.length === 0 && !busy && <div style={ui.empty}>No hay visados para ese filtro.</div>}
             </div>
           </div>
-
-          {/* Footer note */}
-          <div style={ui.footerNote}>
-            <div style={ui.footerTitle}>Nota</div>
-            <div style={ui.footerText}>
-              El botón PDF solo se habilita cuando existe <b>pdfUrl</b> en el documento de <b>visados</b>.
-              Si ya existen ambas firmas pero todavía no hay PDF, usá “Generar PDF”.
-            </div>
-          </div>
         </div>
       </div>
     </div>

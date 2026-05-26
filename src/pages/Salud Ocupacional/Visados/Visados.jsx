@@ -6,7 +6,6 @@ import {
   Badge,
   Brand,
   Container,
-  FooterNote,
   GhostButton,
   Hero,
   Main,
@@ -102,10 +101,6 @@ export default function Visados() {
               />
             ))}
           </ModuleGrid>
-
-          <FooterNote title="Tip">
-            Desde «Generar visado» creás uno nuevo. En «Administrar» buscás por cédula/nombre y descargás el PDF firmado.
-          </FooterNote>
         </Container>
       </Main>
     </Shell>

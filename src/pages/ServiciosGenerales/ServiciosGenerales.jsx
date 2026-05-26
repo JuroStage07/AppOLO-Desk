@@ -12,7 +12,6 @@ import {
   Badge,
   Brand,
   Container,
-  FooterNote,
   GhostButton,
   Hero,
   Main,
@@ -121,10 +120,6 @@ export default function ServiciosGenerales() {
               />
             ))}
           </ModuleGrid>
-
-          <FooterNote title="Tip">
-            Si un módulo no abre, revisá permisos de servicios generales en tu perfil y que la ruta esté habilitada en la app.
-          </FooterNote>
         </Container>
       </Main>
     </Shell>

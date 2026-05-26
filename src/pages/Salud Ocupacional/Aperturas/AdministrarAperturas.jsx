@@ -12,7 +12,6 @@ import {
   Badge,
   Brand,
   Container,
-  FooterNote,
   GhostButton,
   Hero,
   Main,
@@ -120,10 +119,6 @@ export default function AdministrarAperturas() {
               />
             ))}
           </ModuleGrid>
-
-          <FooterNote title="Tip">
-            Si algo no abre, revisá rutas y permisos (<b>permisos.saludOcupacional</b>).
-          </FooterNote>
         </Container>
       </Main>
     </Shell>

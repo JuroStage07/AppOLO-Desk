@@ -6,7 +6,6 @@ import {
   Badge,
   Brand,
   Container,
-  FooterNote,
   GhostButton,
   Hero,
   Main,
@@ -101,11 +100,7 @@ export default function PesajeTarimas() {
                 onClick={() => go(m.path)}
               />
             ))}
-          </ModuleGrid>
-
-          <FooterNote title="Tip">
-            Desde «Registrar tarimas» podés ingresar nuevos pesajes. En «Consultar tarimas» buscás y revisás los registros ya guardados.
-          </FooterNote>
+          </ModuleGrid>
         </Container>
       </Main>
     </Shell>

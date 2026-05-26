@@ -6,7 +6,6 @@ import {
   Badge,
   Brand,
   Container,
-  FooterNote,
   GhostButton,
   Hero,
   Main,
@@ -102,10 +101,6 @@ export default function Despacho() {
               />
             ))}
           </ModuleGrid>
-
-          <FooterNote title="Tip">
-            Los despachos en progreso se actualizan en tiempo real. Los finalizados quedan disponibles para consulta y auditoría.
-          </FooterNote>
         </Container>
       </Main>
     </Shell>

@@ -12,7 +12,6 @@ import {
   Badge,
   Brand,
   Container,
-  FooterNote,
   GhostButton,
   Hero,
   Main,
@@ -108,10 +107,6 @@ export default function ServiciosGeneralesOrdenesTrabajo() {
               />
             ))}
           </ModuleGrid>
-
-          <FooterNote title="Tip">
-            Desde «Crear OT» podés generar una nueva orden. En «Gestión de OTs» vas a ver el listado completo con filtros y cambios de estado.
-          </FooterNote>
         </Container>
       </Main>
     </Shell>

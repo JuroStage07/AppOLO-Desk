@@ -13,7 +13,6 @@ import {
   Badge,
   Brand,
   Container,
-  FooterNote,
   GhostButton,
   Hero,
   Main,
@@ -130,13 +129,7 @@ export default function OTsHubMantenimiento() {
                 onClick={() => go(m.path)}
               />
             ))}
-          </ModuleGrid>
-
-          <FooterNote title="Tip">
-            El tablero sigue en <b>/mantenimiento/OTsPage</b>. Las finalizadas usan{" "}
-            <b>OTState: &quot;Finalizada&quot;</b> en Firestore cuando cierres el
-            flujo desde la app.
-          </FooterNote>
+          </ModuleGrid>
         </Container>
       </Main>
     </Shell>

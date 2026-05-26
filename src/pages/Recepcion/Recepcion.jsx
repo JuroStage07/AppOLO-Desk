@@ -265,13 +265,6 @@ export default function Recepcion() {
             })}
 
           </div>
-
-          <div style={ui.footerNote}>
-            <div style={ui.footerTitle}>Tip</div>
-            <div style={ui.footerText}>
-              Si un módulo no abre, revisá permisos de recepción en tu perfil y que la ruta esté habilitada en la app.
-            </div>
-          </div>
         </div>
       </main>
     </div>

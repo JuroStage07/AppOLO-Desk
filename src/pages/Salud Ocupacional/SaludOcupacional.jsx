@@ -15,7 +15,6 @@ import {
   Badge,
   Brand,
   Container,
-  FooterNote,
   GhostButton,
   Hero,
   Main,
@@ -25,10 +24,12 @@ import {
   Shell,
   Topbar,
 } from "../../components/ui";
+import usePinnedModules from "../../hooks/usePinnedModules";
 
 export default function SaludOcupacional() {
   const nav = useNavigate();
   const user = auth.currentUser;
+  const { isPinned, togglePin } = usePinnedModules();
 
   const go = (path) => nav(path);
 
@@ -105,23 +106,7 @@ export default function SaludOcupacional() {
             subtitle="Seleccioná un módulo para ingresar. Las acciones quedan asociadas a tu usuario."
             badge={<Badge icon={Lock}>Operación</Badge>}
             aside={
-              <QuickCard
-                actions={[
-                  {
-                    label: "Control de marcas",
-                    accent: true,
-                    onClick: () => go("/salud/control-marcas"),
-                  },
-                  {
-                    label: "Nuevo visado",
-                    onClick: () => go("/salud/visado"),
-                  },
-                  {
-                    label: "Aperturas",
-                    onClick: () => go("/salud/aperturas"),
-                  },
-                ]}
-              />
+              <QuickCard />
             }
           />
 
@@ -136,14 +121,11 @@ export default function SaludOcupacional() {
                 tone="accent"
                 href={m.path}
                 onClick={() => go(m.path)}
+                pinned={isPinned(m.path)}
+                onTogglePin={() => togglePin(m.title, m.path)}
               />
             ))}
           </ModuleGrid>
-
-          <FooterNote title="Tip">
-            Si un módulo no abre, verificá la ruta y que el perfil tenga{" "}
-            <b>permisos.saludOcupacional</b> u otros permisos requeridos.
-          </FooterNote>
         </Container>
       </Main>
     </Shell>
