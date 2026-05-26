@@ -1,14 +1,16 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     addDoc,
     collection,
+    deleteDoc,
     doc,
     getDoc,
     getDocs,
     orderBy,
     query,
     serverTimestamp,
+    updateDoc,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, db, storage } from "../../firebase";
@@ -72,6 +74,16 @@ export default function DocumentacionPage() {
     });
     const [pdfFile, setPdfFile] = useState(null);
 
+    // Colecciones state
+    const [showColeccionesModal, setShowColeccionesModal] = useState(false);
+    const [colecciones, setColecciones] = useState([]);
+    const [loadingColecciones, setLoadingColecciones] = useState(false);
+    const [coleccionForm, setColeccionForm] = useState({ name: "", description: "" });
+    const [showNewColeccionForm, setShowNewColeccionForm] = useState(false);
+    const [selectedColeccion, setSelectedColeccion] = useState(null);
+    const [coleccionBusy, setColeccionBusy] = useState(false);
+    const [coleccionErr, setColeccionErr] = useState("");
+
     const loadProfile = async () => {
         const currentUser = auth.currentUser;
 
@@ -116,6 +128,115 @@ export default function DocumentacionPage() {
             setLoadingDocs(false);
         }
     };
+
+    const loadColecciones = async () => {
+        setLoadingColecciones(true);
+        setColeccionErr("");
+        try {
+            const q = query(
+                collection(db, "colecciones"),
+                orderBy("createdAt", "desc")
+            );
+            const snap = await getDocs(q);
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            setColecciones(list);
+        } catch (e) {
+            console.error(e);
+            setColeccionErr("No se pudo cargar las colecciones.");
+        } finally {
+            setLoadingColecciones(false);
+        }
+    };
+
+    const handleCreateColeccion = async () => {
+        const name = safe(coleccionForm.name);
+        if (!name) return;
+        setColeccionBusy(true);
+        setColeccionErr("");
+        try {
+            const currentUser = auth.currentUser;
+            if (!currentUser?.uid) throw new Error("No hay usuario autenticado.");
+
+            await addDoc(collection(db, "colecciones"), {
+                name,
+                nameLower: name.toLowerCase(),
+                description: safe(coleccionForm.description),
+                documentIds: [],
+                createdBy: currentUser.uid,
+                createdAt: serverTimestamp(),
+            });
+            setColeccionForm({ name: "", description: "" });
+            setShowNewColeccionForm(false);
+            await loadColecciones();
+        } catch (e) {
+            console.error(e);
+            setColeccionErr(e?.message || "No se pudo crear la colección.");
+        } finally {
+            setColeccionBusy(false);
+        }
+    };
+
+    const handleDeleteColeccion = async (colId) => {
+        if (!colId) return;
+        setColeccionBusy(true);
+        setColeccionErr("");
+        try {
+            await deleteDoc(doc(db, "colecciones", colId));
+            if (selectedColeccion?.id === colId) setSelectedColeccion(null);
+            await loadColecciones();
+        } catch (e) {
+            console.error(e);
+            setColeccionErr("No se pudo eliminar la colección.");
+        } finally {
+            setColeccionBusy(false);
+        }
+    };
+
+    const handleToggleDocInColeccion = async (docId) => {
+        if (!selectedColeccion?.id || !docId) return;
+        setColeccionBusy(true);
+        setColeccionErr("");
+        try {
+            const currentIds = selectedColeccion.documentIds || [];
+            const newIds = currentIds.includes(docId)
+                ? currentIds.filter((id) => id !== docId)
+                : [...currentIds, docId];
+
+            await updateDoc(doc(db, "colecciones", selectedColeccion.id), {
+                documentIds: newIds,
+            });
+
+            setSelectedColeccion((prev) => ({ ...prev, documentIds: newIds }));
+            setColecciones((prev) =>
+                prev.map((c) =>
+                    c.id === selectedColeccion.id ? { ...c, documentIds: newIds } : c
+                )
+            );
+        } catch (e) {
+            console.error(e);
+            setColeccionErr("No se pudo actualizar la colección.");
+        } finally {
+            setColeccionBusy(false);
+        }
+    };
+
+    const openColeccionesModal = () => {
+        setColeccionErr("");
+        setShowColeccionesModal(true);
+        loadColecciones();
+    };
+
+    const closeColeccionesModal = () => {
+        if (coleccionBusy) return;
+        setShowColeccionesModal(false);
+        setSelectedColeccion(null);
+        setShowNewColeccionForm(false);
+    };
+
+    const coleccionDocs = useMemo(() => {
+        if (!selectedColeccion?.documentIds?.length) return [];
+        return docs.filter((d) => selectedColeccion.documentIds.includes(d.id));
+    }, [selectedColeccion, docs]);
 
     useEffect(() => {
         const prevOverflow = document.body.style.overflow;
@@ -177,21 +298,27 @@ export default function DocumentacionPage() {
 
     const filteredDocs = useMemo(() => {
         const t = safe(qText).toLowerCase();
-        if (!t) return docs;
+        let result = docs;
 
-        return docs.filter((d) => {
-            const title = safe(d.title).toLowerCase();
-            const category = safe(d.category).toLowerCase();
-            const description = safe(d.description).toLowerCase();
-            const fileName = safe(d.fileName).toLowerCase();
+        if (t) {
+            result = docs.filter((d) => {
+                const title = safe(d.title).toLowerCase();
+                const category = safe(d.category).toLowerCase();
+                const description = safe(d.description).toLowerCase();
+                const fileName = safe(d.fileName).toLowerCase();
 
-            return (
-                title.includes(t) ||
-                category.includes(t) ||
-                description.includes(t) ||
-                fileName.includes(t)
-            );
-        });
+                return (
+                    title.includes(t) ||
+                    category.includes(t) ||
+                    description.includes(t) ||
+                    fileName.includes(t)
+                );
+            });
+        }
+
+        return [...result].sort((a, b) =>
+            safe(a.title).localeCompare(safe(b.title), "es", { sensitivity: "base" })
+        );
     }, [docs, qText]);
 
     const categories = useMemo(() => {
@@ -351,7 +478,7 @@ export default function DocumentacionPage() {
                             <h1 style={ui.title}>Centro de documentación empresarial</h1>
                             <p style={ui.subtitle}>
                                 Una biblioteca corporativa para consolidar <b>normas</b>, <b>políticas</b>, <b>procesos</b>,
-                                <b> reglamentos</b> y documentos clave de la empresa en una sola experiencia elegante y profesional.
+                                <b> reglamentos</b> y documentos clave de la empresa.
                             </p>
                         </div>
                     </div>
@@ -389,6 +516,15 @@ export default function DocumentacionPage() {
                                         >
                                             <span style={ui.searchToggleIcon}>⌕</span>
                                             <span>{showDocSearch ? "Ocultar búsqueda" : "Buscar documento"}</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={openColeccionesModal}
+                                            style={ui.coleccionesBtn}
+                                        >
+                                            <span style={ui.coleccionesBtnIcon}>📁</span>
+                                            <span>Colecciones</span>
                                         </button>
                                     </div>
                                 </div>
@@ -736,6 +872,225 @@ export default function DocumentacionPage() {
                     </div>
                 </div>
             )}
+
+            {/* Modal Colecciones */}
+            {showColeccionesModal && (
+                <div style={ui.modalBackdrop} onClick={closeColeccionesModal}>
+                    <div
+                        style={ui.coleccionesModalCard}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={ui.coleccionesModalHeader}>
+                            <div>
+                                <div style={ui.modalKicker}>Organización documental</div>
+                                <div style={ui.modalTitle}>Colecciones</div>
+                                <div style={ui.modalText}>
+                                    Agrupá documentos de la biblioteca en colecciones temáticas para facilitar el acceso y la distribución.
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeColeccionesModal}
+                                style={ui.modalCloseBtn}
+                                disabled={coleccionBusy}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div style={ui.coleccionesBody}>
+                            {/* Left: lista de colecciones */}
+                            <div style={ui.coleccionesLeft}>
+                                <div style={ui.coleccionesLeftHead}>
+                                    <div style={ui.coleccionesLeftTitle}>Mis colecciones</div>
+                                    {isDocumentacionUploader && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowNewColeccionForm(true)}
+                                            style={ui.coleccionesAddBtn}
+                                            disabled={coleccionBusy}
+                                        >
+                                            ＋ Nueva
+                                        </button>
+                                    )}
+                                </div>
+
+                                {showNewColeccionForm && (
+                                    <div style={ui.coleccionesNewForm}>
+                                        <input
+                                            value={coleccionForm.name}
+                                            onChange={(e) => setColeccionForm((p) => ({ ...p, name: e.target.value }))}
+                                            placeholder="Nombre de la colección"
+                                            style={ui.coleccionesNewInput}
+                                            disabled={coleccionBusy}
+                                        />
+                                        <input
+                                            value={coleccionForm.description}
+                                            onChange={(e) => setColeccionForm((p) => ({ ...p, description: e.target.value }))}
+                                            placeholder="Descripción (opcional)"
+                                            style={ui.coleccionesNewInput}
+                                            disabled={coleccionBusy}
+                                        />
+                                        <div style={ui.coleccionesNewActions}>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setShowNewColeccionForm(false); setColeccionForm({ name: "", description: "" }); }}
+                                                style={ui.coleccionesNewCancelBtn}
+                                                disabled={coleccionBusy}
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleCreateColeccion}
+                                                style={{
+                                                    ...ui.coleccionesNewSaveBtn,
+                                                    ...(!safe(coleccionForm.name) ? ui.btnDisabled : {}),
+                                                }}
+                                                disabled={!safe(coleccionForm.name) || coleccionBusy}
+                                            >
+                                                {coleccionBusy ? "Creando…" : "Crear"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {coleccionErr && <div style={ui.errBox}>{coleccionErr}</div>}
+
+                                <div style={ui.coleccionesList}>
+                                    {loadingColecciones ? (
+                                        <div style={ui.empty}>Cargando colecciones…</div>
+                                    ) : colecciones.length === 0 ? (
+                                        <div style={ui.empty}>No hay colecciones creadas aún.</div>
+                                    ) : (
+                                        colecciones.map((col) => {
+                                            const active = selectedColeccion?.id === col.id;
+                                            return (
+                                                <div
+                                                    key={col.id}
+                                                    style={{
+                                                        ...ui.coleccionRow,
+                                                        ...(active ? ui.coleccionRowActive : {}),
+                                                    }}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedColeccion(col)}
+                                                        style={ui.coleccionRowBtn}
+                                                    >
+                                                        <div style={ui.coleccionRowIcon}>📁</div>
+                                                        <div style={ui.coleccionRowInfo}>
+                                                            <div style={ui.coleccionRowName}>{safe(col.name)}</div>
+                                                            <div style={ui.coleccionRowMeta}>
+                                                                {(col.documentIds || []).length} documento{(col.documentIds || []).length !== 1 ? "s" : ""}
+                                                            </div>
+                                                        </div>
+                                                    </button>
+                                                    {isDocumentacionUploader && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteColeccion(col.id)}
+                                                            style={ui.coleccionDeleteBtn}
+                                                            title="Eliminar colección"
+                                                            disabled={coleccionBusy}
+                                                        >
+                                                            🗑
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right: documentos de la colección seleccionada */}
+                            <div style={ui.coleccionesRight}>
+                                {selectedColeccion ? (
+                                    <>
+                                        <div style={ui.coleccionesRightHead}>
+                                            <div>
+                                                <div style={ui.coleccionesRightTitle}>{safe(selectedColeccion.name)}</div>
+                                                {!!safe(selectedColeccion.description) && (
+                                                    <div style={ui.coleccionesRightDesc}>{safe(selectedColeccion.description)}</div>
+                                                )}
+                                            </div>
+                                            <div style={ui.coleccionesRightBadge}>
+                                                {(selectedColeccion.documentIds || []).length} doc{(selectedColeccion.documentIds || []).length !== 1 ? "s" : ""}
+                                            </div>
+                                        </div>
+
+                                        <div style={ui.coleccionesRightSubtitle}>
+                                            Seleccioná documentos para incluirlos en esta colección:
+                                        </div>
+
+                                        <div style={ui.coleccionesDocGrid}>
+                                            {docs.length === 0 ? (
+                                                <div style={ui.empty}>No hay documentos en la biblioteca.</div>
+                                            ) : (
+                                                [...docs]
+                                                    .sort((a, b) => safe(a.title).localeCompare(safe(b.title), "es", { sensitivity: "base" }))
+                                                    .map((d) => {
+                                                        const included = (selectedColeccion.documentIds || []).includes(d.id);
+                                                        return (
+                                                            <button
+                                                                key={d.id}
+                                                                type="button"
+                                                                onClick={() => handleToggleDocInColeccion(d.id)}
+                                                                style={{
+                                                                    ...ui.coleccionDocItem,
+                                                                    ...(included ? ui.coleccionDocItemActive : {}),
+                                                                }}
+                                                                disabled={coleccionBusy}
+                                                            >
+                                                                <div style={{
+                                                                    ...ui.coleccionDocCheck,
+                                                                    ...(included ? ui.coleccionDocCheckActive : {}),
+                                                                }}>
+                                                                    {included ? "✓" : ""}
+                                                                </div>
+                                                                <div style={ui.coleccionDocInfo}>
+                                                                    <div style={ui.coleccionDocTitle}>{safe(d.title) || "Sin título"}</div>
+                                                                    <div style={ui.coleccionDocMeta}>
+                                                                        {safe(d.category) || "General"} · {formatBytes(d.size)}
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        );
+                                                    })
+                                            )}
+                                        </div>
+
+                                        {coleccionDocs.length > 0 && (
+                                            <div style={ui.coleccionesIncludedSection}>
+                                                <div style={ui.coleccionesIncludedTitle}>
+                                                    Documentos incluidos ({coleccionDocs.length})
+                                                </div>
+                                                <div style={ui.coleccionesIncludedList}>
+                                                    {coleccionDocs.map((d) => (
+                                                        <div key={d.id} style={ui.coleccionesIncludedItem}>
+                                                            <div style={ui.coleccionesIncludedIcon}>PDF</div>
+                                                            <div style={ui.coleccionesIncludedName}>{safe(d.title)}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div style={ui.coleccionesEmptyRight}>
+                                        <div style={ui.coleccionesEmptyIcon}>📁</div>
+                                        <div style={ui.coleccionesEmptyTitle}>Seleccioná una colección</div>
+                                        <div style={ui.coleccionesEmptyText}>
+                                            Elegí una colección de la lista para ver y gestionar los documentos que contiene.
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -809,7 +1164,6 @@ const ui = {
         padding: 18,
         boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
         display: "grid",
-        gridTemplateColumns: "1.5fr 1fr",
         gap: 16,
         alignItems: "center",
     },
@@ -845,12 +1199,12 @@ const ui = {
 
     contentGrid: {
         display: "grid",
-        gridTemplateColumns: "560px 1fr",
+        gridTemplateColumns: "minmax(320px, 560px) 1fr",
         gap: 14,
         alignItems: "start",
     },
     leftCol: { display: "grid", gap: 14 },
-    rightCol: { minWidth: 0 },
+    rightCol: { minWidth: 0, overflow: "hidden" },
 
     panel: {
         background: "#fff",
@@ -866,6 +1220,7 @@ const ui = {
         justifyContent: "space-between",
         alignItems: "flex-start",
         gap: 12,
+        flexWrap: "wrap",
     },
     panelTitle: { fontWeight: 980, fontSize: 16, color: "#0F172A" },
     panelText: { marginTop: 4, color: "#64748B", fontWeight: 800, fontSize: 13, lineHeight: 1.4 },
@@ -1070,10 +1425,8 @@ const ui = {
         overflow: "hidden",
         boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
         display: "grid",
-        gridTemplateRows: "auto 1fr auto",
+        gridTemplateRows: "auto auto 1fr auto",
         minHeight: "calc(100vh - 175px)",
-        position: "sticky",
-        top: 80,
         alignSelf: "start",
     },
     viewerHead: {
@@ -1470,13 +1823,13 @@ const ui = {
     },
 
     viewerHelpOverlay: {
-        position: "absolute",
+        position: "fixed",
         inset: 0,
         background: "rgba(15,23,42,0.18)",
         backdropFilter: "blur(2px)",
         display: "grid",
-        placeItems: "start end",
-        padding: 86,
+        placeItems: "center",
+        padding: 24,
         zIndex: 10050,
     },
 
@@ -1582,5 +1935,352 @@ const ui = {
         placeItems: "center",
         fontWeight: 980,
         lineHeight: 1,
+    },
+
+    // Colecciones styles
+    coleccionesBtn: {
+        border: "1px solid #E7E9F2",
+        background: "#fff",
+        color: "#0F172A",
+        borderRadius: 16,
+        padding: "12px 16px",
+        minHeight: 46,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 10,
+        fontWeight: 950,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    },
+    coleccionesBtnIcon: {
+        fontSize: 16,
+        lineHeight: 1,
+    },
+    coleccionesModalCard: {
+        width: "min(1100px, 96vw)",
+        maxHeight: "90vh",
+        background: "#fff",
+        border: "1px solid rgba(231,233,242,0.9)",
+        borderRadius: 28,
+        boxShadow: "0 30px 80px rgba(15,23,42,0.28)",
+        display: "grid",
+        gridTemplateRows: "auto 1fr",
+        overflow: "hidden",
+    },
+    coleccionesModalHeader: {
+        padding: 20,
+        borderBottom: "1px solid #EEF1F7",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        gap: 16,
+        background: "linear-gradient(180deg, #FFFFFF 0%, #FBFCFF 100%)",
+    },
+    coleccionesBody: {
+        display: "grid",
+        gridTemplateColumns: "320px 1fr",
+        minHeight: 0,
+        overflow: "hidden",
+    },
+    coleccionesLeft: {
+        borderRight: "1px solid #EEF1F7",
+        display: "grid",
+        gridTemplateRows: "auto auto auto 1fr",
+        gap: 0,
+        overflow: "hidden",
+    },
+    coleccionesLeftHead: {
+        padding: "14px 16px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        borderBottom: "1px solid #EEF1F7",
+    },
+    coleccionesLeftTitle: {
+        fontWeight: 980,
+        fontSize: 14,
+        color: "#0F172A",
+    },
+    coleccionesAddBtn: {
+        border: "1px solid " + ACCENT,
+        background: "#F3FBF9",
+        color: ACCENT,
+        borderRadius: 12,
+        padding: "8px 12px",
+        fontWeight: 980,
+        fontSize: 12,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+    },
+    coleccionesNewForm: {
+        padding: 14,
+        borderBottom: "1px solid #EEF1F7",
+        display: "grid",
+        gap: 10,
+        background: "#FBFCFF",
+    },
+    coleccionesNewInput: {
+        width: "100%",
+        borderRadius: 12,
+        border: "1px solid #E7E9F2",
+        background: "#fff",
+        padding: "10px 12px",
+        fontWeight: 900,
+        fontSize: 13,
+        color: "#0F172A",
+        outline: "none",
+        boxSizing: "border-box",
+    },
+    coleccionesNewActions: {
+        display: "flex",
+        justifyContent: "flex-end",
+        gap: 8,
+    },
+    coleccionesNewCancelBtn: {
+        border: "1px solid #E7E9F2",
+        background: "#fff",
+        color: "#64748B",
+        borderRadius: 10,
+        padding: "8px 12px",
+        fontWeight: 950,
+        fontSize: 12,
+        cursor: "pointer",
+    },
+    coleccionesNewSaveBtn: {
+        border: "1px solid " + ACCENT,
+        background: ACCENT,
+        color: "#fff",
+        borderRadius: 10,
+        padding: "8px 14px",
+        fontWeight: 980,
+        fontSize: 12,
+        cursor: "pointer",
+    },
+    coleccionesList: {
+        overflow: "auto",
+        padding: "8px 0",
+    },
+    coleccionRow: {
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "4px 8px",
+        margin: "0 8px",
+        borderRadius: 14,
+        transition: "background 0.15s",
+    },
+    coleccionRowActive: {
+        background: "#F3FBF9",
+        border: "1px solid rgba(8,159,138,0.20)",
+    },
+    coleccionRowBtn: {
+        flex: 1,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "10px 8px",
+        border: "none",
+        background: "transparent",
+        cursor: "pointer",
+        textAlign: "left",
+        borderRadius: 12,
+    },
+    coleccionRowIcon: {
+        fontSize: 20,
+        lineHeight: 1,
+    },
+    coleccionRowInfo: {
+        display: "grid",
+        gap: 2,
+        minWidth: 0,
+    },
+    coleccionRowName: {
+        fontWeight: 980,
+        fontSize: 13,
+        color: "#0F172A",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+    },
+    coleccionRowMeta: {
+        fontSize: 11,
+        fontWeight: 850,
+        color: "#64748B",
+    },
+    coleccionDeleteBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        border: "1px solid #E7E9F2",
+        background: "#fff",
+        display: "grid",
+        placeItems: "center",
+        cursor: "pointer",
+        fontSize: 14,
+        flex: "0 0 auto",
+    },
+    coleccionesRight: {
+        padding: 20,
+        overflow: "auto",
+        display: "grid",
+        alignContent: "start",
+        gap: 14,
+    },
+    coleccionesRightHead: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        gap: 12,
+    },
+    coleccionesRightTitle: {
+        fontWeight: 980,
+        fontSize: 18,
+        color: "#0F172A",
+    },
+    coleccionesRightDesc: {
+        color: "#64748B",
+        fontWeight: 800,
+        fontSize: 13,
+        marginTop: 4,
+    },
+    coleccionesRightBadge: {
+        padding: "6px 12px",
+        borderRadius: 999,
+        border: "1px solid rgba(8,159,138,0.25)",
+        background: "#F3FBF9",
+        color: ACCENT,
+        fontWeight: 980,
+        fontSize: 12,
+        whiteSpace: "nowrap",
+    },
+    coleccionesRightSubtitle: {
+        color: "#64748B",
+        fontWeight: 850,
+        fontSize: 13,
+    },
+    coleccionesDocGrid: {
+        display: "grid",
+        gap: 8,
+        maxHeight: "calc(90vh - 340px)",
+        overflow: "auto",
+        paddingRight: 4,
+    },
+    coleccionDocItem: {
+        width: "100%",
+        border: "1px solid #E7E9F2",
+        background: "#fff",
+        borderRadius: 14,
+        padding: "10px 12px",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        textAlign: "left",
+        cursor: "pointer",
+        boxSizing: "border-box",
+    },
+    coleccionDocItemActive: {
+        border: "1px solid rgba(8,159,138,0.35)",
+        background: "#F8FFFD",
+    },
+    coleccionDocCheck: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        border: "2px solid #E7E9F2",
+        background: "#fff",
+        display: "grid",
+        placeItems: "center",
+        fontWeight: 980,
+        fontSize: 14,
+        color: "transparent",
+        flex: "0 0 auto",
+    },
+    coleccionDocCheckActive: {
+        border: "2px solid " + ACCENT,
+        background: ACCENT,
+        color: "#fff",
+    },
+    coleccionDocInfo: {
+        display: "grid",
+        gap: 2,
+        minWidth: 0,
+    },
+    coleccionDocTitle: {
+        fontWeight: 950,
+        fontSize: 13,
+        color: "#0F172A",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+    },
+    coleccionDocMeta: {
+        fontSize: 11,
+        fontWeight: 850,
+        color: "#64748B",
+    },
+    coleccionesIncludedSection: {
+        borderTop: "1px solid #EEF1F7",
+        paddingTop: 14,
+        display: "grid",
+        gap: 10,
+    },
+    coleccionesIncludedTitle: {
+        fontWeight: 980,
+        fontSize: 13,
+        color: ACCENT,
+    },
+    coleccionesIncludedList: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 8,
+    },
+    coleccionesIncludedItem: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "6px 10px",
+        borderRadius: 999,
+        border: "1px solid rgba(8,159,138,0.25)",
+        background: "#F3FBF9",
+    },
+    coleccionesIncludedIcon: {
+        fontSize: 10,
+        fontWeight: 980,
+        color: ACCENT,
+    },
+    coleccionesIncludedName: {
+        fontSize: 12,
+        fontWeight: 950,
+        color: "#0F172A",
+        maxWidth: 180,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+    },
+    coleccionesEmptyRight: {
+        display: "grid",
+        placeItems: "center",
+        textAlign: "center",
+        padding: 40,
+        gap: 12,
+        alignSelf: "center",
+    },
+    coleccionesEmptyIcon: {
+        fontSize: 48,
+        lineHeight: 1,
+    },
+    coleccionesEmptyTitle: {
+        fontWeight: 980,
+        fontSize: 16,
+        color: "#0F172A",
+    },
+    coleccionesEmptyText: {
+        color: "#64748B",
+        fontWeight: 800,
+        fontSize: 13,
+        maxWidth: 320,
+        lineHeight: 1.45,
     },
 };

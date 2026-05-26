@@ -250,6 +250,7 @@ match /tareas_apertura/{tareaId} {
   allow create: if canRecepcion()
     && request.resource.data.keys().hasOnly([
       'reserva',
+      'reservaId',
       'proveedor',
       'providerId',
       'estado',
@@ -259,7 +260,8 @@ match /tareas_apertura/{tareaId} {
       'creadoPorNombre',
       'createdAt',
       'updatedAt',
-      'test'
+      'test',
+      'autoCreated'
     ])
     && request.resource.data.reserva is map
     && request.resource.data.proveedor is string
@@ -273,7 +275,9 @@ match /tareas_apertura/{tareaId} {
     && request.resource.data.creadoPorNombre is string
     && request.resource.data.createdAt is timestamp
     && request.resource.data.updatedAt is timestamp
-    && (!('test' in request.resource.data) || request.resource.data.test is bool);
+    && (!('reservaId' in request.resource.data) || request.resource.data.reservaId == null || request.resource.data.reservaId is string)
+    && (!('test' in request.resource.data) || request.resource.data.test is bool)
+    && (!('autoCreated' in request.resource.data) || request.resource.data.autoCreated is bool);
   
   allow update: if canRecepcion()
     && sameTenantCompanyData(resource.data)
@@ -1796,6 +1800,57 @@ match /controlTerceros/{eventId} {
       allow delete: if canReadDocumentacion() && (
         isAdminRequester() || resource.data.createdBy == request.auth.uid
       );
+    }
+
+    // =========================
+    // ✅ Colecciones documentales
+    // =========================
+    match /colecciones/{colId} {
+
+      allow get, list: if canReadDocumentacion();
+
+      allow create: if isAdminRequester()
+        && request.resource.data.keys().hasOnly([
+          'name',
+          'nameLower',
+          'description',
+          'documentIds',
+          'createdBy',
+          'createdAt'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.trim().size() > 0
+        && request.resource.data.nameLower is string
+        && request.resource.data.description is string
+        && request.resource.data.documentIds is list
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt is timestamp;
+
+      allow update: if isAdminRequester()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'name',
+          'nameLower',
+          'description',
+          'documentIds'
+        ])
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['name']) ||
+          (request.resource.data.name is string && request.resource.data.name.trim().size() > 0)
+        )
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['nameLower']) ||
+          request.resource.data.nameLower is string
+        )
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['description']) ||
+          request.resource.data.description is string
+        )
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['documentIds']) ||
+          request.resource.data.documentIds is list
+        );
+
+      allow delete: if isAdminRequester();
     }
     
     // =========================
