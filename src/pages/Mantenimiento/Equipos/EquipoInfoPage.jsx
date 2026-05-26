@@ -513,16 +513,16 @@ export default function EquipoInfoPage() {
       <div style={ui.topbar}>
         <div
           style={ui.brand}
-          onClick={() => nav("/mantenimiento")}
+          onClick={() => nav("/mantenimiento/equipos")}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              nav("/mantenimiento");
+              nav("/mantenimiento/equipos");
             }
           }}
-          aria-label="Ir a mantenimiento"
+          aria-label="Ir a panel de equipos"
         >
           <div style={ui.brandMark} aria-hidden>
             <FileText size={20} strokeWidth={2.2} color="#fff" />
@@ -534,9 +534,9 @@ export default function EquipoInfoPage() {
         </div>
 
         <div style={ui.topbarActions}>
-          <button type="button" onClick={() => nav(-1)} style={ui.btnGhost}>
+          <button type="button" onClick={() => nav("/mantenimiento/equipos")} style={ui.btnGhost}>
             <ArrowLeft size={17} strokeWidth={2} aria-hidden />
-            Volver
+            Equipos
           </button>
         </div>
       </div>
@@ -975,15 +975,17 @@ const ui = {
   },
 
   topbar: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "12px 18px",
     minHeight: 64,
-    padding: "10px 16px",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     borderBottom: "1px solid #E7E9F2",
     background:
-      "linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(246,247,251,0.96) 100%)",
-    backdropFilter: "blur(6px)",
+      "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
+    backdropFilter: "blur(8px)",
     position: "sticky",
     top: 0,
     zIndex: 50,
@@ -1010,8 +1012,8 @@ const ui = {
     flexWrap: "wrap",
   },
   brandMark: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     background: ACCENT,
     color: "#fff",
@@ -1019,7 +1021,7 @@ const ui = {
     placeItems: "center",
     fontWeight: 950,
     letterSpacing: 0.4,
-    boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
+    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
     flexShrink: 0,
   },
   brandTitle: { fontWeight: 950, fontSize: 14, lineHeight: "16px" },

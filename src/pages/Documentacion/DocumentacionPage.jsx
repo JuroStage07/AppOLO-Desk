@@ -13,7 +13,13 @@ import {
     updateDoc,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { ArrowLeft, BookOpen } from "lucide-react";
 import { auth, db, storage } from "../../firebase";
+import {
+    Brand,
+    GhostButton,
+    Topbar,
+} from "../../components/ui";
 
 const ACCENT = "#089F8A";
 
@@ -444,26 +450,22 @@ export default function DocumentacionPage() {
 
     return (
         <div style={ui.shell}>
-            <div style={ui.topbar}>
-                <div style={ui.brand} role="button" tabIndex={0} onClick={back}>
-                    <div style={ui.brandMark}>DO</div>
-                    <div style={{ display: "grid", gap: 2 }}>
-                        <div style={ui.brandTitle}>Documentación</div>
-                        <div style={ui.brandSub}>Biblioteca corporativa · Normas · Políticas · Procesos</div>
-                    </div>
-                </div>
-
-                <div style={ui.topbarRight}>
-                    <div style={ui.kpi}>
-                        <div style={ui.kpiLabel}>Documentos</div>
-                        <div style={ui.kpiValue}>{stats.total}</div>
-                    </div>
-
-                    <button type="button" onClick={back} style={ui.btnGhost}>
-                        ← Volver
-                    </button>
-                </div>
-            </div>
+            <Topbar>
+                <Brand
+                    icon={BookOpen}
+                    title="Documentación"
+                    subtitle="Biblioteca corporativa"
+                    onClick={back}
+                />
+                <Topbar.Right>
+                    <Topbar.UserHint>
+                        {stats.total} documento{stats.total !== 1 ? "s" : ""}
+                    </Topbar.UserHint>
+                    <GhostButton icon={ArrowLeft} onClick={back}>
+                        Inicio
+                    </GhostButton>
+                </Topbar.Right>
+            </Topbar>
 
             <div style={ui.main}>
                 <div style={ui.container}>

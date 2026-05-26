@@ -29,6 +29,11 @@ import {
 import { filterByUserScope } from "../../utils/dataScope";
 import { buildMetricaRecepcionExcelProBuffer } from "../../utils/metricaRecepcionExcelPro";
 import useIsMobile from "../../hooks/useIsMobile";
+import {
+  Brand,
+  GhostButton,
+  Topbar,
+} from "../../components/ui";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -4175,60 +4180,25 @@ export default function MetricaRecepcion() {
         }
       `}</style>
 
-      <header style={{ ...ui.topbar, ...(m ? ui.mTopbar : {}) }}>
-        <div style={{ ...ui.topbarInner, ...(m ? ui.mTopbarInner : {}) }}>
-          <div
-            style={ui.brand}
-            role="button"
-            tabIndex={0}
-            onClick={() => nav("/recepcion")}
-            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && nav("/recepcion")}
-          >
-            <div style={ui.brandMark}>
-              <BarChart3 size={20} strokeWidth={2.25} color="#fff" />
-            </div>
-            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-              <div style={ui.brandTitle}>Recepción</div>
-              <div style={ui.brandSub}>Panel de métricas</div>
-            </div>
-          </div>
-
-          <div style={{ ...ui.topbarRight, ...(m ? ui.mTopbarRight : {}) }}>
-            <div style={{ ...ui.userBox, ...(m ? ui.mUserBox : {}) }}>
-              <div style={ui.userAvatar}>
-                <User size={16} strokeWidth={2.2} />
-              </div>
-              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-                <div style={ui.userMail}>{user?.email || "—"}</div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => nav("/recepcion")}
-              style={{ ...ui.btnGhost, ...(m ? ui.mBtnGhost : {}) }}
-            >
-              <span style={ui.btnInlineIcon}>
-                <ArrowLeft size={16} strokeWidth={2.2} />
-                Volver a recepción
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSettingsModalOpen(true)}
-              style={{ ...ui.btnGhost, ...(m ? ui.mBtnGhost : {}) }}
-              title="Configuración del panel"
-            >
-              <span style={ui.btnInlineIcon}>
-                <Settings size={16} strokeWidth={2.2} />
-                Configuración
-              </span>
-            </button>
-          </div>
-        </div>
-      </header>
+      <Topbar>
+        <Brand
+          icon={BarChart3}
+          title="Recepción"
+          subtitle="Panel de métricas"
+          onClick={() => nav("/recepcion")}
+        />
+        <Topbar.Right>
+          <Topbar.UserHint title={user?.email || ""}>
+            {user?.displayName || user?.email || "Sesión activa"}
+          </Topbar.UserHint>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/recepcion")}>
+            Recepción
+          </GhostButton>
+          <GhostButton icon={Settings} onClick={() => setSettingsModalOpen(true)}>
+            Configuración
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
       <main style={{ ...ui.main, ...(m ? ui.mMain : {}) }}>
         <div style={{ ...ui.container, ...(m ? ui.mContainer : {}) }}>

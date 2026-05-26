@@ -24,6 +24,14 @@ import {
 import { db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { filterSolicitudesOtByScope } from "../../../utils/dataScope";
+import {
+  Brand,
+  Container,
+  GhostButton,
+  Main,
+  Shell,
+  Topbar,
+} from "../../../components/ui";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8,159,138,0.10)";
@@ -184,29 +192,28 @@ export default function OTsFinalizadasPage() {
   if (!permisos?.mantenimiento) return null;
 
   return (
-    <div style={ui.shell}>
-      {/* topbar */}
-      <header style={ui.topbar}>
-        <div style={ui.topbarInner}>
-          <button type="button" onClick={() => nav("/mantenimiento/ots")} style={ui.backBtn}>
-            <ArrowLeft size={16} strokeWidth={2.5} />
+    <Shell lockBodyScroll={false}>
+      <Topbar>
+        <Brand
+          icon={CheckCircle2}
+          title="OT Finalizadas"
+          subtitle="Mantenimiento"
+          onClick={() => nav("/mantenimiento/ots")}
+        />
+        <Topbar.Right>
+          <Topbar.UserHint>
+            {listLoading
+              ? "Cargando…"
+              : `${filteredItems.length} de ${items.length} cargadas`}
+          </Topbar.UserHint>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/mantenimiento/ots")}>
             Órdenes de trabajo
-          </button>
-          <div style={ui.brand}>
-            <div style={ui.brandMark}>
-              <CheckCircle2 size={19} strokeWidth={2.3} color="#fff" />
-            </div>
-            <div>
-              <div style={ui.brandTitle}>OT Finalizadas</div>
-              <div style={ui.brandSub}>Mantenimiento</div>
-            </div>
-          </div>
-          <div style={{ width: 160 }} />
-        </div>
-      </header>
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
-      <main style={ui.main}>
-        <div style={ui.container}>
+      <Main>
+        <Container max={720}>
 
           {/* hero */}
           <div style={ui.hero}>
@@ -401,79 +408,15 @@ export default function OTsFinalizadasPage() {
             </div>
           )}
 
-        </div>
-      </main>
+        </Container>
+      </Main>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
+    </Shell>
   );
 }
 
 const ui = {
-  shell: {
-    minHeight: "100vh",
-    background: "#F0F2F8",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-    color: "#0F172A",
-    display: "grid",
-    gridTemplateRows: "auto 1fr",
-  },
-  topbar: {
-    borderBottom: "1px solid #E2E5EF",
-    background: "#fff",
-    boxShadow: "0 1px 0 #E2E5EF",
-  },
-  topbarInner: {
-    maxWidth: 900,
-    margin: "0 auto",
-    padding: "0 20px",
-    height: 60,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    boxSizing: "border-box",
-  },
-  backBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 7,
-    padding: "8px 14px",
-    borderRadius: 12,
-    border: "1px solid #E7E9F2",
-    background: "#fff",
-    color: "#0F172A",
-    fontWeight: 900,
-    fontSize: 13,
-    cursor: "pointer",
-    fontFamily: "inherit",
-    boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
-  },
-  brand: {
-    display: "flex",
-    alignItems: "center",
-    gap: 11,
-  },
-  brandMark: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    background: `linear-gradient(135deg, ${ACCENT} 0%, #06B89A 100%)`,
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-    boxShadow: `0 4px 12px ${ACCENT_MID}`,
-  },
-  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A", letterSpacing: -0.2 },
-  brandSub: { fontWeight: 700, fontSize: 11, color: SLATE, marginTop: 1 },
-
-  main: { padding: "32px 16px 48px", boxSizing: "border-box" },
-  container: {
-    maxWidth: 720,
-    margin: "0 auto",
-    display: "grid",
-    gap: 20,
-  },
-
   /* hero */
   hero: {
     display: "flex",

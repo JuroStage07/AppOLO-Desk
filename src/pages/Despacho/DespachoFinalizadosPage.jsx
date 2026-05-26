@@ -1,9 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../../firebase";
-import { ArrowLeft, CheckCircle2, Loader2, Truck, User } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, Truck } from "lucide-react";
 import { collection, doc, getDoc, onSnapshot, orderBy, query, where, limit } from "firebase/firestore";
 import useIsMobile from "../../hooks/useIsMobile";
+import {
+  Brand,
+  GhostButton,
+  Topbar,
+} from "../../components/ui";
 
 const ACCENT = "#089F8A";
 const SLATE = "#64748B";
@@ -122,38 +127,22 @@ export default function DespachoFinalizadosPage() {
 
   return (
     <div style={{ ...ui.shell, ...(isMobile ? ui.mShell : {}) }}>
-      <header style={ui.topbar}>
-        <div style={ui.topbarInner}>
-          <div style={ui.brand}>
-            <div style={ui.brandMark}>
-              <CheckCircle2 size={20} strokeWidth={2.2} color="#fff" />
-            </div>
-            <div>
-              <div style={ui.brandTitle}>Despachos</div>
-              <div style={ui.brandSub}>Historial de cierres</div>
-            </div>
-          </div>
-
-          <div style={ui.topbarRight}>
-            <div style={ui.userBox}>
-              <div style={ui.userAvatar}>
-                <User size={16} strokeWidth={2.2} />
-              </div>
-              <div>
-                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-                <div style={ui.userMail}>{user?.email || "—"}</div>
-              </div>
-            </div>
-
-            <button type="button" onClick={() => nav("/despacho")} style={ui.btnGhost}>
-              <span style={ui.btnInlineIcon}>
-                <ArrowLeft size={16} />
-                Volver
-              </span>
-            </button>
-          </div>
-        </div>
-      </header>
+      <Topbar>
+        <Brand
+          icon={CheckCircle2}
+          title="Despachos"
+          subtitle="Historial de cierres"
+          onClick={() => nav("/despacho")}
+        />
+        <Topbar.Right>
+          <Topbar.UserHint title={user?.email || ""}>
+            {user?.displayName || user?.email || "Sesión activa"}
+          </Topbar.UserHint>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/despacho")}>
+            Volver
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
       <main style={ui.main}>
         <div style={ui.container}>

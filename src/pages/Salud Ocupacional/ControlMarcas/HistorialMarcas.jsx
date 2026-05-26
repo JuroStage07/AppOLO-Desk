@@ -1,9 +1,15 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { ArrowLeft, History } from "lucide-react";
 import { db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { filterByUserScope } from "../../../utils/dataScope";
+import {
+  Brand,
+  GhostButton,
+  Topbar,
+} from "../../../components/ui";
 
 const ACCENT = "#089F8A";
 const DANGER = "#DC2626";
@@ -139,26 +145,19 @@ export default function HistorialMarcas() {
 
   return (
     <div style={ui.shell}>
-      <div className="hm-topbar" style={ui.topbar}>
-        <div style={ui.brand}>
-          <div style={ui.brandTitle}>AppoloDesk</div>
-          <div style={ui.brandSub}>Historial completo de marcas</div>
-        </div>
-
-        <div className="hm-topbar-actions" style={ui.topbarRight}>
-          <button type="button" onClick={() => nav(-1)} style={ui.btnGhost}>
+      <Topbar>
+        <Brand
+          icon={History}
+          title="Historial de marcas"
+          subtitle="Control de marcas"
+          onClick={() => nav("/salud/control-marcas")}
+        />
+        <Topbar.Right>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/salud/control-marcas")}>
             Volver
-          </button>
-          <button
-            type="button"
-            onClick={() => cargarMarcas(dia)}
-            style={ui.btnGhost}
-            disabled={loading}
-          >
-            Recargar
-          </button>
-        </div>
-      </div>
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
       <main style={ui.main}>
         <section style={ui.card}>
@@ -293,39 +292,6 @@ const ui = {
     color: "#0F172A",
     display: "grid",
     gridTemplateRows: "auto 1fr",
-  },
-  topbar: {
-    height: 64,
-    padding: "10px 16px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    borderBottom: "1px solid #E7E9F2",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(246,247,251,0.95) 100%)",
-    backdropFilter: "blur(6px)",
-  },
-  brand: { display: "grid", gap: 2 },
-  brandTitle: { fontWeight: 950, fontSize: 14 },
-  brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B" },
-  topbarRight: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-  btnGhost: {
-    border: "1px solid #E7E9F2",
-    background: "#fff",
-    borderRadius: 14,
-    padding: "10px 12px",
-    cursor: "pointer",
-    fontWeight: 950,
-    color: "#0F172A",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
-    whiteSpace: "nowrap",
   },
   main: {
     padding: 16,

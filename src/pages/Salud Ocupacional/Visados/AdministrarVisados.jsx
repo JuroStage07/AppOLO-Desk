@@ -17,8 +17,14 @@ import autoTable from "jspdf-autotable";
 import LogoPng from "../../../assets/Logo.png";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAuth } from "firebase/auth";
+import { ArrowLeft, FileText } from "lucide-react";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { filterByUserScope } from "../../../utils/dataScope";
+import {
+  Brand,
+  GhostButton,
+  Topbar,
+} from "../../../components/ui";
 
 // Convierte un import de imagen (url) a DataURL para jsPDF
 async function loadImageAsDataURL(src) {
@@ -639,26 +645,22 @@ export default function AdministrarVisados() {
   return (
     <div style={ui.shell}>
       {/* Topbar */}
-      <div style={ui.topbar}>
-        <div style={ui.brand} role="button" tabIndex={0} onClick={() => nav("/salud/visado")}>
-          <div style={ui.brandMark}>SO</div>
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>Salud Ocupacional</div>
-            <div style={ui.brandSub}>Administración · Visados</div>
-          </div>
-        </div>
-
-        <div style={ui.topbarRight}>
-          <div style={ui.kpi}>
-            <div style={ui.kpiLabel}>Resultados</div>
-            <div style={ui.kpiValue}>{rows.length}</div>
-          </div>
-
-          <button type="button" onClick={back} style={ui.btnGhost} disabled={busy}>
-            ← Volver
-          </button>
-        </div>
-      </div>
+      <Topbar>
+        <Brand
+          icon={FileText}
+          title="Salud Ocupacional"
+          subtitle="Administración · Visados"
+          onClick={() => nav("/salud/visado")}
+        />
+        <Topbar.Right>
+          <Topbar.UserHint>
+            {rows.length} resultado{rows.length !== 1 ? "s" : ""}
+          </Topbar.UserHint>
+          <GhostButton icon={ArrowLeft} onClick={back} disabled={busy}>
+            Volver
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
       {/* Content */}
       <div style={ui.main}>

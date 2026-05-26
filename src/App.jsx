@@ -20,7 +20,6 @@ import DespachoFinalizadosPage from "./pages/Despacho/DespachoFinalizadosPage";
 
 //SaludOcupacional
 import SaludOcupacional from "./pages/Salud Ocupacional/SaludOcupacional";
-import ControlTercerosManual from "./pages/Salud Ocupacional/ControlTerceros/ControlTercerosManual";
 import ControlMarcas from "./pages/Salud Ocupacional/ControlMarcas/ControlMarcas";
 import HistorialMarcas from "./pages/Salud Ocupacional/ControlMarcas/HistorialMarcas";
 import Visados from "./pages/Salud Ocupacional/Visados/Visados";
@@ -159,15 +158,6 @@ export default function App() {
             element={
               <PrivateRoute>
                 <SaludOcupacional />
-              </PrivateRoute>
-            }
-          />
-
-          <Route
-            path="/salud/terceros"
-            element={
-              <PrivateRoute>
-                <ControlTercerosManual />
               </PrivateRoute>
             }
           />

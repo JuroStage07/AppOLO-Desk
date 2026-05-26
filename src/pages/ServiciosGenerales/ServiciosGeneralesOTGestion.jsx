@@ -1,6 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
 import { collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
 import {
   ArrowLeft,
@@ -9,14 +8,20 @@ import {
   LayoutGrid,
   ListFilter,
   Loader2,
-  LogOut,
   ShieldAlert,
-  User,
   UserCheck,
 } from "lucide-react";
 import { AuthCtx } from "../../auth/AuthProvider";
 import { auth, db } from "../../firebase";
 import { filterSolicitudesOtByScope } from "../../utils/dataScope";
+import {
+  Brand,
+  Container,
+  GhostButton,
+  Main,
+  Shell,
+  Topbar,
+} from "../../components/ui";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -90,28 +95,11 @@ export default function ServiciosGeneralesOTGestion() {
   const canOpenMantenimientoDetail =
     role === "dev" || permisos?.mantenimiento === true;
   const user = auth.currentUser;
-  const [busyLogout, setBusyLogout] = useState(false);
   const [rows, setRows] = useState([]);
   const [listLoading, setListLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   /** "all" | "mine" */
   const [filterScope, setFilterScope] = useState("all");
-
-  useEffect(() => {
-    const prevOverflow = document.body.style.overflow;
-    const prevBg = document.body.style.background;
-    const prevMargin = document.body.style.margin;
-
-    document.body.style.overflow = "hidden";
-    document.body.style.background = "#F6F7FB";
-    document.body.style.margin = "0";
-
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.background = prevBg;
-      document.body.style.margin = prevMargin;
-    };
-  }, []);
 
   useEffect(() => {
     if (authLoading) return;
@@ -197,15 +185,6 @@ export default function ServiciosGeneralesOTGestion() {
     return () => unsubEnProceso();
   }, [authLoading, profile?.tenantId, profile?.company]);
 
-  const logout = async () => {
-    try {
-      setBusyLogout(true);
-      await signOut(auth);
-    } finally {
-      setBusyLogout(false);
-    }
-  };
-
   const totalRows = rows.length;
   const enProcesoCount = rows.filter((r) => r.OTState === OT_STATE_EN_PROCESO).length;
   const solicitadaCount = rows.filter((r) => r.OTState === OT_STATE_SOLICITADA).length;
@@ -224,71 +203,26 @@ export default function ServiciosGeneralesOTGestion() {
   }, [canOpenMantenimientoDetail]);
 
   return (
-    <div className="sgotg-shell" style={ui.shell}>
-      <header style={ui.topbar}>
-        <div style={ui.topbarInner}>
-          <div style={ui.topbarLeft}>
-            <button
-              type="button"
-              onClick={() => nav("/servicios-generales/ordenes-trabajo")}
-              style={ui.backBtn}
-            >
-              <ArrowLeft size={18} strokeWidth={2.2} />
-              Órdenes de trabajo
-            </button>
-          </div>
+    <Shell lockBodyScroll={false}>
+      <Topbar>
+        <Brand
+          icon={LayoutGrid}
+          title="Gestión de OTs"
+          subtitle="Servicios generales"
+          onClick={() => nav("/servicios-generales/ordenes-trabajo")}
+        />
+        <Topbar.Right>
+          <Topbar.UserHint title={user?.email || ""}>
+            {user?.displayName || user?.email || "Sesión activa"}
+          </Topbar.UserHint>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/servicios-generales/ordenes-trabajo")}>
+            Órdenes de trabajo
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
-          <div style={ui.brand}>
-            <div style={ui.brandMark}>
-              <LayoutGrid size={20} strokeWidth={2.25} color="#fff" />
-            </div>
-            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-              <div style={ui.brandTitle}>Gestión de OTs</div>
-              <div style={ui.brandSub}>Servicios generales</div>
-            </div>
-          </div>
-
-          <div style={ui.topbarRight}>
-            <div style={ui.userBox}>
-              <div style={ui.userAvatar}>
-                <User size={16} strokeWidth={2.2} />
-              </div>
-              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-                <div style={ui.userMail}>{user?.email || "—"}</div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void logout()}
-              disabled={busyLogout}
-              style={ui.btnGhost}
-            >
-              {busyLogout ? (
-                <Loader2 size={16} style={{ animation: "sgotgSpin 0.7s linear infinite" }} />
-              ) : (
-                <LogOut size={16} strokeWidth={2.2} />
-              )}
-              Salir
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <style>{`
-        @keyframes sgotgSpin { to { transform: rotate(360deg); } }
-        @supports (height: 100dvh) {
-          .sgotg-shell {
-            height: 100dvh;
-            max-height: 100dvh;
-            min-height: 100dvh;
-          }
-        }
-      `}</style>
-
-      <main style={ui.main}>
-        <div style={ui.container}>
+      <Main>
+        <Container>
           <div style={ui.heroCard}>
             <div style={ui.heroAccent} aria-hidden />
             <div style={ui.heroTop}>
@@ -485,159 +419,15 @@ export default function ServiciosGeneralesOTGestion() {
               })}
             </ul>
           )}
-        </div>
-      </main>
-    </div>
+        </Container>
+      </Main>
+
+      <style>{`@keyframes sgotgSpin { to { transform: rotate(360deg); } }`}</style>
+    </Shell>
   );
 }
 
 const ui = {
-  shell: {
-    width: "100%",
-    boxSizing: "border-box",
-    background: "#F6F7FB",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-    color: "#0F172A",
-    display: "grid",
-    gridTemplateRows: "auto minmax(0, 1fr)",
-    minHeight: "100vh",
-    height: "100vh",
-    maxHeight: "100vh",
-    overflow: "hidden",
-  },
-  topbar: {
-    width: "100%",
-    boxSizing: "border-box",
-    borderBottom: "1px solid #E7E9F2",
-    background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
-    zIndex: 10,
-  },
-  topbarInner: {
-    width: "100%",
-    maxWidth: 1120,
-    marginLeft: "auto",
-    marginRight: "auto",
-    boxSizing: "border-box",
-    padding: "12px 18px",
-    minHeight: 64,
-    display: "grid",
-    gridTemplateColumns: "1fr auto 1fr",
-    alignItems: "center",
-    gap: 12,
-  },
-  topbarLeft: { display: "flex", justifyContent: "flex-start" },
-  topbarRight: {
-    display: "flex",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-  backBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "8px 12px",
-    borderRadius: 12,
-    border: "1px solid #E7E9F2",
-    background: "#fff",
-    color: "#334155",
-    fontWeight: 800,
-    fontSize: 13,
-    cursor: "pointer",
-    fontFamily: "inherit",
-  },
-  brand: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    justifySelf: "center",
-    minWidth: 0,
-  },
-  brandMark: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    background: ACCENT,
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-  },
-  brandTitle: {
-    fontWeight: 950,
-    fontSize: 15,
-    color: "#0F172A",
-    letterSpacing: -0.2,
-  },
-  brandSub: { fontWeight: 800, fontSize: 12, color: SLATE },
-  userBox: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "6px 10px",
-    borderRadius: 14,
-    border: "1px solid #E7E9F2",
-    background: "#fff",
-    maxWidth: 260,
-  },
-  userAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    background: ACCENT_SOFT,
-    display: "grid",
-    placeItems: "center",
-    color: ACCENT,
-    flexShrink: 0,
-  },
-  userName: {
-    fontWeight: 900,
-    fontSize: 12,
-    color: "#0F172A",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  userMail: {
-    fontWeight: 700,
-    fontSize: 11,
-    color: SLATE,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  btnGhost: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "8px 12px",
-    borderRadius: 12,
-    border: "1px solid #E7E9F2",
-    background: "#fff",
-    color: "#334155",
-    fontWeight: 800,
-    fontSize: 13,
-    cursor: "pointer",
-    fontFamily: "inherit",
-  },
-  main: {
-    width: "100%",
-    boxSizing: "border-box",
-    minHeight: 0,
-    overflowX: "hidden",
-    overflowY: "auto",
-    WebkitOverflowScrolling: "touch",
-    padding: "22px 16px 32px",
-  },
-  container: {
-    width: "100%",
-    maxWidth: 1120,
-    marginLeft: "auto",
-    marginRight: "auto",
-    boxSizing: "border-box",
-    display: "grid",
-    gap: 18,
-  },
   heroCard: {
     position: "relative",
     overflow: "hidden",

@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "PowerShell(Out-Null *)",
-      "PowerShell(& \"C:\\\\Users\\\\jcampos\\\\AppData\\\\Roaming\\\\npm\\\\firebase.cmd\" deploy --only hosting)"
+      "PowerShell(& \"C:\\\\Users\\\\jcampos\\\\AppData\\\\Roaming\\\\npm\\\\firebase.cmd\" deploy --only hosting)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(npx eslint *)",
+      "Bash(npx vite *)"
     ]
   }
 }

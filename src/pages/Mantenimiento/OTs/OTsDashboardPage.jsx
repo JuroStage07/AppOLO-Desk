@@ -1,12 +1,9 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
 import {
   ArrowLeft,
+  BarChart3,
   LayoutGrid,
-  Loader2,
-  LogOut,
-  User,
   Wrench,
 } from "lucide-react";
 import {
@@ -22,11 +19,20 @@ import {
 } from "recharts";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 
-import { auth, db } from "../../../firebase";
+import { db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { isSolicitudOtInScope } from "../../../utils/dataScope";
 import { PERIOD, formatYMD } from "./dashboard/periodUtils";
 import { useOTsDashboardMetrics } from "./dashboard/useOTsDashboardMetrics";
+import {
+  Badge,
+  Brand,
+  Container,
+  GhostButton,
+  Main,
+  Shell,
+  Topbar,
+} from "../../../components/ui";
 import "./OTsDashboardPage.css";
 
 function defaultCustomRange() {
@@ -42,7 +48,6 @@ export default function OTsDashboardPage() {
   const { user, permisos } = authCtx || {};
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
-  const [busyLogout, setBusyLogout] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -51,31 +56,6 @@ export default function OTsDashboardPage() {
       nav(-1);
     }
   }, [authLoading, permisos, nav]);
-
-  useEffect(() => {
-    const prevOverflow = document.body.style.overflow;
-    const prevBg = document.body.style.background;
-    const prevMargin = document.body.style.margin;
-
-    document.body.style.overflow = "hidden";
-    document.body.style.background = "#F6F7FB";
-    document.body.style.margin = "0";
-
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.background = prevBg;
-      document.body.style.margin = prevMargin;
-    };
-  }, []);
-
-  const logout = async () => {
-    try {
-      setBusyLogout(true);
-      await signOut(auth);
-    } finally {
-      setBusyLogout(false);
-    }
-  };
 
   const defaults = useMemo(() => defaultCustomRange(), []);
   const [period, setPeriod] = useState(PERIOD.MONTH);
@@ -128,93 +108,29 @@ export default function OTsDashboardPage() {
   )}`;
 
   return (
-    <div style={ui.shell}>
-      <header style={ui.topbar}>
-        <div style={ui.topbarInner}>
-          <div
-            style={ui.brand}
-            role="button"
-            tabIndex={0}
-            onClick={() => nav("/mantenimiento/ots")}
-            onKeyDown={(e) =>
-              (e.key === "Enter" || e.key === " ") && nav("/mantenimiento/ots")
-            }
-          >
-            <div style={ui.brandMark} aria-hidden="true">
-              <Wrench size={20} strokeWidth={2.25} color="#fff" />
-            </div>
-            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-              <div style={ui.brandTitle}>Mantenimiento</div>
-              <div style={ui.brandSub}>Dashboard · Órdenes de trabajo</div>
-            </div>
-          </div>
+    <Shell lockBodyScroll={false}>
+      <Topbar>
+        <Brand
+          icon={Wrench}
+          title="Mantenimiento"
+          subtitle="Dashboard · Órdenes de trabajo"
+          onClick={() => nav("/mantenimiento/ots")}
+        />
+        <Topbar.Right>
+          <Topbar.UserHint title={user?.email || ""}>
+            {user?.displayName || user?.email || "Sesión activa"}
+          </Topbar.UserHint>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/mantenimiento/ots")}>
+            Órdenes de trabajo
+          </GhostButton>
+          <GhostButton icon={LayoutGrid} onClick={() => nav("/mantenimiento/OTsPage")}>
+            Tablero
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
-          <div style={ui.topbarRight}>
-            <div style={ui.userBox}>
-              <div style={ui.userAvatar}>
-                <User size={16} strokeWidth={2.2} />
-              </div>
-              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-                <div style={ui.userMail}>{user?.email || "—"}</div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => nav("/mantenimiento/ots")}
-              style={ui.btnGhost}
-              disabled={busyLogout}
-            >
-              <span style={ui.btnInlineIcon}>
-                <ArrowLeft size={16} strokeWidth={2.2} />
-                Órdenes de trabajo
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => nav("/mantenimiento/OTsPage")}
-              style={ui.btnGhost}
-              disabled={busyLogout}
-              title="Ir al tablero"
-            >
-              <span style={ui.btnInlineIcon}>
-                <LayoutGrid size={16} strokeWidth={2.2} />
-                Tablero
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={logout}
-              style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
-              disabled={busyLogout}
-              title="Cerrar sesión"
-            >
-              <span style={ui.btnInlineIcon}>
-                {busyLogout ? (
-                  <Loader2
-                    size={16}
-                    strokeWidth={2.2}
-                    style={{ animation: "otsDashSpin 0.7s linear infinite" }}
-                  />
-                ) : (
-                  <LogOut size={16} strokeWidth={2.2} />
-                )}
-                {busyLogout ? "Cerrando…" : "Salir"}
-              </span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main style={ui.main}>
-        <style>{`
-          @keyframes otsDashSpin { to { transform: rotate(360deg); } }
-        `}</style>
-
-        <div style={ui.container}>
+      <Main>
+        <Container max={1280}>
           <header className="otsDashboard__header">
             <h1 className="otsDashboard__title">Dashboard</h1>
             <p className="otsDashboard__subtitle">
@@ -462,152 +378,11 @@ export default function OTsDashboardPage() {
           </table>
         </div>
       </div>
-        </div>
-      </main>
-    </div>
+        </Container>
+      </Main>
+    </Shell>
   );
 }
 
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
-const SLATE = "#64748B";
 
-const ui = {
-  shell: {
-    minHeight: "100vh",
-    height: "100vh",
-    width: "100%",
-    maxWidth: "100%",
-    boxSizing: "border-box",
-    background: "#F6F7FB",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-    color: "#0F172A",
-    overflow: "hidden",
-    display: "grid",
-    gridTemplateRows: "auto 1fr",
-  },
-
-  topbar: {
-    width: "100%",
-    boxSizing: "border-box",
-    borderBottom: "1px solid #E7E9F2",
-    background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
-    backdropFilter: "blur(8px)",
-  },
-  topbarInner: {
-    width: "100%",
-    maxWidth: 1120,
-    marginLeft: "auto",
-    marginRight: "auto",
-    boxSizing: "border-box",
-    padding: "12px 18px",
-    minHeight: 64,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-
-  brand: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    cursor: "pointer",
-    userSelect: "none",
-    outline: "none",
-  },
-  brandMark: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    background: ACCENT,
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
-  },
-  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
-  brandSub: { fontWeight: 800, fontSize: 12, color: SLATE },
-
-  topbarRight: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-  },
-
-  userBox: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "6px 12px 6px 6px",
-    borderRadius: 12,
-    border: "1px solid #E7E9F2",
-    background: "#fff",
-    boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
-    maxWidth: 220,
-    minWidth: 0,
-  },
-  userAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    background: ACCENT_SOFT,
-    color: ACCENT,
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-  },
-  userName: {
-    fontWeight: 800,
-    fontSize: 12,
-    color: "#0F172A",
-    lineHeight: 1.2,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  userMail: {
-    fontWeight: 650,
-    fontSize: 11,
-    color: SLATE,
-    lineHeight: 1.2,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-
-  btnGhost: {
-    border: "1px solid #E7E9F2",
-    background: "#fff",
-    borderRadius: 12,
-    padding: "9px 14px",
-    cursor: "pointer",
-    fontWeight: 800,
-    fontSize: 13,
-    color: "#0F172A",
-    boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
-    whiteSpace: "nowrap",
-    fontFamily: "inherit",
-  },
-  btnInlineIcon: { display: "inline-flex", alignItems: "center", gap: 8 },
-  btnDisabled: { opacity: 0.55, cursor: "not-allowed", boxShadow: "none" },
-
-  main: {
-    width: "100%",
-    boxSizing: "border-box",
-    overflow: "auto",
-    padding: "18px 16px 28px",
-    WebkitOverflowScrolling: "touch",
-  },
-  container: {
-    width: "100%",
-    maxWidth: 1120,
-    marginLeft: "auto",
-    marginRight: "auto",
-    boxSizing: "border-box",
-  },
-};
 

@@ -3686,27 +3686,25 @@ export default function OTsPage() {
   return (
     <div style={{ ...ui.shell, ...(isMobile ? ui.mShell : {}) }}>
       <div style={{ ...ui.topbar, ...(isMobile ? ui.mTopbar : {}) }}>
-        <div style={ui.brand}>
-          <div style={ui.brandMark}>OT</div>
+        <div style={ui.brand} role="button" tabIndex={0} onClick={() => nav("/mantenimiento")} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && nav("/mantenimiento")}>
+          <div style={ui.brandMark}>
+            <Wrench size={20} strokeWidth={2.25} color="#fff" />
+          </div>
 
           <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>AppoloDesk</div>
-            <div style={ui.brandSub}>Gestión de órdenes de trabajo</div>
+            <div style={ui.brandTitle}>Órdenes de Trabajo</div>
+            <div style={ui.brandSub}>Gestión de OTs</div>
           </div>
         </div>
 
         <div style={{ ...ui.topbarRight, ...(isMobile ? ui.mTopbarRight : {}) }}>
           <button
             type="button"
-            onClick={() => nav(-1)}
+            onClick={() => nav("/mantenimiento")}
             style={{ ...ui.btnGhost, ...(isMobile ? ui.mBtnGhost : {}) }}
           >
             <ArrowLeft size={16} />
-            Volver
-          </button>
-
-          <button type="button" style={{ ...ui.btnGhost, ...(isMobile ? ui.mBtnGhost : {}) }}>
-            <ClipboardList size={16} />({selectedCount}) Seleccionado
+            Inicio
           </button>
 
           <button
@@ -3973,26 +3971,31 @@ const ui = {
     gridTemplateRows: "auto 1fr",
   },
   topbar: {
-    height: 64,
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "12px 18px",
     minHeight: 64,
-    padding: "10px 16px",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     borderBottom: "1px solid #E7E9F2",
     background:
-      "linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(246,247,251,0.98) 100%)",
+      "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
     backdropFilter: "blur(8px)",
     gap: 12,
+    flexWrap: "wrap",
   },
   brand: {
     display: "flex",
     alignItems: "center",
     gap: 12,
+    cursor: "pointer",
+    userSelect: "none",
+    outline: "none",
   },
   brandMark: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     background: ACCENT,
     color: "#fff",
@@ -4000,7 +4003,8 @@ const ui = {
     placeItems: "center",
     fontWeight: 950,
     letterSpacing: 0.4,
-    boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
+    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
+    flexShrink: 0,
   },
   brandTitle: {
     fontWeight: 950,

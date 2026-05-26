@@ -7,7 +7,6 @@ import {
     Loader2,
     Package,
     Truck,
-    User,
     RefreshCcw,
 } from "lucide-react";
 import {
@@ -20,6 +19,11 @@ import {
     where,
 } from "firebase/firestore";
 import useIsMobile from "../../hooks/useIsMobile";
+import {
+    Brand,
+    GhostButton,
+    Topbar,
+} from "../../components/ui";
 
 const ACCENT = "#089F8A";
 const SLATE = "#64748B";
@@ -398,38 +402,22 @@ export default function DespachoInProgressPage() {
 
     return (
         <div style={{ ...ui.shell, ...(isMobile ? ui.mShell : {}) }}>
-            <header style={ui.topbar}>
-                <div style={ui.topbarInner}>
-                    <div style={ui.brand}>
-                        <div style={ui.brandMark}>
-                            <Truck size={20} strokeWidth={2.2} color="#fff" />
-                        </div>
-                        <div>
-                            <div style={ui.brandTitle}>Despachos</div>
-                            <div style={ui.brandSub}>Despachos abiertos en tiempo real</div>
-                        </div>
-                    </div>
-
-                    <div style={ui.topbarRight}>
-                        <div style={ui.userBox}>
-                            <div style={ui.userAvatar}>
-                                <User size={16} strokeWidth={2.2} />
-                            </div>
-                            <div>
-                                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-                                <div style={ui.userMail}>{user?.email || "—"}</div>
-                            </div>
-                        </div>
-
-                        <button type="button" onClick={() => nav("/despacho")} style={ui.btnGhost}>
-                            <span style={ui.btnInlineIcon}>
-                                <ArrowLeft size={16} />
-                                Volver
-                            </span>
-                        </button>
-                    </div>
-                </div>
-            </header>
+            <Topbar>
+                <Brand
+                    icon={Truck}
+                    title="Despachos"
+                    subtitle="Despachos abiertos en tiempo real"
+                    onClick={() => nav("/despacho")}
+                />
+                <Topbar.Right>
+                    <Topbar.UserHint title={user?.email || ""}>
+                        {user?.displayName || user?.email || "Sesión activa"}
+                    </Topbar.UserHint>
+                    <GhostButton icon={ArrowLeft} onClick={() => nav("/despacho")}>
+                        Volver
+                    </GhostButton>
+                </Topbar.Right>
+            </Topbar>
 
             <main style={ui.main}>
                 <div style={ui.container}>

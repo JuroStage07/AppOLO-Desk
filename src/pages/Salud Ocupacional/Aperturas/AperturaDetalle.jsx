@@ -1,7 +1,6 @@
 // screens/aperturas/AperturaDetalle.jsx
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { signOut } from "firebase/auth";
 import { doc, updateDoc, deleteDoc, serverTimestamp, addDoc, collection } from "firebase/firestore";
 import { createPortal } from "react-dom";
 import {
@@ -17,7 +16,6 @@ import {
   FileText,
   HelpCircle,
   Loader2,
-  LogOut,
   Maximize2,
   MoreHorizontal,
   Play,
@@ -36,6 +34,11 @@ import { AuthCtx } from "../../../auth/AuthProvider";
 import { listenApertura } from "../../../services/aperturas";
 import { isInUserScope } from "../../../utils/dataScope";
 import { isEpaRestrictedUser } from "../../../config/epaOnlyUids";
+import {
+  Brand,
+  GhostButton,
+  Topbar,
+} from "../../../components/ui";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -444,13 +447,10 @@ export default function AperturaDetalle() {
   const { profile = {}, epaAdmin, user: ctxUser } = authCtx || {};
   const user = ctxUser ?? auth.currentUser;
 
-  const [busyLogout, setBusyLogout] = useState(false);
+  const [apertura, setApertura] = useState(undefined);
 
   const { search } = useLocation();
-  const isViewMode = new URLSearchParams(search).get("mode") === "ver"; // (si lo ocupás después)
-
-  // data
-  const [apertura, setApertura] = useState(undefined);
+  const isViewMode = new URLSearchParams(search).get("mode") === "ver";
 
   // visor de fotos (RF)
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
@@ -573,15 +573,6 @@ export default function AperturaDetalle() {
   }, [apertura, nav, profile?.tenantId, profile?.company]);
 
   const isLoading = apertura === undefined;
-
-  const logout = async () => {
-    try {
-      setBusyLogout(true);
-      await signOut(auth);
-    } finally {
-      setBusyLogout(false);
-    }
-  };
 
   const go = (path) => nav(path);
 
@@ -985,56 +976,22 @@ export default function AperturaDetalle() {
         }
       `}</style>
 
-      <header style={ui.topbar}>
-        <div style={ui.topbarInner}>
-          <div
-            style={ui.brand}
-            role="button"
-            tabIndex={0}
-            onClick={() => go("/salud/aperturas")}
-            onKeyDown={(e) =>
-              (e.key === "Enter" || e.key === " ") && go("/salud/aperturas")
-            }
-          >
-            <div style={ui.brandMark}>
-              <ClipboardList size={20} strokeWidth={2.25} color="#fff" />
-            </div>
-            <div style={{ display: "grid", gap: 2 }}>
-              <div style={ui.brandTitle}>Salud ocupacional</div>
-              <div style={ui.brandSub}>Detalle de apertura</div>
-            </div>
-          </div>
-
-          <div style={ui.topbarRight}>
-            <div style={ui.userBox}>
-              <div style={ui.userAvatar}>
-                <User size={16} strokeWidth={2.2} />
-              </div>
-              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-                <div style={ui.userMail}>{user?.email || "—"}</div>
-              </div>
-            </div>
-
-            <button type="button" onClick={() => go("/salud/aperturas")} style={ui.btnGhost} disabled={busyLogout}>
-              Administrar
-            </button>
-
-            <button
-              type="button"
-              onClick={logout}
-              style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
-              disabled={busyLogout}
-              title="Cerrar sesión"
-            >
-              <span style={ui.btnInlineIcon}>
-                <LogOut size={16} strokeWidth={2.2} />
-                {busyLogout ? "Cerrando…" : "Salir"}
-              </span>
-            </button>
-          </div>
-        </div>
-      </header>
+      <Topbar>
+        <Brand
+          icon={ClipboardList}
+          title="Salud ocupacional"
+          subtitle="Detalle de apertura"
+          onClick={() => go("/salud/aperturas")}
+        />
+        <Topbar.Right>
+          <Topbar.UserHint title={user?.email || ""}>
+            {user?.displayName || user?.email || "Sesión activa"}
+          </Topbar.UserHint>
+          <GhostButton icon={ArrowLeft} onClick={() => go("/salud/aperturas")}>
+            Administrar
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
       <main style={ui.main}>
         <div style={ui.container}>

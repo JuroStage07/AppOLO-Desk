@@ -1,6 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
 import { auth } from "../../../firebase";
 import {
   addDoc,
@@ -14,6 +13,12 @@ import {
 import { db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { isInUserScope } from "../../../utils/dataScope";
+import { ArrowLeft, PenLine } from "lucide-react";
+import {
+  Brand,
+  GhostButton,
+  Topbar,
+} from "../../../components/ui";
 
 const ACCENT = "#089F8A";
 
@@ -35,7 +40,6 @@ export default function NuevoVisado() {
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
-  const [busyLogout, setBusyLogout] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
@@ -80,14 +84,6 @@ export default function NuevoVisado() {
   }, []);
 
   const back = () => nav("/salud/visado");
-  const logout = async () => {
-    try {
-      setBusyLogout(true);
-      await signOut(auth);
-    } finally {
-      setBusyLogout(false);
-    }
-  };
 
   const set = (key, value) => setForm((p) => ({ ...p, [key]: value }));
 
@@ -252,32 +248,19 @@ export default function NuevoVisado() {
     <div style={styles.shell}>
       <div style={styles.container}>
         {/* Header sticky */}
-        <div style={styles.header}>
-          <div style={styles.headerLeft}>
-            <div style={styles.kickerRow}>
-              <span style={styles.kickerDot} />
-              <div style={styles.kicker}>Salud Ocupacional</div>
-              <span style={styles.badge}>{saving ? "Guardando…" : "Formulario"}</span>
-            </div>
-            <h1 style={styles.title}>Nuevo visado</h1>
-            <p style={styles.subtitle}>Registro de personal externo para ingreso a instalaciones.</p>
-          </div>
-
-          <div style={styles.headerRight}>
-            <button type="button" onClick={back} style={styles.btnGhost} disabled={saving || busyLogout}>
-              ← Volver
-            </button>
-            <button
-              type="button"
-              onClick={logout}
-              style={{ ...styles.btnGhost, ...(busyLogout ? styles.btnDisabled : {}) }}
-              disabled={saving || busyLogout}
-              title="Cerrar sesión"
-            >
-              {busyLogout ? "Saliendo…" : "Salir"}
-            </button>
-          </div>
-        </div>
+        <Topbar>
+          <Brand
+            icon={PenLine}
+            title="Nuevo visado"
+            subtitle="Salud Ocupacional"
+            onClick={back}
+          />
+          <Topbar.Right>
+            <GhostButton icon={ArrowLeft} onClick={back} disabled={saving}>
+              Volver
+            </GhostButton>
+          </Topbar.Right>
+        </Topbar>
 
         {/* Card */}
         <div style={styles.card}>

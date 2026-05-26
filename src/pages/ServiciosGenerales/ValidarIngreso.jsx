@@ -5,6 +5,14 @@ import { ArrowLeft, UserCheck, AlertCircle, CheckCircle2, User, ScanLine, Shield
 import { db } from "../../firebase";
 import { AuthCtx } from "../../auth/AuthProvider";
 import { isInUserScope } from "../../utils/dataScope";
+import {
+  Brand,
+  Container,
+  GhostButton,
+  Main,
+  Shell,
+  Topbar,
+} from "../../components/ui";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8,159,138,0.12)";
@@ -141,29 +149,23 @@ export default function ValidarIngreso() {
   const progressPct = (countdown / COUNTDOWN_S) * 100;
 
   return (
-    <div style={ui.shell}>
-      {/* ── topbar ── */}
-      <header style={ui.topbar}>
-        <div style={ui.topbarInner}>
-          <button type="button" onClick={() => nav("/servicios-generales")} style={ui.backBtn}>
-            <ArrowLeft size={16} strokeWidth={2.5} />
+    <Shell lockBodyScroll={false}>
+      <Topbar>
+        <Brand
+          icon={UserCheck}
+          title="Validar ingreso"
+          subtitle="Servicios generales"
+          onClick={() => nav("/servicios-generales")}
+        />
+        <Topbar.Right>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/servicios-generales")}>
             Servicios generales
-          </button>
-          <div style={ui.brand}>
-            <div style={ui.brandMark}>
-              <UserCheck size={19} strokeWidth={2.3} color="#fff" />
-            </div>
-            <div>
-              <div style={ui.brandTitle}>Validar ingreso</div>
-              <div style={ui.brandSub}>Servicios generales</div>
-            </div>
-          </div>
-          <div />
-        </div>
-      </header>
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
-      <main style={ui.main}>
-        <div style={ui.center}>
+      <Main center>
+        <Container max={480}>
 
           {/* ── scan card ── */}
           <div style={ui.scanCard}>
@@ -266,8 +268,8 @@ export default function ValidarIngreso() {
             </div>
           )}
 
-        </div>
-      </main>
+        </Container>
+      </Main>
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -302,83 +304,11 @@ export default function ValidarIngreso() {
           </div>
         </div>
       )}
-    </div>
+    </Shell>
   );
 }
 
 const ui = {
-  shell: {
-    minHeight: "100vh",
-    background: "#F0F2F8",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-    color: "#0F172A",
-    display: "grid",
-    gridTemplateRows: "auto 1fr",
-  },
-
-  /* topbar */
-  topbar: {
-    borderBottom: "1px solid #E2E5EF",
-    background: "#fff",
-    boxShadow: "0 1px 0 #E2E5EF",
-  },
-  topbarInner: {
-    maxWidth: 900,
-    margin: "0 auto",
-    padding: "0 20px",
-    height: 60,
-    display: "grid",
-    gridTemplateColumns: "1fr auto 1fr",
-    alignItems: "center",
-    boxSizing: "border-box",
-  },
-  backBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 7,
-    padding: "7px 13px",
-    borderRadius: 10,
-    border: "1px solid #E2E5EF",
-    background: "#F8F9FC",
-    color: "#334155",
-    fontWeight: 800,
-    fontSize: 13,
-    cursor: "pointer",
-    fontFamily: "inherit",
-  },
-  brand: {
-    display: "flex",
-    alignItems: "center",
-    gap: 11,
-    justifySelf: "center",
-  },
-  brandMark: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    background: `linear-gradient(135deg, ${ACCENT} 0%, #06B89A 100%)`,
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-    boxShadow: `0 4px 12px ${ACCENT_MID}`,
-  },
-  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A", letterSpacing: -0.2 },
-  brandSub: { fontWeight: 700, fontSize: 11, color: SLATE, marginTop: 1 },
-
-  /* main */
-  main: {
-    display: "grid",
-    placeItems: "start center",
-    padding: "36px 16px 48px",
-    boxSizing: "border-box",
-  },
-  center: {
-    width: "100%",
-    maxWidth: 480,
-    display: "grid",
-    gap: 18,
-  },
-
   /* scan card */
   scanCard: {
     background: "#fff",

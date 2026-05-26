@@ -1,8 +1,8 @@
 // screens/aperturas/AperturasFinalizadas.jsx
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
 import {
+  ArrowLeft,
   ArrowRight,
   CalendarDays,
   ChevronDown,
@@ -14,7 +14,6 @@ import {
   LayoutList,
   Loader2,
   Lock,
-  LogOut,
   RotateCcw,
   Search,
   SlidersHorizontal,
@@ -23,6 +22,14 @@ import {
 import { auth } from "../../../firebase";
 import useIsMobile from "../../../hooks/useIsMobile";
 import { AuthCtx } from "../../../auth/AuthProvider";
+import {
+  Brand,
+  Container,
+  GhostButton,
+  Main,
+  Shell,
+  Topbar,
+} from "../../../components/ui";
 
 import { listenAperturasFinalizadasGlobal } from "../../../services/aperturas";
 
@@ -212,7 +219,6 @@ export default function AperturasFinalizadas() {
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
 
-  const [busyLogout, setBusyLogout] = useState(false);
   const [hovered, setHovered] = useState(null);
 
   // data
@@ -227,21 +233,7 @@ export default function AperturasFinalizadas() {
   const [anioSeleccionado, setAnioSeleccionado] = useState("Todos");
   const [visibleCount, setVisibleCount] = useState(10);
 
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    const prevBg = document.body.style.background;
-    const prevMargin = document.body.style.margin;
-
-    document.body.style.overflow = "hidden";
-    document.body.style.background = "#F6F7FB";
-    document.body.style.margin = "0";
-
-    return () => {
-      document.body.style.overflow = prev;
-      document.body.style.background = prevBg;
-      document.body.style.margin = prevMargin;
-    };
-  }, []);
+  const go = (path) => nav(path);
 
   useEffect(() => {
     if (authLoading) return;
@@ -264,17 +256,6 @@ export default function AperturasFinalizadas() {
     setMesSeleccionado("Todos");
     setAnioSeleccionado("Todos");
   };
-
-  const logout = async () => {
-    try {
-      setBusyLogout(true);
-      await signOut(auth);
-    } finally {
-      setBusyLogout(false);
-    }
-  };
-
-  const go = (path) => nav(path);
 
   const data = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -350,75 +331,26 @@ export default function AperturasFinalizadas() {
   const m = isMobile;
 
   return (
-    <div style={{ ...ui.shell, ...(m ? ui.mShell : {}) }}>
-      <style>{`
-        @keyframes aperturasFinalizadasSpin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+    <Shell lockBodyScroll={false}>
+      <Topbar>
+        <Brand
+          icon={ClipboardList}
+          title="Salud ocupacional"
+          subtitle="Aperturas finalizadas"
+          onClick={() => go("/salud/aperturas")}
+        />
+        <Topbar.Right>
+          <Topbar.UserHint title={user?.email || ""}>
+            {user?.displayName || user?.email || "Sesión activa"}
+          </Topbar.UserHint>
+          <GhostButton icon={ArrowLeft} onClick={() => go("/salud/aperturas")}>
+            Administrar
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
-      <header style={{ ...ui.topbar, ...(m ? ui.mTopbar : {}) }}>
-        <div style={{ ...ui.topbarInner, ...(m ? ui.mTopbarInner : {}) }}>
-          <div
-            style={ui.brand}
-            role="button"
-            tabIndex={0}
-            onClick={() => go("/salud/aperturas")}
-            onKeyDown={(e) =>
-              (e.key === "Enter" || e.key === " ") && go("/salud/aperturas")
-            }
-          >
-            <div style={ui.brandMark}>
-              <ClipboardList size={20} strokeWidth={2.25} color="#fff" />
-            </div>
-            <div style={{ display: "grid", gap: 2 }}>
-              <div style={ui.brandTitle}>Salud ocupacional</div>
-              <div style={ui.brandSub}>Aperturas finalizadas</div>
-            </div>
-          </div>
-
-          <div style={{ ...ui.topbarRight, ...(m ? ui.mTopbarRight : {}) }}>
-            <div style={{ ...ui.userBox, ...(m ? ui.mUserBox : {}) }}>
-              <div style={ui.userAvatar}>
-                <User size={16} strokeWidth={2.2} />
-              </div>
-              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-                <div style={ui.userMail}>{user?.email || "—"}</div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => go("/salud/aperturas")}
-              style={{ ...ui.btnGhost, ...(m ? ui.mBtnGhost : {}) }}
-              disabled={busyLogout}
-            >
-              Administrar
-            </button>
-
-            <button
-              type="button"
-              onClick={logout}
-              style={{
-                ...ui.btnGhost,
-                ...(m ? ui.mBtnGhost : {}),
-                ...(busyLogout ? ui.btnDisabled : {}),
-              }}
-              disabled={busyLogout}
-              title="Cerrar sesión"
-            >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <LogOut size={16} strokeWidth={2.2} />
-                {busyLogout ? "Cerrando…" : "Salir"}
-              </span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main style={{ ...ui.main, ...(m ? ui.mMain : {}) }}>
-        <div style={{ ...ui.container, ...(m ? ui.mContainer : {}) }}>
+      <Main>
+        <Container>
           <section style={{ ...ui.hero, ...(m ? ui.mHero : {}) }}>
             <div style={{ display: "grid", gap: 10, minWidth: 0 }}>
               <div style={ui.kickerRow}>
@@ -488,7 +420,7 @@ export default function AperturasFinalizadas() {
                   ...(showFilters ? ui.btnFilterActive : ui.btnGhost),
                   ...(m ? ui.mBtnGhost : {}),
                 }}
-                disabled={busyLogout}
+                disabled={false}
               >
                 <span style={ui.btnInlineIcon}>
                   <SlidersHorizontal size={16} strokeWidth={2.2} />
@@ -504,7 +436,7 @@ export default function AperturasFinalizadas() {
                 type="button"
                 onClick={() => setVisibleCount(10)}
                 style={{ ...ui.btnGhost, ...(m ? ui.mBtnGhost : {}) }}
-                disabled={busyLogout || isLoading}
+                disabled={isLoading}
                 title="Volver al inicio de la lista"
               >
                 <span style={ui.btnInlineIcon}>
@@ -609,7 +541,7 @@ export default function AperturasFinalizadas() {
                   type="button"
                   onClick={limpiarFiltros}
                   style={{ ...ui.btnGhost, ...(m ? ui.mBtnGhost : {}) }}
-                  disabled={busyLogout}
+                  disabled={false}
                 >
                   <span style={ui.btnInlineIcon}>
                     <RotateCcw size={16} strokeWidth={2.2} />
@@ -765,9 +697,15 @@ export default function AperturasFinalizadas() {
               </div>
             </>
           )}
-        </div>
-      </main>
-    </div>
+        </Container>
+      </Main>
+
+      <style>{`
+        @keyframes aperturasFinalizadasSpin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </Shell>
   );
 }
 

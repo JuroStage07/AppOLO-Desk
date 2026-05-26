@@ -1,7 +1,6 @@
 // screens/aperturas/AperturasRechazadas.jsx
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
 import {
   collection,
   onSnapshot,
@@ -17,14 +16,19 @@ import {
   Ban,
   ClipboardList,
   Filter,
-  Loader2,
-  LogOut,
-  User,
 } from "lucide-react";
 
-import { auth, db } from "../../../firebase";
+import { db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { filterByUserScope } from "../../../utils/dataScope";
+import {
+  Brand,
+  Container,
+  GhostButton,
+  Main,
+  Shell,
+  Topbar,
+} from "../../../components/ui";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -103,12 +107,10 @@ const MOTIVOS = [
 
 export default function AperturasRechazadas() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
 
-  const [busyLogout, setBusyLogout] = useState(false);
   const [items, setItems] = useState([]);
   const [motivoFiltro, setMotivoFiltro] = useState("Todos");
 
@@ -127,89 +129,29 @@ export default function AperturasRechazadas() {
     return items.filter((it) => it?.rechazo?.motivo === motivoFiltro);
   }, [items, motivoFiltro]);
 
-  const logout = async () => {
-    try {
-      setBusyLogout(true);
-      await signOut(auth);
-    } finally {
-      setBusyLogout(false);
-    }
-  };
-
   const goDetalle = (id) => {
     // ✅ ajustá la ruta si tu detalle es otra
     nav(`/salud/aperturas/detalle/${encodeURIComponent(id)}?source=rechazada`);
   };
 
   return (
-    <div style={ui.shell}>
-      <style>{`
-        @keyframes rechazadasSpin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+    <Shell>
+      <Topbar>
+        <Brand
+          icon={ClipboardList}
+          title="Aperturas"
+          subtitle="Rechazadas"
+          onClick={() => nav("/salud/aperturas")}
+        />
+        <Topbar.Right>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/salud/aperturas")}>
+            Administrar
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
-      <header style={ui.topbar}>
-        <div style={ui.topbarInner}>
-          <div
-            style={ui.brand}
-            role="button"
-            tabIndex={0}
-            onClick={() => nav("/salud/aperturas")}
-            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && nav("/salud/aperturas")}
-          >
-            <div style={ui.brandMark}>
-              <ClipboardList size={20} strokeWidth={2.25} color="#fff" />
-            </div>
-            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-              <div style={ui.brandTitle}>Aperturas</div>
-              <div style={ui.brandSub}>Rechazadas</div>
-            </div>
-          </div>
-
-          <div style={ui.topbarRight}>
-            <div style={ui.userBox}>
-              <div style={ui.userAvatar}>
-                <User size={16} strokeWidth={2.2} />
-              </div>
-              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-                <div style={ui.userMail}>{user?.email || "—"}</div>
-              </div>
-            </div>
-
-            <button type="button" onClick={() => nav("/salud/aperturas")} style={ui.btnGhost} disabled={busyLogout}>
-              <span style={ui.btnInlineIcon}>
-                <ArrowLeft size={16} strokeWidth={2.2} />
-                Administrar
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={logout}
-              style={{ ...ui.btnGhost, ...(busyLogout ? ui.btnDisabled : {}) }}
-              disabled={busyLogout}
-            >
-              <span style={ui.btnInlineIcon}>
-                {busyLogout ? (
-                  <Loader2
-                    size={16}
-                    strokeWidth={2.2}
-                    style={{ animation: "rechazadasSpin 0.7s linear infinite" }}
-                  />
-                ) : (
-                  <LogOut size={16} strokeWidth={2.2} />
-                )}
-                {busyLogout ? "Cerrando…" : "Salir"}
-              </span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main style={ui.main}>
-        <div style={ui.container}>
+      <Main>
+        <Container>
           <div style={ui.filtersCard}>
             <div style={ui.filtersHead}>
               <Filter size={18} color={ACCENT} strokeWidth={2.2} />
@@ -311,154 +253,14 @@ export default function AperturasRechazadas() {
               })}
             </div>
           )}
-        </div>
-      </main>
-    </div>
+        </Container>
+      </Main>
+    </Shell>
   );
 }
 
 /* ===================== Styles ===================== */
 const ui = {
-  shell: {
-    minHeight: "100vh",
-    height: "100vh",
-    width: "100%",
-    maxWidth: "100%",
-    boxSizing: "border-box",
-    background: "#F6F7FB",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-    color: "#0F172A",
-    overflow: "hidden",
-    display: "grid",
-    gridTemplateRows: "auto 1fr",
-  },
-
-  topbar: {
-    width: "100%",
-    boxSizing: "border-box",
-    borderBottom: "1px solid #E7E9F2",
-    background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
-    backdropFilter: "blur(8px)",
-  },
-  topbarInner: {
-    width: "100%",
-    maxWidth: 1120,
-    marginLeft: "auto",
-    marginRight: "auto",
-    boxSizing: "border-box",
-    padding: "12px 18px",
-    minHeight: 64,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-
-  brand: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    cursor: "pointer",
-    userSelect: "none",
-    outline: "none",
-  },
-  brandMark: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    background: ACCENT,
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-    boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
-  },
-  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
-  brandSub: { fontWeight: 800, fontSize: 12, color: SLATE },
-
-  topbarRight: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-  },
-
-  userBox: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "6px 12px 6px 6px",
-    borderRadius: 12,
-    border: "1px solid #E7E9F2",
-    background: "#fff",
-    boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
-    maxWidth: 220,
-    minWidth: 0,
-  },
-  userAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    background: ACCENT_SOFT,
-    color: ACCENT,
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-  },
-  userName: {
-    fontWeight: 800,
-    fontSize: 12,
-    color: "#0F172A",
-    lineHeight: 1.2,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  userMail: {
-    fontWeight: 650,
-    fontSize: 11,
-    color: SLATE,
-    lineHeight: 1.2,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-
-  btnGhost: {
-    border: "1px solid #E7E9F2",
-    background: "#fff",
-    borderRadius: 12,
-    padding: "9px 14px",
-    cursor: "pointer",
-    fontWeight: 800,
-    fontSize: 13,
-    color: "#0F172A",
-    boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
-    whiteSpace: "nowrap",
-    fontFamily: "inherit",
-  },
-  btnInlineIcon: { display: "inline-flex", alignItems: "center", gap: 8 },
-  btnDisabled: { opacity: 0.55, cursor: "not-allowed", boxShadow: "none" },
-
-  main: {
-    width: "100%",
-    boxSizing: "border-box",
-    overflow: "auto",
-    padding: "18px 16px 28px",
-    WebkitOverflowScrolling: "touch",
-  },
-  container: {
-    width: "100%",
-    maxWidth: 1120,
-    marginLeft: "auto",
-    marginRight: "auto",
-    boxSizing: "border-box",
-    display: "grid",
-    gap: 16,
-    paddingBottom: 8,
-  },
-
   filtersCard: {
     background: "#fff",
     border: "1px solid #E7E9F2",

@@ -295,21 +295,7 @@ export default function PanelEquiposMantenimiento() {
                     </div>
                 </div>
 
-                <div style={ui.topbarActions}>
-                    <div style={ui.kpi}>
-                        <div style={ui.kpiLabel}>Mostrando</div>
-                        <div style={ui.kpiValue}>
-                            {loading ? "—" : equiposFiltrados.length}
-                            {!loading && equipos.length > 0 ? (
-                                <span style={ui.kpiHint}>
-                                    {" "}
-                                    / {equipos.length} en ámbito
-                                </span>
-                            ) : null}
-                        </div>
-                    </div>
-
-                    <button
+                <div style={ui.topbarActions}>                    <button
                         type="button"
                         onClick={() => setShowFilters((v) => !v)}
                         style={{
@@ -347,11 +333,11 @@ export default function PanelEquiposMantenimiento() {
 
                     <button
                         type="button"
-                        onClick={() => nav(-1)}
+                        onClick={() => nav("/mantenimiento")}
                         style={ui.btnGhost}
                     >
                         <ArrowLeft size={17} strokeWidth={2} aria-hidden />
-                        Volver
+                        Inicio
                     </button>
                 </div>
             </div>
@@ -752,15 +738,17 @@ const ui = {
     },
 
     topbar: {
-        height: 64,
-        padding: "10px 16px",
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "12px 18px",
+        minHeight: 64,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         borderBottom: "1px solid #E7E9F2",
         background:
-            "linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(246,247,251,0.96) 100%)",
-        backdropFilter: "blur(6px)",
+            "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
+        backdropFilter: "blur(8px)",
         position: "sticky",
         top: 0,
         zIndex: 50,
@@ -781,8 +769,8 @@ const ui = {
         outline: "none",
     },
     brandMark: {
-        width: 42,
-        height: 42,
+        width: 44,
+        height: 44,
         borderRadius: 14,
         background: ACCENT,
         color: "#fff",
@@ -790,7 +778,7 @@ const ui = {
         placeItems: "center",
         fontWeight: 950,
         letterSpacing: 0.4,
-        boxShadow: "0 12px 24px rgba(8,159,138,0.20)",
+        boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
         flexShrink: 0,
     },
     topbarActions: {

@@ -1,5 +1,4 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import {
   collection,
@@ -15,9 +14,15 @@ import {
   getDocsFromServer,
   onSnapshot,
 } from "firebase/firestore";
+import { ArrowLeft, ScanLine } from "lucide-react";
 import { auth, db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { filterByUserScope } from "../../../utils/dataScope";
+import {
+  Brand,
+  GhostButton,
+  Topbar,
+} from "../../../components/ui";
 
 const ACCENT = "#089F8A";
 const DANGER = "#DC2626";
@@ -361,15 +366,6 @@ export default function ControlMarcas() {
     }
   };
 
-  const logout = async () => {
-    try {
-      await signOut(auth);
-    } catch (e) {
-      console.log(e);
-      showToast("err", "No se pudo cerrar sesión.");
-    }
-  };
-
   useEffect(() => {
     cargarUltimasMarcasDelDia();
   }, []);
@@ -401,34 +397,19 @@ export default function ControlMarcas() {
 
   return (
     <div style={ui.shell}>
-      <div style={ui.topbar}>
-        <div style={ui.brand}>
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>AppoloDesk</div>
-            <div style={ui.brandSub}>Control de marcas · asistencia</div>
-          </div>
-        </div>
-
-        <div style={ui.topbarRight}>
-          <button
-            type="button"
-            onClick={() => nav(-1)}
-            style={ui.btnGhost}
-            disabled={loading}
-          >
-            ← Volver
-          </button>
-
-          <button
-            type="button"
-            onClick={logout}
-            style={ui.btnGhost}
-            disabled={loading}
-          >
-            Cerrar sesión
-          </button>
-        </div>
-      </div>
+      <Topbar>
+        <Brand
+          icon={ScanLine}
+          title="Control de marcas"
+          subtitle="Entrada / Salida · Asistencia"
+          onClick={() => nav("/salud")}
+        />
+        <Topbar.Right>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/salud")}>
+            Salud
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
       <div style={ui.main}>
         <div style={ui.mainWrap}>
@@ -919,18 +900,6 @@ const ui = {
     gridTemplateRows: "auto 1fr",
   },
 
-  topbar: {
-    height: 64,
-    padding: "10px 16px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderBottom: "1px solid #E7E9F2",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(246,247,251,0.95) 100%)",
-    backdropFilter: "blur(6px)",
-  },
-
   topAccent: {
     position: "absolute",
     left: 0,
@@ -939,11 +908,6 @@ const ui = {
     width: "100%",
     background: `linear-gradient(90deg, ${ACCENT} 0%, rgba(8,159,138,0.25) 60%, rgba(8,159,138,0) 100%)`,
   },
-
-  brand: { display: "flex", alignItems: "center", gap: 12 },
-  brandTitle: { fontWeight: 950, fontSize: 14 },
-  brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B" },
-  topbarRight: { display: "flex", alignItems: "center", gap: 12 },
 
   btnGhost: {
     border: "1px solid #E7E9F2",
