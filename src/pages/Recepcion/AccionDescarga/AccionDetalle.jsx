@@ -189,6 +189,7 @@ export default function AccionDetalle() {
   const nav = useNavigate();
   const params = useParams();
   const authCtx = useContext(AuthCtx);
+  const user = authCtx?.user || null;
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
 
@@ -200,6 +201,9 @@ export default function AccionDetalle() {
   const [err, setErr] = useState(null);
 
   const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // tipo de la apertura: preferimos el copiado en la acción; si falta, lo leemos de la apertura.
+  const [aperturaTipo, setAperturaTipo] = useState(null);
 
   // Modal iniciar
   const [startModalOpen, setStartModalOpen] = useState(false);
@@ -274,6 +278,41 @@ export default function AccionDetalle() {
 
     return () => unsub && unsub();
   }, [authLoading, ref, profile?.tenantId, profile?.company]);
+
+  // Resuelve el tipo de la apertura: 1) el campo copiado en la acción;
+  // 2) respaldo leyendo la apertura por aperturaId (aperturas → aperturasRecepcion).
+  useEffect(() => {
+    let cancel = false;
+    setAperturaTipo(null);
+
+    const own = (accion?.tipo ?? "").toString().trim();
+    if (own) {
+      setAperturaTipo(own);
+      return;
+    }
+
+    const apId = accion?.aperturaId;
+    if (!apId) return;
+
+    (async () => {
+      try {
+        let snap = await getDoc(doc(db, "aperturas", String(apId)));
+        if (!snap.exists()) {
+          snap = await getDoc(doc(db, "aperturasRecepcion", String(apId)));
+        }
+        if (!cancel && snap.exists()) {
+          const t = (snap.data()?.tipo ?? "").toString().trim();
+          if (t) setAperturaTipo(t);
+        }
+      } catch (e) {
+        console.error("No se pudo leer el tipo de la apertura:", e);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [accion?.id, accion?.tipo, accion?.aperturaId]);
 
   const refreshOnce = useCallback(async () => {
     try {
@@ -541,6 +580,13 @@ export default function AccionDetalle() {
                       mono
                       onClick={() => accion?.aperturaId && copiar(accion?.aperturaId, "Copiado")}
                       rightHint={accion?.aperturaId ? "Click para copiar" : null}
+                    />
+                    <div style={ui.divider} />
+                    <InfoRow
+                      label="Tipo de apertura"
+                      value={aperturaTipo || "—"}
+                      onClick={() => aperturaTipo && copiar(aperturaTipo, "Copiado")}
+                      rightHint={aperturaTipo ? "Click para copiar" : null}
                     />
                   </Section>
                 </div>

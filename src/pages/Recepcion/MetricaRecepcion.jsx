@@ -24,6 +24,7 @@ import {
   limit,
   orderBy,
   query,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import { filterByUserScope } from "../../utils/dataScope";
@@ -31,6 +32,8 @@ import { buildMetricaRecepcionExcelProBuffer } from "../../utils/metricaRecepcio
 import useIsMobile from "../../hooks/useIsMobile";
 import {
   Brand,
+  Chip,
+  ChipsRow,
   GhostButton,
   Topbar,
 } from "../../components/ui";
@@ -965,6 +968,176 @@ function buildAndenesData(docs = []) {
       ),
     }))
     .sort((a, b) => b.acciones - a.acciones);
+}
+
+/* ===== Clasificación por tipo de apertura (EPA vs Cofersa) ===== */
+// Tipos de apertura considerados EPA (normalizados: minúsculas, sin acentos).
+const EPA_TIPOS = ["recepcion epa", "epa fiscal", "epa", "suministros epa"];
+
+function normalizeTipo(t) {
+  return String(t ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, ""); // quita acentos
+}
+
+function isEpaTipo(t) {
+  return EPA_TIPOS.includes(normalizeTipo(t));
+}
+
+/** Decide si una acción entra en el contexto activo ("General" | "EPA" | "COFERSA"). */
+function accionMatchesContext(row, context) {
+  if (context === "EPA") return isEpaTipo(row?.tipo);
+  if (context === "COFERSA") return !isEpaTipo(row?.tipo); // todo lo no-EPA = Cofersa
+  return true; // General
+}
+
+/**
+ * Sintetiza documentos "diarios" con la MISMA forma que `dashboard_salud_daily`
+ * a partir de acciones de descarga crudas, para recomputar el panel en las vistas
+ * EPA / COFERSA (los agregados diarios del servidor no se pueden cortar por tipo).
+ *
+ * Cada acción aporta a varios días según su dimensión temporal, y solo cuenta si
+ * ese día cae dentro de `allowedDayKeys`:
+ *  - creadoAt    -> accionesCreadas
+ *  - startedAt   -> accionesIniciadas (+ andén accionesDia, starter iniciadasDia, accionesPorTipo)
+ *  - completedAt -> accionesFinalizadas (+ tiempo, bultos, finalizadas por starter/andén)
+ *
+ * Los totales de starters se mantienen consistentes con los totales del día para
+ * que `filterDashboardDocsByExcludedUsers` (que recomputa desde starters) no los altere.
+ */
+function buildSyntheticDailyDocsFromAcciones(rows = [], allowedDayKeys = []) {
+  const allowed = new Set(allowedDayKeys);
+  const byDay = new Map();
+
+  const starterKey = (who) =>
+    who.uid && who.uid !== "sin_uid" ? `uid:${who.uid}` : `name:${who.label}`;
+
+  const ensureDay = (dk) => {
+    if (!byDay.has(dk)) {
+      byDay.set(dk, {
+        dayKey: dk,
+        accionesCreadas: 0,
+        accionesIniciadas: 0,
+        accionesFinalizadas: 0,
+        accionesTiempoTotalMs: 0,
+        accionesBultosTotales: 0,
+        accionesPorTipo: {},
+        _starters: new Map(),
+        _andenes: new Map(),
+      });
+    }
+    return byDay.get(dk);
+  };
+
+  const ensureStarter = (day, who) => {
+    const key = starterKey(who);
+    if (!day._starters.has(key)) {
+      day._starters.set(key, {
+        starterUid: who.uid,
+        starter: who.label,
+        iniciadasDia: 0,
+        finalizadasDia: 0,
+        bultosTotalesDia: 0,
+        tiempoTotalMsDia: 0,
+      });
+    }
+    return day._starters.get(key);
+  };
+
+  const ensureAnden = (day, idAnden) => {
+    const key = String(idAnden || "—");
+    if (!day._andenes.has(key)) {
+      day._andenes.set(key, {
+        idAnden: key,
+        accionesDia: 0,
+        finalizadasDia: 0,
+        _starters: new Map(),
+      });
+    }
+    return day._andenes.get(key);
+  };
+
+  const ensureAndenStarter = (anden, who) => {
+    const key = starterKey(who);
+    if (!anden._starters.has(key)) {
+      anden._starters.set(key, {
+        starterUid: who.uid,
+        starter: who.label,
+        iniciadasDia: 0,
+        finalizadasDia: 0,
+      });
+    }
+    return anden._starters.get(key);
+  };
+
+  for (const row of rows) {
+    const who = actionStarterIdentity(row);
+    const idAnden = String(row?.idAnden ?? "—").trim() || "—";
+
+    const createdDate = toDateSafe(row?.creadoAt);
+    const startedDate = toDateSafe(row?.startedAt);
+    const completedDate = toDateSafe(row?.completedAt ?? row?.completeAt);
+
+    if (createdDate) {
+      const dk = ymd(createdDate);
+      if (allowed.has(dk)) ensureDay(dk).accionesCreadas += 1;
+    }
+
+    if (startedDate) {
+      const dk = ymd(startedDate);
+      if (allowed.has(dk)) {
+        const day = ensureDay(dk);
+        day.accionesIniciadas += 1;
+        ensureStarter(day, who).iniciadasDia += 1;
+        const anden = ensureAnden(day, idAnden);
+        anden.accionesDia += 1;
+        ensureAndenStarter(anden, who).iniciadasDia += 1;
+        const tipoDescarga = String(row?.tipoDescarga ?? "").trim() || "Sin tipo";
+        day.accionesPorTipo[tipoDescarga] =
+          (day.accionesPorTipo[tipoDescarga] || 0) + 1;
+      }
+    }
+
+    if (completedDate) {
+      const dk = ymd(completedDate);
+      if (allowed.has(dk)) {
+        const day = ensureDay(dk);
+        const dur = actionDurationMs(row);
+        const bultos = Number(row?.cantidadBultos || 0);
+        day.accionesFinalizadas += 1;
+        day.accionesTiempoTotalMs += dur;
+        day.accionesBultosTotales += bultos;
+        const st = ensureStarter(day, who);
+        st.finalizadasDia += 1;
+        st.tiempoTotalMsDia += dur;
+        st.bultosTotalesDia += bultos;
+        const anden = ensureAnden(day, idAnden);
+        anden.finalizadasDia += 1;
+        ensureAndenStarter(anden, who).finalizadasDia += 1;
+      }
+    }
+  }
+
+  return Array.from(byDay.values())
+    .map((d) => ({
+      dayKey: d.dayKey,
+      accionesCreadas: d.accionesCreadas,
+      accionesIniciadas: d.accionesIniciadas,
+      accionesFinalizadas: d.accionesFinalizadas,
+      accionesTiempoTotalMs: d.accionesTiempoTotalMs,
+      accionesBultosTotales: d.accionesBultosTotales,
+      accionesPorTipo: d.accionesPorTipo,
+      starters: Array.from(d._starters.values()),
+      andenes: Array.from(d._andenes.values()).map((a) => ({
+        idAnden: a.idAnden,
+        accionesDia: a.accionesDia,
+        finalizadasDia: a.finalizadasDia,
+        starters: Array.from(a._starters.values()),
+      })),
+    }))
+    .sort((a, b) => String(a.dayKey).localeCompare(String(b.dayKey)));
 }
 
 function buildDashboardFromDailyDocs(
@@ -3056,6 +3229,17 @@ export default function MetricaRecepcion() {
   const [usersCatalogLoading, setUsersCatalogLoading] = useState(false);
   const [usersCatalogError, setUsersCatalogError] = useState("");
   const [andenSettingsHydrated, setAndenSettingsHydrated] = useState(false);
+  const [activeContext, setActiveContext] = useState("General");
+  const [profileRole, setProfileRole] = useState("");
+  const [backfill, setBackfill] = useState({
+    running: false,
+    done: false,
+    processed: 0,
+    updated: 0,
+    total: 0,
+    errors: 0,
+    message: "",
+  });
   const [excludedAndenUserDraft, setExcludedAndenUserDraft] = useState("");
   const [andenDetalleModal, setAndenDetalleModal] = useState({
     open: false,
@@ -3893,8 +4077,6 @@ export default function MetricaRecepcion() {
     }));
   };
 
-  const EPA_ANDENES = ["4", "5", "6", "7"];
-
   const openTendenciasEpa = async () => {
     setEpaActiveTab("proveedores");
     if (!tenantScope.tenantId || !tenantScope.company) {
@@ -3934,17 +4116,14 @@ export default function MetricaRecepcion() {
         tenantScope.company
       );
 
-      // Filter by date range, completed actions, and andenes 4-7
+      // Filter by date range, completed actions, and EPA tipo
       const filteredRows = rows.filter((row) => {
         const completedAt = row?.completedAt ?? row?.completeAt;
         const completedDate = toDateSafe(completedAt);
         if (!completedDate || !allowed.has(ymd(completedDate))) return false;
         if (!completedAt) return false;
-        const anden = String(row?.idAnden ?? "").trim();
-        if (!EPA_ANDENES.includes(anden)) return false;
-        // Exclude providers that belong to Tendencias Cofersa
-        const provName = String(row?.proveedorNombre || "").trim();
-        if (COFERSA_PROVIDERS.some((cp) => matchesProvider(provName, cp))) return false;
+        // EPA = tipo de apertura ∈ {Recepcion EPA, EPA Fiscal, EPA, Suministros EPA}
+        if (!isEpaTipo(row?.tipo)) return false;
         return true;
       });
 
@@ -4131,6 +4310,8 @@ export default function MetricaRecepcion() {
         const profileSnap = await getDoc(doc(db, "profiles", currentUser.uid));
         const profile = profileSnap.exists() ? profileSnap.data() || {} : {};
 
+        setProfileRole(String(profile?.role || ""));
+
         const tenantId = String(profile?.tenantId || "").trim();
         const company = String(profile?.company || "").trim();
         setTenantScope({ tenantId, company });
@@ -4144,39 +4325,131 @@ export default function MetricaRecepcion() {
         }
 
         const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate, customRange);
+        const isContextRecompute =
+          activeContext === "EPA" || activeContext === "COFERSA";
 
-        const q = query(
-          collection(db, "dashboard_salud_daily"),
-          where("tenantId", "==", tenantId),
-          where("company", "==", company),
-          orderBy("dayKey", "asc")
-        );
+        // Acciones crudas: siempre se cargan para "Tiempos por proveedor"; en las
+        // vistas EPA/COFERSA son además la base para recomputar todo el panel
+        // (los agregados diarios del servidor no se pueden cortar por tipo).
+        let accRows = [];
+        try {
+          const aq = query(
+            collection(db, "accion_descarga"),
+            orderBy("creadoAt", "desc"),
+            limit(isContextRecompute ? 4000 : 2500)
+          );
+          const accSnap = await getDocs(aq);
+          accRows = filterByUserScope(
+            accSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+            tenantId,
+            company
+          );
+        } catch (accErr) {
+          console.error("loadDashboard accion_descarga:", accErr);
+          accRows = [];
+        }
 
-        const snap = await getDocs(q);
+        const contextRows = isContextRecompute
+          ? accRows.filter((row) => accionMatchesContext(row, activeContext))
+          : accRows;
 
-        const allDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const filteredDocs = allDocs.filter((d) => dayKeys.includes(d.dayKey));
+        let built;
+        let dataPresent;
+        let coverageWithDataSize = 0;
 
-        const built = buildDashboardFromDailyDocs(
-          activeFilter,
-          filteredDocs,
-          selectedDate,
-          customRange,
-          excludedAndenUsersSet
-        );
-        const metricDocsForDailySlice = filterDashboardDocsByExcludedUsers(
-          filteredDocs,
-          excludedAndenUsersSet
-        );
+        if (isContextRecompute) {
+          // EPA / COFERSA: panel recomputado desde acciones crudas filtradas por tipo.
+          const syntheticDocs = buildSyntheticDailyDocsFromAcciones(
+            contextRows,
+            dayKeys
+          );
+          built = buildDashboardFromDailyDocs(
+            activeFilter,
+            syntheticDocs,
+            selectedDate,
+            customRange,
+            excludedAndenUsersSet
+          );
 
-        const withData = new Set(
-          filteredDocs
-            .map((d) => String(d.dayKey || "").trim())
-            .filter(Boolean)
-        );
-        built.periodDayKeysExpected = [...dayKeys];
-        built.dayKeysWithData = [...withData].sort();
-        built.dayKeysSinDatos = dayKeys.filter((k) => !withData.has(k));
+          const withData = new Set(
+            syntheticDocs.map((d) => String(d.dayKey || "").trim()).filter(Boolean)
+          );
+          coverageWithDataSize = withData.size;
+          built.periodDayKeysExpected = [...dayKeys];
+          built.dayKeysWithData = [...withData].sort();
+          built.dayKeysSinDatos = dayKeys.filter((k) => !withData.has(k));
+          built.dailySlice = filterDashboardDocsByExcludedUsers(
+            syntheticDocs,
+            excludedAndenUsersSet
+          )
+            .slice()
+            .sort((a, b) =>
+              String(a.dayKey || "").localeCompare(String(b.dayKey || ""))
+            )
+            .map((d) => ({
+              dayKey: String(d.dayKey || ""),
+              docId: "",
+              accionesFinalizadas: Number(d.accionesFinalizadas || 0),
+              accionesIniciadas: Number(d.accionesIniciadas || 0),
+              accionesCreadas: Number(d.accionesCreadas || 0),
+              cumplimientoDiaPct: dailyCompliancePercent(d),
+              accionesBultosTotales: Number(d.accionesBultosTotales || 0),
+              accionesTiempoTotalMs: Number(d.accionesTiempoTotalMs || 0),
+            }));
+
+          dataPresent = syntheticDocs.length > 0;
+        } else {
+          // General: agregados diarios del servidor (números exactos).
+          const q = query(
+            collection(db, "dashboard_salud_daily"),
+            where("tenantId", "==", tenantId),
+            where("company", "==", company),
+            orderBy("dayKey", "asc")
+          );
+
+          const snap = await getDocs(q);
+
+          const allDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          const filteredDocs = allDocs.filter((d) => dayKeys.includes(d.dayKey));
+
+          built = buildDashboardFromDailyDocs(
+            activeFilter,
+            filteredDocs,
+            selectedDate,
+            customRange,
+            excludedAndenUsersSet
+          );
+          const metricDocsForDailySlice = filterDashboardDocsByExcludedUsers(
+            filteredDocs,
+            excludedAndenUsersSet
+          );
+
+          const withData = new Set(
+            filteredDocs.map((d) => String(d.dayKey || "").trim()).filter(Boolean)
+          );
+          coverageWithDataSize = withData.size;
+          built.periodDayKeysExpected = [...dayKeys];
+          built.dayKeysWithData = [...withData].sort();
+          built.dayKeysSinDatos = dayKeys.filter((k) => !withData.has(k));
+          built.dailySlice = metricDocsForDailySlice
+            .slice()
+            .sort((a, b) =>
+              String(a.dayKey || "").localeCompare(String(b.dayKey || ""))
+            )
+            .map((d) => ({
+              dayKey: String(d.dayKey || ""),
+              docId: String(d.id || ""),
+              accionesFinalizadas: Number(d.accionesFinalizadas || 0),
+              accionesIniciadas: Number(d.accionesIniciadas || 0),
+              accionesCreadas: Number(d.accionesCreadas || 0),
+              cumplimientoDiaPct: dailyCompliancePercent(d),
+              accionesBultosTotales: Number(d.accionesBultosTotales || 0),
+              accionesTiempoTotalMs: Number(d.accionesTiempoTotalMs || 0),
+            }));
+
+          dataPresent = filteredDocs.length > 0;
+        }
+
         if (built.executiveSummary) {
           built.executiveSummary = {
             ...built.executiveSummary,
@@ -4184,41 +4457,16 @@ export default function MetricaRecepcion() {
               dayKeys.length > 0
                 ? {
                     expected: dayKeys.length,
-                    withData: withData.size,
+                    withData: coverageWithDataSize,
                     missing: built.dayKeysSinDatos.length,
                   }
                 : null,
           };
         }
-        built.dailySlice = metricDocsForDailySlice
-          .slice()
-          .sort((a, b) =>
-            String(a.dayKey || "").localeCompare(String(b.dayKey || ""))
-          )
-          .map((d) => ({
-            dayKey: String(d.dayKey || ""),
-            docId: String(d.id || ""),
-            accionesFinalizadas: Number(d.accionesFinalizadas || 0),
-            accionesIniciadas: Number(d.accionesIniciadas || 0),
-            accionesCreadas: Number(d.accionesCreadas || 0),
-            cumplimientoDiaPct: dailyCompliancePercent(d),
-            accionesBultosTotales: Number(d.accionesBultosTotales || 0),
-            accionesTiempoTotalMs: Number(d.accionesTiempoTotalMs || 0),
-          }));
 
+        // Tiempos por proveedor (mismas filas del contexto activo).
         try {
-          const aq = query(
-            collection(db, "accion_descarga"),
-            orderBy("creadoAt", "desc"),
-            limit(2500)
-          );
-          const accSnap = await getDocs(aq);
-          const accRows = filterByUserScope(
-            accSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-            tenantId,
-            company
-          );
-          const providerAcciones = filterAccionesParaMetricaProveedor(accRows, {
+          const providerAcciones = filterAccionesParaMetricaProveedor(contextRows, {
             allowedDayKeys: dayKeys,
             excludedActionsSet,
             excludedAndenUsersSet,
@@ -4231,7 +4479,7 @@ export default function MetricaRecepcion() {
           built.providerTimesAcciones = [];
         }
 
-        if (!filteredDocs.length) {
+        if (!dataPresent) {
           const msg =
             activeFilter === "fecha"
               ? `No hay operaciones registradas para la fecha ${formatSelectedDateLabel(selectedDate)}.`
@@ -4264,12 +4512,123 @@ export default function MetricaRecepcion() {
       mounted = false;
     };
   }, [
+    activeContext,
     activeFilter,
     selectedDate,
     customRange,
     excludedAndenUsersSet,
     excludedActionsSet,
   ]);
+
+  // Backfill (una sola vez): clasifica acciones de descarga sin `tipo` leyendo su
+  // apertura. Si la apertura es EPA, guarda su tipo EPA real; si no, guarda "Cofersa".
+  const runTipoBackfill = useCallback(async () => {
+    if (backfill.running) return;
+    setBackfill({
+      running: true,
+      done: false,
+      processed: 0,
+      updated: 0,
+      total: 0,
+      errors: 0,
+      message: "Buscando acciones…",
+    });
+
+    try {
+      const { tenantId, company } = tenantScope;
+      const aq = query(
+        collection(db, "accion_descarga"),
+        orderBy("creadoAt", "desc"),
+        limit(5000)
+      );
+      const snap = await getDocs(aq);
+      const rows = filterByUserScope(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        tenantId,
+        company
+      );
+
+      const pending = rows.filter((r) => !String(r?.tipo ?? "").trim());
+
+      if (!pending.length) {
+        setBackfill({
+          running: false,
+          done: true,
+          processed: 0,
+          updated: 0,
+          total: 0,
+          errors: 0,
+          message: "No hay acciones por clasificar (todas ya tienen tipo).",
+        });
+        return;
+      }
+
+      setBackfill((prev) => ({
+        ...prev,
+        total: pending.length,
+        message: `Clasificando ${pending.length} acciones…`,
+      }));
+
+      // Cache de tipo real por aperturaId (evita relecturas).
+      const aperturaCache = new Map();
+      const resolveAperturaTipo = async (apId) => {
+        const key = String(apId || "").trim();
+        if (!key) return null;
+        if (aperturaCache.has(key)) return aperturaCache.get(key);
+        let tipo = null;
+        try {
+          let s = await getDoc(doc(db, "aperturas", key));
+          if (!s.exists()) s = await getDoc(doc(db, "aperturasRecepcion", key));
+          if (s.exists()) tipo = String(s.data()?.tipo ?? "").trim() || null;
+        } catch (e) {
+          console.error("backfill: lectura apertura", key, e);
+        }
+        aperturaCache.set(key, tipo);
+        return tipo;
+      };
+
+      let processed = 0;
+      let updated = 0;
+      let errors = 0;
+
+      for (const row of pending) {
+        processed += 1;
+        try {
+          const apTipo = await resolveAperturaTipo(row.aperturaId);
+          const value = isEpaTipo(apTipo) ? apTipo : "Cofersa";
+          await updateDoc(doc(db, "accion_descarga", row.id), { tipo: value });
+          updated += 1;
+        } catch (e) {
+          console.error("backfill: update acción", row.id, e);
+          errors += 1;
+        }
+
+        if (processed % 10 === 0 || processed === pending.length) {
+          setBackfill((prev) => ({ ...prev, processed, updated, errors }));
+        }
+      }
+
+      setBackfill({
+        running: false,
+        done: true,
+        processed,
+        updated,
+        total: pending.length,
+        errors,
+        message: `Listo: ${updated} actualizadas${
+          errors ? `, ${errors} con error` : ""
+        }.`,
+      });
+    } catch (e) {
+      console.error("runTipoBackfill:", e);
+      setBackfill((prev) => ({
+        ...prev,
+        running: false,
+        done: true,
+        message: e?.message || "Error durante el backfill.",
+      }));
+    }
+  }, [backfill.running, tenantScope]);
 
   useEffect(() => {
     if (!aperturasModalOpen) return;
@@ -4382,7 +4741,20 @@ export default function MetricaRecepcion() {
             </div>
           )}
           <div style={{ ...ui.heroCompact, ...(m ? ui.mHeroCompact : {}) }}>
-            <h1 style={{ ...ui.title, margin: 0 }}>Panel de Recepción</h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+              <h1 style={{ ...ui.title, margin: 0 }}>Panel de Recepción</h1>
+              <ChipsRow>
+                {["General", "EPA", "COFERSA"].map((ctx) => (
+                  <Chip
+                    key={ctx}
+                    active={activeContext === ctx}
+                    onClick={() => setActiveContext(ctx)}
+                  >
+                    {ctx}
+                  </Chip>
+                ))}
+              </ChipsRow>
+            </div>
             <button
               type="button"
               style={{ ...ui.heroInfoBtn, ...(m ? ui.mHeroInfoBtn : {}) }}
@@ -4707,7 +5079,7 @@ export default function MetricaRecepcion() {
                 }}
                 disabled={loadingData || !!loadError}
                 onClick={openTendenciasEpa}
-                title="Análisis de tendencias EPA — Andenes 4, 5, 6 y 7"
+                title="Análisis de tendencias EPA — aperturas tipo EPA"
               >
                 <TrendingUp size={18} strokeWidth={2.2} color="#0369A1" aria-hidden />
                 Tendencia EPA
@@ -4887,6 +5259,53 @@ export default function MetricaRecepcion() {
                 Cerrar
               </button>
             </div>
+
+            {["administrativo", "dev"].includes(
+              String(profileRole).toLowerCase()
+            ) && (
+              <div style={ui.settingsSection}>
+                <div style={ui.settingsTitle}>
+                  Clasificar acciones por tipo (EPA / Cofersa)
+                </div>
+                <div style={ui.settingsText}>
+                  Recorre las acciones de descarga que aún no tienen <code>tipo</code>,
+                  lee su apertura y lo guarda: las EPA conservan su tipo EPA real y el
+                  resto queda como «Cofersa». Solo hace falta correrlo una vez (las
+                  acciones nuevas ya nacen con tipo).
+                </div>
+                <div style={ui.settingsWarningText}>
+                  Operación de mantenimiento. Puede tardar varios minutos si hay muchas
+                  acciones; no cierres esta ventana mientras corre.
+                </div>
+                <div style={ui.settingsRowCompact}>
+                  <button
+                    type="button"
+                    onClick={runTipoBackfill}
+                    disabled={backfill.running}
+                    style={{
+                      ...ui.settingsAddBtn,
+                      ...(backfill.running
+                        ? { opacity: 0.6, cursor: "not-allowed" }
+                        : {}),
+                    }}
+                  >
+                    {backfill.running ? "Clasificando…" : "Clasificar acciones ahora"}
+                  </button>
+                </div>
+                {(backfill.running || backfill.done) && (
+                  <div style={ui.settingsText}>
+                    {backfill.total > 0
+                      ? `Progreso: ${backfill.processed}/${backfill.total} · ${backfill.updated} actualizadas${
+                          backfill.errors ? ` · ${backfill.errors} con error` : ""
+                        }`
+                      : null}
+                    {backfill.message ? (
+                      <div style={{ marginTop: 4 }}>{backfill.message}</div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div style={ui.settingsSection}>
               <div style={ui.settingsTitle}>Usuarios excluidos de métricas</div>
@@ -6216,7 +6635,7 @@ export default function MetricaRecepcion() {
                   Tendencia EPA
                 </div>
                 <div style={ui.aperturasSheetSubtitle}>
-                  Análisis de tiempos por proveedor en Andenes 4, 5, 6 y 7 · {currentData.label}
+                  Análisis de tiempos por proveedor en aperturas tipo EPA · {currentData.label}
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -6292,7 +6711,7 @@ export default function MetricaRecepcion() {
 
                       wsResumen.mergeCells("A1:E1");
                       const resTitleCell = wsResumen.getCell("A1");
-                      resTitleCell.value = `Tendencia EPA — Resumen (Andenes 4-7)`;
+                      resTitleCell.value = `Tendencia EPA — Resumen (tipo EPA)`;
                       resTitleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
                       resTitleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0369A1" } };
                       resTitleCell.alignment = { vertical: "middle", horizontal: "center" };
@@ -6358,7 +6777,7 @@ export default function MetricaRecepcion() {
                       wsResumen.getCell(`A${rRes}`).font = { bold: true, size: 13, color: { argb: "FF0369A1" } };
                       rRes += 1;
 
-                      wsResumen.getCell(`A${rRes}`).value = "Evolución del tiempo promedio de descarga (Andenes 4-7)";
+                      wsResumen.getCell(`A${rRes}`).value = "Evolución del tiempo promedio de descarga (tipo EPA)";
                       wsResumen.getCell(`A${rRes}`).font = { size: 11, color: { argb: "FF64748B" } };
                       rRes += 1;
 
@@ -6469,7 +6888,7 @@ export default function MetricaRecepcion() {
                         let r = 3;
                         ws.mergeCells(`A${r}:D${r}`);
                         const summaryTitle = ws.getCell(`A${r}`);
-                        summaryTitle.value = "Resumen de métricas (Andenes 4-7)";
+                        summaryTitle.value = "Resumen de métricas (tipo EPA)";
                         summaryTitle.font = { bold: true, size: 13, color: { argb: "FF0369A1" } };
                         r += 1;
                         
@@ -6606,7 +7025,7 @@ export default function MetricaRecepcion() {
               <div style={ui.aperturasModalEmpty}>{tendenciasEpaModal.error}</div>
             ) : tendenciasEpaModal.providers.length === 0 ? (
               <div style={ui.aperturasModalEmpty}>
-                No se encontraron descargas en Andenes 4, 5, 6 y 7 para este período.
+                No se encontraron descargas tipo EPA para este período.
               </div>
             ) : (
               <>
@@ -6658,7 +7077,7 @@ export default function MetricaRecepcion() {
                         {tendenciasEpaModal.providers.length} proveedores encontrados
                       </div>
                       <div style={{ fontSize: 12, fontWeight: 750, color: "#0369A1" }}>
-                        Descargas en Andenes 4, 5, 6 y 7 — Haz clic en un proveedor para ver el detalle
+                        Descargas tipo EPA — Haz clic en un proveedor para ver el detalle
                       </div>
                     </div>
 

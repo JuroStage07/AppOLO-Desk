@@ -651,6 +651,7 @@ export default function AperturaDetalle() {
 
       const accionRef = await addDoc(collection(db, "accion_descarga"), {
         aperturaId: apertura.id,
+        tipo: apertura?.tipo ?? null,
         creadoPorUid: user?.uid || null,
         creadoPorNombre: user?.displayName || "—",
         creadoAt: serverTimestamp(),
