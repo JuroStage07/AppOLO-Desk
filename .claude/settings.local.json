@@ -7,7 +7,11 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(npx eslint *)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(grep -v '^$')",
+      "Bash(git ls-tree *)",
+      "Bash(npm run *)",
+      "Bash(powershell *)"
     ]
   }
 }
