@@ -24,6 +24,7 @@ const DEPARTAMENTOS = [
   "Sistema",
   "Personal",
   "Comercio exterior",
+  "Ingeniería",
   "Ventas",
   "CEDI",
   "Transportes",
