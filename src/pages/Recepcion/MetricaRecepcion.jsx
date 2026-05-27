@@ -2647,7 +2647,7 @@ function VolumenPorFechaChart({ actions = [], accentColor = "#0F172A", accentSof
             <div style={volStyles.subtitle}>Evolución de descargas en el rango · {periodLabel}</div>
           </div>
         </div>
-        <div style={{ padding: "32px 0", textAlign: "center", color: "#64748B", fontSize: 13, fontWeight: 800 }}>
+        <div style={{ padding: "32px 0", textAlign: "center", color: "#64748B", fontSize: 13, fontWeight: 620 }}>
           Sin datos para graficar.
         </div>
       </div>
@@ -2754,7 +2754,7 @@ function VolumenPorFechaChart({ actions = [], accentColor = "#0F172A", accentSof
               {dailyMap.map((d, i) => (
                 <tr key={d.dayKey} style={{ background: i % 2 === 0 ? "#FAFBFE" : "#fff" }}>
                   <td style={volStyles.td}>{d.label}</td>
-                  <td style={{ ...volStyles.td, textAlign: "right", fontWeight: 950 }}>{d.value}</td>
+                  <td style={{ ...volStyles.td, textAlign: "right", fontWeight: 790 }}>{d.value}</td>
                 </tr>
               ))}
             </tbody>
@@ -2781,7 +2781,7 @@ const volStyles = {
   },
   title: {
     fontSize: 16,
-    fontWeight: 900,
+    fontWeight: 700,
     color: "#0F172A",
     marginBottom: 4,
   },
@@ -2819,7 +2819,7 @@ const volStyles = {
   },
   xLabel: {
     fontSize: 10,
-    fontWeight: 800,
+    fontWeight: 620,
     color: "#64748B",
     textAlign: "center",
     minWidth: 0,
@@ -2834,7 +2834,7 @@ const volStyles = {
   },
   summary: {
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 700,
     color: "#64748B",
     cursor: "pointer",
     padding: "4px 0",
@@ -2854,7 +2854,7 @@ const volStyles = {
     padding: "6px 8px",
     borderBottom: "1px solid #E2E8F0",
     color: "#64748B",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 11,
     textTransform: "uppercase",
     letterSpacing: "0.03em",
@@ -2863,7 +2863,7 @@ const volStyles = {
     padding: "6px 8px",
     borderBottom: "1px solid #F8FAFC",
     color: "#0F172A",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
   },
 };
@@ -4194,9 +4194,12 @@ export default function MetricaRecepcion() {
           <GhostButton icon={ArrowLeft} onClick={() => nav("/recepcion")}>
             Recepción
           </GhostButton>
-          <GhostButton icon={Settings} onClick={() => setSettingsModalOpen(true)}>
-            Configuración
-          </GhostButton>
+          <GhostButton
+            icon={Settings}
+            onClick={() => setSettingsModalOpen(true)}
+            title="Configuración"
+            aria-label="Configuración"
+          />
         </Topbar.Right>
       </Topbar>
 
@@ -5021,7 +5024,7 @@ export default function MetricaRecepcion() {
                   color={ACCENT}
                   style={{ animation: "metricaRecepcionSpin 0.75s linear infinite" }}
                 />
-                <span style={{ color: "#64748B", fontWeight: 800, fontSize: 13 }}>
+                <span style={{ color: "#64748B", fontWeight: 620, fontSize: 13 }}>
                   Cargando…
                 </span>
               </div>
@@ -5119,7 +5122,7 @@ export default function MetricaRecepcion() {
                   color={ACCENT}
                   style={{ animation: "metricaRecepcionSpin 0.75s linear infinite" }}
                 />
-                <span style={{ color: "#64748B", fontWeight: 800, fontSize: 13 }}>
+                <span style={{ color: "#64748B", fontWeight: 620, fontSize: 13 }}>
                   Cargando descargas…
                 </span>
               </div>
@@ -5720,7 +5723,7 @@ export default function MetricaRecepcion() {
                     border: "1px solid #7C3AED",
                     background: "linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)",
                     color: "#fff",
-                    fontWeight: 900,
+                    fontWeight: 700,
                     fontSize: 13,
                     cursor: tendenciasCofersaModal.loading || tendenciasCofersaModal.providers.length === 0 ? "not-allowed" : "pointer",
                     fontFamily: "inherit",
@@ -5757,7 +5760,7 @@ export default function MetricaRecepcion() {
             {tendenciasCofersaModal.loading ? (
               <div style={ui.aperturasModalLoadingBox}>
                 <Loader2 size={22} strokeWidth={2.25} color="#7C3AED" style={{ animation: "metricaRecepcionSpin 0.75s linear infinite" }} />
-                <span style={{ color: "#64748B", fontWeight: 800, fontSize: 13 }}>Analizando tendencias…</span>
+                <span style={{ color: "#64748B", fontWeight: 620, fontSize: 13 }}>Analizando tendencias…</span>
               </div>
             ) : tendenciasCofersaModal.error ? (
               <div style={ui.aperturasModalEmpty}>{tendenciasCofersaModal.error}</div>
@@ -5811,7 +5814,7 @@ export default function MetricaRecepcion() {
                       background: "linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)",
                       border: "1px solid rgba(124,58,237,0.2)",
                     }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#6B21A8", marginBottom: 4 }}>
+                      <div style={{ fontSize: 13, fontWeight: 620, color: "#6B21A8", marginBottom: 4 }}>
                         {tendenciasCofersaModal.providers.length} proveedores encontrados
                       </div>
                       <div style={{ fontSize: 12, fontWeight: 750, color: "#7C3AED" }}>
@@ -5850,10 +5853,10 @@ export default function MetricaRecepcion() {
                           }}
                         >
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: 950, color: "#0F172A", marginBottom: 4 }}>
+                            <div style={{ fontSize: 14, fontWeight: 790, color: "#0F172A", marginBottom: 4 }}>
                               {provider.name}
                             </div>
-                            <div style={{ fontSize: 12, fontWeight: 800, color: "#64748B", marginBottom: 4 }}>
+                            <div style={{ fontSize: 12, fontWeight: 620, color: "#64748B", marginBottom: 4 }}>
                               {provider.count} descargas · Promedio: {fmtMinutesFromMs(provider.avgTimeMs)}
                             </div>
                             {provider.variations && provider.variations.length > 1 && (
@@ -5874,7 +5877,7 @@ export default function MetricaRecepcion() {
                               background: "rgba(124,58,237,0.1)",
                               color: "#7C3AED",
                               fontSize: 12,
-                              fontWeight: 900,
+                              fontWeight: 700,
                             }}>
                               {fmtMinutesFromMs(provider.totalTimeMs)}
                             </div>
@@ -5899,7 +5902,7 @@ export default function MetricaRecepcion() {
                         background: "#fff",
                         color: "#0F172A",
                         fontSize: 12,
-                        fontWeight: 800,
+                        fontWeight: 620,
                         cursor: "pointer",
                         fontFamily: "inherit",
                         marginBottom: 16,
@@ -5916,7 +5919,7 @@ export default function MetricaRecepcion() {
                       background: "linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)",
                       border: "1px solid rgba(124,58,237,0.2)",
                     }}>
-                      <div style={{ fontSize: 16, fontWeight: 950, color: "#6B21A8", marginBottom: 4 }}>
+                      <div style={{ fontSize: 16, fontWeight: 790, color: "#6B21A8", marginBottom: 4 }}>
                         {tendenciasCofersaModal.selectedProvider.name}
                       </div>
                       {tendenciasCofersaModal.selectedProvider.variations && 
@@ -5932,26 +5935,26 @@ export default function MetricaRecepcion() {
                       )}
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
                         <div>
-                          <div style={{ fontSize: 11, fontWeight: 900, color: "#7C3AED", textTransform: "uppercase", marginBottom: 4 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", marginBottom: 4 }}>
                             Descargas
                           </div>
-                          <div style={{ fontSize: 20, fontWeight: 950, color: "#0F172A" }}>
+                          <div style={{ fontSize: 20, fontWeight: 790, color: "#0F172A" }}>
                             {tendenciasCofersaModal.selectedProvider.count}
                           </div>
                         </div>
                         <div>
-                          <div style={{ fontSize: 11, fontWeight: 900, color: "#7C3AED", textTransform: "uppercase", marginBottom: 4 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", marginBottom: 4 }}>
                             Tiempo promedio
                           </div>
-                          <div style={{ fontSize: 20, fontWeight: 950, color: "#0F172A" }}>
+                          <div style={{ fontSize: 20, fontWeight: 790, color: "#0F172A" }}>
                             {fmtMinutesFromMs(tendenciasCofersaModal.selectedProvider.avgTimeMs)}
                           </div>
                         </div>
                         <div>
-                          <div style={{ fontSize: 11, fontWeight: 900, color: "#7C3AED", textTransform: "uppercase", marginBottom: 4 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", marginBottom: 4 }}>
                             Tiempo total
                           </div>
-                          <div style={{ fontSize: 20, fontWeight: 950, color: "#0F172A" }}>
+                          <div style={{ fontSize: 20, fontWeight: 790, color: "#0F172A" }}>
                             {fmtMinutesFromMs(tendenciasCofersaModal.selectedProvider.totalTimeMs)}
                           </div>
                         </div>
@@ -6402,7 +6405,7 @@ export default function MetricaRecepcion() {
                     border: "1px solid #0369A1",
                     background: "linear-gradient(135deg, #0369A1 0%, #38BDF8 100%)",
                     color: "#fff",
-                    fontWeight: 900,
+                    fontWeight: 700,
                     fontSize: 13,
                     cursor: tendenciasEpaModal.loading || tendenciasEpaModal.providers.length === 0 ? "not-allowed" : "pointer",
                     fontFamily: "inherit",
@@ -6439,7 +6442,7 @@ export default function MetricaRecepcion() {
             {tendenciasEpaModal.loading ? (
               <div style={ui.aperturasModalLoadingBox}>
                 <Loader2 size={22} strokeWidth={2.25} color="#0369A1" style={{ animation: "metricaRecepcionSpin 0.75s linear infinite" }} />
-                <span style={{ color: "#64748B", fontWeight: 800, fontSize: 13 }}>Analizando tendencias EPA…</span>
+                <span style={{ color: "#64748B", fontWeight: 620, fontSize: 13 }}>Analizando tendencias EPA…</span>
               </div>
             ) : tendenciasEpaModal.error ? (
               <div style={ui.aperturasModalEmpty}>{tendenciasEpaModal.error}</div>
@@ -6493,7 +6496,7 @@ export default function MetricaRecepcion() {
                       background: "linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)",
                       border: "1px solid rgba(3,105,161,0.2)",
                     }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#075985", marginBottom: 4 }}>
+                      <div style={{ fontSize: 13, fontWeight: 620, color: "#075985", marginBottom: 4 }}>
                         {tendenciasEpaModal.providers.length} proveedores encontrados
                       </div>
                       <div style={{ fontSize: 12, fontWeight: 750, color: "#0369A1" }}>
@@ -6532,10 +6535,10 @@ export default function MetricaRecepcion() {
                           }}
                         >
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: 950, color: "#0F172A", marginBottom: 4 }}>
+                            <div style={{ fontSize: 14, fontWeight: 790, color: "#0F172A", marginBottom: 4 }}>
                               {provider.name}
                             </div>
-                            <div style={{ fontSize: 12, fontWeight: 800, color: "#64748B", marginBottom: 4 }}>
+                            <div style={{ fontSize: 12, fontWeight: 620, color: "#64748B", marginBottom: 4 }}>
                               {provider.count} descargas · Promedio: {fmtMinutesFromMs(provider.avgTimeMs)}
                             </div>
                             {provider.variations && provider.variations.length > 1 && (
@@ -6556,7 +6559,7 @@ export default function MetricaRecepcion() {
                               background: "rgba(3,105,161,0.1)",
                               color: "#0369A1",
                               fontSize: 12,
-                              fontWeight: 900,
+                              fontWeight: 700,
                             }}>
                               {fmtMinutesFromMs(provider.totalTimeMs)}
                             </div>
@@ -6581,7 +6584,7 @@ export default function MetricaRecepcion() {
                         background: "#fff",
                         color: "#0F172A",
                         fontSize: 12,
-                        fontWeight: 800,
+                        fontWeight: 620,
                         cursor: "pointer",
                         fontFamily: "inherit",
                         marginBottom: 16,
@@ -6598,7 +6601,7 @@ export default function MetricaRecepcion() {
                       background: "linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)",
                       border: "1px solid rgba(3,105,161,0.2)",
                     }}>
-                      <div style={{ fontSize: 16, fontWeight: 950, color: "#075985", marginBottom: 4 }}>
+                      <div style={{ fontSize: 16, fontWeight: 790, color: "#075985", marginBottom: 4 }}>
                         {tendenciasEpaModal.selectedProvider.name}
                       </div>
                       {tendenciasEpaModal.selectedProvider.variations && 
@@ -6614,26 +6617,26 @@ export default function MetricaRecepcion() {
                       )}
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
                         <div>
-                          <div style={{ fontSize: 11, fontWeight: 900, color: "#0369A1", textTransform: "uppercase", marginBottom: 4 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#0369A1", textTransform: "uppercase", marginBottom: 4 }}>
                             Descargas
                           </div>
-                          <div style={{ fontSize: 20, fontWeight: 950, color: "#0F172A" }}>
+                          <div style={{ fontSize: 20, fontWeight: 790, color: "#0F172A" }}>
                             {tendenciasEpaModal.selectedProvider.count}
                           </div>
                         </div>
                         <div>
-                          <div style={{ fontSize: 11, fontWeight: 900, color: "#0369A1", textTransform: "uppercase", marginBottom: 4 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#0369A1", textTransform: "uppercase", marginBottom: 4 }}>
                             Tiempo promedio
                           </div>
-                          <div style={{ fontSize: 20, fontWeight: 950, color: "#0F172A" }}>
+                          <div style={{ fontSize: 20, fontWeight: 790, color: "#0F172A" }}>
                             {fmtMinutesFromMs(tendenciasEpaModal.selectedProvider.avgTimeMs)}
                           </div>
                         </div>
                         <div>
-                          <div style={{ fontSize: 11, fontWeight: 900, color: "#0369A1", textTransform: "uppercase", marginBottom: 4 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#0369A1", textTransform: "uppercase", marginBottom: 4 }}>
                             Tiempo total
                           </div>
-                          <div style={{ fontSize: 20, fontWeight: 950, color: "#0F172A" }}>
+                          <div style={{ fontSize: 20, fontWeight: 790, color: "#0F172A" }}>
                             {fmtMinutesFromMs(tendenciasEpaModal.selectedProvider.totalTimeMs)}
                           </div>
                         </div>
@@ -6739,7 +6742,7 @@ export default function MetricaRecepcion() {
             {aperturasModalLoading ? (
               <div style={ui.aperturasModalLoadingBox}>
                 <Loader2 size={22} strokeWidth={2.25} color={ACCENT} style={{ animation: "metricaRecepcionSpin 0.75s linear infinite" }} />
-                <span style={{ color: "#64748B", fontWeight: 800, fontSize: 13 }}>Cargando…</span>
+                <span style={{ color: "#64748B", fontWeight: 620, fontSize: 13 }}>Cargando…</span>
               </div>
             ) : aperturasModalError ? (
               <div style={ui.aperturasModalEmpty}>{aperturasModalError}</div>
@@ -6930,8 +6933,8 @@ const ui = {
     flexShrink: 0,
     boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
   },
-  brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
-  brandSub: { fontWeight: 800, fontSize: 12, color: SLATE },
+  brandTitle: { fontWeight: 790, fontSize: 14, color: "#0F172A" },
+  brandSub: { fontWeight: 620, fontSize: 12, color: SLATE },
 
   topbarRight: {
     display: "flex",
@@ -6947,7 +6950,7 @@ const ui = {
     borderRadius: 12,
     padding: "9px 14px",
     cursor: "pointer",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
     color: "#0F172A",
     boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
@@ -6976,7 +6979,7 @@ const ui = {
     marginRight: "auto",
     boxSizing: "border-box",
     display: "grid",
-    gap: 16,
+    gap: 22,
     paddingBottom: 8,
   },
 
@@ -7007,7 +7010,7 @@ const ui = {
     border: "1px solid rgba(8,159,138,0.28)",
     background: ACCENT_SOFT,
     color: "#0F172A",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 13,
     cursor: "pointer",
     fontFamily: "inherit",
@@ -7029,14 +7032,14 @@ const ui = {
   },
   kicker: {
     fontSize: 11,
-    fontWeight: 900,
+    fontWeight: 700,
     letterSpacing: 0.08,
     textTransform: "uppercase",
     color: ACCENT,
   },
   badge: {
     fontSize: 12,
-    fontWeight: 800,
+    fontWeight: 620,
     padding: "5px 11px",
     borderRadius: 999,
     background: "#FFFFFF",
@@ -7051,7 +7054,7 @@ const ui = {
   title: {
     margin: 0,
     fontSize: "clamp(22px, 4vw, 30px)",
-    fontWeight: 950,
+    fontWeight: 790,
     letterSpacing: -0.4,
     lineHeight: 1.12,
     color: "#0F172A",
@@ -7069,7 +7072,7 @@ const ui = {
   heroNote: {
     background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
     border: "1px solid #E7E9F2",
-    borderRadius: 24,
+    borderRadius: 18,
     padding: 18,
     boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
     display: "grid",
@@ -7078,7 +7081,7 @@ const ui = {
   },
 
   heroNoteTitle: {
-    fontWeight: 980,
+    fontWeight: 820,
     fontSize: 22,
     lineHeight: 1.1,
     color: "#0F172A",
@@ -7086,7 +7089,7 @@ const ui = {
 
   heroNoteText: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
     lineHeight: 1.5,
   },
@@ -7102,7 +7105,7 @@ const ui = {
     alignItems: "center",
     gap: 8,
     color: "#475569",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     lineHeight: 1.35,
   },
@@ -7138,7 +7141,7 @@ const ui = {
     border: "1px solid rgba(8,159,138,0.28)",
     background: ACCENT_SOFT,
     color: "#0F172A",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     cursor: "pointer",
     fontFamily: "inherit",
@@ -7147,7 +7150,7 @@ const ui = {
   },
 
   sectionTitle: {
-    fontWeight: 980,
+    fontWeight: 820,
     fontSize: 16,
     color: "#0F172A",
     marginBottom: 2,
@@ -7155,7 +7158,7 @@ const ui = {
 
   sectionText: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
     lineHeight: 1.35,
   },
@@ -7204,7 +7207,7 @@ const ui = {
     color: "#334155",
     borderRadius: 18,
     padding: "12px 14px",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 12,
     cursor: "pointer",
     boxShadow: "0 8px 18px rgba(15,23,42,0.04)",
@@ -7229,7 +7232,7 @@ const ui = {
     color: ACCENT,
     borderRadius: 12,
     padding: "9px 14px",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
     cursor: "pointer",
     display: "inline-flex",
@@ -7245,7 +7248,7 @@ const ui = {
     color: "#0F172A",
     borderRadius: 12,
     padding: "9px 14px",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
     cursor: "pointer",
     display: "inline-flex",
@@ -7265,7 +7268,7 @@ const ui = {
   kpiCard: {
     background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
     border: "1px solid #E7E9F2",
-    borderRadius: 22,
+    borderRadius: 18,
     padding: 16,
     boxShadow: "0 10px 22px rgba(15, 23, 42, 0.05)",
     minHeight: 124,
@@ -7275,13 +7278,13 @@ const ui = {
 
   kpiLabel: {
     color: "#64748B",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 13,
   },
 
   kpiValue: {
     color: "#0F172A",
-    fontWeight: 990,
+    fontWeight: 850,
     fontSize: 30,
     lineHeight: 1.05,
     marginBottom: 10,
@@ -7290,7 +7293,7 @@ const ui = {
 
   kpiMeta: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     lineHeight: 1.4,
     marginBottom: 8,
@@ -7298,7 +7301,7 @@ const ui = {
 
   kpiHint: {
     color: ACCENT,
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 12,
     lineHeight: 1.35,
   },
@@ -7307,7 +7310,7 @@ const ui = {
     display: "grid",
     gap: 14,
     padding: 16,
-    borderRadius: 24,
+    borderRadius: 18,
     border: "1px solid #E7E9F2",
     background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
     boxShadow: "0 12px 28px rgba(15,23,42,0.05)",
@@ -7327,14 +7330,14 @@ const ui = {
   },
 
   kpiPanelTitle: {
-    fontWeight: 980,
+    fontWeight: 820,
     fontSize: 15,
     color: "#0F172A",
   },
 
   kpiPanelText: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     lineHeight: 1.45,
   },
@@ -7345,7 +7348,7 @@ const ui = {
     background: "#F8FAFC",
     border: "1px solid #E7E9F2",
     color: "#475569",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     whiteSpace: "nowrap",
   },
@@ -7387,7 +7390,7 @@ const ui = {
 
   execSummaryKicker: {
     fontSize: 11,
-    fontWeight: 900,
+    fontWeight: 700,
     letterSpacing: 0.06,
     textTransform: "uppercase",
     color: ACCENT,
@@ -7396,7 +7399,7 @@ const ui = {
 
   execSummaryHeadline: {
     fontSize: "clamp(16px, 2.6vw, 19px)",
-    fontWeight: 950,
+    fontWeight: 790,
     color: "#0F172A",
     lineHeight: 1.35,
     maxWidth: 720,
@@ -7412,7 +7415,7 @@ const ui = {
 
   execSummaryWarnInline: {
     color: "#B45309",
-    fontWeight: 800,
+    fontWeight: 620,
   },
 
   execSummaryStatusBadge: {
@@ -7421,7 +7424,7 @@ const ui = {
     background: "#F1F5F9",
     border: "1px solid #E2E8F0",
     color: "#334155",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 11,
     flexShrink: 0,
     alignSelf: "flex-start",
@@ -7445,7 +7448,7 @@ const ui = {
 
   execSummaryPillarTitle: {
     fontSize: 11,
-    fontWeight: 900,
+    fontWeight: 700,
     color: "#64748B",
     textTransform: "uppercase",
     letterSpacing: 0.04,
@@ -7453,7 +7456,7 @@ const ui = {
 
   execSummaryPillarValue: {
     fontSize: 16,
-    fontWeight: 950,
+    fontWeight: 790,
     color: "#0F172A",
     lineHeight: 1.2,
   },
@@ -7479,7 +7482,7 @@ const ui = {
 
   execSummaryColTitle: {
     fontSize: 12,
-    fontWeight: 950,
+    fontWeight: 790,
     color: "#0F172A",
   },
 
@@ -7499,7 +7502,7 @@ const ui = {
   execSummaryFocus: {
     margin: 0,
     color: "#0F172A",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
     lineHeight: 1.5,
     padding: "12px 14px",
@@ -7523,7 +7526,7 @@ const ui = {
 
   snapshotLabel: {
     fontSize: 10,
-    fontWeight: 900,
+    fontWeight: 700,
     color: "#64748B",
     textTransform: "uppercase",
     letterSpacing: 0.04,
@@ -7532,7 +7535,7 @@ const ui = {
 
   snapshotValue: {
     fontSize: 15,
-    fontWeight: 950,
+    fontWeight: 790,
     color: "#0F172A",
   },
 
@@ -7622,14 +7625,14 @@ const ui = {
   },
 
   chartTitle: {
-    fontWeight: 980,
+    fontWeight: 820,
     fontSize: 16,
     color: "#0F172A",
   },
 
   chartSubtitle: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     marginTop: 4,
     lineHeight: 1.35,
@@ -7641,7 +7644,7 @@ const ui = {
     background: "#F8FAFC",
     border: "1px solid #E7E9F2",
     color: "#475569",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 11,
     whiteSpace: "nowrap",
   },
@@ -7711,13 +7714,13 @@ const ui = {
 
   barValue: {
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 700,
     color: "#0F172A",
   },
 
   barLabel: {
     fontSize: 12,
-    fontWeight: 800,
+    fontWeight: 620,
     color: "#64748B",
   },
 
@@ -7775,14 +7778,14 @@ const ui = {
 
   teamName: {
     fontSize: 13,
-    fontWeight: 950,
+    fontWeight: 790,
     color: "#0F172A",
     lineHeight: 1.2,
   },
 
   teamMeta: {
     fontSize: 12,
-    fontWeight: 800,
+    fontWeight: 620,
     color: "#64748B",
     marginTop: 4,
     lineHeight: 1.35,
@@ -7797,14 +7800,14 @@ const ui = {
 
   teamValue: {
     fontSize: 18,
-    fontWeight: 980,
+    fontWeight: 820,
     color: ACCENT,
     lineHeight: 1,
   },
 
   teamValueLabel: {
     fontSize: 11,
-    fontWeight: 900,
+    fontWeight: 700,
     color: "#64748B",
     textTransform: "uppercase",
     letterSpacing: 0.3,
@@ -7812,7 +7815,7 @@ const ui = {
 
   teamTimeValue: {
     fontSize: 14,
-    fontWeight: 950,
+    fontWeight: 790,
     color: "#0F172A",
     flexShrink: 0,
   },
@@ -7839,7 +7842,7 @@ const ui = {
 
   teamFoot: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     lineHeight: 1.35,
   },
@@ -7887,7 +7890,7 @@ const ui = {
 
   legendText: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
   },
 
@@ -7919,14 +7922,14 @@ const ui = {
   },
 
   donutValue: {
-    fontWeight: 980,
+    fontWeight: 820,
     fontSize: 24,
     color: "#0F172A",
     lineHeight: 1,
   },
 
   donutText: {
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 11,
     color: "#64748B",
   },
@@ -7951,13 +7954,13 @@ const ui = {
 
   userRowName: {
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 700,
     color: "#0F172A",
   },
 
   userRowValue: {
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 700,
     color: ACCENT,
   },
 
@@ -7976,7 +7979,7 @@ const ui = {
   },
 
   bottomCard: {
-    borderRadius: 24,
+    borderRadius: 18,
     border: "1px solid #E7E9F2",
     background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
     padding: 18,
@@ -7984,7 +7987,7 @@ const ui = {
   },
 
   bottomTitle: {
-    fontWeight: 980,
+    fontWeight: 820,
     fontSize: 18,
     color: "#0F172A",
     lineHeight: 1.15,
@@ -7992,7 +7995,7 @@ const ui = {
 
   bottomText: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
     lineHeight: 1.5,
     marginBottom: 14,
@@ -8009,7 +8012,7 @@ const ui = {
     alignItems: "start",
     gap: 10,
     color: "#475569",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
     lineHeight: 1.45,
     padding: "10px 0",
@@ -8048,7 +8051,7 @@ const ui = {
     flexShrink: 0,
   },
   userName: {
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     color: "#0F172A",
     lineHeight: 1.2,
@@ -8085,7 +8088,7 @@ const ui = {
     color: "#B42318",
     borderRadius: 16,
     padding: "12px 14px",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
   },
 
@@ -8095,13 +8098,13 @@ const ui = {
     color: "#0F766E",
     borderRadius: 16,
     padding: "12px 14px",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
   },
 
   emptyMiniText: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     display: "grid",
     placeItems: "center",
@@ -8130,7 +8133,7 @@ const ui = {
     background: "#FFFFFF",
     border: "1px solid #E7E9F2",
     color: "#475569",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 12,
     boxShadow: "0 8px 18px rgba(15,23,42,0.04)",
   },
@@ -8144,7 +8147,7 @@ const ui = {
 
   heroNoteEyebrow: {
     color: "#64748B",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 11,
     letterSpacing: 0.4,
     textTransform: "uppercase",
@@ -8157,14 +8160,14 @@ const ui = {
     background: "#F1FBF8",
     border: "1px solid rgba(8,159,138,0.22)",
     color: ACCENT,
-    fontWeight: 950,
+    fontWeight: 790,
     fontSize: 11,
     whiteSpace: "nowrap",
   },
 
   sectionOverline: {
     color: ACCENT,
-    fontWeight: 950,
+    fontWeight: 790,
     fontSize: 11,
     letterSpacing: 0.5,
     textTransform: "uppercase",
@@ -8172,7 +8175,7 @@ const ui = {
 
   sectionOverlineLg: {
     color: ACCENT,
-    fontWeight: 950,
+    fontWeight: 790,
     fontSize: 13,
     letterSpacing: 0.55,
     textTransform: "uppercase",
@@ -8182,7 +8185,7 @@ const ui = {
     display: "grid",
     gap: 14,
     padding: 16,
-    borderRadius: 24,
+    borderRadius: 18,
     border: "1px solid #E7E9F2",
     background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
     boxShadow: "0 12px 28px rgba(15,23,42,0.05)",
@@ -8202,14 +8205,14 @@ const ui = {
   },
 
   filtersPanelTitle: {
-    fontWeight: 980,
+    fontWeight: 820,
     fontSize: 15,
     color: "#0F172A",
   },
 
   filtersPanelText: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     lineHeight: 1.45,
   },
@@ -8220,7 +8223,7 @@ const ui = {
     background: "#F8FAFC",
     border: "1px solid #E7E9F2",
     color: "#475569",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     whiteSpace: "nowrap",
   },
@@ -8246,13 +8249,13 @@ const ui = {
   },
 
   filterBtnLabel: {
-    fontWeight: 950,
+    fontWeight: 790,
     fontSize: 12,
     lineHeight: 1.1,
   },
 
   filterBtnHint: {
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 11,
     color: "#64748B",
     lineHeight: 1.1,
@@ -8283,7 +8286,7 @@ const ui = {
   statusCard: {
     background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
     border: "1px solid #E7E9F2",
-    borderRadius: 24,
+    borderRadius: 18,
     padding: 16,
     boxShadow: "0 10px 22px rgba(15, 23, 42, 0.06)",
     display: "grid",
@@ -8299,14 +8302,14 @@ const ui = {
   },
 
   alertCardTitle: {
-    fontWeight: 980,
+    fontWeight: 820,
     fontSize: 16,
     color: "#0F172A",
   },
 
   alertCardSubtitle: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     marginTop: 4,
     lineHeight: 1.4,
@@ -8318,7 +8321,7 @@ const ui = {
     background: "#F8FAFC",
     border: "1px solid #E7E9F2",
     color: "#475569",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 11,
     whiteSpace: "nowrap",
   },
@@ -8386,14 +8389,14 @@ const ui = {
 
   alertTitle: {
     color: "#0F172A",
-    fontWeight: 950,
+    fontWeight: 790,
     fontSize: 13,
     lineHeight: 1.2,
   },
 
   alertDescription: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     lineHeight: 1.45,
   },
@@ -8409,13 +8412,13 @@ const ui = {
 
   statusHeroLabel: {
     color: "#64748B",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 12,
   },
 
   statusHeroValue: {
     color: "#0F172A",
-    fontWeight: 990,
+    fontWeight: 850,
     fontSize: 34,
     lineHeight: 1,
     letterSpacing: -0.8,
@@ -8423,7 +8426,7 @@ const ui = {
 
   statusHeroText: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     lineHeight: 1.4,
   },
@@ -8451,14 +8454,14 @@ const ui = {
 
   statusMiniLabel: {
     color: "#64748B",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 11,
     lineHeight: 1.3,
   },
 
   statusMiniValue: {
     color: "#0F172A",
-    fontWeight: 980,
+    fontWeight: 820,
     fontSize: 20,
     lineHeight: 1.1,
   },
@@ -8470,7 +8473,7 @@ const ui = {
     width: "fit-content",
     padding: "7px 10px",
     borderRadius: 999,
-    fontWeight: 950,
+    fontWeight: 790,
     fontSize: 11,
     border: "1px solid #E7E9F2",
     background: "#F8FAFC",
@@ -8514,13 +8517,13 @@ const ui = {
 
   mixLabel: {
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 700,
     color: "#0F172A",
   },
 
   mixValue: {
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 700,
     color: "#64748B",
   },
 
@@ -8549,7 +8552,7 @@ const ui = {
 
   bottomEyebrow: {
     color: ACCENT,
-    fontWeight: 950,
+    fontWeight: 790,
     fontSize: 11,
     letterSpacing: 0.5,
     textTransform: "uppercase",
@@ -8562,7 +8565,7 @@ const ui = {
     background: "#F8FAFC",
     border: "1px solid #E7E9F2",
     color: "#475569",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 12,
     whiteSpace: "nowrap",
   },
@@ -8613,7 +8616,7 @@ const ui = {
     width: "min(640px, calc(100vw - 32px))",
     maxHeight: "min(calc(100vh - 32px), 720px)",
     background: "#fff",
-    borderRadius: 22,
+    borderRadius: 18,
     border: "1px solid #E7E9F2",
     boxShadow: "0 24px 64px rgba(15,23,42,0.2)",
     padding: 16,
@@ -8630,7 +8633,7 @@ const ui = {
     width: "min(780px, calc(100vw - 32px))",
     maxHeight: "min(calc(100vh - 32px), 760px)",
     background: "#fff",
-    borderRadius: 22,
+    borderRadius: 18,
     border: "1px solid #E7E9F2",
     boxShadow: "0 24px 64px rgba(15,23,42,0.2)",
     padding: 16,
@@ -8660,7 +8663,7 @@ const ui = {
     border: "1px solid rgba(8,159,138,0.28)",
     background: "#fff",
     color: "#0F172A",
-    fontWeight: 950,
+    fontWeight: 790,
     fontSize: 13,
     cursor: "pointer",
     fontFamily: "inherit",
@@ -8670,7 +8673,7 @@ const ui = {
 
   inlineCodeHint: {
     fontSize: 11,
-    fontWeight: 800,
+    fontWeight: 620,
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
     background: "#F1F5F9",
     padding: "2px 6px",
@@ -8688,7 +8691,7 @@ const ui = {
     border: "1px solid rgba(124,58,237,0.28)",
     background: "linear-gradient(135deg, #FDFBFF 0%, #F5F3FF 100%)",
     color: "#0F172A",
-    fontWeight: 950,
+    fontWeight: 790,
     fontSize: 13,
     cursor: "pointer",
     fontFamily: "inherit",
@@ -8707,7 +8710,7 @@ const ui = {
     border: "1px solid rgba(3,105,161,0.28)",
     background: "linear-gradient(135deg, #F8FDFF 0%, #F0F9FF 100%)",
     color: "#0F172A",
-    fontWeight: 950,
+    fontWeight: 790,
     fontSize: 13,
     cursor: "pointer",
     fontFamily: "inherit",
@@ -8728,7 +8731,7 @@ const ui = {
     border: "1px solid #D1D5DB",
     background: "#F9FAFB",
     color: "#475569",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
     cursor: "pointer",
     fontFamily: "inherit",
@@ -8762,7 +8765,7 @@ const ui = {
 
   providerTimesFilterLabel: {
     fontSize: 11,
-    fontWeight: 950,
+    fontWeight: 790,
     color: "#64748B",
     textTransform: "uppercase",
     letterSpacing: 0.4,
@@ -8798,7 +8801,7 @@ const ui = {
 
   providerTimesFilterHint: {
     fontSize: 12,
-    fontWeight: 800,
+    fontWeight: 620,
     color: "#94A3B8",
     lineHeight: 1.35,
   },
@@ -8809,7 +8812,7 @@ const ui = {
     width: "min(720px, calc(100vw - 32px))",
     maxHeight: "min(calc(100vh - 32px), 720px)",
     background: "#fff",
-    borderRadius: 22,
+    borderRadius: 18,
     border: "1px solid #E7E9F2",
     boxShadow: "0 24px 64px rgba(15,23,42,0.2)",
     padding: 16,
@@ -8834,14 +8837,14 @@ const ui = {
   },
   aperturasSheetTitle: {
     fontSize: 17,
-    fontWeight: 980,
+    fontWeight: 820,
     color: "#0F172A",
     lineHeight: 1.2,
   },
   aperturasSheetSubtitle: {
     marginTop: 4,
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
     lineHeight: 1.4,
   },
@@ -8851,7 +8854,7 @@ const ui = {
     border: "1px solid #E7E9F2",
     backgroundColor: "#F2F4FB",
     cursor: "pointer",
-    fontWeight: 950,
+    fontWeight: 790,
     color: "#0F172A",
     fontFamily: "inherit",
     flexShrink: 0,
@@ -8863,7 +8866,7 @@ const ui = {
   },
   settingsTitle: {
     fontSize: 14,
-    fontWeight: 950,
+    fontWeight: 790,
     color: "#0F172A",
   },
   settingsText: {
@@ -8874,7 +8877,7 @@ const ui = {
   },
   settingsWarningText: {
     fontSize: 12,
-    fontWeight: 800,
+    fontWeight: 620,
     color: "#92400E",
     background: "#FFFBEB",
     border: "1px solid rgba(245, 158, 11, 0.35)",
@@ -8906,14 +8909,14 @@ const ui = {
     color: "#1D4ED8",
     padding: "8px 12px",
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 700,
     cursor: "pointer",
     fontFamily: "inherit",
     width: "fit-content",
   },
   settingsError: {
     fontSize: 12,
-    fontWeight: 800,
+    fontWeight: 620,
     color: "#B42318",
     background: "#FEF2F2",
     border: "1px solid #FECACA",
@@ -8926,7 +8929,7 @@ const ui = {
     background: "#FBFCFF",
     padding: "10px 12px",
     fontSize: 13,
-    fontWeight: 800,
+    fontWeight: 620,
     color: "#0F172A",
     outline: "none",
     fontFamily: "inherit",
@@ -8940,7 +8943,7 @@ const ui = {
     color: "#fff",
     padding: "10px 12px",
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 700,
     cursor: "pointer",
     fontFamily: "inherit",
     whiteSpace: "nowrap",
@@ -8951,7 +8954,7 @@ const ui = {
     border: "1px dashed #D3DAE8",
     background: "#F8FAFC",
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 12,
   },
   settingsList: {
@@ -8971,7 +8974,7 @@ const ui = {
   },
   settingsCatalogTitle: {
     fontSize: 12,
-    fontWeight: 900,
+    fontWeight: 700,
     color: "#475467",
   },
   settingsCatalogList: {
@@ -9004,7 +9007,7 @@ const ui = {
     color: ACCENT,
     padding: "5px 10px",
     fontSize: 11,
-    fontWeight: 900,
+    fontWeight: 700,
     cursor: "pointer",
     fontFamily: "inherit",
     whiteSpace: "nowrap",
@@ -9016,7 +9019,7 @@ const ui = {
     color: "#B42318",
     padding: "5px 10px",
     fontSize: 11,
-    fontWeight: 900,
+    fontWeight: 700,
     cursor: "pointer",
     fontFamily: "inherit",
     whiteSpace: "nowrap",
@@ -9033,7 +9036,7 @@ const ui = {
   },
   settingsListText: {
     fontSize: 12,
-    fontWeight: 800,
+    fontWeight: 620,
     color: "#0F172A",
     wordBreak: "break-word",
   },
@@ -9044,7 +9047,7 @@ const ui = {
     color: "#B42318",
     padding: "6px 10px",
     fontSize: 11,
-    fontWeight: 900,
+    fontWeight: 700,
     cursor: "pointer",
     fontFamily: "inherit",
     whiteSpace: "nowrap",
@@ -9058,7 +9061,7 @@ const ui = {
   },
   aperturasModalEmpty: {
     color: "#64748B",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 13,
     padding: "20px 8px",
     textAlign: "center",
@@ -9080,7 +9083,7 @@ const ui = {
   },
   aperturasFilterLabel: {
     color: "#64748B",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 11,
   },
   aperturasFilterInput: {
@@ -9089,7 +9092,7 @@ const ui = {
     background: "#FBFCFF",
     padding: "10px 12px",
     fontSize: 13,
-    fontWeight: 800,
+    fontWeight: 620,
     color: "#0F172A",
     outline: "none",
     fontFamily: "inherit",
@@ -9102,7 +9105,7 @@ const ui = {
     background: "#FBFCFF",
     padding: "10px 12px",
     fontSize: 13,
-    fontWeight: 800,
+    fontWeight: 620,
     color: "#0F172A",
     outline: "none",
     fontFamily: "inherit",
@@ -9117,14 +9120,14 @@ const ui = {
     border: "1px solid #E7E9F2",
     background: "#F8FAFC",
     color: "#475569",
-    fontWeight: 900,
+    fontWeight: 700,
     fontSize: 12,
     cursor: "pointer",
     fontFamily: "inherit",
   },
   aperturasFilterHint: {
     color: "#94A3B8",
-    fontWeight: 800,
+    fontWeight: 620,
     fontSize: 11,
   },
   aperturasListWrap: {
@@ -9160,7 +9163,7 @@ const ui = {
     flexShrink: 0,
   },
   aperturasRowTitle: {
-    fontWeight: 950,
+    fontWeight: 790,
     fontSize: 13,
     color: "#0F172A",
     lineHeight: 1.35,
@@ -9169,13 +9172,13 @@ const ui = {
   aperturasRowMeta: {
     marginTop: 4,
     fontSize: 11,
-    fontWeight: 800,
+    fontWeight: 620,
     color: "#64748B",
     lineHeight: 1.35,
   },
   estadoPill: {
     fontSize: 11,
-    fontWeight: 900,
+    fontWeight: 700,
     padding: "4px 10px",
     borderRadius: 999,
     whiteSpace: "nowrap",
@@ -9199,7 +9202,7 @@ const ui = {
     border: "none",
     background: "transparent",
     color: ACCENT,
-    fontWeight: 950,
+    fontWeight: 790,
     fontSize: 12,
     cursor: "pointer",
     textDecoration: "underline",
