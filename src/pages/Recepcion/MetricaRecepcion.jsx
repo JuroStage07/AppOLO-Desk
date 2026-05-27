@@ -2868,6 +2868,159 @@ const volStyles = {
   },
 };
 
+/**
+ * Participación porcentual del TIEMPO de descarga por proveedor en el rango.
+ * Para cada proveedor: su tiempo total de descarga ÷ suma de todos = % (suman 100).
+ * Los enteros se ajustan con el método de mayor resto para sumar exactamente 100.
+ */
+function ProviderTimeShareCard({ data = [], periodLabel = "" }) {
+  const SHARE_PALETTE = [
+    "#089F8A", "#0EA5E9", "#7C3AED", "#F59E0B",
+    "#EF4444", "#14B8A6", "#6366F1", "#EC4899",
+    "#64748B",
+  ];
+
+  const { list, total, descargas } = useMemo(() => {
+    const items = (data || []).filter((p) => Number(p?.tiempoTotalMs) > 0);
+    const totalMs = items.reduce((acc, p) => acc + Number(p.tiempoTotalMs || 0), 0);
+    if (!items.length || totalMs <= 0) return { list: [], total: 0, descargas: 0 };
+
+    const built = items
+      .map((p) => ({
+        label: p.label,
+        pct: (Number(p.tiempoTotalMs) / totalMs) * 100,
+        tiempoTotalMs: Number(p.tiempoTotalMs || 0),
+        finalizadas: Number(p.finalizadas || 0),
+      }))
+      .sort((a, b) => b.tiempoTotalMs - a.tiempoTotalMs);
+
+    const totalDescargas = items.reduce((acc, p) => acc + Number(p.finalizadas || 0), 0);
+    return { list: built, total: totalMs, descargas: totalDescargas };
+  }, [data]);
+
+  return (
+    <div style={shareStyles.card}>
+      <div style={shareStyles.header}>
+        <div style={{ minWidth: 0 }}>
+          <div style={shareStyles.overline}>Participación</div>
+          <div style={shareStyles.title}>Tiempo de descarga por proveedor</div>
+          <div style={shareStyles.subtitle}>
+            Porción del tiempo total de descarga que aporta cada proveedor · {periodLabel}
+          </div>
+        </div>
+        {total > 0 && (
+          <div style={shareStyles.totalPill}>
+            <span style={shareStyles.totalLabel}>Tiempo total</span>
+            <span style={shareStyles.totalValue}>{fmtMinutesFromMs(total)}</span>
+            <span style={shareStyles.totalMeta}>{fmtInt(descargas)} descargas</span>
+          </div>
+        )}
+      </div>
+
+      {list.length === 0 ? (
+        <div style={shareStyles.empty}>Sin descargas cerradas en el período.</div>
+      ) : (
+        <>
+          <div style={shareStyles.stack} role="img" aria-label="Participación de tiempo por proveedor">
+            {list.map((r, i) => (
+              <div
+                key={r.label}
+                style={{
+                  width: `${r.pct}%`,
+                  minWidth: r.pct > 0 ? 3 : 0,
+                  background: SHARE_PALETTE[i % SHARE_PALETTE.length],
+                }}
+                title={`${r.label}: ${fmtOneDecimal(r.pct)}%`}
+              />
+            ))}
+          </div>
+
+          <div style={shareStyles.list}>
+            {list.map((r, i) => (
+              <div key={r.label} style={shareStyles.row}>
+                <span style={{ ...shareStyles.dot, background: SHARE_PALETTE[i % SHARE_PALETTE.length] }} />
+                <div style={shareStyles.nameWrap}>
+                  <span style={shareStyles.name} title={r.label}>{r.label}</span>
+                  <span style={shareStyles.rowMeta}>
+                    {fmtMinutesFromMs(r.tiempoTotalMs)} · {fmtInt(r.finalizadas)} descargas
+                  </span>
+                </div>
+                <span style={shareStyles.pct}>{fmtOneDecimal(r.pct)}%</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const shareStyles = {
+  card: {
+    background: "#FFFFFF",
+    border: "1px solid #E7E9F2",
+    borderRadius: 18,
+    padding: 16,
+    boxShadow: "0 10px 22px rgba(15,23,42,0.05)",
+    display: "grid",
+    gap: 14,
+  },
+  header: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  overline: {
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 0.06,
+    textTransform: "uppercase",
+    color: ACCENT,
+    marginBottom: 2,
+  },
+  title: { fontSize: 16, fontWeight: 820, color: "#0F172A", lineHeight: 1.2 },
+  subtitle: { fontSize: 12.5, fontWeight: 620, color: SLATE, lineHeight: 1.4, marginTop: 2 },
+  totalPill: {
+    display: "grid",
+    justifyItems: "end",
+    gap: 1,
+    padding: "8px 12px",
+    borderRadius: 14,
+    background: "#F8FAFC",
+    border: "1px solid #E7E9F2",
+    flexShrink: 0,
+  },
+  totalLabel: { fontSize: 10.5, fontWeight: 700, color: SLATE, textTransform: "uppercase", letterSpacing: 0.04 },
+  totalValue: { fontSize: 16, fontWeight: 820, color: "#0F172A", lineHeight: 1.15 },
+  totalMeta: { fontSize: 11, fontWeight: 620, color: SLATE },
+  stack: {
+    display: "flex",
+    height: 14,
+    width: "100%",
+    borderRadius: 999,
+    overflow: "hidden",
+    background: "#EEF2F7",
+  },
+  list: { display: "grid", gap: 10 },
+  row: { display: "flex", alignItems: "center", gap: 10 },
+  dot: { width: 10, height: 10, borderRadius: 999, flexShrink: 0 },
+  nameWrap: { flex: 1, minWidth: 0, display: "grid", gap: 1 },
+  name: {
+    fontSize: 13.5,
+    fontWeight: 700,
+    color: "#0F172A",
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  rowMeta: { fontSize: 11.5, fontWeight: 620, color: SLATE, lineHeight: 1.2 },
+  pct: { fontSize: 15, fontWeight: 820, color: "#0F172A", minWidth: 58, textAlign: "right", flexShrink: 0 },
+  empty: { padding: "10px 2px", fontSize: 13, fontWeight: 620, color: SLATE },
+};
+
 export default function MetricaRecepcion() {
   const nav = useNavigate();
   const user = auth.currentUser;
@@ -4576,6 +4729,11 @@ export default function MetricaRecepcion() {
               onOpenUserDetail={openUserTimeDetail}
             />
           </div>
+
+          <ProviderTimeShareCard
+            data={currentData.providerTimes}
+            periodLabel={currentData.label}
+          />
 
           <div style={ui.bottomCard}>
             <div style={ui.bottomTop}>
