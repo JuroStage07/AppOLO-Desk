@@ -13,6 +13,7 @@ import {
   LogOut,
   Menu,
   Pin,
+  Search,
   Shield,
   Sparkles,
   User,
@@ -31,21 +32,21 @@ import { isEpaRestrictedUser } from "../config/epaOnlyUids";
 import { useAllPinnedModules } from "../hooks/usePinnedModules";
 import { PinsFlyout } from "../components/ui";
 
-/* ─── Design tokens ─── */
+/* ─── Design tokens (unified with app theme accent #089F8A) ─── */
 const T = {
-  accent: "#06B6A0",
-  accentDark: "#059585",
-  accentSoft: "rgba(6, 182, 160, 0.08)",
-  accentGlow: "rgba(6, 182, 160, 0.25)",
-  bg: "#F8FAFC",
+  accent: "#089F8A",
+  accentDark: "#06776A",
+  accentSoft: "rgba(8, 159, 138, 0.10)",
+  accentGlow: "rgba(8, 159, 138, 0.28)",
+  bg: "#F6F8FB",
   surface: "#FFFFFF",
   surfaceAlt: "#F1F5F9",
-  border: "#E2E8F0",
-  borderSoft: "rgba(226, 232, 240, 0.6)",
+  border: "#E5E9F0",
+  borderSoft: "rgba(226, 232, 240, 0.7)",
   text: "#0F172A",
   textSecondary: "#475569",
   textMuted: "#94A3B8",
-  shadow: "0 1px 3px rgba(15,23,42,0.04), 0 4px 12px rgba(15,23,42,0.06)",
+  shadow: "0 1px 2px rgba(15,23,42,0.04), 0 6px 16px rgba(15,23,42,0.05)",
   shadowMd: "0 4px 16px rgba(15,23,42,0.06), 0 12px 40px rgba(15,23,42,0.08)",
   shadowLg: "0 8px 24px rgba(15,23,42,0.08), 0 20px 60px rgba(15,23,42,0.12)",
   radius: 16,
@@ -54,7 +55,7 @@ const T = {
   font: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
 };
 
-export default function Home() {
+export default function AreasTrabajoHubPage() {
   const nav = useNavigate();
   const { profile, epaAdmin, user: ctxUser } = useContext(AuthCtx);
   const user = ctxUser ?? auth.currentUser;
@@ -64,6 +65,8 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedArea, setExpandedArea] = useState(null);
   const [pinsOpen, setPinsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [searchFocus, setSearchFocus] = useState(false);
   const { pins } = useAllPinnedModules();
 
   useEffect(() => {
@@ -75,7 +78,6 @@ export default function Home() {
     document.body.style.background = T.bg;
     document.body.style.margin = "0";
 
-    // Trigger mount animation
     requestAnimationFrame(() => setMounted(true));
 
     return () => {
@@ -128,7 +130,6 @@ export default function Home() {
         img: imgSalud,
         tag: "Seguridad",
         icon: <Shield size={18} strokeWidth={2} />,
-        tone: "accent",
         subModules: [
           { label: "Control de marcas", path: "/salud/control-marcas" },
           { label: "Aperturas", path: "/salud/aperturas" },
@@ -212,6 +213,22 @@ export default function Home() {
     }
     return allAreas;
   }, [allAreas, epaOnly]);
+
+  const term = query.trim().toLowerCase();
+  const filteredAreas = useMemo(() => {
+    if (!term) return areas;
+    return areas.filter((a) => {
+      const haystack = [
+        a.title,
+        a.desc,
+        a.tag,
+        ...(a.subModules || []).map((s) => s.label),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [areas, term]);
 
   const pinCount = epaOnly
     ? pins.filter((p) => p.moduleKey === "epa").length
@@ -364,7 +381,6 @@ export default function Home() {
       {/* ─── Header ─── */}
       <header style={styles.header}>
         <div style={styles.headerInner}>
-          {/* Menu button */}
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
@@ -392,7 +408,6 @@ export default function Home() {
           </div>
 
           <div style={styles.headerActions}>
-            {/* User pill */}
             <div style={styles.userPill}>
               <div style={styles.userPillAvatar}>
                 <User size={14} strokeWidth={2.2} />
@@ -402,7 +417,6 @@ export default function Home() {
               </span>
             </div>
 
-            {/* Logout */}
             <button
               type="button"
               onClick={logout}
@@ -430,54 +444,56 @@ export default function Home() {
       {/* ─── Main content ─── */}
       <main style={styles.main}>
         <div style={styles.container}>
-          {/* Welcome section */}
+          {/* Hero */}
           <section
             style={{
-              ...styles.welcomeSection,
+              ...styles.hero,
               opacity: mounted ? 1 : 0,
               transform: mounted ? "translateY(0)" : "translateY(12px)",
             }}
           >
-            <div style={styles.welcomeContent}>
-              <div style={styles.welcomeGreeting}>
-                <span style={styles.greetingEmoji}>👋</span>
-                <span style={styles.greetingText}>{greeting}</span>
+            <div style={styles.heroText}>
+              <div style={styles.greetingChip}>
+                <span style={styles.greetingDot} />
+                <span>{greeting}</span>
               </div>
-              <h1 style={styles.welcomeTitle}>
-                {user?.displayName || "Operador"}
-              </h1>
-              <p style={styles.welcomeSubtitle}>
-                Seleccioná un módulo para comenzar. Tenés acceso a{" "}
-                <strong style={{ color: T.accent, fontWeight: 700 }}>
-                  {areas.length} áreas
+              <h1 style={styles.heroTitle}>{user?.displayName || "Operador"}</h1>
+              <p style={styles.heroSubtitle}>
+                Elegí un área para comenzar. Tenés acceso a{" "}
+                <strong style={{ color: T.accent, fontWeight: 800 }}>
+                  {areas.length} {areas.length === 1 ? "área" : "áreas"}
                 </strong>{" "}
                 de trabajo.
               </p>
             </div>
 
-            {/* Quick stats */}
-            <div style={styles.quickStats}>
-              <div style={styles.quickStatItem}>
-                <div style={styles.quickStatIcon}>
-                  <Zap size={16} strokeWidth={2.2} color={T.accent} />
-                </div>
-                <div>
-                  <div style={styles.quickStatValue}>{areas.length}</div>
-                  <div style={styles.quickStatLabel}>Módulos</div>
-                </div>
-              </div>
-              <div style={styles.quickStatDivider} />
-              <div style={styles.quickStatItem}>
-                <div style={styles.quickStatIcon}>
-                  <Shield size={16} strokeWidth={2.2} color={T.accent} />
-                </div>
-                <div>
-                  <div style={styles.quickStatValue}>
-                    {user?.email ? "Activa" : "—"}
-                  </div>
-                  <div style={styles.quickStatLabel}>Sesión</div>
-                </div>
-              </div>
+            <div
+              style={{
+                ...styles.searchWrap,
+                ...(searchFocus ? styles.searchWrapFocus : {}),
+              }}
+            >
+              <Search size={17} strokeWidth={2.2} color={searchFocus ? T.accent : T.textMuted} />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => setSearchFocus(true)}
+                onBlur={() => setSearchFocus(false)}
+                placeholder="Buscar área o sección…"
+                style={styles.searchInput}
+                aria-label="Buscar área"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  style={styles.searchClear}
+                  aria-label="Limpiar búsqueda"
+                >
+                  <X size={14} strokeWidth={2.4} />
+                </button>
+              )}
             </div>
           </section>
 
@@ -487,124 +503,144 @@ export default function Home() {
               ...styles.gridSection,
               opacity: mounted ? 1 : 0,
               transform: mounted ? "translateY(0)" : "translateY(16px)",
-              transitionDelay: "120ms",
+              transitionDelay: "100ms",
             }}
           >
             <div style={styles.sectionHeader}>
               <h2 style={styles.sectionTitle}>Áreas de trabajo</h2>
-              <span style={styles.sectionBadge}>{areas.length} disponibles</span>
+              <span style={styles.sectionBadge}>
+                {term
+                  ? `${filteredAreas.length} ${filteredAreas.length === 1 ? "resultado" : "resultados"}`
+                  : `${areas.length} disponibles`}
+              </span>
             </div>
 
-            <div style={styles.grid}>
-              {areas.map((a, idx) => {
-                const isHover = hovered === a.key;
-                const blocked = a.blocked === true;
+            {filteredAreas.length === 0 ? (
+              <div style={styles.emptyState}>
+                <div style={styles.emptyIcon}>
+                  <Search size={22} strokeWidth={2} color={T.textMuted} />
+                </div>
+                <div style={styles.emptyTitle}>Sin resultados</div>
+                <div style={styles.emptyText}>
+                  No encontramos áreas para “{query}”.
+                </div>
+                <button type="button" onClick={() => setQuery("")} style={styles.emptyBtn}>
+                  Limpiar búsqueda
+                </button>
+              </div>
+            ) : (
+              <div style={styles.grid}>
+                {filteredAreas.map((a, idx) => {
+                  const isHover = hovered === a.key;
+                  const blocked = a.blocked === true;
 
-                return (
-                  <div
-                    key={a.key}
-                    role={blocked ? "group" : "button"}
-                    aria-disabled={blocked || undefined}
-                    tabIndex={blocked ? -1 : 0}
-                    onClick={() => !blocked && go(a.path)}
-                    onKeyDown={(e) => {
-                      if (blocked) return;
-                      if (e.key === "Enter" || e.key === " ") go(a.path);
-                    }}
-                    onMouseEnter={() => !blocked && setHovered(a.key)}
-                    onMouseLeave={() => setHovered(null)}
-                    style={{
-                      ...styles.card,
-                      ...(isHover && !blocked ? styles.cardHover : {}),
-                      ...(blocked ? styles.cardBlocked : {}),
-                      transitionDelay: `${idx * 40}ms`,
-                      opacity: mounted ? 1 : 0,
-                      transform: mounted
-                        ? isHover && !blocked
-                          ? "translateY(-4px) scale(1.01)"
-                          : "translateY(0) scale(1)"
-                        : "translateY(20px) scale(0.97)",
-                    }}
-                  >
-                    {/* Image area */}
+                  return (
                     <div
+                      key={a.key}
+                      role={blocked ? "group" : "button"}
+                      aria-disabled={blocked || undefined}
+                      tabIndex={blocked ? -1 : 0}
+                      onClick={() => !blocked && go(a.path)}
+                      onKeyDown={(e) => {
+                        if (blocked) return;
+                        if (e.key === "Enter" || e.key === " ") go(a.path);
+                      }}
+                      onMouseEnter={() => !blocked && setHovered(a.key)}
+                      onMouseLeave={() => setHovered(null)}
                       style={{
-                        ...styles.cardMedia,
-                        backgroundImage: `url(${a.img})`,
-                        ...(a.mediaStyle || {}),
+                        ...styles.card,
+                        ...(isHover && !blocked ? styles.cardHover : {}),
+                        ...(blocked ? styles.cardBlocked : {}),
+                        transitionDelay: `${idx * 40}ms`,
+                        opacity: mounted ? 1 : 0,
+                        transform: mounted
+                          ? isHover && !blocked
+                            ? "translateY(-4px)"
+                            : "translateY(0)"
+                          : "translateY(20px)",
                       }}
                     >
+                      {/* Image area */}
                       <div
                         style={{
-                          ...styles.cardMediaOverlay,
-                          ...(a.mediaOverlayStyle || {}),
+                          ...styles.cardMedia,
+                          backgroundImage: `url(${a.img})`,
+                          ...(a.mediaStyle || {}),
+                          ...(isHover && !blocked && !a.mediaStyle
+                            ? { backgroundSize: "112%" }
+                            : {}),
                         }}
-                      />
-                      {/* Tag pill */}
-                      <div style={styles.cardMediaBadge}>
-                        <span style={styles.tagPill}>{a.tag}</span>
-                      </div>
-                      {blocked && (
-                        <div style={styles.blockedOverlay}>
-                          <Lock size={20} strokeWidth={2} color="#fff" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Card content */}
-                    <div style={styles.cardContent}>
-                      <div style={styles.cardHeader}>
+                      >
                         <div
                           style={{
-                            ...styles.cardIconBox,
-                            ...(isHover && !blocked
-                              ? {
-                                  background: T.accent,
-                                  color: "#fff",
-                                  boxShadow: `0 4px 12px ${T.accentGlow}`,
-                                }
-                              : {}),
+                            ...styles.cardMediaOverlay,
+                            ...(a.mediaOverlayStyle || {}),
                           }}
-                        >
-                          {a.icon}
+                        />
+                        <div style={styles.cardMediaTop}>
+                          <span style={styles.tagPill}>{a.tag}</span>
                         </div>
-                        <h3 style={styles.cardTitle}>{a.title}</h3>
-                      </div>
-
-                      <p style={styles.cardDesc}>{blocked ? a.blockedDesc || a.desc : a.desc}</p>
-
-                      <div style={styles.cardAction}>
-                        {blocked ? (
-                          <span style={styles.cardActionBlocked}>
-                            <Lock size={13} strokeWidth={2.5} />
-                            <span>No disponible</span>
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              ...styles.cardActionLink,
-                              ...(isHover ? { color: T.accent } : {}),
-                            }}
-                          >
-                            <span>Abrir módulo</span>
-                            <ChevronRight
-                              size={14}
-                              strokeWidth={2.5}
-                              style={{
-                                transition: "transform 200ms ease",
-                                transform: isHover
-                                  ? "translateX(3px)"
-                                  : "translateX(0)",
-                              }}
-                            />
-                          </span>
+                        {blocked && (
+                          <div style={styles.blockedOverlay}>
+                            <Lock size={20} strokeWidth={2} color="#fff" />
+                          </div>
                         )}
                       </div>
+
+                      {/* Card content */}
+                      <div style={styles.cardContent}>
+                        <div style={styles.cardHeader}>
+                          <div
+                            style={{
+                              ...styles.cardIconBox,
+                              ...(isHover && !blocked
+                                ? {
+                                    background: T.accent,
+                                    color: "#fff",
+                                    borderColor: T.accent,
+                                    boxShadow: `0 6px 16px ${T.accentGlow}`,
+                                  }
+                                : {}),
+                            }}
+                          >
+                            {a.icon}
+                          </div>
+                          <h3 style={styles.cardTitle}>{a.title}</h3>
+                        </div>
+
+                        <p style={styles.cardDesc}>{blocked ? a.blockedDesc || a.desc : a.desc}</p>
+
+                        <div style={styles.cardAction}>
+                          {blocked ? (
+                            <span style={styles.cardActionBlocked}>
+                              <Lock size={13} strokeWidth={2.5} />
+                              <span>No disponible</span>
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                ...styles.cardActionLink,
+                                ...(isHover ? { color: T.accent } : {}),
+                              }}
+                            >
+                              <span>Abrir módulo</span>
+                              <ArrowRight
+                                size={15}
+                                strokeWidth={2.5}
+                                style={{
+                                  transition: "transform 200ms ease",
+                                  transform: isHover ? "translateX(4px)" : "translateX(0)",
+                                }}
+                              />
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         </div>
       </main>
@@ -617,11 +653,8 @@ const cssAnimations = `
   @keyframes homeSpin {
     to { transform: rotate(360deg); }
   }
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
   * { box-sizing: border-box; }
+  input::placeholder { color: ${T.textMuted}; }
 `;
 
 /* ─── Styles ─── */
@@ -643,7 +676,7 @@ const styles = {
   header: {
     width: "100%",
     borderBottom: `1px solid ${T.border}`,
-    background: "rgba(255,255,255,0.85)",
+    background: "rgba(255,255,255,0.82)",
     backdropFilter: "blur(12px) saturate(1.4)",
     WebkitBackdropFilter: "blur(12px) saturate(1.4)",
     position: "sticky",
@@ -653,11 +686,10 @@ const styles = {
   headerInner: {
     maxWidth: 1200,
     margin: "0 auto",
-    padding: "14px 24px",
+    padding: "12px 24px",
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
+    gap: 14,
   },
 
   brand: {
@@ -668,6 +700,7 @@ const styles = {
     userSelect: "none",
     outline: "none",
     textDecoration: "none",
+    marginLeft: 4,
   },
   brandIcon: {
     width: 40,
@@ -698,6 +731,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 8,
+    marginLeft: "auto",
   },
   userPill: {
     display: "flex",
@@ -927,111 +961,115 @@ const styles = {
   main: {
     width: "100%",
     overflow: "auto",
-    padding: "28px 24px 40px",
+    padding: "28px 24px 48px",
     WebkitOverflowScrolling: "touch",
   },
   container: {
     maxWidth: 1200,
     margin: "0 auto",
     display: "grid",
-    gap: 32,
+    gap: 26,
   },
 
-  /* Welcome */
-  welcomeSection: {
-    display: "grid",
-    gridTemplateColumns: "1fr auto",
-    alignItems: "center",
+  /* Hero */
+  hero: {
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
     gap: 24,
-    padding: "28px 32px",
-    background: T.surface,
-    borderRadius: 20,
-    border: `1px solid ${T.border}`,
-    boxShadow: T.shadow,
+    flexWrap: "wrap",
     transition: "opacity 400ms ease, transform 400ms ease",
   },
-  welcomeContent: {
+  heroText: {
     display: "grid",
     gap: 8,
     minWidth: 0,
   },
-  welcomeGreeting: {
-    display: "flex",
+  greetingChip: {
+    display: "inline-flex",
     alignItems: "center",
     gap: 8,
-  },
-  greetingEmoji: { fontSize: 20 },
-  greetingText: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: T.textMuted,
+    fontSize: 12,
+    fontWeight: 700,
+    color: T.accent,
+    background: T.accentSoft,
+    padding: "5px 12px",
+    borderRadius: 999,
+    width: "fit-content",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
-  welcomeTitle: {
+  greetingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    background: T.accent,
+    boxShadow: `0 0 0 3px ${T.accentSoft}`,
+  },
+  heroTitle: {
     margin: 0,
-    fontSize: "clamp(24px, 3.5vw, 32px)",
-    fontWeight: 800,
+    fontSize: "clamp(26px, 4vw, 36px)",
+    fontWeight: 850,
     color: T.text,
-    letterSpacing: -0.5,
-    lineHeight: 1.15,
+    letterSpacing: -0.6,
+    lineHeight: 1.1,
   },
-  welcomeSubtitle: {
+  heroSubtitle: {
     margin: 0,
     fontSize: 15,
     fontWeight: 500,
     color: T.textSecondary,
     lineHeight: 1.5,
-    maxWidth: 440,
+    maxWidth: 480,
   },
 
-  quickStats: {
+  /* Search */
+  searchWrap: {
     display: "flex",
     alignItems: "center",
-    gap: 20,
-    padding: "16px 24px",
+    gap: 10,
+    padding: "11px 14px",
+    background: T.surface,
+    border: `1px solid ${T.border}`,
+    borderRadius: 14,
+    boxShadow: T.shadow,
+    width: "min(320px, 100%)",
+    transition: "border-color 150ms ease, box-shadow 150ms ease",
+  },
+  searchWrapFocus: {
+    borderColor: T.accent,
+    boxShadow: `0 0 0 4px ${T.accentSoft}`,
+  },
+  searchInput: {
+    flex: 1,
+    border: "none",
+    outline: "none",
+    background: "transparent",
+    fontSize: 14,
+    fontWeight: 500,
+    color: T.text,
+    fontFamily: "inherit",
+    minWidth: 0,
+  },
+  searchClear: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    border: "none",
     background: T.surfaceAlt,
-    borderRadius: T.radius,
-    border: `1px solid ${T.borderSoft}`,
-  },
-  quickStatItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-  },
-  quickStatIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    background: T.accentSoft,
+    color: T.textSecondary,
     display: "grid",
     placeItems: "center",
+    cursor: "pointer",
     flexShrink: 0,
-  },
-  quickStatValue: {
-    fontSize: 16,
-    fontWeight: 800,
-    color: T.text,
-    lineHeight: 1.2,
-  },
-  quickStatLabel: {
-    fontSize: 12,
-    fontWeight: 500,
-    color: T.textMuted,
-    lineHeight: 1.2,
-    marginTop: 1,
-  },
-  quickStatDivider: {
-    width: 1,
-    height: 32,
-    background: T.border,
-    flexShrink: 0,
+    padding: 0,
+    fontFamily: "inherit",
   },
 
   /* Grid section */
   gridSection: {
     display: "grid",
-    gap: 18,
+    gap: 16,
     transition: "opacity 400ms ease, transform 400ms ease",
   },
   sectionHeader: {
@@ -1042,8 +1080,8 @@ const styles = {
   },
   sectionTitle: {
     margin: 0,
-    fontSize: 18,
-    fontWeight: 750,
+    fontSize: 17,
+    fontWeight: 800,
     color: T.text,
     letterSpacing: -0.2,
   },
@@ -1053,15 +1091,15 @@ const styles = {
     color: T.textMuted,
     padding: "5px 12px",
     borderRadius: 999,
-    background: T.surfaceAlt,
-    border: `1px solid ${T.borderSoft}`,
+    background: T.surface,
+    border: `1px solid ${T.border}`,
   },
 
   /* Cards grid */
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 220px), 1fr))",
-    gap: 14,
+    gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 248px), 1fr))",
+    gap: 16,
   },
 
   card: {
@@ -1071,7 +1109,7 @@ const styles = {
     overflow: "hidden",
     cursor: "pointer",
     userSelect: "none",
-    transition: "all 280ms cubic-bezier(0.22, 1, 0.36, 1)",
+    transition: "transform 260ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms ease, border-color 200ms ease",
     boxShadow: T.shadow,
     outline: "none",
     display: "flex",
@@ -1079,7 +1117,7 @@ const styles = {
   },
   cardHover: {
     borderColor: T.accent,
-    boxShadow: T.shadowLg,
+    boxShadow: T.shadowMd,
   },
   cardBlocked: {
     cursor: "not-allowed",
@@ -1089,32 +1127,36 @@ const styles = {
 
   /* Card media */
   cardMedia: {
-    height: 100,
+    height: 118,
     backgroundSize: "cover",
     backgroundPosition: "center",
     position: "relative",
     overflow: "hidden",
+    transition: "background-size 400ms ease",
   },
   cardMediaOverlay: {
     position: "absolute",
     inset: 0,
     background:
-      "linear-gradient(180deg, rgba(15,23,42,0.05) 0%, rgba(15,23,42,0.45) 100%)",
+      "linear-gradient(180deg, rgba(15,23,42,0.04) 0%, rgba(15,23,42,0.48) 100%)",
   },
-  cardMediaBadge: {
+  cardMediaTop: {
     position: "absolute",
     top: 12,
     left: 12,
+    right: 12,
+    display: "flex",
+    justifyContent: "flex-start",
   },
   tagPill: {
     padding: "5px 11px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.18)",
-    border: "1px solid rgba(255,255,255,0.3)",
+    background: "rgba(255,255,255,0.2)",
+    border: "1px solid rgba(255,255,255,0.35)",
     backdropFilter: "blur(8px)",
     WebkitBackdropFilter: "blur(8px)",
     color: "#fff",
-    fontWeight: 700,
+    fontWeight: 800,
     fontSize: 11,
     letterSpacing: 0.2,
   },
@@ -1128,11 +1170,11 @@ const styles = {
 
   /* Card content */
   cardContent: {
-    padding: "12px 14px 14px",
+    padding: "14px 16px 16px",
     display: "flex",
     flexDirection: "column",
     flex: 1,
-    gap: 8,
+    gap: 9,
   },
   cardHeader: {
     display: "flex",
@@ -1140,10 +1182,11 @@ const styles = {
     gap: 10,
   },
   cardIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 9,
     background: T.surfaceAlt,
+    border: `1px solid ${T.border}`,
     color: T.textSecondary,
     display: "grid",
     placeItems: "center",
@@ -1152,30 +1195,34 @@ const styles = {
   },
   cardTitle: {
     margin: 0,
-    fontSize: 13,
-    fontWeight: 700,
+    fontSize: 14.5,
+    fontWeight: 800,
     color: T.text,
-    letterSpacing: -0.1,
+    letterSpacing: -0.2,
     lineHeight: 1.2,
   },
   cardDesc: {
     margin: 0,
-    fontSize: 11.5,
+    fontSize: 12.5,
     fontWeight: 500,
     color: T.textMuted,
-    lineHeight: 1.4,
+    lineHeight: 1.45,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
   },
   cardAction: {
     marginTop: "auto",
-    paddingTop: 8,
+    paddingTop: 10,
     borderTop: `1px solid ${T.borderSoft}`,
   },
   cardActionLink: {
     display: "inline-flex",
     alignItems: "center",
-    gap: 4,
-    fontSize: 12,
-    fontWeight: 600,
+    gap: 6,
+    fontSize: 12.5,
+    fontWeight: 700,
     color: T.textSecondary,
     transition: "color 200ms ease",
   },
@@ -1183,8 +1230,43 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     gap: 5,
-    fontSize: 12,
-    fontWeight: 600,
+    fontSize: 12.5,
+    fontWeight: 700,
     color: T.textMuted,
+  },
+
+  /* Empty state */
+  emptyState: {
+    display: "grid",
+    justifyItems: "center",
+    gap: 8,
+    textAlign: "center",
+    padding: "48px 24px",
+    background: T.surface,
+    border: `1px dashed ${T.border}`,
+    borderRadius: 18,
+  },
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    background: T.surfaceAlt,
+    display: "grid",
+    placeItems: "center",
+    marginBottom: 4,
+  },
+  emptyTitle: { fontSize: 15, fontWeight: 800, color: T.text },
+  emptyText: { fontSize: 13, fontWeight: 500, color: T.textMuted, maxWidth: 320 },
+  emptyBtn: {
+    marginTop: 8,
+    padding: "9px 18px",
+    borderRadius: 10,
+    border: `1px solid ${T.border}`,
+    background: T.surface,
+    color: T.text,
+    fontWeight: 700,
+    fontSize: 13,
+    cursor: "pointer",
+    fontFamily: "inherit",
   },
 };
