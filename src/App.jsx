@@ -50,6 +50,8 @@ import MetricaRecepcion from "./pages/Recepcion/MetricaRecepcion";
 
 import EPAHubPage from "./pages/EPA/EPAHubPage";
 import AperturasFinalizadasEPA from "./pages/EPA/AperturasFinalizadasEPA";
+import DevHub from "./pages/Dev/DevHub";
+import UpdateSupabasePage from "./pages/Dev/UpdateSupabasePage";
 import ServiciosGenerales from "./pages/ServiciosGenerales/ServiciosGenerales";
 import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGenerales/ServiciosGeneralesOrdenesTrabajo";
 import ServiciosGeneralesOTCrear from "./pages/ServiciosGenerales/ServiciosGeneralesOTCrear";
@@ -304,6 +306,24 @@ export default function App() {
             element={
               <PrivateRoute>
                 <AperturasFinalizadasEPA />
+              </PrivateRoute>
+            }
+          />
+
+          {/* ================= Dev (solo role=dev) ================= */}
+          <Route
+            path="/dev"
+            element={
+              <PrivateRoute>
+                <DevHub />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/dev/update-supabase"
+            element={
+              <PrivateRoute>
+                <UpdateSupabasePage />
               </PrivateRoute>
             }
           />

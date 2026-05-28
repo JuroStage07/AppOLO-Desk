@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Code2,
   LayoutDashboard,
   Loader2,
   Lock,
@@ -57,7 +58,7 @@ const T = {
 
 export default function AreasTrabajoHubPage() {
   const nav = useNavigate();
-  const { profile, epaAdmin, user: ctxUser } = useContext(AuthCtx);
+  const { profile, epaAdmin, role, user: ctxUser } = useContext(AuthCtx);
   const user = ctxUser ?? auth.currentUser;
   const [hovered, setHovered] = useState(null);
   const [busyLogout, setBusyLogout] = useState(false);
@@ -211,6 +212,26 @@ export default function AreasTrabajoHubPage() {
             "linear-gradient(180deg, rgba(15,23,42,0.02) 0%, rgba(15,23,42,0.12) 100%)",
         },
       },
+      {
+        key: "dev",
+        title: "Dev",
+        desc: "Herramientas internas de desarrollo: migraciones, sincronización y utilidades.",
+        path: "/dev",
+        img: null,
+        tag: "Desarrollo",
+        icon: <Code2 size={18} strokeWidth={2} />,
+        devOnly: true,
+        subModules: [
+          { label: "Update AppOLO Supabase", path: "/dev/update-supabase" },
+        ],
+        mediaStyle: {
+          background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+          backgroundImage: "none",
+        },
+        mediaOverlayStyle: {
+          background: "none",
+        },
+      },
     ],
     []
   );
@@ -221,8 +242,8 @@ export default function AreasTrabajoHubPage() {
     if (epaOnly) {
       return allAreas.filter((a) => a.key === "epa");
     }
-    return allAreas;
-  }, [allAreas, epaOnly]);
+    return allAreas.filter((a) => !a.devOnly || role === "dev");
+  }, [allAreas, epaOnly, role]);
 
   const term = query.trim().toLowerCase();
   const filteredAreas = useMemo(() => {
