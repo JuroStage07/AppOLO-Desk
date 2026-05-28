@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from "react";
+﻿import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { AuthCtx } from "../auth/AuthProvider";
@@ -132,8 +132,12 @@ export default function AreasTrabajoHubPage() {
         icon: <Shield size={18} strokeWidth={2} />,
         subModules: [
           { label: "Control de marcas", path: "/salud/control-marcas" },
+          { label: "Historial marcas", path: "/salud/control-marcas/historial" },
           { label: "Aperturas", path: "/salud/aperturas" },
+          { label: "Aperturas finalizadas", path: "/salud/aperturas/finalizadas" },
+          { label: "Aperturas rechazadas", path: "/salud/aperturas/rechazadas" },
           { label: "Visados", path: "/salud/visados" },
+          { label: "Generar visado", path: "/salud/visado/generar" },
           { label: "Documentación", path: "/documentacion" },
           { label: "Métricas", path: "/salud/metricas" },
         ],
@@ -162,6 +166,8 @@ export default function AreasTrabajoHubPage() {
         subModules: [
           { label: "Equipos", path: "/mantenimiento/equipos" },
           { label: "Órdenes de trabajo", path: "/mantenimiento/ots" },
+          { label: "Gestión OTs", path: "/mantenimiento/OTsPage" },
+          { label: "OTs finalizadas", path: "/mantenimiento/ots/finalizadas" },
           { label: "Dashboard OTs", path: "/mantenimiento/ots/dashboard" },
         ],
       },
@@ -175,8 +181,12 @@ export default function AreasTrabajoHubPage() {
         icon: <Sparkles size={18} strokeWidth={2} />,
         subModules: [
           { label: "Órdenes de trabajo", path: "/servicios-generales/ordenes-trabajo" },
+          { label: "Crear OT", path: "/servicios-generales/ordenes-trabajo/crear" },
+          { label: "Gestión de OTs", path: "/servicios-generales/ordenes-trabajo/gestion" },
           { label: "Validar ingreso", path: "/servicios-generales/validar-ingreso" },
           { label: "Pesaje tarimas", path: "/servicios-generales/pesaje-tarimas" },
+          { label: "Registrar tarimas", path: "/servicios-generales/pesaje-tarimas/registrar" },
+          { label: "Consultar tarimas", path: "/servicios-generales/pesaje-tarimas/consultar" },
         ],
       },
       {
@@ -228,6 +238,21 @@ export default function AreasTrabajoHubPage() {
         .toLowerCase();
       return haystack.includes(term);
     });
+  }, [areas, term]);
+
+  // Flat list of matching submodules when searching
+  const filteredSubModules = useMemo(() => {
+    if (!term) return [];
+    const results = [];
+    areas.forEach((a) => {
+      if (a.blocked) return;
+      (a.subModules || []).forEach((sub) => {
+        if (sub.label.toLowerCase().includes(term)) {
+          results.push({ ...sub, parentTitle: a.title, parentIcon: a.icon, parentKey: a.key });
+        }
+      });
+    });
+    return results;
   }, [areas, term]);
 
   const pinCount = epaOnly
@@ -510,25 +535,27 @@ export default function AreasTrabajoHubPage() {
               <h2 style={styles.sectionTitle}>Áreas de trabajo</h2>
               <span style={styles.sectionBadge}>
                 {term
-                  ? `${filteredAreas.length} ${filteredAreas.length === 1 ? "resultado" : "resultados"}`
+                  ? `${filteredAreas.length + filteredSubModules.length} ${(filteredAreas.length + filteredSubModules.length) === 1 ? "resultado" : "resultados"}`
                   : `${areas.length} disponibles`}
               </span>
             </div>
 
-            {filteredAreas.length === 0 ? (
+            {filteredAreas.length === 0 && filteredSubModules.length === 0 ? (
               <div style={styles.emptyState}>
                 <div style={styles.emptyIcon}>
                   <Search size={22} strokeWidth={2} color={T.textMuted} />
                 </div>
                 <div style={styles.emptyTitle}>Sin resultados</div>
                 <div style={styles.emptyText}>
-                  No encontramos áreas para “{query}”.
+                  No encontramos áreas ni secciones para “{query}”.
                 </div>
                 <button type="button" onClick={() => setQuery("")} style={styles.emptyBtn}>
                   Limpiar búsqueda
                 </button>
               </div>
             ) : (
+              <>
+              {filteredAreas.length > 0 && (
               <div style={styles.grid}>
                 {filteredAreas.map((a, idx) => {
                   const isHover = hovered === a.key;
@@ -640,6 +667,42 @@ export default function AreasTrabajoHubPage() {
                   );
                 })}
               </div>
+              )}
+
+              {/* Sub-modules matching search */}
+              {term && filteredSubModules.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={styles.sectionHeader}>
+                    <h3 style={{ ...styles.sectionTitle, fontSize: 15 }}>Secciones encontradas</h3>
+                    <span style={styles.sectionBadge}>{filteredSubModules.length} {filteredSubModules.length === 1 ? "sección" : "secciones"}</span>
+                  </div>
+                  <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                    {filteredSubModules.map((sub) => (
+                      <div
+                        key={sub.path}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => go(sub.path)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") go(sub.path); }}
+                        onMouseEnter={() => setHovered("sub-" + sub.path)}
+                        onMouseLeave={() => setHovered(null)}
+                        style={{
+                          ...styles.subModuleRow,
+                          ...(hovered === "sub-" + sub.path ? styles.subModuleRowHover : {}),
+                        }}
+                      >
+                        <div style={styles.subModuleIcon}>{sub.parentIcon}</div>
+                        <div style={styles.subModuleInfo}>
+                          <span style={styles.subModuleLabel}>{sub.label}</span>
+                          <span style={styles.subModuleParent}>{sub.parentTitle}</span>
+                        </div>
+                        <ArrowRight size={14} strokeWidth={2.2} color={hovered === "sub-" + sub.path ? T.accent : T.textMuted} style={{ transition: "color 150ms ease" }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              </>
             )}
           </section>
         </div>
@@ -1268,5 +1331,52 @@ const styles = {
     fontSize: 13,
     cursor: "pointer",
     fontFamily: "inherit",
+  },
+
+  /* Sub-module search results */
+  subModuleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "12px 16px",
+    background: T.surface,
+    border: `1px solid ${T.border}`,
+    borderRadius: 14,
+    cursor: "pointer",
+    transition: "all 180ms ease",
+    outline: "none",
+  },
+  subModuleRowHover: {
+    borderColor: T.accent,
+    boxShadow: T.shadow,
+    transform: "translateX(2px)",
+  },
+  subModuleIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    background: T.accentSoft,
+    color: T.accent,
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+  },
+  subModuleInfo: {
+    flex: 1,
+    display: "grid",
+    gap: 2,
+    minWidth: 0,
+  },
+  subModuleLabel: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: T.text,
+    lineHeight: 1.2,
+  },
+  subModuleParent: {
+    fontSize: 11,
+    fontWeight: 500,
+    color: T.textMuted,
+    lineHeight: 1.2,
   },
 };
