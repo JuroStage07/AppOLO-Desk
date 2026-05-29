@@ -11,7 +11,8 @@
       "Bash(grep -v '^$')",
       "Bash(git ls-tree *)",
       "Bash(npm run *)",
-      "Bash(powershell *)"
+      "Bash(powershell *)",
+      "PowerShell(git *)"
     ]
   }
 }

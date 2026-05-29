@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../../firebase";
 import {
@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Expand,
   Eye,
   FileSpreadsheet,
   Info,
@@ -16,6 +17,15 @@ import {
   TrendingUp,
   User,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 import {
   collection,
   doc,
@@ -569,6 +579,7 @@ function aggregateProviderTimesByProveedor(rows = []) {
   for (const row of rows) {
     const dur = actionDurationMs(row);
     const label = actionProveedorLabel(row);
+    const unidades = Number(row?.cantidadBultos ?? row?.bultos ?? 0);
 
     if (!map.has(label)) {
       map.set(label, {
@@ -576,12 +587,14 @@ function aggregateProviderTimesByProveedor(rows = []) {
         finalizadas: 0,
         tiempoTotalMs: 0,
         tiempoPromedioMs: 0,
+        unidades: 0,
       });
     }
 
     const agg = map.get(label);
     agg.finalizadas += 1;
     agg.tiempoTotalMs += Number(dur || 0);
+    agg.unidades += Number.isFinite(unidades) ? unidades : 0;
   }
 
   return Array.from(map.values())
@@ -823,7 +836,7 @@ function buildExecutiveSummary({
       title: "Ritmo de muelle",
       value:
         horasTotales > 0
-          ? `${fmtInt(bultosPorHora)} bultos/h`
+          ? `${fmtInt(bultosPorHora)} unidades/h`
           : "Sin horas acumuladas",
       hint:
         horasTotales > 0
@@ -833,7 +846,7 @@ function buildExecutiveSummary({
     {
       title: "Capacidad",
       value: `${fmtInt(andenesEnUso)} andenes activos`,
-      hint: `${fmtInt(bultosTotales)} bultos procesados · ${fmtMinutesFromMs(tiempoPromedioMs)} promedio por cierre`,
+      hint: `${fmtInt(bultosTotales)} unidades procesadas · ${fmtMinutesFromMs(tiempoPromedioMs)} promedio por cierre`,
     },
   ];
 
@@ -880,8 +893,8 @@ function buildExecutiveSummary({
     { label: "Descargas cerradas", value: fmtInt(accionesFinalizadas) },
     { label: "Descargas iniciadas", value: fmtInt(accionesIniciadas) },
     { label: "Tiempo promedio", value: fmtMinutesFromMs(tiempoPromedioMs) },
-    { label: "Bultos totales", value: fmtInt(bultosTotales) },
-    { label: "Bultos / hora (estim.)", value: fmtInt(bultosPorHora) },
+    { label: "Unidades totales", value: fmtInt(bultosTotales) },
+    { label: "Unidades / hora (estim.)", value: fmtInt(bultosPorHora) },
   ];
 
   return {
@@ -895,6 +908,15 @@ function buildExecutiveSummary({
   };
 }
 
+function normalizeAndenId(raw) {
+  const s = String(raw || "—").trim();
+  if (s === "—") return s;
+  // If it's purely numeric (e.g. "1", "01", "3"), normalize to zero-padded 2 digits
+  const num = /^\d+$/.test(s) ? parseInt(s, 10) : NaN;
+  if (!isNaN(num)) return String(num).padStart(2, "0");
+  return s;
+}
+
 function buildAndenesData(docs = []) {
   const map = new Map();
 
@@ -902,7 +924,7 @@ function buildAndenesData(docs = []) {
     const andenes = Array.isArray(d?.andenes) ? d.andenes : [];
 
     for (const a of andenes) {
-      const key = String(a?.idAnden || "—");
+      const key = normalizeAndenId(a?.idAnden);
 
       if (!map.has(key)) {
         map.set(key, {
@@ -1225,7 +1247,7 @@ function buildDashboardFromDailyDocs(
     executiveSummary,
     kpis: [
       {
-        label: "Descargas completadas",
+        label: "Descargas completas",
         value: fmtInt(accionesFinalizadas),
         hint: "Acciones cerradas en el período",
         comparison: `${fmtInt(accionesIniciadas)} iniciadas · ${fmtInt(accionesCreadas)} creadas`,
@@ -1246,26 +1268,19 @@ function buildDashboardFromDailyDocs(
         tone: compliance >= 85 ? "good" : compliance >= 70 ? "warn" : "danger",
       },
       {
-        label: "Bultos procesados",
+        label: "Unidades procesadas",
         value: fmtInt(bultosTotales),
         hint: "Volumen total registrado en el período",
         comparison: `${fmtInt(bultosPorDescarga)} por descarga`,
         tone: "default",
       },
       {
-        label: "Bultos por hora",
+        label: "Unidades por hora",
         value: fmtInt(bultosPorHora),
         hint: "Eficiencia estimada sobre tiempo acumulado",
         comparison: horasTotales > 0
           ? `${fmtOneDecimal(horasTotales)} h trabajadas`
           : "Sin horas registradas",
-        tone: "default",
-      },
-      {
-        label: "Andenes en uso",
-        value: `${fmtInt(andenesEnUso)}/9`,
-        hint: "Posiciones con actividad registrada",
-        comparison: `${fmtInt(accionesIniciadas)} iniciadas · ${fmtInt(accionesCreadas)} creadas`,
         tone: "default",
       },
       {
@@ -1289,7 +1304,7 @@ function buildDashboardFromDailyDocs(
     notes: [
       `Se registran ${fmtInt(accionesFinalizadas)} descargas completadas durante ${labelMap[filterKey] || "el período seleccionado"}.`,
       `La mediana diaria de cumplimiento operativo es ${compliance}% (${fmtInt(accionesIniciadas)} iniciadas y ${fmtInt(accionesCreadas)} creadas en total en el período).`,
-      `El tiempo promedio de descarga es de ${fmtMinutesFromMs(tiempoPromedioMs)} y el volumen procesado alcanza ${fmtInt(bultosTotales)} bultos.`,
+      `El tiempo promedio de descarga es de ${fmtMinutesFromMs(tiempoPromedioMs)} y el volumen procesado alcanza ${fmtInt(bultosTotales)} unidades.`,
     ],
   };
 }
@@ -1484,7 +1499,7 @@ function buildMetricaRecepcionExportRows({
     "Usuario",
     "Iniciadas",
     "Finalizadas",
-    "Bultos",
+    "Unidades",
     "Tiempo promedio",
     "Tiempo total",
   ]);
@@ -1643,6 +1658,99 @@ function FilterTabs({
           </span>
         </button>
       </div>
+    </div>
+  );
+}
+
+function KpiCard({ item, onAperturasClick, expanded, onToggle }) {
+  const isAperturas = item.kpiKind === "aperturasCreadas";
+
+  const cardStyle = {
+    ...ui.kpiCard,
+    ...(item.tone === "good"
+      ? ui.kpiCardGood
+      : item.tone === "warn"
+        ? ui.kpiCardWarn
+        : item.tone === "danger"
+          ? ui.kpiCardDanger
+          : {}),
+    cursor: "pointer",
+    minHeight: 0,
+    transition: "all 200ms ease",
+  };
+
+  const dotStyle = {
+    ...ui.kpiToneDot,
+    ...(item.tone === "good"
+      ? ui.kpiToneDotGood
+      : item.tone === "warn"
+        ? ui.kpiToneDotWarn
+        : item.tone === "danger"
+          ? ui.kpiToneDotDanger
+          : {}),
+  };
+
+  const hintStyle = {
+    ...ui.kpiHint,
+    ...(item.tone === "good"
+      ? ui.kpiHintGood
+      : item.tone === "warn"
+        ? ui.kpiHintWarn
+        : item.tone === "danger"
+          ? ui.kpiHintDanger
+          : {}),
+  };
+
+  return (
+    <div
+      style={cardStyle}
+      onClick={onToggle}
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onToggle?.();
+        }
+      }}
+    >
+      <div style={ui.kpiCardTop}>
+        <div style={{ ...ui.kpiLabel, display: "flex", alignItems: "center", gap: 4 }}>
+          {item.label}
+          {expanded ? (
+            <ChevronUp size={12} strokeWidth={2.5} color="#94A3B8" />
+          ) : (
+            <ChevronDown size={12} strokeWidth={2.5} color="#94A3B8" />
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {isAperturas && expanded && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAperturasClick?.();
+              }}
+              style={ui.kpiEyeBtn}
+              aria-label="Ver aperturas creadas y estado"
+              title="Ver detalle"
+            >
+              <Eye size={16} strokeWidth={2.25} color={ACCENT} />
+            </button>
+          )}
+          <div style={dotStyle} />
+        </div>
+      </div>
+
+      <div style={ui.kpiValue}>{item.value}</div>
+
+      {expanded && (
+        <>
+          {item.hint && <div style={ui.kpiMeta}>{item.hint}</div>}
+          {item.comparison && <div style={hintStyle}>{item.comparison}</div>}
+        </>
+      )}
     </div>
   );
 }
@@ -2103,84 +2211,83 @@ function MiniUserChart({ data = [], periodLabel = "Semana actual" }) {
   );
 }
 
-function MixTypeChart({ data = [], periodLabel = "" }) {
-  const [hoveredIndex, setHoveredIndex] = React.useState(null);
-  const max = Math.max(...data.map((d) => d.value), 1);
+function MixTypeModal({ open, onClose, data = [], periodLabel = "" }) {
   const totalMix = data.reduce((s, d) => s + (Number(d.value) || 0), 0);
 
-  return (
-    <div style={ui.chartCard}>
-      <div style={ui.chartHeader}>
-        <div>
-          <div style={ui.chartTitle}>Mix de operación</div>
-          <div style={ui.chartSubtitle}>
-            Distribución por tipo de acción · {periodLabel}
-          </div>
-          {data.length > 0 && (
-            <div style={ui.chartMetaRow}>
-              Acciones tipificadas: <b>{fmtInt(totalMix)}</b>
-              <span style={ui.chartMetaSep}>·</span>
-              {data.length} categorías
-            </div>
-          )}
-        </div>
-        <span style={ui.chartBadge}>Tipo</span>
-      </div>
+  const chartData = data
+    .filter((d) => d.label && d.label !== "—")
+    .map((d) => ({
+      name: d.label,
+      cantidad: Number(d.value || 0),
+      percent: Number(d.percent || 0),
+    }));
 
-      <div style={ui.mixList}>
-        {data.length === 0 ? (
+  if (!open) return null;
+
+  return (
+    <div
+      style={ui.aperturasModalRoot}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mix-type-full-modal-title"
+    >
+      <button type="button" style={ui.aperturasModalBackdrop} onClick={onClose} aria-label="Cerrar" />
+      <div style={{ ...ui.providerTimesSheet, maxWidth: 680 }}>
+        <div style={ui.aperturasSheetHeader}>
+          <div style={{ minWidth: 0 }}>
+            <div id="mix-type-full-modal-title" style={ui.aperturasSheetTitle}>
+              Mix de operación
+            </div>
+            <div style={ui.aperturasSheetSubtitle}>
+              Distribución por tipo de acción · <b>{periodLabel}</b> · {fmtInt(totalMix)} acciones · {chartData.length} categorías
+            </div>
+          </div>
+          <button type="button" onClick={onClose} style={ui.aperturasSheetCloseBtn}>
+            Cerrar
+          </button>
+        </div>
+
+        {chartData.length === 0 ? (
           <div style={ui.emptyMiniText}>Sin datos disponibles.</div>
         ) : (
-          data.map((item, idx) => {
-            const isHovered = hoveredIndex === idx;
-            return (
-              <div 
-                key={item.label} 
-                style={{
-                  ...ui.mixRow,
-                  transform: isHovered ? 'translateX(4px)' : 'translateX(0)',
-                  transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
-                  cursor: 'pointer',
-                  background: isHovered ? '#F8FAFC' : 'transparent',
-                  borderRadius: '12px',
-                  padding: isHovered ? '10px' : '8px',
-                }}
-                onMouseEnter={() => setHoveredIndex(idx)}
-                onMouseLeave={() => setHoveredIndex(null)}
-              >
-                <div style={ui.mixRowTop}>
-                  <div style={{
-                    ...ui.mixLabel,
-                    color: isHovered ? ACCENT : '#0F172A',
-                    transition: 'color 200ms ease',
-                  }}>
-                    {item.label}
-                  </div>
-                  <div style={{
-                    ...ui.mixValue,
-                    transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-                    transition: 'transform 200ms ease',
-                    color: isHovered ? ACCENT : '#0F172A',
-                  }}>
+          <>
+            <div style={{ width: "100%", height: 300, flexShrink: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 700 }} interval={0} angle={-25} textAnchor="end" height={60} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(value, name) => [fmtInt(value), name === "cantidad" ? "Acciones" : name]}
+                    contentStyle={{ borderRadius: 12, border: "1px solid #E7E9F2", fontSize: 12, fontWeight: 700 }}
+                  />
+                  <Bar dataKey="cantidad" name="Acciones" fill="#089F8A" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "grid", gap: 8, padding: "4px 4px 12px" }}>
+              {data.filter((d) => d.label && d.label !== "—").map((item, idx) => (
+                <div
+                  key={item.label + String(idx)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    border: "1px solid #E7E9F2",
+                    background: "#FBFCFF",
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 790, color: "#0F172A" }}>{item.label}</div>
+                  <div style={{ fontSize: 13, fontWeight: 790, color: "#0F172A", flexShrink: 0 }}>
                     {fmtInt(item.value)} · {item.percent}%
                   </div>
                 </div>
-
-                <div style={ui.mixTrack}>
-                  <div
-                    style={{
-                      ...ui.mixFill,
-                      width: `${Math.max((item.value / max) * 100, 6)}%`,
-                      transition: 'width 400ms cubic-bezier(0.4, 0, 0.2, 1)',
-                      boxShadow: isHovered 
-                        ? '0 4px 12px rgba(8,159,138,0.3)' 
-                        : '0 2px 6px rgba(8,159,138,0.15)',
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -2276,14 +2383,219 @@ function AndenesChart({ data = [], periodLabel = "", onOpenDetalleAnden }) {
   );
 }
 
+function AndenesChartCompact({ data = [], periodLabel = "", onExpand }) {
+  const top3 = data.slice(0, 3);
+  const max = Math.max(...data.map((d) => d.acciones), 1);
+  const totalAcc = data.reduce((s, d) => s + d.acciones, 0);
+  const totalFin = data.reduce((s, d) => s + d.finalizadas, 0);
+
+  return (
+    <div style={ui.chartCard}>
+      <div style={ui.chartHeader}>
+        <div>
+          <div style={ui.chartTitle}>Uso de andenes</div>
+          <div style={ui.chartSubtitle}>
+            {data.length} andenes · {totalAcc} acc · {totalFin} fin · {periodLabel}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            type="button"
+            onClick={onExpand}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: `1px solid ${ACCENT}`,
+              background: ACCENT_SOFT,
+              color: ACCENT,
+              fontWeight: 700,
+              fontSize: 11,
+              cursor: "pointer",
+            }}
+            title="Ver detalle completo de andenes"
+          >
+            <Expand size={13} strokeWidth={2.4} />
+            Expandir
+          </button>
+          <span style={ui.chartBadge}>Infraestructura</span>
+        </div>
+      </div>
+
+      <div style={ui.mixList}>
+        {data.length === 0 ? (
+          <div style={ui.emptyMiniText}>Sin datos disponibles.</div>
+        ) : (
+          <>
+            {top3.map((item) => (
+              <div key={item.label} style={{ ...ui.mixRow, padding: "6px 8px" }}>
+                <div style={ui.mixRowTop}>
+                  <div style={ui.mixLabel}>{item.label}</div>
+                  <div style={ui.mixValue}>
+                    {item.acciones} acc · {item.finalizadas} fin
+                  </div>
+                </div>
+                <div style={ui.mixTrack}>
+                  <div
+                    style={{
+                      ...ui.mixFill,
+                      width: `${Math.max((item.acciones / max) * 100, 6)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+            {data.length > 3 && (
+              <button
+                type="button"
+                onClick={onExpand}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: ACCENT,
+                  fontWeight: 700,
+                  fontSize: 12,
+                  cursor: "pointer",
+                  padding: "6px 0",
+                  textAlign: "left",
+                }}
+              >
+                + {data.length - 3} andenes más…
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AndenesFullModal({ open, onClose, data = [], periodLabel = "", onOpenDetalleAnden }) {
+  const [hoveredIndex, setHoveredIndex] = React.useState(null);
+  const max = Math.max(...data.map((d) => d.acciones), 1);
+  const totalAcc = data.reduce((s, d) => s + d.acciones, 0);
+  const totalFin = data.reduce((s, d) => s + d.finalizadas, 0);
+
+  if (!open) return null;
+
+  return (
+    <div
+      style={ui.aperturasModalRoot}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="andenes-full-modal-title"
+    >
+      <button type="button" style={ui.aperturasModalBackdrop} onClick={onClose} aria-label="Cerrar" />
+
+      <div style={{
+        ...ui.providerTimesSheet,
+        maxWidth: 640,
+      }}>
+        <div style={ui.aperturasSheetHeader}>
+          <div style={{ minWidth: 0 }}>
+            <div id="andenes-full-modal-title" style={ui.aperturasSheetTitle}>
+              Uso de andenes
+            </div>
+            <div style={ui.aperturasSheetSubtitle}>
+              Actividad operativa por posición · <b>{periodLabel}</b> · {data.length} andenes · {totalAcc} acciones · {totalFin} finalizadas
+            </div>
+          </div>
+          <button type="button" onClick={onClose} style={ui.aperturasSheetCloseBtn}>
+            Cerrar
+          </button>
+        </div>
+
+        <div style={{ padding: "0 20px 20px", maxHeight: "60vh", overflowY: "auto" }}>
+          {data.length === 0 ? (
+            <div style={ui.emptyMiniText}>Sin datos disponibles.</div>
+          ) : (
+            data.map((item, idx) => {
+              const isHovered = hoveredIndex === idx;
+              return (
+                <div
+                  key={item.label}
+                  style={{
+                    ...ui.mixRow,
+                    transform: isHovered ? "translateX(4px)" : "translateX(0)",
+                    transition: "all 250ms cubic-bezier(0.4, 0, 0.2, 1)",
+                    cursor: "pointer",
+                    background: isHovered ? "#F8FAFC" : "transparent",
+                    borderRadius: "12px",
+                    padding: isHovered ? "10px" : "8px",
+                  }}
+                  onMouseEnter={() => setHoveredIndex(idx)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                >
+                  <div style={ui.mixRowTop}>
+                    <div style={{
+                      ...ui.mixLabel,
+                      color: isHovered ? ACCENT : "#0F172A",
+                      transition: "color 200ms ease",
+                    }}>
+                      {item.label}
+                    </div>
+                    <div style={ui.mixValueWrap}>
+                      <div style={{
+                        ...ui.mixValue,
+                        color: isHovered ? ACCENT : "#0F172A",
+                        transition: "color 200ms ease",
+                      }}>
+                        {item.acciones} acc · {item.finalizadas} fin
+                      </div>
+                      <button
+                        type="button"
+                        style={{
+                          ...ui.kpiEyeBtn,
+                          transform: isHovered ? "scale(1.1)" : "scale(1)",
+                          transition: "transform 200ms ease",
+                        }}
+                        title="Ver operadores del andén"
+                        onClick={() => onOpenDetalleAnden?.(item)}
+                      >
+                        <Eye size={16} strokeWidth={2.2} color={ACCENT} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={ui.mixTrack}>
+                    <div
+                      style={{
+                        ...ui.mixFill,
+                        width: `${Math.max((item.acciones / max) * 100, 6)}%`,
+                        transition: "width 400ms cubic-bezier(0.4, 0, 0.2, 1)",
+                        boxShadow: isHovered
+                          ? "0 4px 12px rgba(8,159,138,0.3)"
+                          : "0 2px 6px rgba(8,159,138,0.15)",
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TeamProductivityCard({
   data = [],
   periodLabel = "",
   excludedUsersCount = 0,
   onOpenSettings,
 }) {
-  const [hoveredIndex, setHoveredIndex] = React.useState(null);
-  const max = Math.max(...data.map((d) => d.finalizadas), 1);
+  const [modalOpen, setModalOpen] = React.useState(false);
+
+  const chartData = data
+    .filter((d) => Number(d.finalizadas || 0) > 0)
+    .map((d) => ({
+      name: d.label || "—",
+      bultos: Number(d.bultos || 0),
+      _raw: d,
+    }));
 
   return (
     <div style={ui.teamCard}>
@@ -2310,79 +2622,121 @@ function TeamProductivityCard({
           >
             <Settings size={16} strokeWidth={2.25} color={ACCENT} />
           </button>
+          {chartData.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: `1px solid ${ACCENT}`,
+                background: ACCENT_SOFT,
+                color: ACCENT,
+                fontWeight: 700,
+                fontSize: 11,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+              title="Ver detalle completo de productividad"
+            >
+              <Expand size={13} strokeWidth={2.4} />
+              Expandir
+            </button>
+          )}
           <span style={ui.chartBadge}>Equipo</span>
         </div>
       </div>
 
-      <div style={ui.teamList}>
-        {data.length === 0 ? (
-          <div style={ui.emptyMiniText}>Sin datos de usuarios para el período.</div>
-        ) : (
-          data.map((item, idx) => {
-            const isHovered = hoveredIndex === idx;
-            return (
-              <div 
-                key={item.label} 
-                style={{
-                  ...ui.teamRow,
-                  transform: isHovered ? 'translateX(4px)' : 'translateX(0)',
-                  transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
-                  cursor: 'pointer',
-                  background: isHovered ? '#F8FAFC' : 'transparent',
-                  borderRadius: '12px',
-                  padding: isHovered ? '12px' : '10px',
-                }}
-                onMouseEnter={() => setHoveredIndex(idx)}
-                onMouseLeave={() => setHoveredIndex(null)}
-              >
-                <div style={ui.teamRowTop}>
-                  <div>
-                    <div style={{
-                      ...ui.teamName,
-                      color: isHovered ? ACCENT : '#0F172A',
-                      transition: 'color 200ms ease',
-                    }}>
-                      {item.label}
-                    </div>
-                    <div style={ui.teamMeta}>
-                      {fmtInt(item.finalizadas)} cerradas · {fmtInt(item.iniciadas)} iniciadas
-                    </div>
-                  </div>
+      {chartData.length === 0 ? (
+        <div style={ui.emptyMiniText}>Sin datos de usuarios para el período.</div>
+      ) : (
+        <div style={{ width: "100%", height: 280 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 700 }} interval={0} angle={-20} textAnchor="end" height={50} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+              <Tooltip
+                formatter={(value) => [fmtInt(value), "Unidades"]}
+                contentStyle={{ borderRadius: 12, border: "1px solid #E7E9F2", fontSize: 12, fontWeight: 700 }}
+              />
+              <Bar dataKey="bultos" name="Unidades" fill="#089F8A" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
-                  <div style={ui.teamValueBox}>
-                    <div style={{
-                      ...ui.teamValue,
-                      transform: isHovered ? 'scale(1.1)' : 'scale(1)',
-                      transition: 'transform 200ms ease',
-                      color: isHovered ? ACCENT : '#0F172A',
-                    }}>
-                      {fmtInt(item.bultos)}
-                    </div>
-                    <div style={ui.teamValueLabel}>bultos</div>
-                  </div>
+      {modalOpen && (
+        <div
+          style={ui.aperturasModalRoot}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="team-prod-full-modal-title"
+        >
+          <button type="button" style={ui.aperturasModalBackdrop} onClick={() => setModalOpen(false)} aria-label="Cerrar" />
+          <div style={{ ...ui.providerTimesSheet, maxWidth: 720 }}>
+            <div style={ui.aperturasSheetHeader}>
+              <div style={{ minWidth: 0 }}>
+                <div id="team-prod-full-modal-title" style={ui.aperturasSheetTitle}>
+                  Productividad por usuario
                 </div>
-
-                <div style={ui.teamTrack}>
-                  <div
-                    style={{
-                      ...ui.teamFill,
-                      width: `${Math.max((item.finalizadas / max) * 100, 6)}%`,
-                      transition: 'width 400ms cubic-bezier(0.4, 0, 0.2, 1)',
-                      boxShadow: isHovered 
-                        ? '0 4px 12px rgba(8,159,138,0.3)' 
-                        : '0 2px 6px rgba(8,159,138,0.15)',
-                    }}
-                  />
-                </div>
-
-                <div style={ui.teamFoot}>
-                  <span>Tiempo promedio: {fmtMinutesFromMs(item.tiempoPromedioMs)}</span>
+                <div style={ui.aperturasSheetSubtitle}>
+                  Cierres, volumen y ritmo de ejecución · {periodLabel}
                 </div>
               </div>
-            );
-          })
-        )}
-      </div>
+              <button type="button" onClick={() => setModalOpen(false)} style={ui.aperturasSheetCloseBtn}>
+                Cerrar
+              </button>
+            </div>
+
+            <div style={{ width: "100%", height: 300, flexShrink: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 700 }} interval={0} angle={-20} textAnchor="end" height={50} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(value) => [fmtInt(value), "Unidades"]}
+                    contentStyle={{ borderRadius: 12, border: "1px solid #E7E9F2", fontSize: 12, fontWeight: 700 }}
+                  />
+                  <Bar dataKey="bultos" name="Unidades" fill="#089F8A" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "grid", gap: 8, padding: "4px 4px 12px" }}>
+              {data.map((item, idx) => (
+                <div
+                  key={item.label + String(idx)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    border: "1px solid #E7E9F2",
+                    background: "#FBFCFF",
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 790, color: "#0F172A" }}>{item.label}</div>
+                    <div style={{ fontSize: 11, fontWeight: 620, color: "#64748B", marginTop: 2 }}>
+                      {fmtInt(item.finalizadas)} cerradas · {fmtInt(item.iniciadas)} iniciadas · Tiempo promedio: {fmtMinutesFromMs(item.tiempoPromedioMs)}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 16, fontWeight: 820, color: "#0F172A" }}>{fmtInt(item.bultos)}</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>unidades</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2396,12 +2750,18 @@ function TeamTimesCard({
   badgeLabel = "Tiempo",
   detailable = true,
 }) {
-  const [hoveredIndex, setHoveredIndex] = React.useState(null);
+  const [modalOpen, setModalOpen] = React.useState(false);
   const subtitle =
     chartSubtitle ??
     `Comparativo de duración promedio por operador · ${periodLabel}`;
-  const valid = data.filter((d) => Number(d.tiempoPromedioMs || 0) > 0);
-  const max = Math.max(...valid.map((d) => d.tiempoPromedioMs), 1);
+
+  const chartData = data
+    .filter((d) => Number(d.tiempoPromedioMs || 0) > 0)
+    .map((d) => ({
+      name: d.label || "—",
+      horas: Number(((d.tiempoPromedioMs || 0) / 3600000).toFixed(1)),
+      _raw: d,
+    }));
 
   return (
     <div style={ui.teamCard}>
@@ -2410,98 +2770,388 @@ function TeamTimesCard({
           <div style={ui.chartTitle}>{chartTitle}</div>
           <div style={ui.chartSubtitle}>{subtitle}</div>
         </div>
-        <span style={ui.chartBadge}>{badgeLabel}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {chartData.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: `1px solid ${ACCENT}`,
+                background: ACCENT_SOFT,
+                color: ACCENT,
+                fontWeight: 700,
+                fontSize: 11,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+              title="Ver detalle completo por usuario"
+            >
+              <Expand size={13} strokeWidth={2.4} />
+              Expandir
+            </button>
+          )}
+          <span style={ui.chartBadge}>{badgeLabel}</span>
+        </div>
       </div>
 
-      <div style={ui.teamList}>
-        {data.length === 0 ? (
-          <div style={ui.emptyMiniText}>Sin tiempos registrados para el período.</div>
-        ) : (
-          data.map((item, idx) => {
-            const isHovered = hoveredIndex === idx;
-            const width =
-              item.tiempoPromedioMs > 0
-                ? `${Math.max((item.tiempoPromedioMs / max) * 100, 6)}%`
-                : "6%";
+      {chartData.length === 0 ? (
+        <div style={ui.emptyMiniText}>Sin tiempos registrados para el período.</div>
+      ) : (
+        <div style={{ width: "100%", height: 280 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 700 }} interval={0} angle={-20} textAnchor="end" height={50} />
+              <YAxis allowDecimals tick={{ fontSize: 11 }} unit=" h" />
+              <Tooltip
+                formatter={(value) => [`${value} h`, "Tiempo promedio"]}
+                contentStyle={{ borderRadius: 12, border: "1px solid #E7E9F2", fontSize: 12, fontWeight: 700 }}
+              />
+              <Bar dataKey="horas" name="Tiempo promedio" fill="#089F8A" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
-            return (
-              <div 
-                key={item.label + String(idx)}
-                style={{
-                  ...ui.teamRow,
-                  transform: isHovered ? 'translateX(4px)' : 'translateX(0)',
-                  transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
-                  cursor: 'pointer',
-                  background: isHovered ? '#F8FAFC' : 'transparent',
-                  borderRadius: '12px',
-                  padding: isHovered ? '12px' : '10px',
-                }}
-                onMouseEnter={() => setHoveredIndex(idx)}
-                onMouseLeave={() => setHoveredIndex(null)}
-              >
-                <div style={ui.teamRowTop}>
-                  <div>
-                    <div style={{
-                      ...ui.teamName,
-                      color: isHovered ? ACCENT : '#0F172A',
-                      transition: 'color 200ms ease',
-                    }}>
-                      {item.label}
-                    </div>
-                    <div style={ui.teamMeta}>
-                      {fmtInt(item.finalizadas)} cerradas
-                    </div>
-                  </div>
+      {modalOpen && (
+        <TeamTimesFullModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          data={data}
+          chartData={chartData}
+          periodLabel={periodLabel}
+          chartTitle={chartTitle}
+          subtitle={subtitle}
+          detailable={detailable}
+          onOpenUserDetail={onOpenUserDetail}
+        />
+      )}
+    </div>
+  );
+}
 
-                  <div style={ui.mixValueWrap}>
-                    <div style={{
-                      ...ui.teamTimeValue,
-                      transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-                      transition: 'transform 200ms ease',
-                      color: isHovered ? ACCENT : '#0F172A',
-                    }}>
-                      {item.tiempoPromedioMs > 0
-                        ? fmtMinutesFromMs(item.tiempoPromedioMs)
-                        : "—"}
-                    </div>
-                    {detailable ? (
-                      <button
-                        type="button"
-                        style={{
-                          ...ui.kpiEyeBtn,
-                          transform: isHovered ? 'scale(1.1)' : 'scale(1)',
-                          transition: 'transform 200ms ease',
-                        }}
-                        title="Ver descargas contadas"
-                        aria-label={`Ver descargas contadas para ${item.label}`}
-                        onClick={() => onOpenUserDetail?.(item)}
-                      >
-                        <Eye size={16} strokeWidth={2.2} color={ACCENT} />
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
+function TeamTimesFullModal({
+  open,
+  onClose,
+  data = [],
+  chartData = [],
+  periodLabel = "",
+  chartTitle = "Tiempos por usuario",
+  subtitle = "",
+  detailable = true,
+  onOpenUserDetail,
+}) {
+  if (!open) return null;
 
-                <div style={ui.teamTrack}>
-                  <div
-                    style={{
-                      ...ui.teamFillSoft,
-                      width,
-                      transition: 'width 400ms cubic-bezier(0.4, 0, 0.2, 1)',
-                      boxShadow: isHovered 
-                        ? '0 4px 12px rgba(8,159,138,0.3)' 
-                        : '0 2px 6px rgba(8,159,138,0.15)',
-                    }}
-                  />
-                </div>
+  return (
+    <div
+      style={ui.aperturasModalRoot}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="team-times-full-modal-title"
+    >
+      <button type="button" style={ui.aperturasModalBackdrop} onClick={onClose} aria-label="Cerrar" />
 
-                <div style={ui.teamFoot}>
-                  <span>Total acumulado: {fmtMinutesFromMs(item.tiempoTotalMs)}</span>
+      <div style={{ ...ui.providerTimesSheet, maxWidth: 720 }}>
+        <div style={ui.aperturasSheetHeader}>
+          <div style={{ minWidth: 0 }}>
+            <div id="team-times-full-modal-title" style={ui.aperturasSheetTitle}>
+              {chartTitle}
+            </div>
+            <div style={ui.aperturasSheetSubtitle}>
+              {subtitle}
+            </div>
+          </div>
+          <button type="button" onClick={onClose} style={ui.aperturasSheetCloseBtn}>
+            Cerrar
+          </button>
+        </div>
+
+        <div style={{ width: "100%", height: 300, flexShrink: 0 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 700 }} interval={0} angle={-20} textAnchor="end" height={50} />
+              <YAxis allowDecimals tick={{ fontSize: 11 }} unit=" h" />
+              <Tooltip
+                formatter={(value) => [`${value} h`, "Tiempo promedio"]}
+                contentStyle={{ borderRadius: 12, border: "1px solid #E7E9F2", fontSize: 12, fontWeight: 700 }}
+              />
+              <Bar dataKey="horas" name="Tiempo promedio" fill="#089F8A" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "grid", gap: 8, padding: "4px 4px 12px" }}>
+          {data.map((item, idx) => (
+            <div
+              key={item.label + String(idx)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #E7E9F2",
+                background: "#FBFCFF",
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 790, color: "#0F172A" }}>{item.label}</div>
+                <div style={{ fontSize: 11, fontWeight: 620, color: "#64748B", marginTop: 2 }}>
+                  {fmtInt(item.finalizadas)} cerradas · Total: {fmtMinutesFromMs(item.tiempoTotalMs)}
                 </div>
               </div>
-            );
-          })
-        )}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 790, color: "#0F172A" }}>
+                  {item.tiempoPromedioMs > 0 ? fmtMinutesFromMs(item.tiempoPromedioMs) : "—"}
+                </span>
+                {detailable && (
+                  <button
+                    type="button"
+                    style={ui.kpiEyeBtn}
+                    title="Ver descargas contadas"
+                    aria-label={`Ver descargas contadas para ${item.label}`}
+                    onClick={() => onOpenUserDetail?.(item)}
+                  >
+                    <Eye size={16} strokeWidth={2.2} color={ACCENT} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeamCombinedTable({
+  productivity = [],
+  times = [],
+  periodLabel = "",
+  excludedUsersCount = 0,
+  onOpenSettings,
+  onOpenUserDetail,
+  onExportExcel,
+}) {
+  const [exporting, setExporting] = React.useState(false);
+  // Merge data by user label
+  const merged = useMemo(() => {
+    const map = new Map();
+    for (const p of productivity) {
+      const key = p.label || "—";
+      map.set(key, {
+        label: key,
+        starterUid: p.starterUid,
+        iniciadas: p.iniciadas || 0,
+        finalizadas: p.finalizadas || 0,
+        bultos: p.bultos || 0,
+        tiempoPromedioMs: p.tiempoPromedioMs || 0,
+        tiempoTotalMs: p.tiempoTotalMs || 0,
+      });
+    }
+    for (const t of times) {
+      const key = t.label || "—";
+      if (map.has(key)) {
+        const existing = map.get(key);
+        existing.tiempoPromedioMs = t.tiempoPromedioMs || existing.tiempoPromedioMs;
+        existing.tiempoTotalMs = t.tiempoTotalMs || existing.tiempoTotalMs;
+      } else {
+        map.set(key, {
+          label: key,
+          starterUid: t.starterUid,
+          iniciadas: 0,
+          finalizadas: t.finalizadas || 0,
+          bultos: 0,
+          tiempoPromedioMs: t.tiempoPromedioMs || 0,
+          tiempoTotalMs: t.tiempoTotalMs || 0,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.bultos - a.bultos);
+  }, [productivity, times]);
+
+  if (merged.length === 0) {
+    return (
+      <div style={ui.teamCard}>
+        <div style={ui.chartHeader}>
+          <div>
+            <div style={ui.chartTitle}>Desempeño del equipo</div>
+            <div style={ui.chartSubtitle}>Productividad y tiempos por operador · {periodLabel}</div>
+          </div>
+          <span style={ui.chartBadge}>Equipo</span>
+        </div>
+        <div style={ui.emptyMiniText}>Sin datos de usuarios para el período.</div>
+      </div>
+    );
+  }
+
+  const tableStyles = {
+    wrapper: {
+      overflowX: "auto",
+      WebkitOverflowScrolling: "touch",
+      marginTop: 8,
+    },
+    table: {
+      width: "100%",
+      borderCollapse: "collapse",
+      fontSize: 13,
+      minWidth: 580,
+    },
+    th: {
+      textAlign: "left",
+      padding: "10px 12px",
+      borderBottom: "2px solid #E2E8F0",
+      color: "#64748B",
+      fontWeight: 900,
+      fontSize: 11,
+      textTransform: "uppercase",
+      letterSpacing: "0.04em",
+      whiteSpace: "nowrap",
+    },
+    thRight: {
+      textAlign: "right",
+      padding: "10px 12px",
+      borderBottom: "2px solid #E2E8F0",
+      color: "#64748B",
+      fontWeight: 900,
+      fontSize: 11,
+      textTransform: "uppercase",
+      letterSpacing: "0.04em",
+      whiteSpace: "nowrap",
+    },
+    td: {
+      padding: "10px 12px",
+      borderBottom: "1px solid #F1F5F9",
+      color: "#0F172A",
+      fontWeight: 700,
+      fontSize: 13,
+      whiteSpace: "nowrap",
+    },
+    tdRight: {
+      padding: "10px 12px",
+      borderBottom: "1px solid #F1F5F9",
+      color: "#0F172A",
+      fontWeight: 700,
+      fontSize: 13,
+      textAlign: "right",
+      whiteSpace: "nowrap",
+    },
+    tdName: {
+      padding: "10px 12px",
+      borderBottom: "1px solid #F1F5F9",
+      color: "#0F172A",
+      fontWeight: 790,
+      fontSize: 13,
+    },
+  };
+
+  return (
+    <div style={ui.teamCard}>
+      <div style={ui.chartHeader}>
+        <div>
+          <div style={ui.chartTitle}>Desempeño del equipo</div>
+          <div style={ui.chartSubtitle}>
+            Productividad y tiempos por operador · {periodLabel}
+          </div>
+          {excludedUsersCount > 0 && (
+            <div style={ui.chartMetaRow}>
+              {excludedUsersCount} usuario{excludedUsersCount === 1 ? "" : "s"} excluido
+              {excludedUsersCount === 1 ? "" : "s"} de las métricas
+            </div>
+          )}
+        </div>
+        <div style={ui.cardHeaderActions}>
+          <button
+            type="button"
+            style={ui.kpiEyeBtn}
+            title="Excluir usuarios de las métricas"
+            aria-label="Configurar usuarios excluidos"
+            onClick={onOpenSettings}
+          >
+            <Settings size={16} strokeWidth={2.25} color={ACCENT} />
+          </button>
+          {onExportExcel && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (exporting) return;
+                try {
+                  setExporting(true);
+                  await onExportExcel(merged);
+                } finally {
+                  setExporting(false);
+                }
+              }}
+              disabled={exporting}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "7px 12px",
+                borderRadius: 10,
+                border: `1px solid ${ACCENT}`,
+                background: ACCENT,
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: exporting ? "not-allowed" : "pointer",
+                opacity: exporting ? 0.6 : 1,
+                fontFamily: "inherit",
+              }}
+              title="Exportar tabla y descargas por usuario a Excel"
+            >
+              <FileSpreadsheet size={14} strokeWidth={2.4} />
+              {exporting ? "Generando…" : "Excel"}
+            </button>
+          )}
+          <span style={ui.chartBadge}>Equipo</span>
+        </div>
+      </div>
+
+      <div style={tableStyles.wrapper}>
+        <table style={tableStyles.table}>
+          <thead>
+            <tr>
+              <th style={tableStyles.th}>Usuario</th>
+              <th style={tableStyles.thRight}>Cerradas</th>
+              <th style={tableStyles.thRight}>Iniciadas</th>
+              <th style={tableStyles.thRight}>Unidades</th>
+              <th style={tableStyles.thRight}>T. Promedio</th>
+              <th style={tableStyles.thRight}>T. Total</th>
+              <th style={{ ...tableStyles.th, textAlign: "center", width: 40 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {merged.map((row, idx) => (
+              <tr key={row.label + String(idx)} style={{ background: idx % 2 === 0 ? "#FAFBFE" : "#fff" }}>
+                <td style={tableStyles.tdName}>{row.label}</td>
+                <td style={tableStyles.tdRight}>{fmtInt(row.finalizadas)}</td>
+                <td style={tableStyles.tdRight}>{fmtInt(row.iniciadas)}</td>
+                <td style={tableStyles.tdRight}>{fmtInt(row.bultos)}</td>
+                <td style={tableStyles.tdRight}>{row.tiempoPromedioMs > 0 ? fmtMinutesFromMs(row.tiempoPromedioMs) : "—"}</td>
+                <td style={tableStyles.tdRight}>{row.tiempoTotalMs > 0 ? fmtMinutesFromMs(row.tiempoTotalMs) : "—"}</td>
+                <td style={{ ...tableStyles.td, textAlign: "center" }}>
+                  <button
+                    type="button"
+                    style={ui.kpiEyeBtn}
+                    title="Ver descargas contadas"
+                    aria-label={`Ver descargas de ${row.label}`}
+                    onClick={() => onOpenUserDetail?.({ ...row, label: row.label, starterUid: row.starterUid })}
+                  >
+                    <Eye size={15} strokeWidth={2.2} color={ACCENT} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -3047,23 +3697,36 @@ const volStyles = {
  * Los enteros se ajustan con el método de mayor resto para sumar exactamente 100.
  */
 function ProviderTimeShareCard({ data = [], periodLabel = "" }) {
-  const SHARE_PALETTE = [
-    "#089F8A", "#0EA5E9", "#7C3AED", "#F59E0B",
-    "#EF4444", "#14B8A6", "#6366F1", "#EC4899",
-    "#64748B",
-  ];
+  const PAGE_SIZE = 10;
+  const [page, setPage] = React.useState(0);
+  const [search, setSearch] = React.useState("");
+  const [exporting, setExporting] = React.useState(false);
 
   const { list, total, descargas } = useMemo(() => {
     const items = (data || []).filter((p) => Number(p?.tiempoTotalMs) > 0);
     const totalMs = items.reduce((acc, p) => acc + Number(p.tiempoTotalMs || 0), 0);
     if (!items.length || totalMs <= 0) return { list: [], total: 0, descargas: 0 };
 
+    // Compute exact percentages, then round using largest remainder so they sum to 100
+    const rawPcts = items.map((p) => (Number(p.tiempoTotalMs) / totalMs) * 100);
+    const flooredPcts = rawPcts.map((v) => Math.floor(v * 10) / 10); // 1 decimal floor
+    const sumFloor = flooredPcts.reduce((a, b) => a + b, 0);
+    const remainders = rawPcts.map((v, i) => ({ i, frac: v - flooredPcts[i] }));
+    let leftover = Math.round((100 - sumFloor) * 10);
+    const pctRounded = [...flooredPcts];
+    remainders.sort((a, b) => b.frac - a.frac);
+    for (let k = 0; k < remainders.length && leftover > 0; k++) {
+      pctRounded[remainders[k].i] = Math.round((pctRounded[remainders[k].i] + 0.1) * 10) / 10;
+      leftover -= 1;
+    }
+
     const built = items
-      .map((p) => ({
+      .map((p, i) => ({
         label: p.label,
-        pct: (Number(p.tiempoTotalMs) / totalMs) * 100,
+        pct: pctRounded[i],
         tiempoTotalMs: Number(p.tiempoTotalMs || 0),
         finalizadas: Number(p.finalizadas || 0),
+        unidades: Number(p.unidades || 0),
       }))
       .sort((a, b) => b.tiempoTotalMs - a.tiempoTotalMs);
 
@@ -3071,58 +3734,412 @@ function ProviderTimeShareCard({ data = [], periodLabel = "" }) {
     return { list: built, total: totalMs, descargas: totalDescargas };
   }, [data]);
 
+  const totalPct = list.reduce((acc, r) => acc + Number(r.pct || 0), 0);
+
+  const filteredList = useMemo(() => {
+    const q = String(search || "").trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((r) => String(r.label || "").toLowerCase().includes(q));
+  }, [list, search]);
+
+  const filteredTotalMs = useMemo(
+    () => filteredList.reduce((acc, r) => acc + Number(r.tiempoTotalMs || 0), 0),
+    [filteredList]
+  );
+  const filteredDescargas = useMemo(
+    () => filteredList.reduce((acc, r) => acc + Number(r.finalizadas || 0), 0),
+    [filteredList]
+  );
+  const filteredUnidades = useMemo(
+    () => filteredList.reduce((acc, r) => acc + Number(r.unidades || 0), 0),
+    [filteredList]
+  );
+  const filteredPct = useMemo(
+    () => filteredList.reduce((acc, r) => acc + Number(r.pct || 0), 0),
+    [filteredList]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filteredList.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const visibleRows = filteredList.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
+  React.useEffect(() => {
+    setPage(0);
+  }, [data, search]);
+
+  const handleExportExcel = async () => {
+    if (exporting || filteredList.length === 0) return;
+    try {
+      setExporting(true);
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "AppoloDesk";
+      wb.created = new Date();
+      wb.modified = new Date();
+      wb.subject = `Tiempo por proveedor - ${periodLabel}`;
+
+      const ws = wb.addWorksheet("Proveedores", {
+        properties: { tabColor: { argb: "FF089F8A" } },
+      });
+      ws.columns = [
+        { width: 36 },
+        { width: 20 },
+        { width: 20 },
+        { width: 20 },
+        { width: 18 },
+      ];
+
+      // Title row
+      ws.mergeCells("A1:E1");
+      const titleCell = ws.getCell("A1");
+      titleCell.value = "Tiempo de descarga por proveedor";
+      titleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+      titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF089F8A" } };
+      titleCell.alignment = { vertical: "middle", horizontal: "center" };
+      ws.getRow(1).height = 30;
+
+      ws.mergeCells("A2:E2");
+      ws.getCell("A2").value = `Período: ${periodLabel}${search ? ` · Filtro: "${search}"` : ""}`;
+      ws.getCell("A2").font = { size: 11, color: { argb: "FF64748B" } };
+      ws.getRow(2).height = 18;
+
+      // Header row
+      const hdr = ws.getRow(4);
+      hdr.values = ["Proveedor", "Tiempo total", "Tiempo promedio", "Descargas totales", "Participación"];
+      hdr.height = 22;
+      for (let c = 1; c <= 5; c++) {
+        const cell = hdr.getCell(c);
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF089F8A" } };
+        cell.alignment = { vertical: "middle", horizontal: c === 1 ? "left" : "right" };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FF089F8A" } },
+          left: { style: "thin", color: { argb: "FF089F8A" } },
+          bottom: { style: "thin", color: { argb: "FF067A6B" } },
+          right: { style: "thin", color: { argb: "FF089F8A" } },
+        };
+      }
+
+      // Data rows
+      let r = 5;
+      filteredList.forEach((row, idx) => {
+        const dataRow = ws.getRow(r);
+        dataRow.height = 18;
+        const avgMs = row.finalizadas > 0 ? Math.round(row.tiempoTotalMs / row.finalizadas) : 0;
+        dataRow.getCell(1).value = row.label;
+        dataRow.getCell(2).value = fmtMinutesFromMs(row.tiempoTotalMs);
+        dataRow.getCell(3).value = avgMs > 0 ? fmtMinutesFromMs(avgMs) : "—";
+        dataRow.getCell(4).value = row.finalizadas;
+        dataRow.getCell(5).value = `${fmtOneDecimal(row.pct)}%`;
+        const fill = idx % 2 === 0 ? "FFFAFBFE" : "FFFFFFFF";
+        for (let c = 1; c <= 5; c++) {
+          const cell = dataRow.getCell(c);
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+          cell.border = {
+            top: { style: "hair", color: { argb: "FFE2E8F0" } },
+            left: { style: "hair", color: { argb: "FFE2E8F0" } },
+            bottom: { style: "hair", color: { argb: "FFE2E8F0" } },
+            right: { style: "hair", color: { argb: "FFE2E8F0" } },
+          };
+          cell.alignment = { vertical: "middle", horizontal: c === 1 ? "left" : "right" };
+          cell.font = { size: 11, color: { argb: "FF0F172A" }, bold: c === 1 };
+        }
+        r += 1;
+      });
+
+      // Total row
+      const totalRow = ws.getRow(r);
+      totalRow.height = 22;
+      const totalAvgMs = filteredDescargas > 0 ? Math.round(filteredTotalMs / filteredDescargas) : 0;
+      totalRow.getCell(1).value = `Total (${filteredList.length} proveedores)`;
+      totalRow.getCell(2).value = fmtMinutesFromMs(filteredTotalMs);
+      totalRow.getCell(3).value = totalAvgMs > 0 ? fmtMinutesFromMs(totalAvgMs) : "—";
+      totalRow.getCell(4).value = filteredDescargas;
+      totalRow.getCell(5).value = `${fmtOneDecimal(filteredPct)}%`;
+      for (let c = 1; c <= 5; c++) {
+        const cell = totalRow.getCell(c);
+        cell.font = { bold: true, color: { argb: "FF0F172A" }, size: 12 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+        cell.alignment = { vertical: "middle", horizontal: c === 1 ? "left" : "right" };
+        cell.border = {
+          top: { style: "medium", color: { argb: "FF94A3B8" } },
+          bottom: { style: "thin", color: { argb: "FF94A3B8" } },
+          left: { style: "hair", color: { argb: "FFE2E8F0" } },
+          right: { style: "hair", color: { argb: "FFE2E8F0" } },
+        };
+      }
+
+      // Auto filter
+      ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: r - 1, column: 5 } };
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeLabel = String(periodLabel || "periodo").replace(/\s+/g, "_");
+      a.download = `tiempo-por-proveedor_${safeLabel}_${Date.now()}.xlsx`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("ProviderTimeShareCard export:", e);
+      window.alert("No se pudo generar el Excel. Revisa la consola.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const tableStyles = {
+    wrapper: {
+      overflowX: "auto",
+      WebkitOverflowScrolling: "touch",
+      marginTop: 8,
+    },
+    table: {
+      width: "100%",
+      borderCollapse: "collapse",
+      fontSize: 13,
+      minWidth: 600,
+    },
+    th: {
+      textAlign: "left",
+      padding: "10px 12px",
+      borderBottom: "2px solid #E2E8F0",
+      color: "#64748B",
+      fontWeight: 900,
+      fontSize: 11,
+      textTransform: "uppercase",
+      letterSpacing: "0.04em",
+      whiteSpace: "nowrap",
+    },
+    thRight: {
+      textAlign: "right",
+      padding: "10px 12px",
+      borderBottom: "2px solid #E2E8F0",
+      color: "#64748B",
+      fontWeight: 900,
+      fontSize: 11,
+      textTransform: "uppercase",
+      letterSpacing: "0.04em",
+      whiteSpace: "nowrap",
+    },
+    td: {
+      padding: "10px 12px",
+      borderBottom: "1px solid #F1F5F9",
+      color: "#0F172A",
+      fontWeight: 700,
+      fontSize: 13,
+      whiteSpace: "nowrap",
+    },
+    tdRight: {
+      padding: "10px 12px",
+      borderBottom: "1px solid #F1F5F9",
+      color: "#0F172A",
+      fontWeight: 700,
+      fontSize: 13,
+      textAlign: "right",
+      whiteSpace: "nowrap",
+    },
+    tdName: {
+      padding: "10px 12px",
+      borderBottom: "1px solid #F1F5F9",
+      color: "#0F172A",
+      fontWeight: 790,
+      fontSize: 13,
+    },
+    tfootCell: {
+      padding: "12px",
+      borderTop: "2px solid #E2E8F0",
+      color: "#0F172A",
+      fontWeight: 900,
+      fontSize: 13,
+      background: "#F8FAFC",
+      whiteSpace: "nowrap",
+    },
+    tfootCellRight: {
+      padding: "12px",
+      borderTop: "2px solid #E2E8F0",
+      color: "#0F172A",
+      fontWeight: 900,
+      fontSize: 13,
+      background: "#F8FAFC",
+      textAlign: "right",
+      whiteSpace: "nowrap",
+    },
+  };
+
   return (
-    <div style={shareStyles.card}>
-      <div style={shareStyles.header}>
-        <div style={{ minWidth: 0 }}>
-          <div style={shareStyles.overline}>Participación</div>
-          <div style={shareStyles.title}>Tiempo de descarga por proveedor</div>
-          <div style={shareStyles.subtitle}>
+    <div style={ui.teamCard}>
+      <div style={ui.chartHeader}>
+        <div>
+          <div style={ui.chartTitle}>Tiempo de descarga por proveedor</div>
+          <div style={ui.chartSubtitle}>
             Porción del tiempo total de descarga que aporta cada proveedor · {periodLabel}
           </div>
         </div>
-        {total > 0 && (
-          <div style={shareStyles.totalPill}>
-            <span style={shareStyles.totalLabel}>Tiempo total</span>
-            <span style={shareStyles.totalValue}>{fmtMinutesFromMs(total)}</span>
-            <span style={shareStyles.totalMeta}>{fmtInt(descargas)} descargas</span>
-          </div>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filtrar proveedor…"
+            style={{
+              padding: "7px 12px",
+              borderRadius: 10,
+              border: "1px solid #E7E9F2",
+              background: "#FBFCFF",
+              fontSize: 12,
+              fontWeight: 620,
+              color: "#0F172A",
+              outline: "none",
+              fontFamily: "inherit",
+              minWidth: 160,
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            disabled={exporting || filteredList.length === 0}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "7px 12px",
+              borderRadius: 10,
+              border: `1px solid ${ACCENT}`,
+              background: ACCENT,
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 12,
+              cursor: exporting || filteredList.length === 0 ? "not-allowed" : "pointer",
+              opacity: exporting || filteredList.length === 0 ? 0.6 : 1,
+              fontFamily: "inherit",
+            }}
+            title="Descargar tabla en Excel"
+          >
+            <FileSpreadsheet size={14} strokeWidth={2.4} />
+            {exporting ? "Generando…" : "Excel"}
+          </button>
+          <span style={ui.chartBadge}>Participación</span>
+        </div>
       </div>
 
       {list.length === 0 ? (
-        <div style={shareStyles.empty}>Sin descargas cerradas en el período.</div>
+        <div style={ui.emptyMiniText}>Sin descargas cerradas en el período.</div>
+      ) : filteredList.length === 0 ? (
+        <div style={ui.emptyMiniText}>Ningún proveedor coincide con «{search}».</div>
       ) : (
-        <>
-          <div style={shareStyles.stack} role="img" aria-label="Participación de tiempo por proveedor">
-            {list.map((r, i) => (
-              <div
-                key={r.label}
-                style={{
-                  width: `${r.pct}%`,
-                  minWidth: r.pct > 0 ? 3 : 0,
-                  background: SHARE_PALETTE[i % SHARE_PALETTE.length],
-                }}
-                title={`${r.label}: ${fmtOneDecimal(r.pct)}%`}
-              />
-            ))}
-          </div>
+        <div style={tableStyles.wrapper}>
+          <table style={tableStyles.table}>
+            <thead>
+              <tr>
+                <th style={tableStyles.th}>Proveedor</th>
+                <th style={tableStyles.thRight}>Tiempo total</th>
+                <th style={tableStyles.thRight}>Tiempo promedio</th>
+                <th style={tableStyles.thRight}>Descargas totales</th>
+                <th style={tableStyles.thRight}>Unidades</th>
+                <th style={tableStyles.thRight}>Participación</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.map((row, idx) => {
+                const absoluteIdx = safePage * PAGE_SIZE + idx;
+                const avgMs = row.finalizadas > 0 ? Math.round(row.tiempoTotalMs / row.finalizadas) : 0;
+                return (
+                  <tr key={row.label + String(absoluteIdx)} style={{ background: absoluteIdx % 2 === 0 ? "#FAFBFE" : "#fff" }}>
+                    <td style={tableStyles.tdName}>{row.label}</td>
+                    <td style={tableStyles.tdRight}>{fmtMinutesFromMs(row.tiempoTotalMs)}</td>
+                    <td style={tableStyles.tdRight}>{avgMs > 0 ? fmtMinutesFromMs(avgMs) : "—"}</td>
+                    <td style={tableStyles.tdRight}>{fmtInt(row.finalizadas)}</td>
+                    <td style={tableStyles.tdRight}>{fmtInt(row.unidades)}</td>
+                    <td style={tableStyles.tdRight}>{fmtOneDecimal(row.pct)}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td style={tableStyles.tfootCell}>Total ({fmtInt(filteredList.length)} proveedores)</td>
+                <td style={tableStyles.tfootCellRight}>{fmtMinutesFromMs(filteredTotalMs)}</td>
+                <td style={tableStyles.tfootCellRight}>
+                  {filteredDescargas > 0 ? fmtMinutesFromMs(Math.round(filteredTotalMs / filteredDescargas)) : "—"}
+                </td>
+                <td style={tableStyles.tfootCellRight}>{fmtInt(filteredDescargas)}</td>
+                <td style={tableStyles.tfootCellRight}>{fmtInt(filteredUnidades)}</td>
+                <td style={tableStyles.tfootCellRight}>{fmtOneDecimal(filteredPct)}%</td>
+              </tr>
+            </tfoot>
+          </table>
 
-          <div style={shareStyles.list}>
-            {list.map((r, i) => (
-              <div key={r.label} style={shareStyles.row}>
-                <span style={{ ...shareStyles.dot, background: SHARE_PALETTE[i % SHARE_PALETTE.length] }} />
-                <div style={shareStyles.nameWrap}>
-                  <span style={shareStyles.name} title={r.label}>{r.label}</span>
-                  <span style={shareStyles.rowMeta}>
-                    {fmtMinutesFromMs(r.tiempoTotalMs)} · {fmtInt(r.finalizadas)} descargas
-                  </span>
-                </div>
-                <span style={shareStyles.pct}>{fmtOneDecimal(r.pct)}%</span>
+          {totalPages > 1 && (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              padding: "10px 4px 0",
+              flexWrap: "wrap",
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748B" }}>
+                Mostrando {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filteredList.length)} de {fmtInt(filteredList.length)}
               </div>
-            ))}
-          </div>
-        </>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={safePage === 0}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #E7E9F2",
+                    background: safePage === 0 ? "#F8FAFC" : "#fff",
+                    color: safePage === 0 ? "#94A3B8" : "#0F172A",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: safePage === 0 ? "not-allowed" : "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  <ChevronUp size={12} strokeWidth={2.5} style={{ transform: "rotate(-90deg)" }} />
+                  Anterior
+                </button>
+                <span style={{ fontSize: 12, fontWeight: 800, color: "#0F172A", padding: "0 6px" }}>
+                  {safePage + 1} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={safePage >= totalPages - 1}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #E7E9F2",
+                    background: safePage >= totalPages - 1 ? "#F8FAFC" : "#fff",
+                    color: safePage >= totalPages - 1 ? "#94A3B8" : "#0F172A",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: safePage >= totalPages - 1 ? "not-allowed" : "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  Siguiente
+                  <ChevronDown size={12} strokeWidth={2.5} style={{ transform: "rotate(-90deg)" }} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -3248,6 +4265,22 @@ export default function MetricaRecepcion() {
     error: "",
     starters: [],
   });
+  const [andenesFullModalOpen, setAndenesFullModalOpen] = useState(false);
+  const [mixModalOpen, setMixModalOpen] = useState(false);
+  const [alertasModalOpen, setAlertasModalOpen] = useState(false);
+  const [kpisExpanded, setKpisExpanded] = useState(false);
+  const kpiGridRef = useRef(null);
+
+  useEffect(() => {
+    if (!kpisExpanded) return;
+    const handleClickOutside = (e) => {
+      if (kpiGridRef.current && !kpiGridRef.current.contains(e.target)) {
+        setKpisExpanded(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [kpisExpanded]);
   const [userTimeDetailModal, setUserTimeDetailModal] = useState({
     open: false,
     user: null,
@@ -3443,24 +4476,17 @@ export default function MetricaRecepcion() {
             tone: "default",
           },
           {
-            label: "Bultos procesados",
+            label: "Unidades procesadas",
             value: "0",
             hint: "Volumen total registrado en el período",
             comparison: "—",
             tone: "default",
           },
           {
-            label: "Bultos por hora",
+            label: "Unidades por hora",
             value: "0",
             hint: "Eficiencia estimada sobre tiempo acumulado",
             comparison: "—",
-            tone: "default",
-          },
-          {
-            label: "Andenes en uso",
-            value: "0/9",
-            hint: "Posiciones con actividad registrada",
-            comparison: "Ej. 4 iniciadas · 7 creadas",
             tone: "default",
           },
           {
@@ -3597,6 +4623,264 @@ export default function MetricaRecepcion() {
     selectedDate,
     user?.email,
     user?.displayName,
+  ]);
+
+  const handleExportTeamExcel = useCallback(async (mergedUsers = []) => {
+    if (!tenantScope.tenantId || !tenantScope.company) {
+      window.alert("No se pudo determinar el tenant para exportar.");
+      return;
+    }
+    try {
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "AppoloDesk";
+      wb.created = new Date();
+      wb.modified = new Date();
+      wb.subject = `Desempeño del equipo - ${currentData.label}`;
+
+      const styleHeaderRow = (row, cols) => {
+        row.height = 22;
+        for (let c = 1; c <= cols; c++) {
+          const cell = row.getCell(c);
+          cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF089F8A" } };
+          cell.alignment = { vertical: "middle", horizontal: c === 1 ? "left" : "right", wrapText: true };
+          cell.border = {
+            top: { style: "thin", color: { argb: "FF089F8A" } },
+            left: { style: "thin", color: { argb: "FF089F8A" } },
+            bottom: { style: "thin", color: { argb: "FF067A6B" } },
+            right: { style: "thin", color: { argb: "FF089F8A" } },
+          };
+        }
+      };
+      const zebraRow = (row, cols, odd) => {
+        row.height = 19;
+        const fill = odd ? "FFFAFBFE" : "FFFFFFFF";
+        for (let c = 1; c <= cols; c++) {
+          const cell = row.getCell(c);
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+          cell.border = {
+            top: { style: "hair", color: { argb: "FFE2E8F0" } },
+            left: { style: "hair", color: { argb: "FFE2E8F0" } },
+            bottom: { style: "hair", color: { argb: "FFE2E8F0" } },
+            right: { style: "hair", color: { argb: "FFE2E8F0" } },
+          };
+          cell.alignment = { vertical: "middle", horizontal: c === 1 ? "left" : "right", wrapText: true };
+          cell.font = { size: 11, color: { argb: "FF0F172A" }, bold: c === 1 };
+        }
+      };
+      const formatFecha = (value) => {
+        const d = toDateSafe(value);
+        if (!d) return "—";
+        return d.toLocaleString("es-CR", {
+          day: "2-digit", month: "short", year: "numeric",
+          hour: "2-digit", minute: "2-digit",
+        });
+      };
+
+      // === Resumen sheet ===
+      const wsRes = wb.addWorksheet("Resumen", { properties: { tabColor: { argb: "FF089F8A" } } });
+      wsRes.columns = [
+        { width: 28 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 18 }, { width: 18 },
+      ];
+      wsRes.mergeCells("A1:F1");
+      const titleCell = wsRes.getCell("A1");
+      titleCell.value = "Desempeño del equipo";
+      titleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+      titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF089F8A" } };
+      titleCell.alignment = { vertical: "middle", horizontal: "center" };
+      wsRes.getRow(1).height = 30;
+      wsRes.mergeCells("A2:F2");
+      wsRes.getCell("A2").value = `Período: ${currentData.label}`;
+      wsRes.getCell("A2").font = { size: 11, color: { argb: "FF64748B" } };
+      wsRes.getRow(2).height = 18;
+
+      const hdrRow = wsRes.getRow(4);
+      hdrRow.values = ["Usuario", "Cerradas", "Iniciadas", "Unidades", "T. Promedio", "T. Total"];
+      styleHeaderRow(hdrRow, 6);
+
+      let r = 5;
+      let totalCerradas = 0, totalIniciadas = 0, totalUnidades = 0, totalMs = 0;
+      mergedUsers.forEach((u, idx) => {
+        const dataRow = wsRes.getRow(r);
+        dataRow.getCell(1).value = u.label || "—";
+        dataRow.getCell(2).value = Number(u.finalizadas || 0);
+        dataRow.getCell(3).value = Number(u.iniciadas || 0);
+        dataRow.getCell(4).value = Number(u.bultos || 0);
+        dataRow.getCell(5).value = u.tiempoPromedioMs > 0 ? fmtMinutesFromMs(u.tiempoPromedioMs) : "—";
+        dataRow.getCell(6).value = u.tiempoTotalMs > 0 ? fmtMinutesFromMs(u.tiempoTotalMs) : "—";
+        zebraRow(dataRow, 6, idx % 2 === 0);
+        totalCerradas += Number(u.finalizadas || 0);
+        totalIniciadas += Number(u.iniciadas || 0);
+        totalUnidades += Number(u.bultos || 0);
+        totalMs += Number(u.tiempoTotalMs || 0);
+        r += 1;
+      });
+
+      const totalRow = wsRes.getRow(r);
+      totalRow.height = 22;
+      totalRow.getCell(1).value = `Total (${mergedUsers.length} usuarios)`;
+      totalRow.getCell(2).value = totalCerradas;
+      totalRow.getCell(3).value = totalIniciadas;
+      totalRow.getCell(4).value = totalUnidades;
+      totalRow.getCell(5).value = totalCerradas > 0 ? fmtMinutesFromMs(Math.round(totalMs / totalCerradas)) : "—";
+      totalRow.getCell(6).value = fmtMinutesFromMs(totalMs);
+      for (let c = 1; c <= 6; c++) {
+        const cell = totalRow.getCell(c);
+        cell.font = { bold: true, color: { argb: "FF0F172A" }, size: 12 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+        cell.alignment = { vertical: "middle", horizontal: c === 1 ? "left" : "right" };
+        cell.border = {
+          top: { style: "medium", color: { argb: "FF94A3B8" } },
+          bottom: { style: "thin", color: { argb: "FF94A3B8" } },
+        };
+      }
+      wsRes.autoFilter = { from: { row: 4, column: 1 }, to: { row: r - 1, column: 6 } };
+
+      // === Fetch all actions once and partition by user ===
+      const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate, customRange);
+      const allowed = new Set(dayKeys);
+      const q = query(
+        collection(db, "accion_descarga"),
+        orderBy("creadoAt", "desc"),
+        limit(3000)
+      );
+      const snap = await getDocs(q);
+      const rows = filterByUserScope(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        tenantScope.tenantId,
+        tenantScope.company
+      );
+
+      // === One sheet per user ===
+      const usedSheetNames = new Set(["Resumen"]);
+      for (const u of mergedUsers) {
+        const selectedUid = normalizeExcludedUserToken(u.starterUid);
+        const selectedName = normalizeExcludedUserToken(u.label);
+        const userActions = rows
+          .filter((row) => {
+            const completedDate = toDateSafe(row?.completedAt ?? row?.completeAt);
+            if (!completedDate || !allowed.has(ymd(completedDate))) return false;
+            if (excludedActionsSet.has(String(row?.id || "").trim())) return false;
+            const who = actionStarterIdentity(row);
+            const uidKey = normalizeExcludedUserToken(who.uid);
+            const nameKey = normalizeExcludedUserToken(who.label);
+            if (excludedAndenUsersSet.has(uidKey) || excludedAndenUsersSet.has(nameKey)) return false;
+            return (
+              (selectedUid && uidKey === selectedUid) ||
+              (selectedName && nameKey === selectedName)
+            );
+          })
+          .map((row) => ({ ...row, _durationMs: actionDurationMs(row) }))
+          .sort((a, b) => {
+            const ad = toDateSafe(a?.completedAt ?? a?.completeAt)?.getTime() || 0;
+            const bd = toDateSafe(b?.completedAt ?? b?.completeAt)?.getTime() || 0;
+            return bd - ad;
+          });
+
+        let safeSheetName = String(u.label || "Usuario").replace(/[:\\\/\?\*\[\]]/g, "_").slice(0, 28);
+        if (!safeSheetName.trim()) safeSheetName = "Usuario";
+        if (usedSheetNames.has(safeSheetName)) {
+          let suffix = 2;
+          while (usedSheetNames.has(`${safeSheetName.slice(0, 26)}_${suffix}`)) suffix++;
+          safeSheetName = `${safeSheetName.slice(0, 26)}_${suffix}`;
+        }
+        usedSheetNames.add(safeSheetName);
+
+        const ws = wb.addWorksheet(safeSheetName, { properties: { tabColor: { argb: "FF089F8A" } } });
+        ws.columns = [
+          { width: 28 }, { width: 18 }, { width: 14 }, { width: 14 }, { width: 24 }, { width: 28 },
+        ];
+        ws.mergeCells("A1:F1");
+        const tCell = ws.getCell("A1");
+        tCell.value = `Usuario: ${u.label || "—"}`;
+        tCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+        tCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF089F8A" } };
+        tCell.alignment = { vertical: "middle", horizontal: "center" };
+        ws.getRow(1).height = 30;
+        ws.mergeCells("A2:F2");
+        ws.getCell("A2").value = `Período: ${currentData.label} · ${userActions.length} descarga(s) cerrada(s)`;
+        ws.getCell("A2").font = { size: 11, color: { argb: "FF64748B" } };
+        ws.getRow(2).height = 18;
+
+        // KPIs
+        let rr = 4;
+        const kpis = [
+          ["Cerradas", Number(u.finalizadas || 0)],
+          ["Iniciadas", Number(u.iniciadas || 0)],
+          ["Unidades", Number(u.bultos || 0)],
+          ["Tiempo promedio", u.tiempoPromedioMs > 0 ? fmtMinutesFromMs(u.tiempoPromedioMs) : "—"],
+          ["Tiempo total", u.tiempoTotalMs > 0 ? fmtMinutesFromMs(u.tiempoTotalMs) : "—"],
+        ];
+        for (const [k, v] of kpis) {
+          const row = ws.getRow(rr);
+          row.getCell(1).value = k;
+          row.getCell(1).font = { bold: true, color: { argb: "FF64748B" } };
+          row.getCell(2).value = v;
+          row.height = 18;
+          rr += 1;
+        }
+
+        rr += 1;
+        if (userActions.length === 0) {
+          ws.mergeCells(`A${rr}:F${rr}`);
+          ws.getCell(`A${rr}`).value = "Sin descargas cerradas para este usuario en el período.";
+          ws.getCell(`A${rr}`).font = { italic: true, color: { argb: "FF64748B" }, size: 11 };
+        } else {
+          ws.mergeCells(`A${rr}:F${rr}`);
+          ws.getCell(`A${rr}`).value = "Descargas contadas";
+          ws.getCell(`A${rr}`).font = { bold: true, size: 13, color: { argb: "FF089F8A" } };
+          rr += 1;
+
+          const dHdr = ws.getRow(rr);
+          dHdr.values = ["Fecha cerrada", "Duración", "Andén", "Unidades", "Proveedor", "ID Acción"];
+          styleHeaderRow(dHdr, 6);
+          rr += 1;
+
+          userActions.forEach((row, idx) => {
+            const dr = ws.getRow(rr);
+            dr.getCell(1).value = formatFecha(row?.completedAt ?? row?.completeAt);
+            dr.getCell(2).value = fmtMinutesFromMs(row._durationMs);
+            dr.getCell(3).value = String(row?.idAnden ?? "—");
+            dr.getCell(4).value = Number(row?.cantidadBultos ?? row?.bultos ?? 0) || "—";
+            dr.getCell(5).value = String(row?.proveedorNombre ?? "—");
+            dr.getCell(6).value = String(row?.id || "—");
+            zebraRow(dr, 6, idx % 2 === 0);
+            rr += 1;
+          });
+
+          const startRow = rr - userActions.length;
+          ws.autoFilter = { from: { row: startRow - 1, column: 1 }, to: { row: rr - 1, column: 6 } };
+        }
+      }
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeLabel = String(currentData.label || "periodo").replace(/\s+/g, "_");
+      a.download = `desempeno-equipo_${safeLabel}_${Date.now()}.xlsx`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("handleExportTeamExcel:", e);
+      window.alert("No se pudo generar el Excel. Revisa la consola.");
+    }
+  }, [
+    tenantScope.tenantId,
+    tenantScope.company,
+    activeFilter,
+    selectedDate,
+    customRange,
+    excludedAndenUsersSet,
+    excludedActionsSet,
+    currentData.label,
   ]);
 
   const addExcludedAndenUser = () => {
@@ -3742,7 +5026,7 @@ export default function MetricaRecepcion() {
     try {
       const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate, customRange);
       const allowed = new Set(dayKeys);
-      const andenId = String(item?.idAnden || item?.label?.replace("Andén ", "") || "").trim();
+      const andenId = normalizeAndenId(item?.idAnden || item?.label?.replace("Andén ", "") || "");
 
       const q = query(
         collection(db, "accion_descarga"),
@@ -3757,11 +5041,17 @@ export default function MetricaRecepcion() {
       );
 
       const filtered = rows.filter((row) => {
-        const rowAnden = String(row?.idAnden ?? "").trim();
+        const rowAnden = normalizeAndenId(row?.idAnden);
         if (!rowAnden || rowAnden !== andenId) return false;
-        const dt = toDateSafe(row?.creadoAt);
-        if (!dt) return false;
-        return allowed.has(ymd(dt));
+        // Match if any relevant date falls within the period
+        const creadoDate = toDateSafe(row?.creadoAt);
+        const startedDate = toDateSafe(row?.startedAt);
+        const completedDate = toDateSafe(row?.completedAt ?? row?.completeAt);
+        const matchesPeriod =
+          (creadoDate && allowed.has(ymd(creadoDate))) ||
+          (startedDate && allowed.has(ymd(startedDate))) ||
+          (completedDate && allowed.has(ymd(completedDate)));
+        return matchesPeriod;
       });
 
       const grouped = new Map();
@@ -3776,10 +5066,16 @@ export default function MetricaRecepcion() {
           });
         }
         const agg = grouped.get(who.uid);
-        // "Iniciadas" se contabiliza por acciones que pasaron por inicio.
-        agg.iniciadas += row?.startedAt ? 1 : 0;
-        // Finalizadas por acción cerrada.
-        agg.finalizadas += row?.completedAt || row?.completeAt ? 1 : 0;
+        // Count "iniciadas" only if startedAt falls within the period
+        const startedDate = toDateSafe(row?.startedAt);
+        if (startedDate && allowed.has(ymd(startedDate))) {
+          agg.iniciadas += 1;
+        }
+        // Count "finalizadas" only if completedAt falls within the period
+        const completedDate = toDateSafe(row?.completedAt ?? row?.completeAt);
+        if (completedDate && allowed.has(ymd(completedDate))) {
+          agg.finalizadas += 1;
+        }
       }
 
       const startersRaw = Array.from(grouped.values());
@@ -4845,166 +6141,104 @@ export default function MetricaRecepcion() {
                 </div>
               )}
 
-              <div style={{ ...ui.kpiGrid, ...(m ? ui.mKpiGrid : {}) }}>
+              <div ref={kpiGridRef} style={{ ...ui.kpiGrid, ...(m ? ui.mKpiGrid : {}) }}>
                 {currentData.kpis.map((item) => {
-                  const isAperturas = item.kpiKind === "aperturasCreadas";
+                  const key = item.kpiKind || item.label;
                   return (
-                    <div
-                      key={item.kpiKind || item.label}
-                      style={{
-                        ...ui.kpiCard,
-                        ...(item.tone === "good"
-                          ? ui.kpiCardGood
-                          : item.tone === "warn"
-                            ? ui.kpiCardWarn
-                            : item.tone === "danger"
-                              ? ui.kpiCardDanger
-                              : {}),
-                      }}
-                    >
-                      <div style={ui.kpiCardTop}>
-                        <div style={ui.kpiLabel}>{item.label}</div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          {isAperturas && (
-                            <button
-                              type="button"
-                              onClick={() => setAperturasModalOpen(true)}
-                              style={ui.kpiEyeBtn}
-                              aria-label="Ver aperturas creadas y estado"
-                              title="Ver detalle"
-                            >
-                              <Eye size={18} strokeWidth={2.25} color={ACCENT} />
-                            </button>
-                          )}
-                          <div
-                            style={{
-                              ...ui.kpiToneDot,
-                              ...(item.tone === "good"
-                                ? ui.kpiToneDotGood
-                                : item.tone === "warn"
-                                  ? ui.kpiToneDotWarn
-                                  : item.tone === "danger"
-                                    ? ui.kpiToneDotDanger
-                                    : {}),
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <div style={ui.kpiValue}>{item.value}</div>
-                      <div style={ui.kpiMeta}>{item.hint}</div>
-                      <div
-                        style={{
-                          ...ui.kpiHint,
-                          ...(item.tone === "good"
-                            ? ui.kpiHintGood
-                            : item.tone === "warn"
-                              ? ui.kpiHintWarn
-                              : item.tone === "danger"
-                                ? ui.kpiHintDanger
-                                : {}),
-                        }}
-                      >
-                        {item.comparison}
-                      </div>
-                    </div>
+                    <KpiCard
+                      key={key}
+                      item={item}
+                      expanded={kpisExpanded}
+                      onToggle={() => setKpisExpanded((v) => !v)}
+                      onAperturasClick={() => setAperturasModalOpen(true)}
+                    />
                   );
                 })}
               </div>
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", ...(m ? { width: "100%" } : {}) }}>
+                <button
+                  type="button"
+                  style={{
+                    ...ui.providerTimesOpenBtn,
+                    ...(m ? { flex: 1 } : {}),
+                  }}
+                  onClick={() => setAndenesFullModalOpen(true)}
+                  title={`Uso de andenes · ${currentData.andenesData?.length || 0} andenes`}
+                >
+                  <Expand size={18} strokeWidth={2.2} color={ACCENT} aria-hidden />
+                  Uso de andenes
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    ...ui.providerTimesOpenBtn,
+                    ...(m ? { flex: 1 } : {}),
+                  }}
+                  onClick={() => setMixModalOpen(true)}
+                  title="Mix de operación — distribución por tipo"
+                >
+                  <BarChart3 size={18} strokeWidth={2.2} color={ACCENT} aria-hidden />
+                  Mix de operación
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    ...ui.providerTimesOpenBtn,
+                    ...(m ? { flex: 1 } : {}),
+                    ...(loadingData || loadError ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                  }}
+                  disabled={loadingData || !!loadError}
+                  onClick={() => setProviderTimesModalOpen(true)}
+                >
+                  <BarChart3 size={18} strokeWidth={2.2} color={ACCENT} aria-hidden />
+                  Tiempos por proveedor
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    ...ui.tendenciasCofersaBtn,
+                    ...(m ? { flex: 1 } : {}),
+                    ...(loadingData || loadError ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                  }}
+                  disabled={loadingData || !!loadError}
+                  onClick={openTendenciasCofersa}
+                  title="Análisis de tendencias para proveedores Cofersa"
+                >
+                  <TrendingUp size={18} strokeWidth={2.2} color="#7C3AED" aria-hidden />
+                  Tendencias Cofersa
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    ...ui.tendenciasEpaBtn,
+                    ...(m ? { flex: 1 } : {}),
+                    ...(loadingData || loadError ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                  }}
+                  disabled={loadingData || !!loadError}
+                  onClick={openTendenciasEpa}
+                  title="Análisis de tendencias EPA — aperturas tipo EPA"
+                >
+                  <TrendingUp size={18} strokeWidth={2.2} color="#0369A1" aria-hidden />
+                  Tendencia EPA
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    ...ui.providerTimesOpenBtn,
+                    ...(m ? { flex: 1 } : {}),
+                    border: "1px solid rgba(220,38,38,0.28)",
+                    background: "linear-gradient(135deg, #FFFBFB 0%, #FEF2F2 100%)",
+                    boxShadow: "0 10px 24px rgba(220,38,38,0.10)",
+                  }}
+                  onClick={() => setAlertasModalOpen(true)}
+                  title="Alertas y estado operativo"
+                >
+                  <AlertTriangle size={18} strokeWidth={2.2} color="#DC2626" aria-hidden />
+                  Alertas
+                </button>
+              </div>
             </div>
-          </div>
-
-          <div style={ui.sectionHeaderBlock}>
-            <div style={ui.sectionOverline}>Monitoreo</div>
-            <div style={ui.alertsTitleRow}>
-              <div style={{ ...ui.sectionTitle, marginBottom: 0 }}>Alertas y estado operativo</div>
-              <button
-                type="button"
-                style={{ ...ui.alertsToggleBtn, ...(m ? ui.mAlertsToggleBtn : {}) }}
-                onClick={() => setAlertsMonitoreoOpen((o) => !o)}
-                aria-expanded={alertsMonitoreoOpen}
-                aria-controls="recepcion-alertas-panel"
-                id="recepcion-alertas-toggle"
-              >
-                {alertsMonitoreoOpen ? (
-                  <>
-                    Ocultar
-                    <ChevronUp size={16} strokeWidth={2.5} color={ACCENT} />
-                  </>
-                ) : (
-                  <>
-                    Mostrar alertas
-                    <ChevronDown size={16} strokeWidth={2.5} color={ACCENT} />
-                  </>
-                )}
-              </button>
-            </div>
-            {alertsMonitoreoOpen && (
-              <>
-                <div style={ui.sectionText}>
-                  Señales rápidas para detectar desvíos, pendientes y estado general del flujo operativo.
-                </div>
-                <div style={ui.alertsGrid} id="recepcion-alertas-panel" role="region" aria-labelledby="recepcion-alertas-toggle">
-                  <div style={ui.alertCard}>
-                    <div style={ui.alertCardHeader}>
-                      <div>
-                        <div style={ui.alertCardTitle}>Alertas operativas</div>
-                        <div style={ui.alertCardSubtitle}>
-                          Indicadores que requieren seguimiento o validación.
-                        </div>
-                      </div>
-                      <span style={ui.alertCardBadge}>Monitoreo</span>
-                    </div>
-
-                    <div style={ui.alertList}>
-                      {currentData.alerts.map((alert, idx) => (
-                        <div
-                          key={`${alert.title}-${idx}`}
-                          style={{
-                            ...ui.alertItem,
-                            ...(alert.tone === "good"
-                              ? ui.alertItemGood
-                              : alert.tone === "warn"
-                                ? ui.alertItemWarn
-                                : alert.tone === "danger"
-                                  ? ui.alertItemDanger
-                                  : {}),
-                          }}
-                        >
-                          <div
-                            style={{
-                              ...ui.alertIcon,
-                              ...(alert.tone === "good"
-                                ? ui.alertIconGood
-                                : alert.tone === "warn"
-                                  ? ui.alertIconWarn
-                                  : alert.tone === "danger"
-                                    ? ui.alertIconDanger
-                                    : {}),
-                            }}
-                          >
-                            {alert.tone === "good" ? (
-                              <CheckCircle2 size={18} strokeWidth={2.25} />
-                            ) : alert.tone === "warn" ? (
-                              <AlertTriangle size={18} strokeWidth={2.25} />
-                            ) : alert.tone === "danger" ? (
-                              <AlertTriangle size={18} strokeWidth={2.25} />
-                            ) : (
-                              <Info size={18} strokeWidth={2.25} />
-                            )}
-                          </div>
-
-                          <div style={ui.alertBody}>
-                            <div style={ui.alertTitle}>{alert.title}</div>
-                            <div style={ui.alertDescription}>{alert.description}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
           </div>
 
           <div style={ui.sectionHeaderBlock}>
@@ -5014,91 +6248,12 @@ export default function MetricaRecepcion() {
           <div style={{ ...ui.chartGrid, ...(m ? ui.mChartGrid : {}) }}>
             <MiniBarChart data={currentData.barData} periodLabel={currentData.label} />
             <MiniLineChart data={currentData.lineData} periodLabel={currentData.label} />
-            <MixTypeChart data={currentData.typeMix} periodLabel={currentData.label} />
-            <AndenesChart
+            <AndenesFullModal
+              open={andenesFullModalOpen}
+              onClose={() => setAndenesFullModalOpen(false)}
               data={currentData.andenesData}
               periodLabel={currentData.label}
               onOpenDetalleAnden={openAndenDetalle}
-            />
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: 12,
-              marginTop: 8,
-              marginBottom: 6,
-            }}
-          >
-            <div style={{ ...ui.sectionHeaderBlock, marginTop: 0, marginBottom: 0, flex: "1 1 260px", minWidth: 0 }}>
-              <div style={ui.sectionOverline}>Equipo</div>
-              <div style={ui.sectionTitle}>Desempeño del equipo</div>
-              <div style={ui.sectionText}>
-                Comparativo de productividad y tiempos por operador. Abrí{" "}
-                <b>Tiempos por proveedor</b> para ver duración media agrupada por{" "}
-                <code style={ui.inlineCodeHint}>proveedorNombre</code> (descargas cerradas en el período).
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", ...(m ? { width: "100%" } : {}) }}>
-              <button
-                type="button"
-                style={{
-                  ...ui.providerTimesOpenBtn,
-                  ...(m ? { flex: 1 } : {}),
-                  ...(loadingData || loadError ? { opacity: 0.5, cursor: "not-allowed" } : {}),
-                }}
-                disabled={loadingData || !!loadError}
-                onClick={() => setProviderTimesModalOpen(true)}
-              >
-                <BarChart3 size={18} strokeWidth={2.2} color={ACCENT} aria-hidden />
-                Tiempos por proveedor
-              </button>
-              <button
-                type="button"
-                style={{
-                  ...ui.tendenciasCofersaBtn,
-                  ...(m ? { flex: 1 } : {}),
-                  ...(loadingData || loadError ? { opacity: 0.5, cursor: "not-allowed" } : {}),
-                }}
-                disabled={loadingData || !!loadError}
-                onClick={openTendenciasCofersa}
-                title="Análisis de tendencias para proveedores Cofersa"
-              >
-                <TrendingUp size={18} strokeWidth={2.2} color="#7C3AED" aria-hidden />
-                Tendencias Cofersa
-              </button>
-              <button
-                type="button"
-                style={{
-                  ...ui.tendenciasEpaBtn,
-                  ...(m ? { flex: 1 } : {}),
-                  ...(loadingData || loadError ? { opacity: 0.5, cursor: "not-allowed" } : {}),
-                }}
-                disabled={loadingData || !!loadError}
-                onClick={openTendenciasEpa}
-                title="Análisis de tendencias EPA — aperturas tipo EPA"
-              >
-                <TrendingUp size={18} strokeWidth={2.2} color="#0369A1" aria-hidden />
-                Tendencia EPA
-              </button>
-            </div>
-          </div>
-
-          <div style={{ ...ui.teamGrid, ...(m ? ui.mTeamGrid : {}) }}>
-            <TeamProductivityCard
-              data={currentData.teamProductivity}
-              periodLabel={currentData.label}
-              excludedUsersCount={excludedAndenUsers.length}
-              onOpenSettings={() => setSettingsModalOpen(true)}
-            />
-
-            <TeamTimesCard
-              data={currentData.teamTimes}
-              periodLabel={currentData.label}
-              onOpenUserDetail={openUserTimeDetail}
             />
           </div>
 
@@ -5107,29 +6262,96 @@ export default function MetricaRecepcion() {
             periodLabel={currentData.label}
           />
 
-          <div style={ui.bottomCard}>
-            <div style={ui.bottomTop}>
-              <div>
-                <div style={ui.bottomEyebrow}>Cierre ejecutivo</div>
-                <div style={ui.bottomTitle}>Observaciones del período</div>
-              </div>
 
-              <div style={ui.bottomBadge}>{currentData.label}</div>
-            </div>
+          {mixModalOpen && (
+            <MixTypeModal
+              open={mixModalOpen}
+              onClose={() => setMixModalOpen(false)}
+              data={currentData.typeMix}
+              periodLabel={currentData.label}
+            />
+          )}
 
-            <div style={ui.bottomText}>
-              Resumen automático de los principales indicadores registrados para el período seleccionado.
-            </div>
-
-            <div style={ui.noteList}>
-              {currentData.notes.map((item, idx) => (
-                <div key={`${item}-${idx}`} style={ui.noteItem}>
-                  <span style={ui.noteDot} />
-                  {item}
+          {alertasModalOpen && (
+            <div
+              style={ui.aperturasModalRoot}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="alertas-modal-title"
+            >
+              <button type="button" style={ui.aperturasModalBackdrop} onClick={() => setAlertasModalOpen(false)} aria-label="Cerrar" />
+              <div style={{ ...ui.providerTimesSheet, maxWidth: 600 }}>
+                <div style={ui.aperturasSheetHeader}>
+                  <div style={{ minWidth: 0 }}>
+                    <div id="alertas-modal-title" style={ui.aperturasSheetTitle}>
+                      Alertas y estado operativo
+                    </div>
+                    <div style={ui.aperturasSheetSubtitle}>
+                      Señales rápidas para detectar desvíos, pendientes y estado general · <b>{currentData.label}</b>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setAlertasModalOpen(false)} style={ui.aperturasSheetCloseBtn}>
+                    Cerrar
+                  </button>
                 </div>
-              ))}
+
+                <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "grid", gap: 10, padding: "4px 4px 12px" }}>
+                  {currentData.alerts.map((alert, idx) => (
+                    <div
+                      key={`${alert.title}-${idx}`}
+                      style={{
+                        ...ui.alertItem,
+                        ...(alert.tone === "good"
+                          ? ui.alertItemGood
+                          : alert.tone === "warn"
+                            ? ui.alertItemWarn
+                            : alert.tone === "danger"
+                              ? ui.alertItemDanger
+                              : {}),
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...ui.alertIcon,
+                          ...(alert.tone === "good"
+                            ? ui.alertIconGood
+                            : alert.tone === "warn"
+                              ? ui.alertIconWarn
+                              : alert.tone === "danger"
+                                ? ui.alertIconDanger
+                                : {}),
+                        }}
+                      >
+                        {alert.tone === "good" ? (
+                          <CheckCircle2 size={18} strokeWidth={2.25} />
+                        ) : alert.tone === "warn" ? (
+                          <AlertTriangle size={18} strokeWidth={2.25} />
+                        ) : alert.tone === "danger" ? (
+                          <AlertTriangle size={18} strokeWidth={2.25} />
+                        ) : (
+                          <Info size={18} strokeWidth={2.25} />
+                        )}
+                      </div>
+                      <div style={ui.alertBody}>
+                        <div style={ui.alertTitle}>{alert.title}</div>
+                        <div style={ui.alertDescription}>{alert.description}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
+          <TeamCombinedTable
+            productivity={currentData.teamProductivity}
+            times={currentData.teamTimes}
+            periodLabel={currentData.label}
+            excludedUsersCount={excludedAndenUsers.length}
+            onOpenSettings={() => setSettingsModalOpen(true)}
+            onOpenUserDetail={openUserTimeDetail}
+            onExportExcel={handleExportTeamExcel}
+          />
         </div>
       </main>
 
@@ -5260,57 +6482,10 @@ export default function MetricaRecepcion() {
               </button>
             </div>
 
-            {["administrativo", "dev"].includes(
-              String(profileRole).toLowerCase()
-            ) && (
-              <div style={ui.settingsSection}>
-                <div style={ui.settingsTitle}>
-                  Clasificar acciones por tipo (EPA / Cofersa)
-                </div>
-                <div style={ui.settingsText}>
-                  Recorre las acciones de descarga que aún no tienen <code>tipo</code>,
-                  lee su apertura y lo guarda: las EPA conservan su tipo EPA real y el
-                  resto queda como «Cofersa». Solo hace falta correrlo una vez (las
-                  acciones nuevas ya nacen con tipo).
-                </div>
-                <div style={ui.settingsWarningText}>
-                  Operación de mantenimiento. Puede tardar varios minutos si hay muchas
-                  acciones; no cierres esta ventana mientras corre.
-                </div>
-                <div style={ui.settingsRowCompact}>
-                  <button
-                    type="button"
-                    onClick={runTipoBackfill}
-                    disabled={backfill.running}
-                    style={{
-                      ...ui.settingsAddBtn,
-                      ...(backfill.running
-                        ? { opacity: 0.6, cursor: "not-allowed" }
-                        : {}),
-                    }}
-                  >
-                    {backfill.running ? "Clasificando…" : "Clasificar acciones ahora"}
-                  </button>
-                </div>
-                {(backfill.running || backfill.done) && (
-                  <div style={ui.settingsText}>
-                    {backfill.total > 0
-                      ? `Progreso: ${backfill.processed}/${backfill.total} · ${backfill.updated} actualizadas${
-                          backfill.errors ? ` · ${backfill.errors} con error` : ""
-                        }`
-                      : null}
-                    {backfill.message ? (
-                      <div style={{ marginTop: 4 }}>{backfill.message}</div>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            )}
-
             <div style={ui.settingsSection}>
               <div style={ui.settingsTitle}>Usuarios excluidos de métricas</div>
               <div style={ui.settingsText}>
-                Agregá nombre o UID para que ese usuario no aporte en productividad, bultos,
+                Agregá nombre o UID para que ese usuario no aporte en productividad, unidades,
                 tiempos, descargas cerradas, iniciadas y cumplimiento del panel.
               </div>
               <div style={ui.settingsWarningText}>
@@ -5771,7 +6946,7 @@ export default function MetricaRecepcion() {
                               Cerrada {formatDateTimeShort(row?.completedAt ?? row?.completeAt)}
                               {row?.idAnden ? ` · Andén ${row.idAnden}` : ""}
                               {row?.cantidadBultos != null
-                                ? ` · ${fmtInt(row.cantidadBultos)} bultos`
+                                ? ` · ${fmtInt(row.cantidadBultos)} unidades`
                                 : ""}
                             </div>
                           </div>
@@ -6211,7 +7386,7 @@ export default function MetricaRecepcion() {
                           hdrAcciones.getCell(1).value = "Fecha cerrada";
                           hdrAcciones.getCell(2).value = "Duración";
                           hdrAcciones.getCell(3).value = "Andén";
-                          hdrAcciones.getCell(4).value = "Bultos";
+                          hdrAcciones.getCell(4).value = "Unidades";
                           hdrAcciones.getCell(5).value = "Iniciado por";
                           hdrAcciones.getCell(6).value = "ID Acción";
                           styleHeaderRow(hdrAcciones, 6);
@@ -6559,7 +7734,7 @@ export default function MetricaRecepcion() {
                                   Cerrada {formatDateTimeShort(row?.completedAt ?? row?.completeAt)}
                                   {row?.idAnden ? ` · Andén ${row.idAnden}` : ""}
                                   {row?.cantidadBultos != null
-                                    ? ` · ${fmtInt(row.cantidadBultos)} bultos`
+                                    ? ` · ${fmtInt(row.cantidadBultos)} unidades`
                                     : ""}
                                 </div>
                               </div>
@@ -6926,7 +8101,7 @@ export default function MetricaRecepcion() {
                           hdrAcciones.getCell(1).value = "Fecha cerrada";
                           hdrAcciones.getCell(2).value = "Duración";
                           hdrAcciones.getCell(3).value = "Andén";
-                          hdrAcciones.getCell(4).value = "Bultos";
+                          hdrAcciones.getCell(4).value = "Unidades";
                           hdrAcciones.getCell(5).value = "Iniciado por";
                           hdrAcciones.getCell(6).value = "ID Acción";
                           styleHeaderRow(hdrAcciones, 6);
@@ -7241,7 +8416,7 @@ export default function MetricaRecepcion() {
                                   Cerrada {formatDateTimeShort(row?.completedAt ?? row?.completeAt)}
                                   {row?.idAnden ? ` · Andén ${row.idAnden}` : ""}
                                   {row?.cantidadBultos != null
-                                    ? ` · ${fmtInt(row.cantidadBultos)} bultos`
+                                    ? ` · ${fmtInt(row.cantidadBultos)} unidades`
                                     : ""}
                                 </div>
                               </div>
@@ -7837,18 +9012,18 @@ const ui = {
 
   kpiGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))",
-    gap: 12,
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
+    gap: 8,
     padding: 0,
   },
 
   kpiCard: {
     background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
     border: "1px solid #E7E9F2",
-    borderRadius: 18,
-    padding: 16,
-    boxShadow: "0 10px 22px rgba(15, 23, 42, 0.05)",
-    minHeight: 124,
+    borderRadius: 14,
+    padding: 12,
+    boxShadow: "0 6px 14px rgba(15, 23, 42, 0.04)",
+    minHeight: 96,
     display: "grid",
     alignContent: "start",
   },
@@ -7856,77 +9031,77 @@ const ui = {
   kpiLabel: {
     color: "#64748B",
     fontWeight: 700,
-    fontSize: 13,
+    fontSize: 11.5,
   },
 
   kpiValue: {
     color: "#0F172A",
     fontWeight: 850,
-    fontSize: 30,
-    lineHeight: 1.05,
-    marginBottom: 10,
-    letterSpacing: -0.6,
+    fontSize: 22,
+    lineHeight: 1.1,
+    marginBottom: 6,
+    letterSpacing: -0.4,
   },
 
   kpiMeta: {
     color: "#64748B",
     fontWeight: 620,
-    fontSize: 12,
-    lineHeight: 1.4,
-    marginBottom: 8,
+    fontSize: 11,
+    lineHeight: 1.35,
+    marginBottom: 5,
   },
 
   kpiHint: {
     color: ACCENT,
     fontWeight: 700,
-    fontSize: 12,
-    lineHeight: 1.35,
+    fontSize: 11,
+    lineHeight: 1.3,
   },
 
   kpiPanel: {
     display: "grid",
-    gap: 14,
-    padding: 16,
-    borderRadius: 18,
+    gap: 10,
+    padding: 12,
+    borderRadius: 14,
     border: "1px solid #E7E9F2",
     background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
-    boxShadow: "0 12px 28px rgba(15,23,42,0.05)",
+    boxShadow: "0 8px 20px rgba(15,23,42,0.04)",
   },
 
   kpiPanelTop: {
     display: "flex",
     alignItems: "start",
     justifyContent: "space-between",
-    gap: 16,
+    gap: 12,
     flexWrap: "wrap",
   },
 
   kpiPanelInfo: {
     display: "grid",
-    gap: 4,
+    gap: 2,
   },
 
   kpiPanelTitle: {
     fontWeight: 820,
-    fontSize: 15,
+    fontSize: 13,
     color: "#0F172A",
   },
 
   kpiPanelText: {
     color: "#64748B",
     fontWeight: 620,
-    fontSize: 12,
-    lineHeight: 1.45,
+    fontSize: 11,
+    lineHeight: 1.4,
   },
 
   kpiPanelMeta: {
-    padding: "10px 12px",
-    borderRadius: 14,
+    padding: "7px 10px",
+    borderRadius: 10,
     background: "#F8FAFC",
     border: "1px solid #E7E9F2",
     color: "#475569",
     fontWeight: 620,
-    fontSize: 12,
+    fontSize: 11,
     whiteSpace: "nowrap",
   },
 
@@ -8120,13 +9295,13 @@ const ui = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
-    marginBottom: 8,
+    gap: 6,
+    marginBottom: 4,
   },
 
   kpiToneDot: {
-    width: 10,
-    height: 10,
+    width: 8,
+    height: 8,
     borderRadius: 999,
     background: "#CBD5E1",
     flexShrink: 0,
@@ -8321,14 +9496,13 @@ const ui = {
 
   teamCard: {
     background: "#fff",
-    border: "1px solid #E7E9F2",
-    borderRadius: 18,
-    padding: 16,
-    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
+    border: "1px solid #E5E7EB",
+    borderRadius: 14,
+    padding: "20px 20px 16px",
+    boxShadow: "0 12px 26px rgba(15, 23, 42, 0.06)",
     minHeight: 320,
     display: "grid",
     alignContent: "start",
-    borderTop: `3px solid ${ACCENT_SOFT}`,
   },
 
   teamList: {

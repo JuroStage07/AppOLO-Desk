@@ -12,7 +12,7 @@ import {
     serverTimestamp,
     updateDoc,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { ArrowLeft, BookOpen } from "lucide-react";
 import { auth, db, storage } from "../../firebase";
 import {
@@ -79,6 +79,10 @@ export default function DocumentacionPage() {
         description: "",
     });
     const [pdfFile, setPdfFile] = useState(null);
+
+    // Update modal state
+    const [showUpdateModal, setShowUpdateModal] = useState(false);
+    const [updatePdfFile, setUpdatePdfFile] = useState(null);
 
     // Colecciones state
     const [showColeccionesModal, setShowColeccionesModal] = useState(false);
@@ -427,6 +431,115 @@ export default function DocumentacionPage() {
 
     const back = () => nav("/");
 
+    /** Eliminar documento: borra de Firestore y de Storage */
+    const handleDeleteDoc = async () => {
+        if (!viewerDoc?.id || !isDocumentacionUploader) return;
+        const confirmDelete = window.confirm(
+            `¿Estás seguro de eliminar "${safe(viewerDoc.title)}"? Esta acción no se puede deshacer.`
+        );
+        if (!confirmDelete) return;
+
+        setBusy(true);
+        setErr("");
+        try {
+            // Eliminar archivo de Storage si existe storagePath
+            if (viewerDoc.storagePath) {
+                try {
+                    const sRef = ref(storage, viewerDoc.storagePath);
+                    await deleteObject(sRef);
+                } catch (storageErr) {
+                    console.warn("No se pudo eliminar el archivo de Storage:", storageErr);
+                }
+            }
+            // Eliminar documento de Firestore
+            await deleteDoc(doc(db, "documentacion", viewerDoc.id));
+            setViewerDoc(null);
+            await loadDocs();
+        } catch (e) {
+            console.error(e);
+            setErr(e?.message || "No se pudo eliminar el documento.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    /** Actualizar PDF: sube nuevo archivo, elimina el anterior, mantiene metadatos */
+    const handleUpdateDoc = async () => {
+        if (!viewerDoc?.id || !isDocumentacionUploader || !updatePdfFile) return;
+        if (updatePdfFile.type !== "application/pdf") {
+            setErr("Solo se permiten archivos PDF.");
+            return;
+        }
+
+        setBusy(true);
+        setErr("");
+        try {
+            const currentUser = auth.currentUser;
+            if (!currentUser?.uid) throw new Error("No hay usuario autenticado.");
+
+            // Eliminar archivo anterior de Storage si existe
+            if (viewerDoc.storagePath) {
+                try {
+                    const oldRef = ref(storage, viewerDoc.storagePath);
+                    await deleteObject(oldRef);
+                } catch (storageErr) {
+                    console.warn("No se pudo eliminar el archivo anterior:", storageErr);
+                }
+            }
+
+            // Subir nuevo archivo manteniendo la misma estructura de path
+            const slug = slugify(safe(viewerDoc.title)) || "documento";
+            const now = Date.now();
+            const tenantId = viewerDoc.tenantId || profile?.tenantId;
+            const company = viewerDoc.company || profile?.company;
+            const category = safe(viewerDoc.category);
+
+            const storagePath = `documentacion/${tenantId}/${company}/${category}/${now}-${slug}.pdf`;
+            const sRef = ref(storage, storagePath);
+            await uploadBytes(sRef, updatePdfFile, { contentType: "application/pdf" });
+            const url = await getDownloadURL(sRef);
+
+            // Actualizar documento en Firestore manteniendo metadatos
+            await updateDoc(doc(db, "documentacion", viewerDoc.id), {
+                url,
+                storagePath,
+                fileName: updatePdfFile.name,
+                size: updatePdfFile.size || 0,
+                fileType: updatePdfFile.type || "application/pdf",
+                ext: extFromName(updatePdfFile.name),
+                updatedAt: serverTimestamp(),
+                updatedBy: currentUser.uid,
+            });
+
+            setUpdatePdfFile(null);
+            setShowUpdateModal(false);
+            await loadDocs();
+            // Actualizar el viewerDoc con los nuevos datos
+            const updatedSnap = await getDoc(doc(db, "documentacion", viewerDoc.id));
+            if (updatedSnap.exists()) {
+                setViewerDoc({ id: updatedSnap.id, ...updatedSnap.data() });
+            }
+        } catch (e) {
+            console.error(e);
+            setErr(e?.message || "No se pudo actualizar el documento.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const openUpdateModal = () => {
+        if (!viewerDoc?.id || !isDocumentacionUploader) return;
+        setErr("");
+        setUpdatePdfFile(null);
+        setShowUpdateModal(true);
+    };
+
+    const closeUpdateModal = () => {
+        if (busy) return;
+        setShowUpdateModal(false);
+        setUpdatePdfFile(null);
+    };
+
     //Modal new document
     const openUploadModal = () => {
         if (!isDocumentacionUploader) return;
@@ -617,6 +730,9 @@ export default function DocumentacionPage() {
                                     <div style={ui.viewerSectionTitleInner}>
                                         <div style={ui.viewerSectionKicker}>Lectura</div>
                                         <div style={ui.viewerSectionTitle}>Visor documental</div>
+                                        {viewerDoc?.id && (
+                                            <div style={ui.viewerDocUid}>UID: {viewerDoc.id}</div>
+                                        )}
                                     </div>
                                 </div>
                                 <div style={ui.viewerHead}>
@@ -632,14 +748,38 @@ export default function DocumentacionPage() {
                                     </div>
 
                                     {viewerDoc?.url && (
-                                        <button
-                                            type="button"
-                                            onClick={openViewerModal}
-                                            style={ui.viewerExpandBtn}
-                                            title="Expandir visor"
-                                        >
-                                            <span style={ui.viewerExpandIcon}>⤢</span>
-                                        </button>
+                                        <div style={ui.viewerHeadActions}>
+                                            {isDocumentacionUploader && (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        onClick={openUpdateModal}
+                                                        style={ui.viewerUpdateBtn}
+                                                        title="Reemplazar PDF"
+                                                        disabled={busy}
+                                                    >
+                                                        <span style={ui.viewerActionIcon}>↻</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleDeleteDoc}
+                                                        style={ui.viewerDeleteBtn}
+                                                        title="Eliminar documento"
+                                                        disabled={busy}
+                                                    >
+                                                        <span style={ui.viewerActionIcon}>🗑</span>
+                                                    </button>
+                                                </>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={openViewerModal}
+                                                style={ui.viewerExpandBtn}
+                                                title="Expandir visor"
+                                            >
+                                                <span style={ui.viewerExpandIcon}>⤢</span>
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
 
@@ -866,6 +1006,96 @@ export default function DocumentacionPage() {
                                 style={ui.viewerHelpOkBtn}
                             >
                                 Entendido
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal actualizar documento */}
+            {showUpdateModal && viewerDoc && (
+                <div style={ui.modalBackdrop} onClick={closeUpdateModal}>
+                    <div
+                        style={ui.updateModalCard}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={ui.modalHeader}>
+                            <div>
+                                <div style={ui.modalKicker}>Actualización documental</div>
+                                <div style={ui.modalTitle}>Reemplazar PDF</div>
+                                <div style={ui.modalText}>
+                                    Se reemplazará el archivo actual manteniendo el título, categoría y descripción del documento.
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeUpdateModal}
+                                style={ui.modalCloseBtn}
+                                disabled={busy}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div style={ui.updateModalBody}>
+                            <div style={ui.updateDocInfo}>
+                                <div style={ui.updateDocInfoLabel}>Documento actual</div>
+                                <div style={ui.updateDocInfoTitle}>{safe(viewerDoc.title)}</div>
+                                <div style={ui.updateDocInfoMeta}>
+                                    {safe(viewerDoc.category) || "General"} · {formatBytes(viewerDoc.size)} · {safe(viewerDoc.fileName)}
+                                </div>
+                            </div>
+
+                            <div style={ui.uploadBox}>
+                                <div style={ui.uploadIcon}>PDF</div>
+                                <div style={{ display: "grid", gap: 6 }}>
+                                    <div style={ui.uploadTitle}>Nuevo archivo PDF</div>
+                                    <div style={ui.uploadText}>
+                                        Seleccioná el PDF que reemplazará al documento actual.
+                                    </div>
+                                    {updatePdfFile && (
+                                        <div style={ui.fileBadge}>
+                                            {updatePdfFile.name} · {formatBytes(updatePdfFile.size)}
+                                        </div>
+                                    )}
+                                </div>
+                                <label style={ui.fileBtn}>
+                                    Seleccionar PDF
+                                    <input
+                                        type="file"
+                                        accept="application/pdf"
+                                        style={{ display: "none" }}
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0] || null;
+                                            setUpdatePdfFile(file);
+                                        }}
+                                        disabled={busy}
+                                    />
+                                </label>
+                            </div>
+
+                            {err && <div style={ui.errBox}>{err}</div>}
+                        </div>
+
+                        <div style={ui.updateModalFooter}>
+                            <button
+                                type="button"
+                                onClick={closeUpdateModal}
+                                style={ui.btnSecondary}
+                                disabled={busy}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleUpdateDoc}
+                                disabled={!updatePdfFile || busy}
+                                style={{
+                                    ...ui.btnPrimary,
+                                    ...(!updatePdfFile || busy ? ui.btnDisabled : {}),
+                                }}
+                            >
+                                {busy ? "Actualizando…" : "Reemplazar documento"}
                             </button>
                         </div>
                     </div>
@@ -1691,6 +1921,14 @@ const ui = {
         width: "100%",
         maxWidth: "calc(100% - 36px)",
     },
+    viewerDocUid: {
+        fontSize: 11,
+        fontWeight: 850,
+        color: "#94A3B8",
+        marginTop: 6,
+        fontFamily: "monospace",
+        letterSpacing: 0.3,
+    },
 
     viewerExpandBtn: {
         width: 52,
@@ -1710,6 +1948,98 @@ const ui = {
         fontSize: 22,
         lineHeight: 1,
         fontWeight: 980,
+    },
+
+    viewerHeadActions: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+    },
+
+    viewerUpdateBtn: {
+        width: 42,
+        height: 42,
+        borderRadius: 12,
+        border: "1px solid rgba(8,159,138,0.22)",
+        background: "#F3FBF9",
+        color: ACCENT,
+        display: "grid",
+        placeItems: "center",
+        cursor: "pointer",
+        boxShadow: "0 4px 12px rgba(8,159,138,0.10)",
+        flex: "0 0 auto",
+    },
+
+    viewerDeleteBtn: {
+        width: 42,
+        height: 42,
+        borderRadius: 12,
+        border: "1px solid rgba(239,68,68,0.25)",
+        background: "#FFF6F6",
+        color: "#EF4444",
+        display: "grid",
+        placeItems: "center",
+        cursor: "pointer",
+        boxShadow: "0 4px 12px rgba(239,68,68,0.08)",
+        flex: "0 0 auto",
+    },
+
+    viewerActionIcon: {
+        fontSize: 16,
+        lineHeight: 1,
+        fontWeight: 980,
+    },
+
+    updateModalCard: {
+        width: "min(620px, 100%)",
+        maxHeight: "90vh",
+        overflow: "auto",
+        background: "#fff",
+        border: "1px solid rgba(231,233,242,0.9)",
+        borderRadius: 28,
+        boxShadow: "0 30px 80px rgba(15,23,42,0.28)",
+    },
+
+    updateModalBody: {
+        padding: 20,
+        display: "grid",
+        gap: 16,
+    },
+
+    updateModalFooter: {
+        display: "flex",
+        justifyContent: "flex-end",
+        gap: 12,
+        padding: "0 20px 20px",
+    },
+
+    updateDocInfo: {
+        padding: 14,
+        borderRadius: 18,
+        border: "1px solid #E7E9F2",
+        background: "#FBFCFF",
+        display: "grid",
+        gap: 6,
+    },
+
+    updateDocInfoLabel: {
+        fontSize: 11,
+        fontWeight: 950,
+        color: "#64748B",
+        textTransform: "uppercase",
+        letterSpacing: 0.4,
+    },
+
+    updateDocInfoTitle: {
+        fontWeight: 980,
+        fontSize: 15,
+        color: "#0F172A",
+    },
+
+    updateDocInfoMeta: {
+        fontSize: 12,
+        fontWeight: 850,
+        color: "#64748B",
     },
 
     viewerModalBackdrop: {
