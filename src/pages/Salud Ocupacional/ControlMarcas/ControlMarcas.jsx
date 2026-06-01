@@ -889,13 +889,14 @@ export default function ControlMarcas() {
 const ui = {
   shell: {
     minHeight: "100vh",
+    height: "100dvh",
     width: "100%",
     maxWidth: "100%",
     boxSizing: "border-box",
     background: "#F6F7FB",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
     color: "#0F172A",
-    overflowX: "hidden",
+    overflow: "hidden",
     display: "grid",
     gridTemplateRows: "auto 1fr",
   },

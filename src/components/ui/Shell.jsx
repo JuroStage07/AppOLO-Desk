@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { BG, TEXT, FONT_STACK } from "../../styles/theme";
 
 /**
- * Full-viewport page shell with sticky topbar + scrollable main.
+ * Full-viewport page shell: topbar stays fixed, only <Main/> scrolls.
  *
  * Props:
  *  - children: <Topbar/> + <Main/> typically
@@ -27,11 +27,13 @@ export default function Shell({ children, lockBodyScroll = true, style }) {
     };
   }, [lockBodyScroll]);
 
-  return <div style={{ ...baseShell, ...(lockBodyScroll ? lockedShell : {}), ...style }}>{children}</div>;
+  return (
+    <div style={{ ...shellLayoutStyle, ...style }}>{children}</div>
+  );
 }
 
-const baseShell = {
-  minHeight: "100vh",
+/** Root layout for pages that compose Topbar + scrollable main without <Shell>. */
+export const shellLayoutStyle = {
   width: "100%",
   maxWidth: "100%",
   boxSizing: "border-box",
@@ -40,9 +42,16 @@ const baseShell = {
   color: TEXT,
   display: "grid",
   gridTemplateRows: "auto 1fr",
+  minHeight: "100vh",
+  height: "100dvh",
+  overflow: "hidden",
 };
 
-const lockedShell = {
-  height: "100vh",
-  overflow: "hidden",
+/** Scrollable body row — pair with shellLayoutStyle. */
+export const mainScrollStyle = {
+  width: "100%",
+  minHeight: 0,
+  boxSizing: "border-box",
+  overflow: "auto",
+  WebkitOverflowScrolling: "touch",
 };

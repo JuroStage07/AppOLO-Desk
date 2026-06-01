@@ -546,10 +546,12 @@ const s = {
   /* Main */
   main: {
     width: "100%",
+    minHeight: 0,
     display: "grid",
     placeItems: "center",
     padding: 24,
-    overflow: "hidden",
+    overflow: "auto",
+    WebkitOverflowScrolling: "touch",
   },
   content: {
     display: "flex",

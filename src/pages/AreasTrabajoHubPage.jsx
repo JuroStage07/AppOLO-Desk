@@ -28,10 +28,11 @@ import imgDespacho from "../assets/despacho.png";
 import imgMantenimiento from "../assets/mantenimiento.png";
 import imgRecepcion from "../assets/recepcion.png";
 import imgServiciosGenerales from "../assets/serviciosGenerales.png";
-import imgEpa from "../assets/epalogo.jpeg";
+import imgEpa from "../assets/epa.png";
+import imgDev from "../assets/dev.png";
 import { isEpaRestrictedUser } from "../config/epaOnlyUids";
-import { useAllPinnedModules } from "../hooks/usePinnedModules";
-import { PinsFlyout } from "../components/ui";
+import usePinnedModules, { useAllPinnedModules } from "../hooks/usePinnedModules";
+import { PinsFlyout, SidebarAreaIcon } from "../components/ui";
 
 /* ─── Design tokens (unified with app theme accent #089F8A) ─── */
 const T = {
@@ -55,6 +56,135 @@ const T = {
   radiusXs: 8,
   font: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
 };
+
+const AREA_THEMES = {
+  despacho: { accent: "#16A34A", soft: "rgba(22, 163, 74, 0.12)" },
+  salud: { accent: "#2563EB", soft: "rgba(37, 99, 235, 0.12)" },
+  recepcion: { accent: "#65A30D", soft: "rgba(101, 163, 13, 0.12)" },
+  mantenimiento: { accent: "#7C3AED", soft: "rgba(124, 58, 237, 0.12)" },
+  "servicios-generales": { accent: "#EA580C", soft: "rgba(234, 88, 12, 0.12)" },
+  epa: { accent: "#6D28D9", soft: "rgba(109, 40, 217, 0.12)" },
+  dev: { accent: "#475569", soft: "rgba(71, 85, 105, 0.12)" },
+};
+
+function AreaHubCard({
+  area,
+  blocked,
+  isHover,
+  mounted,
+  idx,
+  onHover,
+  onLeave,
+  onNavigate,
+}) {
+  const { isPinned, togglePin } = usePinnedModules(area.key);
+  const theme = area.theme || AREA_THEMES[area.key] || { accent: T.accent, soft: T.accentSoft };
+  const pinned = isPinned(area.path);
+
+  return (
+    <div
+      role={blocked ? "group" : "button"}
+      aria-disabled={blocked || undefined}
+      tabIndex={blocked ? -1 : 0}
+      onClick={() => !blocked && onNavigate(area.path)}
+      onKeyDown={(e) => {
+        if (blocked) return;
+        if (e.key === "Enter" || e.key === " ") onNavigate(area.path);
+      }}
+      onMouseEnter={() => !blocked && onHover(area.key)}
+      onMouseLeave={onLeave}
+      style={{
+        ...styles.card,
+        ...(isHover && !blocked
+          ? { borderColor: theme.accent, boxShadow: T.shadowMd }
+          : {}),
+        ...(blocked ? styles.cardBlocked : {}),
+        transitionDelay: `${idx * 40}ms`,
+        opacity: mounted ? 1 : 0,
+        transform: mounted
+          ? isHover && !blocked
+            ? "translateY(-4px)"
+            : "translateY(0)"
+          : "translateY(20px)",
+      }}
+    >
+      {!blocked && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            togglePin(area.title, area.path);
+          }}
+          style={{
+            ...styles.cardPinBtn,
+            ...(pinned ? styles.cardPinBtnActive : {}),
+          }}
+          title={pinned ? "Quitar de acceso rápido" : "Fijar en acceso rápido"}
+          aria-label={pinned ? "Quitar pin" : "Fijar pin"}
+        >
+          <Pin
+            size={15}
+            strokeWidth={2.2}
+            style={pinned ? { transform: "rotate(-45deg)" } : undefined}
+          />
+        </button>
+      )}
+
+      <div style={styles.cardBody}>
+        {area.img ? (
+          <div style={styles.cardIconStage}>
+            <img src={area.img} alt="" style={styles.cardIconImg} draggable={false} />
+          </div>
+        ) : null}
+
+        <span
+          style={{
+            ...styles.cardBadge,
+            background: theme.soft,
+            color: theme.accent,
+          }}
+        >
+          {area.tag}
+        </span>
+
+        <h3 style={styles.cardTitle}>{area.title}</h3>
+        <p style={styles.cardDesc}>{blocked ? area.blockedDesc || area.desc : area.desc}</p>
+
+        <div style={styles.cardAction}>
+          {blocked ? (
+            <span style={styles.cardActionBlocked}>
+              <Lock size={13} strokeWidth={2.5} />
+              <span>No disponible</span>
+            </span>
+          ) : (
+            <span
+              style={{
+                ...styles.cardActionLink,
+                color: isHover ? theme.accent : T.textSecondary,
+              }}
+            >
+              <span>Abrir módulo</span>
+              <ArrowRight
+                size={15}
+                strokeWidth={2.5}
+                style={{
+                  transition: "transform 200ms ease",
+                  transform: isHover ? "translateX(4px)" : "translateX(0)",
+                }}
+              />
+            </span>
+          )}
+        </div>
+      </div>
+
+      {blocked && (
+        <div style={styles.blockedOverlay}>
+          <Lock size={20} strokeWidth={2} color="#fff" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AreasTrabajoHubPage() {
   const nav = useNavigate();
@@ -114,6 +244,7 @@ export default function AreasTrabajoHubPage() {
         desc: "Coordinación de carga, asignación de docks y seguimiento de despachos en tiempo real.",
         path: "/despacho",
         img: imgDespacho,
+        theme: AREA_THEMES.despacho,
         tag: "Operación",
         icon: <Zap size={18} strokeWidth={2} />,
         blocked: false,
@@ -129,6 +260,7 @@ export default function AreasTrabajoHubPage() {
         desc: "Gestión de visados, control de ingreso de terceros y registros de seguridad.",
         path: "/salud",
         img: imgSalud,
+        theme: AREA_THEMES.salud,
         tag: "Seguridad",
         icon: <Shield size={18} strokeWidth={2} />,
         subModules: [
@@ -149,6 +281,7 @@ export default function AreasTrabajoHubPage() {
         desc: "Registro de ingresos, validación documental y trazabilidad de mercadería.",
         path: "/recepcion",
         img: imgRecepcion,
+        theme: AREA_THEMES.recepcion,
         tag: "Inbound",
         icon: <ArrowRight size={18} strokeWidth={2} />,
         subModules: [
@@ -162,6 +295,7 @@ export default function AreasTrabajoHubPage() {
         desc: "Control de equipos, checklists preventivos y gestión de fallas correctivas.",
         path: "/mantenimiento",
         img: imgMantenimiento,
+        theme: AREA_THEMES.mantenimiento,
         tag: "Mantenimiento",
         icon: <Clock size={18} strokeWidth={2} />,
         subModules: [
@@ -178,6 +312,7 @@ export default function AreasTrabajoHubPage() {
         desc: "Solicitudes internas, seguimiento de tareas y control de servicios de planta.",
         path: "/servicios-generales",
         img: imgServiciosGenerales,
+        theme: AREA_THEMES["servicios-generales"],
         tag: "Servicios",
         icon: <Sparkles size={18} strokeWidth={2} />,
         subModules: [
@@ -196,41 +331,26 @@ export default function AreasTrabajoHubPage() {
         desc: "Panel exclusivo EPA: aperturas, reportes y administración centralizada.",
         path: "/epa",
         img: imgEpa,
+        theme: AREA_THEMES.epa,
         tag: "EPA",
         icon: <LayoutDashboard size={18} strokeWidth={2} />,
         subModules: [
           { label: "Aperturas finalizadas", path: "/epa/aperturas-finalizadas" },
         ],
-        mediaStyle: {
-          backgroundSize: "contain",
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: "center",
-          backgroundColor: "#F1F5F9",
-        },
-        mediaOverlayStyle: {
-          background:
-            "linear-gradient(180deg, rgba(15,23,42,0.02) 0%, rgba(15,23,42,0.12) 100%)",
-        },
       },
       {
         key: "dev",
         title: "Dev",
         desc: "Herramientas internas de desarrollo: migraciones, sincronización y utilidades.",
         path: "/dev",
-        img: null,
+        img: imgDev,
+        theme: AREA_THEMES.dev,
         tag: "Desarrollo",
         icon: <Code2 size={18} strokeWidth={2} />,
         devOnly: true,
         subModules: [
           { label: "Update AppOLO Supabase", path: "/dev/update-supabase" },
         ],
-        mediaStyle: {
-          background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
-          backgroundImage: "none",
-        },
-        mediaOverlayStyle: {
-          background: "none",
-        },
       },
     ],
     []
@@ -269,7 +389,7 @@ export default function AreasTrabajoHubPage() {
       if (a.blocked) return;
       (a.subModules || []).forEach((sub) => {
         if (sub.label.toLowerCase().includes(term)) {
-          results.push({ ...sub, parentTitle: a.title, parentIcon: a.icon, parentKey: a.key });
+          results.push({ ...sub, parentTitle: a.title, parentImg: a.img, parentIcon: a.icon, parentKey: a.key });
         }
       });
     });
@@ -337,7 +457,7 @@ export default function AreasTrabajoHubPage() {
                       paddingRight: hasSubs ? 4 : 14,
                     }}
                   >
-                    <div style={styles.sidebarItemIcon}>{a.icon}</div>
+                    <SidebarAreaIcon img={a.img} fallback={a.icon} />
                     <div style={styles.sidebarItemText}>
                       <span style={styles.sidebarItemTitle}>{a.title}</span>
                       <span style={styles.sidebarItemTag}>{a.tag}</span>
@@ -578,115 +698,19 @@ export default function AreasTrabajoHubPage() {
               <>
               {filteredAreas.length > 0 && (
               <div style={styles.grid}>
-                {filteredAreas.map((a, idx) => {
-                  const isHover = hovered === a.key;
-                  const blocked = a.blocked === true;
-
-                  return (
-                    <div
-                      key={a.key}
-                      role={blocked ? "group" : "button"}
-                      aria-disabled={blocked || undefined}
-                      tabIndex={blocked ? -1 : 0}
-                      onClick={() => !blocked && go(a.path)}
-                      onKeyDown={(e) => {
-                        if (blocked) return;
-                        if (e.key === "Enter" || e.key === " ") go(a.path);
-                      }}
-                      onMouseEnter={() => !blocked && setHovered(a.key)}
-                      onMouseLeave={() => setHovered(null)}
-                      style={{
-                        ...styles.card,
-                        ...(isHover && !blocked ? styles.cardHover : {}),
-                        ...(blocked ? styles.cardBlocked : {}),
-                        transitionDelay: `${idx * 40}ms`,
-                        opacity: mounted ? 1 : 0,
-                        transform: mounted
-                          ? isHover && !blocked
-                            ? "translateY(-4px)"
-                            : "translateY(0)"
-                          : "translateY(20px)",
-                      }}
-                    >
-                      {/* Image area */}
-                      <div
-                        style={{
-                          ...styles.cardMedia,
-                          backgroundImage: `url(${a.img})`,
-                          ...(a.mediaStyle || {}),
-                          ...(isHover && !blocked && !a.mediaStyle
-                            ? { backgroundSize: "112%" }
-                            : {}),
-                        }}
-                      >
-                        <div
-                          style={{
-                            ...styles.cardMediaOverlay,
-                            ...(a.mediaOverlayStyle || {}),
-                          }}
-                        />
-                        <div style={styles.cardMediaTop}>
-                          <span style={styles.tagPill}>{a.tag}</span>
-                        </div>
-                        {blocked && (
-                          <div style={styles.blockedOverlay}>
-                            <Lock size={20} strokeWidth={2} color="#fff" />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Card content */}
-                      <div style={styles.cardContent}>
-                        <div style={styles.cardHeader}>
-                          <div
-                            style={{
-                              ...styles.cardIconBox,
-                              ...(isHover && !blocked
-                                ? {
-                                    background: T.accent,
-                                    color: "#fff",
-                                    borderColor: T.accent,
-                                    boxShadow: `0 6px 16px ${T.accentGlow}`,
-                                  }
-                                : {}),
-                            }}
-                          >
-                            {a.icon}
-                          </div>
-                          <h3 style={styles.cardTitle}>{a.title}</h3>
-                        </div>
-
-                        <p style={styles.cardDesc}>{blocked ? a.blockedDesc || a.desc : a.desc}</p>
-
-                        <div style={styles.cardAction}>
-                          {blocked ? (
-                            <span style={styles.cardActionBlocked}>
-                              <Lock size={13} strokeWidth={2.5} />
-                              <span>No disponible</span>
-                            </span>
-                          ) : (
-                            <span
-                              style={{
-                                ...styles.cardActionLink,
-                                ...(isHover ? { color: T.accent } : {}),
-                              }}
-                            >
-                              <span>Abrir módulo</span>
-                              <ArrowRight
-                                size={15}
-                                strokeWidth={2.5}
-                                style={{
-                                  transition: "transform 200ms ease",
-                                  transform: isHover ? "translateX(4px)" : "translateX(0)",
-                                }}
-                              />
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {filteredAreas.map((a, idx) => (
+                  <AreaHubCard
+                    key={a.key}
+                    area={a}
+                    blocked={a.blocked === true}
+                    isHover={hovered === a.key}
+                    mounted={mounted}
+                    idx={idx}
+                    onHover={setHovered}
+                    onLeave={() => setHovered(null)}
+                    onNavigate={go}
+                  />
+                ))}
               </div>
               )}
 
@@ -712,7 +736,7 @@ export default function AreasTrabajoHubPage() {
                           ...(hovered === "sub-" + sub.path ? styles.subModuleRowHover : {}),
                         }}
                       >
-                        <div style={styles.subModuleIcon}>{sub.parentIcon}</div>
+                        <SidebarAreaIcon img={sub.parentImg} fallback={sub.parentIcon} />
                         <div style={styles.subModuleInfo}>
                           <span style={styles.subModuleLabel}>{sub.label}</span>
                           <span style={styles.subModuleParent}>{sub.parentTitle}</span>
@@ -1044,6 +1068,7 @@ const styles = {
   /* Main */
   main: {
     width: "100%",
+    minHeight: 0,
     overflow: "auto",
     padding: "28px 24px 48px",
     WebkitOverflowScrolling: "touch",
@@ -1182,14 +1207,15 @@ const styles = {
   /* Cards grid */
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 248px), 1fr))",
+    gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 220px), 1fr))",
     gap: 16,
   },
 
   card: {
+    position: "relative",
     background: T.surface,
     border: `1px solid ${T.border}`,
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: "hidden",
     cursor: "pointer",
     userSelect: "none",
@@ -1199,90 +1225,81 @@ const styles = {
     display: "flex",
     flexDirection: "column",
   },
-  cardHover: {
-    borderColor: T.accent,
-    boxShadow: T.shadowMd,
-  },
   cardBlocked: {
     cursor: "not-allowed",
     opacity: 0.7,
     filter: "grayscale(0.3) saturate(0.7)",
   },
-
-  /* Card media */
-  cardMedia: {
-    height: 118,
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    position: "relative",
-    overflow: "hidden",
-    transition: "background-size 400ms ease",
-  },
-  cardMediaOverlay: {
-    position: "absolute",
-    inset: 0,
-    background:
-      "linear-gradient(180deg, rgba(15,23,42,0.04) 0%, rgba(15,23,42,0.48) 100%)",
-  },
-  cardMediaTop: {
+  cardPinBtn: {
     position: "absolute",
     top: 12,
-    left: 12,
     right: 12,
-    display: "flex",
-    justifyContent: "flex-start",
+    zIndex: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    border: `1px solid ${T.border}`,
+    background: T.surface,
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+    color: T.textMuted,
+    padding: 0,
+    fontFamily: "inherit",
+    transition: "all 150ms ease",
   },
-  tagPill: {
-    padding: "5px 11px",
+  cardPinBtnActive: {
+    background: T.accentSoft,
+    borderColor: "rgba(8, 159, 138, 0.3)",
+    color: T.accent,
+  },
+  cardBody: {
+    padding: "20px 18px 18px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    textAlign: "center",
+    flex: 1,
+    gap: 10,
+  },
+  cardIconStage: {
+    width: 80,
+    height: 80,
+    display: "grid",
+    placeItems: "center",
+    marginBottom: 2,
+  },
+  cardIconImg: {
+    width: 72,
+    height: 72,
+    objectFit: "contain",
+    display: "block",
+    borderRadius: 16,
+    boxShadow: "0 4px 14px rgba(15, 23, 42, 0.08)",
+  },
+  cardBadge: {
+    padding: "5px 12px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.2)",
-    border: "1px solid rgba(255,255,255,0.35)",
-    backdropFilter: "blur(8px)",
-    WebkitBackdropFilter: "blur(8px)",
-    color: "#fff",
     fontWeight: 800,
     fontSize: 11,
-    letterSpacing: 0.2,
+    letterSpacing: 0.15,
+    lineHeight: 1.2,
   },
   blockedOverlay: {
     position: "absolute",
     inset: 0,
-    background: "rgba(15,23,42,0.4)",
+    background: "rgba(15,23,42,0.45)",
     display: "grid",
     placeItems: "center",
-  },
-
-  /* Card content */
-  cardContent: {
-    padding: "14px 16px 16px",
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    gap: 9,
-  },
-  cardHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-  cardIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    background: T.surfaceAlt,
-    border: `1px solid ${T.border}`,
-    color: T.textSecondary,
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-    transition: "all 250ms ease",
+    zIndex: 3,
+    borderRadius: 20,
   },
   cardTitle: {
     margin: 0,
-    fontSize: 14.5,
+    fontSize: 15,
     fontWeight: 800,
     color: T.text,
-    letterSpacing: -0.2,
+    letterSpacing: -0.25,
     lineHeight: 1.2,
   },
   cardDesc: {
@@ -1290,24 +1307,27 @@ const styles = {
     fontSize: 12.5,
     fontWeight: 500,
     color: T.textMuted,
-    lineHeight: 1.45,
+    lineHeight: 1.5,
     display: "-webkit-box",
-    WebkitLineClamp: 2,
+    WebkitLineClamp: 3,
     WebkitBoxOrient: "vertical",
     overflow: "hidden",
+    width: "100%",
   },
   cardAction: {
     marginTop: "auto",
-    paddingTop: 10,
+    paddingTop: 12,
+    width: "100%",
     borderTop: `1px solid ${T.borderSoft}`,
   },
   cardActionLink: {
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
+    width: "100%",
     fontSize: 12.5,
     fontWeight: 700,
-    color: T.textSecondary,
     transition: "color 200ms ease",
   },
   cardActionBlocked: {
@@ -1371,16 +1391,6 @@ const styles = {
     borderColor: T.accent,
     boxShadow: T.shadow,
     transform: "translateX(2px)",
-  },
-  subModuleIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    background: T.accentSoft,
-    color: T.accent,
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
   },
   subModuleInfo: {
     flex: 1,

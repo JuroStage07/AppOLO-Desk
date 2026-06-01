@@ -24,6 +24,7 @@ export function Container({ children, style, gap = 16, max = CONTAINER_MAX }) {
 
 const main = {
   width: "100%",
+  minHeight: 0,
   boxSizing: "border-box",
   overflow: "auto",
   WebkitOverflowScrolling: "touch",

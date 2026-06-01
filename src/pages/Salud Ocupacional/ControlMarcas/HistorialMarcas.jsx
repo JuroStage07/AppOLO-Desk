@@ -285,6 +285,7 @@ export default function HistorialMarcas() {
 const ui = {
   shell: {
     minHeight: "100vh",
+    height: "100dvh",
     width: "100%",
     boxSizing: "border-box",
     background: "#F6F7FB",
@@ -292,13 +293,16 @@ const ui = {
     color: "#0F172A",
     display: "grid",
     gridTemplateRows: "auto 1fr",
+    overflow: "hidden",
   },
   main: {
+    minHeight: 0,
     padding: 16,
     display: "flex",
     justifyContent: "center",
     alignItems: "flex-start",
     overflow: "auto",
+    WebkitOverflowScrolling: "touch",
   },
   card: {
     width: "min(1100px, 100%)",

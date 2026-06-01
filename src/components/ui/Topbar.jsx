@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Code2,
   LayoutDashboard,
   Menu,
   Pin,
@@ -18,7 +19,15 @@ import { AuthCtx } from "../../auth/AuthProvider";
 import { auth } from "../../firebase";
 import { isEpaRestrictedUser } from "../../config/epaOnlyUids";
 import { useAllPinnedModules } from "../../hooks/usePinnedModules";
+import imgSalud from "../../assets/saludOcupacional.png";
+import imgDespacho from "../../assets/despacho.png";
+import imgMantenimiento from "../../assets/mantenimiento.png";
+import imgRecepcion from "../../assets/recepcion.png";
+import imgServiciosGenerales from "../../assets/serviciosGenerales.png";
+import imgEpa from "../../assets/epa.png";
+import imgDev from "../../assets/dev.png";
 import PinsFlyout from "./PinsFlyout";
+import SidebarAreaIcon from "./SidebarAreaIcon";
 import { ACCENT, ACCENT_SOFT, BORDER, CONTAINER_MAX, SLATE, TEXT } from "../../styles/theme";
 
 const SURFACE = "#FFFFFF";
@@ -33,6 +42,7 @@ const SHADOW_LG = "0 8px 24px rgba(15,23,42,0.08), 0 20px 60px rgba(15,23,42,0.1
 const AREAS = [
   {
     key: "despacho", title: "Despacho", path: "/despacho", tag: "Operación",
+    img: imgDespacho,
     icon: <Zap size={16} strokeWidth={2} />,
     subModules: [
       { label: "En progreso", path: "/despacho/in-progress" },
@@ -41,6 +51,7 @@ const AREAS = [
   },
   {
     key: "salud", title: "Salud Ocupacional", path: "/salud", tag: "Seguridad",
+    img: imgSalud,
     icon: <Shield size={16} strokeWidth={2} />,
     subModules: [
       { label: "Control de marcas", path: "/salud/control-marcas" },
@@ -52,6 +63,7 @@ const AREAS = [
   },
   {
     key: "recepcion", title: "Recepción", path: "/recepcion", tag: "Inbound",
+    img: imgRecepcion,
     icon: <ArrowRight size={16} strokeWidth={2} />,
     subModules: [
       { label: "Acción descarga", path: "/recepcion/accion-descarga" },
@@ -60,6 +72,7 @@ const AREAS = [
   },
   {
     key: "mantenimiento", title: "Mantenimiento", path: "/mantenimiento", tag: "Mantenimiento",
+    img: imgMantenimiento,
     icon: <Clock size={16} strokeWidth={2} />,
     subModules: [
       { label: "Equipos", path: "/mantenimiento/equipos" },
@@ -69,6 +82,7 @@ const AREAS = [
   },
   {
     key: "servicios-generales", title: "Servicios Generales", path: "/servicios-generales", tag: "Servicios",
+    img: imgServiciosGenerales,
     icon: <Sparkles size={16} strokeWidth={2} />,
     subModules: [
       { label: "Órdenes de trabajo", path: "/servicios-generales/ordenes-trabajo" },
@@ -78,9 +92,19 @@ const AREAS = [
   },
   {
     key: "epa", title: "EPA", path: "/epa", tag: "EPA",
+    img: imgEpa,
     icon: <LayoutDashboard size={16} strokeWidth={2} />,
     subModules: [
       { label: "Aperturas finalizadas", path: "/epa/aperturas-finalizadas" },
+    ],
+  },
+  {
+    key: "dev", title: "Dev", path: "/dev", tag: "Desarrollo",
+    img: imgDev,
+    icon: <Code2 size={16} strokeWidth={2} />,
+    devOnly: true,
+    subModules: [
+      { label: "Update AppOLO Supabase", path: "/dev/update-supabase" },
     ],
   },
 ];
@@ -88,7 +112,7 @@ const AREAS = [
 /* ─── Sidebar Component ─── */
 function Sidebar({ open, onClose }) {
   const nav = useNavigate();
-  const { profile, epaAdmin, user: ctxUser } = useContext(AuthCtx);
+  const { profile, epaAdmin, role, user: ctxUser } = useContext(AuthCtx);
   const user = ctxUser ?? auth.currentUser;
   const [expandedArea, setExpandedArea] = useState(null);
   const [pinsOpen, setPinsOpen] = useState(false);
@@ -102,8 +126,8 @@ function Sidebar({ open, onClose }) {
     if (epaOnly) {
       return AREAS.filter((a) => a.key === "epa");
     }
-    return AREAS;
-  }, [epaOnly]);
+    return AREAS.filter((a) => !a.devOnly || role === "dev");
+  }, [epaOnly, role]);
 
   const pinCount = epaOnly
     ? pins.filter((p) => p.moduleKey === "epa").length
@@ -136,7 +160,7 @@ function Sidebar({ open, onClose }) {
                     onClick={() => { onClose(); setExpandedArea(null); nav(a.path); }}
                     style={sb.item}
                   >
-                    <div style={sb.itemIcon}>{a.icon}</div>
+                    <SidebarAreaIcon img={a.img} fallback={a.icon} />
                     <div style={sb.itemText}>
                       <span style={sb.itemTitle}>{a.title}</span>
                       <span style={sb.itemTag}>{a.tag}</span>
@@ -216,13 +240,13 @@ function Sidebar({ open, onClose }) {
 /**
  * Sticky top bar with integrated sidebar menu.
  */
-export default function Topbar({ children, style, innerStyle, sticky = false }) {
+export default function Topbar({ children, style, innerStyle, sticky = true }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <>
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <header style={{ ...topbar, ...(sticky ? topbarSticky : {}), ...style }}>
+      <header style={{ ...topbar, ...(sticky ? topbarPinned : {}), ...style }}>
         <div style={{ ...topbarInner, ...innerStyle }}>
           <button
             type="button"
@@ -272,11 +296,14 @@ Topbar.UserBox = UserBox;
 const topbar = {
   width: "100%",
   boxSizing: "border-box",
+  flexShrink: 0,
   borderBottom: `1px solid ${BORDER}`,
   background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
   backdropFilter: "blur(8px)",
+  WebkitBackdropFilter: "blur(8px)",
 };
-const topbarSticky = { position: "sticky", top: 0, zIndex: 100 };
+/** Stays visible when an ancestor scrolls (custom shells, lockBodyScroll=false). */
+const topbarPinned = { position: "sticky", top: 0, zIndex: 120 };
 const topbarInner = {
   width: "100%",
   maxWidth: CONTAINER_MAX,

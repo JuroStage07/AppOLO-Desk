@@ -472,9 +472,13 @@ export default function DespachoInProgressPage() {
 const ui = {
     shell: {
         minHeight: "100vh",
+        height: "100dvh",
         background: "#F6F7FB",
         fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
         color: "#0F172A",
+        display: "grid",
+        gridTemplateRows: "auto 1fr",
+        overflow: "hidden",
     },
     mShell: {},
     topbar: {
@@ -550,7 +554,10 @@ const ui = {
         gap: 8,
     },
     main: {
+        minHeight: 0,
+        overflow: "auto",
         padding: "18px 16px 28px",
+        WebkitOverflowScrolling: "touch",
     },
     container: {
         width: "100%",

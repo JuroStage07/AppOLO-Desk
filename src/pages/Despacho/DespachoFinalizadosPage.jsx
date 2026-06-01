@@ -204,9 +204,13 @@ export default function DespachoFinalizadosPage() {
 const ui = {
   shell: {
     minHeight: "100vh",
+    height: "100dvh",
     background: "#F6F7FB",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
     color: "#0F172A",
+    display: "grid",
+    gridTemplateRows: "auto 1fr",
+    overflow: "hidden",
   },
   mShell: {},
   topbar: {
@@ -269,7 +273,12 @@ const ui = {
     fontFamily: "inherit",
   },
   btnInlineIcon: { display: "inline-flex", alignItems: "center", gap: 8 },
-  main: { padding: "18px 16px 28px" },
+  main: {
+    minHeight: 0,
+    overflow: "auto",
+    padding: "18px 16px 28px",
+    WebkitOverflowScrolling: "touch",
+  },
   container: { width: "100%", maxWidth: 1120, margin: "0 auto", display: "grid", gap: 16 },
   hero: {
     background: "#fff",

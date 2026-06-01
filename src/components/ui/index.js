@@ -7,7 +7,7 @@
 //            Field, Sheet, EmptyState, FooterNote, Spinner, SectionTitle,
 //            theme } from "../../components/ui";
 
-export { default as Shell } from "./Shell";
+export { default as Shell, shellLayoutStyle, mainScrollStyle } from "./Shell";
 export { default as Topbar } from "./Topbar";
 export { default as Brand } from "./Brand";
 export { default as Main, Container } from "./Main";
@@ -15,6 +15,7 @@ export { default as Hero, SectionTitle } from "./Hero";
 export { default as Badge } from "./Badge";
 export { default as Card } from "./Card";
 export { default as IconBox } from "./IconBox";
+export { default as SidebarAreaIcon } from "./SidebarAreaIcon";
 export { default as ModuleCard } from "./ModuleCard";
 export { default as ModuleGrid } from "./ModuleGrid";
 export { default as KpiCard, KpiGrid } from "./KpiCard";

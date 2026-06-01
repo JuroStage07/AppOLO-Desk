@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, BarChart3, TrendingUp, User } from "lucide-react";
+import { ArrowLeft, BarChart3, TrendingUp } from "lucide-react";
+import {
+    Brand,
+    Container,
+    GhostButton,
+    Main,
+    Shell,
+    Topbar,
+} from "../../components/ui";
 import { auth, db } from "../../firebase";
 import {
     collection,
@@ -88,22 +96,6 @@ export default function MetricaSaludOcupacional() {
     const [loadingData, setLoadingData] = useState(true);
     const [loadError, setLoadError] = useState("");
 
-    useEffect(() => {
-        const prev = document.body.style.overflow;
-        const prevBg = document.body.style.background;
-        const prevMargin = document.body.style.margin;
-
-        document.body.style.overflow = "hidden";
-        document.body.style.background = "#F6F7FB";
-        document.body.style.margin = "0";
-
-        return () => {
-            document.body.style.overflow = prev;
-            document.body.style.background = prevBg;
-            document.body.style.margin = prevMargin;
-        };
-    }, []);
-
     // Obtener datos desde Firestore
     useEffect(() => {
         const loadDashboardData = async () => {
@@ -174,48 +166,26 @@ export default function MetricaSaludOcupacional() {
     );
 
     return (
-        <div style={ui.shell}>
-            <header style={ui.topbar}>
-                <div style={ui.topbarInner}>
-                    <div
-                        style={ui.brand}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => nav("/salud")}
-                        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && nav("/salud")}
-                    >
-                        <div style={ui.brandMark}>
-                            <BarChart3 size={20} strokeWidth={2.25} color="#fff" />
-                        </div>
-                        <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-                            <div style={ui.brandTitle}>Salud Ocupacional</div>
-                            <div style={ui.brandSub}>Panel de métricas</div>
-                        </div>
-                    </div>
+        <Shell>
+            <Topbar>
+                <Brand
+                    icon={BarChart3}
+                    title="Salud Ocupacional"
+                    subtitle="Panel de métricas"
+                    onClick={() => nav("/salud")}
+                />
+                <Topbar.Right>
+                    <Topbar.UserHint title={user?.email || ""}>
+                        {user?.displayName || user?.email || "Sesión activa"}
+                    </Topbar.UserHint>
+                    <GhostButton icon={ArrowLeft} onClick={() => nav("/salud")}>
+                        Menú Salud
+                    </GhostButton>
+                </Topbar.Right>
+            </Topbar>
 
-                    <div style={ui.topbarRight}>
-                        <div style={ui.userBox}>
-                            <div style={ui.userAvatar}>
-                                <User size={16} strokeWidth={2.2} />
-                            </div>
-                            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-                                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-                                <div style={ui.userMail}>{user?.email || "—"}</div>
-                            </div>
-                        </div>
-
-                        <button type="button" onClick={() => nav("/salud")} style={ui.btnGhost}>
-                            <span style={ui.btnInlineIcon}>
-                                <ArrowLeft size={16} strokeWidth={2.2} />
-                                Menú Salud
-                            </span>
-                        </button>
-                    </div>
-                </div>
-            </header>
-
-            <main style={ui.main}>
-                <div style={ui.container}>
+            <Main center>
+                <Container style={ui.container}>
                     <div style={ui.hero}>
                         <div style={{ display: "grid", gap: 10 }}>
                             <div style={ui.kickerRow}>
@@ -316,115 +286,14 @@ export default function MetricaSaludOcupacional() {
                             terceros, visados y revisión de equipos para mostrar datos reales y filtros funcionales por fecha.
                         </div>
                     </div>*/}
-                </div>
-            </main>
-        </div>
+                </Container>
+            </Main>
+        </Shell>
     );
 }
 
 const ui = {
-    shell: {
-        minHeight: "100vh",
-        height: "100vh",
-        width: "100%",
-        maxWidth: "100%",
-        boxSizing: "border-box",
-        background: "#F6F7FB",
-        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-        color: "#0F172A",
-        overflow: "hidden",
-        display: "grid",
-        gridTemplateRows: "auto 1fr",
-    },
-
-    topbar: {
-        width: "100%",
-        boxSizing: "border-box",
-        borderBottom: "1px solid #E7E9F2",
-        background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
-        backdropFilter: "blur(8px)",
-        zIndex: 100,
-    },
-    topbarInner: {
-        width: "100%",
-        maxWidth: 1120,
-        marginLeft: "auto",
-        marginRight: "auto",
-        boxSizing: "border-box",
-        padding: "12px 18px",
-        minHeight: 64,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        flexWrap: "wrap",
-    },
-
-    brand: {
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        cursor: "pointer",
-        userSelect: "none",
-        outline: "none",
-    },
-    brandMark: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
-        background: ACCENT,
-        display: "grid",
-        placeItems: "center",
-        flexShrink: 0,
-        boxShadow: "0 12px 28px rgba(8,159,138,0.28)",
-    },
-    brandTitle: { fontWeight: 950, fontSize: 14, color: "#0F172A" },
-    brandSub: { fontWeight: 800, fontSize: 12, color: "#64748B" },
-
-    topbarRight: {
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        flexWrap: "wrap",
-        justifyContent: "flex-end",
-    },
-
-    btnGhost: {
-        border: "1px solid #E7E9F2",
-        background: "#fff",
-        borderRadius: 12,
-        padding: "9px 14px",
-        cursor: "pointer",
-        fontWeight: 800,
-        fontSize: 13,
-        color: "#0F172A",
-        boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
-        whiteSpace: "nowrap",
-        fontFamily: "inherit",
-    },
-    btnInlineIcon: {
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-    },
-
-    main: {
-        width: "100%",
-        boxSizing: "border-box",
-        overflow: "auto",
-        padding: "18px 16px 28px",
-        display: "grid",
-        placeItems: "start center",
-        WebkitOverflowScrolling: "touch",
-    },
-
     container: {
-        width: "100%",
-        maxWidth: 1120,
-        marginLeft: "auto",
-        marginRight: "auto",
-        boxSizing: "border-box",
-        display: "grid",
         gap: 10,
         paddingBottom: 18,
     },
@@ -630,41 +499,6 @@ const ui = {
         fontWeight: 800,
         fontSize: 13,
         lineHeight: 1.5,
-    },
-
-    userBox: {
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "8px 10px",
-        borderRadius: 14,
-        border: "1px solid #E7E9F2",
-        background: "#fff",
-        boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
-        minWidth: 0,
-    },
-    userAvatar: {
-        width: 34,
-        height: 34,
-        borderRadius: 14,
-        background: "rgba(8,159,138,0.12)",
-        color: ACCENT,
-        display: "grid",
-        placeItems: "center",
-        fontWeight: 980,
-        flexShrink: 0,
-    },
-    userName: {
-        fontWeight: 980,
-        fontSize: 12,
-        color: "#0F172A",
-        lineHeight: 1.1,
-    },
-    userMail: {
-        fontWeight: 850,
-        fontSize: 12,
-        color: "#64748B",
-        lineHeight: 1.1,
     },
 
     chartGrid: {

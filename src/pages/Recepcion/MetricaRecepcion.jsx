@@ -4435,7 +4435,7 @@ export default function MetricaRecepcion() {
     const prevBg = document.body.style.background;
     const prevMargin = document.body.style.margin;
 
-    document.body.style.overflow = "auto";
+    document.body.style.overflow = "hidden";
     document.body.style.background = "#F6F7FB";
     document.body.style.margin = "0";
 
@@ -8632,6 +8632,7 @@ export default function MetricaRecepcion() {
 const ui = {
   shell: {
     minHeight: "100vh",
+    height: "100dvh",
     width: "100%",
     maxWidth: "100%",
     boxSizing: "border-box",
@@ -8640,6 +8641,7 @@ const ui = {
     color: "#0F172A",
     display: "grid",
     gridTemplateRows: "auto 1fr",
+    overflow: "hidden",
   },
 
   topbar: {
@@ -8718,6 +8720,7 @@ const ui = {
 
   main: {
     width: "100%",
+    minHeight: 0,
     boxSizing: "border-box",
     overflow: "auto",
     padding: "18px 16px 28px",
@@ -8916,13 +8919,8 @@ const ui = {
   },
 
   stickyFiltersOnly: {
-    position: "sticky",
-    top: 0,
-    zIndex: 90,
-    background: "#F6F7FB",
     paddingTop: 6,
     paddingBottom: 12,
-    boxShadow: "0 1px 0 rgba(15,23,42,0.06)",
   },
 
   stickyKpisOnly: {
@@ -10973,7 +10971,7 @@ const ui = {
   mHeroCompact: { gap: 10, alignItems: "flex-start" },
   mHeroInfoBtn: { width: "100%", justifyContent: "center" },
   mAlertsToggleBtn: { width: "100%", justifyContent: "center" },
-  mStickyFiltersOnly: { position: "relative", top: "auto", paddingBottom: 8 },
+  mStickyFiltersOnly: { paddingBottom: 8 },
   mStickyKpisOnly: { position: "relative", top: "auto", paddingBottom: 8 },
   mKpiGrid: { gridTemplateColumns: "1fr", gap: 10 },
   mChartGrid: { gridTemplateColumns: "1fr", gap: 10 },

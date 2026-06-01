@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from "react";
+import React, { useContext, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../../../firebase";
 import {
@@ -16,7 +16,10 @@ import { isInUserScope } from "../../../utils/dataScope";
 import { ArrowLeft, PenLine } from "lucide-react";
 import {
   Brand,
+  Container,
   GhostButton,
+  Main,
+  Shell,
   Topbar,
 } from "../../../components/ui";
 
@@ -72,16 +75,6 @@ export default function NuevoVisado() {
 
     aceptaNormas: false,
   });
-
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.body.style.background = "#F6F7FB";
-    document.body.style.margin = "0";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
 
   const back = () => nav("/salud/visado");
 
@@ -245,25 +238,24 @@ export default function NuevoVisado() {
   };
 
   return (
-    <div style={styles.shell}>
-      <div style={styles.container}>
-        {/* Header sticky */}
-        <Topbar>
-          <Brand
-            icon={PenLine}
-            title="Nuevo visado"
-            subtitle="Salud Ocupacional"
-            onClick={back}
-          />
-          <Topbar.Right>
-            <GhostButton icon={ArrowLeft} onClick={back} disabled={saving}>
-              Volver
-            </GhostButton>
-          </Topbar.Right>
-        </Topbar>
+    <Shell>
+      <Topbar>
+        <Brand
+          icon={PenLine}
+          title="Nuevo visado"
+          subtitle="Salud Ocupacional"
+          onClick={back}
+        />
+        <Topbar.Right>
+          <GhostButton icon={ArrowLeft} onClick={back} disabled={saving}>
+            Volver
+          </GhostButton>
+        </Topbar.Right>
+      </Topbar>
 
-        {/* Card */}
-        <div style={styles.card}>
+      <Main padding="16px">
+        <Container max={1100} style={{ gap: 12 }}>
+          <div style={styles.card}>
           <form onSubmit={onSubmit} style={styles.form}>
             {/* INFO GENERAL */}
             <Section
@@ -512,9 +504,10 @@ export default function NuevoVisado() {
               </button>
             </div>
           </form>
-        </div>
-      </div>
-    </div>
+          </div>
+        </Container>
+      </Main>
+    </Shell>
   );
 }
 
@@ -581,65 +574,10 @@ function YesNoField({ label, value, onChange, disabled }) {
 /* ===================== STYLES ===================== */
 
 const styles = {
-  shell: {
-    height: "100vh",
-    width: "100vw",
-    background: "#F6F7FB",
-    overflow: "hidden",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-    color: "#101827",
-  },
-
-  container: {
-    height: "100%",
-    width: "min(1100px, 100%)",
-    margin: "0 auto",
-    padding: 16,
-    display: "grid",
-    gridTemplateRows: "auto 1fr",
-    gap: 12,
-  },
-
-  header: {
-    position: "sticky",
-    top: 0,
-    zIndex: 10,
-    background: "linear-gradient(180deg, rgba(246,247,251,1) 0%, rgba(246,247,251,0.92) 100%)",
-    backdropFilter: "blur(6px)",
-    borderRadius: 16,
-    border: "1px solid #E7E9F2",
-    padding: "14px 14px",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-  },
-
-  headerLeft: { display: "grid", gap: 6 },
-
-  kickerRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
-  kickerDot: { width: 10, height: 10, borderRadius: 999, background: ACCENT, boxShadow: "0 0 0 4px rgba(8,159,138,0.14)" },
-  kicker: { fontSize: 12, fontWeight: 900, letterSpacing: 0.6, textTransform: "uppercase", color: ACCENT },
-  badge: {
-    fontSize: 12,
-    fontWeight: 900,
-    padding: "6px 10px",
-    borderRadius: 999,
-    background: "#FFFFFF",
-    border: "1px solid #E7E9F2",
-    color: "#334155",
-  },
-
-  title: { margin: 0, fontSize: 22, fontWeight: 950, letterSpacing: -0.2 },
-  subtitle: { margin: 0, color: "#64748B", fontWeight: 700 },
-
-  headerRight: { display: "flex", gap: 10, alignItems: "center" },
-
   card: {
     background: "#fff",
     border: "1px solid #E7E9F2",
     borderRadius: 18,
-    overflow: "auto",
     boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
   },
 

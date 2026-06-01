@@ -1828,6 +1828,7 @@ const ui = {
 
   main: {
     width: "100%",
+    minHeight: 0,
     boxSizing: "border-box",
     overflow: "auto",
     padding: "18px 16px 100px",

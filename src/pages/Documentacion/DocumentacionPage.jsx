@@ -1384,7 +1384,7 @@ const ui = {
         boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
         whiteSpace: "nowrap",
     },
-    main: { overflow: "auto", padding: 16, display: "grid", placeItems: "start center" },
+    main: { minHeight: 0, overflow: "auto", padding: 16, display: "grid", placeItems: "start center", WebkitOverflowScrolling: "touch" },
     container: { width: "min(1450px, 100%)", display: "grid", gap: 14 },
     heroCard: {
         background: "#fff",

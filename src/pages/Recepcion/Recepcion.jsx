@@ -67,7 +67,7 @@ export default function Recepcion() {
         key: "aperturas",
         title: "Aperturas",
         desc: "Gestión y seguimiento de aperturas de recepción",
-        path: "/recepcion/aperturas",
+        path: "/salud/aperturas",
         tone: "accent",
         icon: ClipboardList,
         tag: "Operativo",
