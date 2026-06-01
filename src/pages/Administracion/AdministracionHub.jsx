@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Code2, Database, Lock, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Clock, Lock, ShieldCheck, Users } from "lucide-react";
 import { auth } from "../../firebase";
 import {
   Badge,
@@ -17,30 +17,30 @@ import {
 } from "../../components/ui";
 import usePinnedModules from "../../hooks/usePinnedModules";
 
-export default function DevHub() {
+export default function AdministracionHub() {
   const nav = useNavigate();
   const user = auth.currentUser;
-  const { isPinned, togglePin } = usePinnedModules("dev");
+  const { isPinned, togglePin } = usePinnedModules("administracion");
 
   const go = (path) => nav(path);
 
   const modules = useMemo(
     () => [
       {
-        key: "update-supabase",
-        title: "Update AppOLO Supabase",
-        desc: "Sincronización y actualización de datos hacia Supabase",
-        path: "/dev/update-supabase",
-        icon: Database,
-        tag: "Sincronización",
+        key: "usuarios",
+        title: "Usuarios",
+        desc: "Gestión de usuarios, roles y permisos de la plataforma",
+        path: "/administracion/usuarios",
+        icon: Users,
+        tag: "Prioritario",
       },
       {
-        key: "config-modulos",
-        title: "Configuración de módulos",
-        desc: "Ajustes y parámetros de los módulos de la plataforma",
-        path: "/dev/config-modulos",
-        icon: SlidersHorizontal,
-        tag: "Configuración",
+        key: "horas-extra",
+        title: "Horas Extra",
+        desc: "Revisión y aprobación de horas extra del personal",
+        path: "/horas-extra",
+        icon: Clock,
+        tag: "Aprobaciones",
       },
     ],
     []
@@ -50,10 +50,10 @@ export default function DevHub() {
     <Shell>
       <Topbar>
         <Brand
-          icon={Code2}
-          title="Dev"
+          icon={ShieldCheck}
+          title="Administración"
           subtitle="Panel de módulos"
-          onClick={() => go("/dev")}
+          onClick={() => go("/administracion")}
         />
         <Topbar.Right>
           <Topbar.UserHint title={user?.email || ""}>
@@ -70,9 +70,9 @@ export default function DevHub() {
           <Hero
             kicker="Centro de control"
             title="Módulos"
-            subtitle="Herramientas internas de desarrollo: migraciones, sincronización y utilidades."
-            badge={<Badge icon={Lock}>Desarrollo</Badge>}
-            aside={<QuickCard moduleKey="dev" />}
+            subtitle="Seleccioná un módulo para ingresar. Las acciones quedan asociadas a tu usuario."
+            badge={<Badge icon={Lock}>Administración</Badge>}
+            aside={<QuickCard moduleKey="administracion" />}
           />
 
           <ModuleGrid>

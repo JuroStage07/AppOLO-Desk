@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Code2, Database, Lock, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Clock, Lock, SlidersHorizontal } from "lucide-react";
 import { auth } from "../../firebase";
 import {
   Badge,
@@ -17,30 +17,22 @@ import {
 } from "../../components/ui";
 import usePinnedModules from "../../hooks/usePinnedModules";
 
-export default function DevHub() {
+export default function ModulesConfigHub() {
   const nav = useNavigate();
   const user = auth.currentUser;
-  const { isPinned, togglePin } = usePinnedModules("dev");
+  const { isPinned, togglePin } = usePinnedModules("config-modulos");
 
   const go = (path) => nav(path);
 
   const modules = useMemo(
     () => [
       {
-        key: "update-supabase",
-        title: "Update AppOLO Supabase",
-        desc: "Sincronización y actualización de datos hacia Supabase",
-        path: "/dev/update-supabase",
-        icon: Database,
-        tag: "Sincronización",
-      },
-      {
-        key: "config-modulos",
-        title: "Configuración de módulos",
-        desc: "Ajustes y parámetros de los módulos de la plataforma",
-        path: "/dev/config-modulos",
-        icon: SlidersHorizontal,
-        tag: "Configuración",
+        key: "config-horas-extra",
+        title: "Configuración Horas Extras",
+        desc: "Parámetros y reglas para el cálculo y aprobación de horas extra",
+        path: "/dev/config-modulos/horas-extra",
+        icon: Clock,
+        tag: "Horas Extra",
       },
     ],
     []
@@ -50,17 +42,17 @@ export default function DevHub() {
     <Shell>
       <Topbar>
         <Brand
-          icon={Code2}
-          title="Dev"
+          icon={SlidersHorizontal}
+          title="Configuración de módulos"
           subtitle="Panel de módulos"
-          onClick={() => go("/dev")}
+          onClick={() => go("/dev/config-modulos")}
         />
         <Topbar.Right>
           <Topbar.UserHint title={user?.email || ""}>
             {user?.displayName || user?.email || "Sesión activa"}
           </Topbar.UserHint>
-          <GhostButton icon={ArrowLeft} onClick={() => go("/")}>
-            Inicio
+          <GhostButton icon={ArrowLeft} onClick={() => go("/dev")}>
+            Volver
           </GhostButton>
         </Topbar.Right>
       </Topbar>
@@ -70,9 +62,9 @@ export default function DevHub() {
           <Hero
             kicker="Centro de control"
             title="Módulos"
-            subtitle="Herramientas internas de desarrollo: migraciones, sincronización y utilidades."
-            badge={<Badge icon={Lock}>Desarrollo</Badge>}
-            aside={<QuickCard moduleKey="dev" />}
+            subtitle="Configurá los parámetros de cada módulo de la plataforma."
+            badge={<Badge icon={Lock}>Configuración</Badge>}
+            aside={<QuickCard moduleKey="config-modulos" />}
           />
 
           <ModuleGrid>

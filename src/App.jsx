@@ -5,6 +5,7 @@ import AuthProvider from "./auth/AuthProvider";
 import { AuthCtx } from "./auth/AuthProvider";
 import RequireAuth from "./auth/RequireAuth";
 import PrivateRoute from "./auth/PrivateRoute";
+import RequireRole from "./auth/RequireRole";
 
 import Login from "./pages/Login";
 import Home from "./pages/Home";
@@ -48,10 +49,15 @@ import AccionDescarga from "./pages/Recepcion/AccionDescarga/AccionDescarga";
 import AccionDetalle from "./pages/Recepcion/AccionDescarga/AccionDetalle";
 import MetricaRecepcion from "./pages/Recepcion/MetricaRecepcion";
 
+import OvertimeApprovals from "./pages/OvertimeApprovals";
+
 import EPAHubPage from "./pages/EPA/EPAHubPage";
 import AperturasFinalizadasEPA from "./pages/EPA/AperturasFinalizadasEPA";
 import DevHub from "./pages/Dev/DevHub";
 import UpdateSupabasePage from "./pages/Dev/UpdateSupabasePage";
+import ModulesConfigHub from "./pages/Dev/ModulesConfigHub";
+import OvertimeSettingsHub from "./pages/Dev/OvertimeSettingsHub";
+import AdministracionHub from "./pages/Administracion/AdministracionHub";
 import ServiciosGenerales from "./pages/ServiciosGenerales/ServiciosGenerales";
 import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGenerales/ServiciosGeneralesOrdenesTrabajo";
 import ServiciosGeneralesOTCrear from "./pages/ServiciosGenerales/ServiciosGeneralesOTCrear";
@@ -310,6 +316,18 @@ export default function App() {
             }
           />
 
+          {/* ================= Administración (solo role=admin o dev) ================= */}
+          <Route
+            path="/administracion"
+            element={
+              <PrivateRoute>
+                <RequireRole roles={["administrativo", "dev"]}>
+                  <AdministracionHub />
+                </RequireRole>
+              </PrivateRoute>
+            }
+          />
+
           {/* ================= Dev (solo role=dev) ================= */}
           <Route
             path="/dev"
@@ -324,6 +342,22 @@ export default function App() {
             element={
               <PrivateRoute>
                 <UpdateSupabasePage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/dev/config-modulos"
+            element={
+              <PrivateRoute>
+                <ModulesConfigHub />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/dev/config-modulos/horas-extra"
+            element={
+              <PrivateRoute>
+                <OvertimeSettingsHub />
               </PrivateRoute>
             }
           />
@@ -507,6 +541,18 @@ export default function App() {
             element={
               <PrivateRoute>
                 <OTsSolDetallePage />
+              </PrivateRoute>
+            }
+          />
+
+          {/* ================= Horas extra ================= */}
+          <Route
+            path="/horas-extra"
+            element={
+              <PrivateRoute>
+                <RequireRole roles={["administrativo", "dev"]}>
+                  <OvertimeApprovals />
+                </RequireRole>
               </PrivateRoute>
             }
           />

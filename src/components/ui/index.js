@@ -16,6 +16,7 @@ export { default as Badge } from "./Badge";
 export { default as Card } from "./Card";
 export { default as IconBox } from "./IconBox";
 export { default as SidebarAreaIcon } from "./SidebarAreaIcon";
+export { default as AreasSidebar } from "./AreasSidebar";
 export { default as ModuleCard } from "./ModuleCard";
 export { default as ModuleGrid } from "./ModuleGrid";
 export { default as KpiCard, KpiGrid } from "./KpiCard";
