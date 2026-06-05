@@ -1,6 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { httpsCallable } from "firebase/functions";
 import {
   ArrowLeft,
   Briefcase,
@@ -12,8 +11,9 @@ import {
   User,
   X,
 } from "lucide-react";
-import { functions, auth } from "../firebase";
+import { auth } from "../firebase";
 import { AuthCtx } from "../auth/AuthProvider";
+import { getOvertimeRecords, decideOvertimeRecord } from "../services/overtimeApi";
 import {
   Badge,
   Brand,
@@ -228,7 +228,7 @@ function OvertimeCard({ record, savingId, onDecide }) {
 export default function OvertimeApprovals() {
   const nav = useNavigate();
   const user = auth.currentUser;
-  const { role, profile } = useContext(AuthCtx);
+  const { role } = useContext(AuthCtx);
 
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -245,15 +245,11 @@ export default function OvertimeApprovals() {
     setLoading(true);
     setError("");
     try {
-      const getOvertimeRecords = httpsCallable(functions, "getOvertimeRecords");
-      const res = await getOvertimeRecords({
-        userEmail: user?.email || profile?.email || "",
-        role: role || "",
-      });
-      setRecords(res.data.records || []);
+      const res = await getOvertimeRecords();
+      setRecords(res.records || []);
     } catch (e) {
       console.error("Error cargando horas extra:", e);
-      setError("No se pudieron cargar las horas extra. Intentá de nuevo.");
+      setError(e.message || "No se pudieron cargar las horas extra. Intentá de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -269,7 +265,6 @@ export default function OvertimeApprovals() {
 
     setSavingId(record.attendanceId);
     try {
-      const decideOvertimeRecord = httpsCallable(functions, "decideOvertimeRecord");
       await decideOvertimeRecord({
         attendanceId: record.attendanceId,
         status,
@@ -279,7 +274,7 @@ export default function OvertimeApprovals() {
       await loadRecords();
     } catch (e) {
       console.error("Error guardando decisión:", e);
-      setError("No se pudo guardar la decisión. Intentá de nuevo.");
+      setError(e.message || "No se pudo guardar la decisión. Intentá de nuevo.");
     } finally {
       setSavingId(null);
     }
@@ -336,7 +331,7 @@ export default function OvertimeApprovals() {
         <Container>
           <Hero
             kicker="Administración"
-            title="Aprobación de horas extra"
+            title="Aprobación de horas extras"
             subtitle={
               isDev
                 ? "Vista completa: estás viendo las horas extra de todos los coordinadores."

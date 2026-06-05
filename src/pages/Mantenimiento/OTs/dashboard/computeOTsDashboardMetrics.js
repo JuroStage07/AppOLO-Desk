@@ -205,6 +205,48 @@ export function computeOTsDashboardMetrics({ rows, period, customFrom, customTo 
 
   const weeklySolicitanteLeaders = weeklyLeadersBySolicitante(filtered, start, end);
 
+  const topDepartamentos = (() => {
+    const map = new Map();
+    const aliases = { ingeniera: "Ingeniería" };
+    for (const r of filtered) {
+      let dep = String(r?.departamento || "").trim();
+      if (!dep) continue;
+      const key = dep.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (aliases[key]) dep = aliases[key];
+      map.set(dep, { name: dep, count: (map.get(dep)?.count ?? 0) + 1 });
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count);
+  })();
+
+  const topLugaresProblema = (() => {
+    const map = new Map();
+    const normalize = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const lugarAliases = [
+      { label: "Bodegas Yoryana", match: (k) => k.includes("yoryana") || k.includes("yoyana") || k.includes("yoriana") || k.includes("joryiana") || k.includes("joryana") },
+      { label: "Bodegas externas", match: (k) => k.includes("bodega externa") || k.includes("bodegas externa") },
+      { label: "Bodegas del Coco", match: (k) => (k.includes("coco") || k.includes("el coco")) && !k.includes("yoryana") },
+    ];
+    for (const r of filtered) {
+      let lugar = String(r?.lugarProblema || "").trim();
+      if (!lugar) continue;
+      const key = normalize(lugar);
+      const alias = lugarAliases.find((a) => a.match(key));
+      if (alias) lugar = alias.label;
+      map.set(lugar, { name: lugar, count: (map.get(lugar)?.count ?? 0) + 1 });
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count);
+  })();
+
+  const topTiposProblema = (() => {
+    const map = new Map();
+    for (const r of filtered) {
+      const tipo = String(r?.tipoProblema || "").trim();
+      if (!tipo) continue;
+      map.set(tipo, { name: tipo, count: (map.get(tipo)?.count ?? 0) + 1 });
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count);
+  })();
+
   return {
     range: { start, end },
     summary,
@@ -215,6 +257,9 @@ export function computeOTsDashboardMetrics({ rows, period, customFrom, customTo 
     lowTraffic,
     topSolicitantes,
     topResponsables,
+    topDepartamentos,
+    topLugaresProblema,
+    topTiposProblema,
     weeklySolicitanteLeaders,
   };
 }

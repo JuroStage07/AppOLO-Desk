@@ -86,9 +86,17 @@ export default function OTsDashboardPage() {
             solicitanteNombre: data.solicitanteNombre || "",
             solicitanteFicha: data.solicitanteFicha || "",
             responsableNombre: data.responsableNombre || "",
+            departamento: data.departamento || data.departamentoBase || "",
+            lugarProblema: data.lugarProblema === "Otro"
+              ? (data.lugarProblemaOtro || "Otro")
+              : (data.lugarProblema || ""),
+            tipoProblema: data.tipoProblema === "Otro"
+              ? (data.tipoProblemaOtro || "Otro")
+              : (data.tipoProblema || ""),
           });
         });
         setRows(list);
+        console.log("[OTsDashboard] sample fields:", list.slice(0, 5).map(r => ({ id: r.id, departamento: r.departamento, lugarProblema: r.lugarProblema, tipoProblema: r.tipoProblema })));
         setLoading(false);
       },
       (e) => {
@@ -223,24 +231,7 @@ export default function OTsDashboardPage() {
         </div>
       </section>
 
-      <div className="otsDashboard__highlight">
-        <div className="otsDashboard__highlight-box">
-          <strong>Más solicitudes (día calendario)</strong>
-          <span>
-            {metrics.busiestDay
-              ? `${metrics.busiestDay.label} · ${metrics.busiestDay.count}`
-              : "—"}
-          </span>
-        </div>
-        <div className="otsDashboard__highlight-box">
-          <strong>Menos solicitudes (día calendario)</strong>
-          <span>
-            {metrics.quietestDay
-              ? `${metrics.quietestDay.label} · ${metrics.quietestDay.count}`
-              : "—"}
-          </span>
-        </div>
-      </div>
+
 
       <div className="otsDashboard__grid">
         <div className="otsDashboard__card otsDashboard__card--half">
@@ -276,25 +267,23 @@ export default function OTsDashboardPage() {
         </div>
 
         <div className="otsDashboard__card">
-          <h2 className="otsDashboard__card-title">Semanas con más solicitudes (líder)</h2>
-          <p className="otsDashboard__card-hint">Líder por solicitante (semana natural lun–dom)</p>
-          {metrics.weeklySolicitanteLeaders.length === 0 ? (
-            <p className="otsDashboard__muted">Sin datos en este período.</p>
+          <h2 className="otsDashboard__card-title">Solicitudes por Departamento</h2>
+          <p className="otsDashboard__card-hint">Total de solicitudes por departamento en el período</p>
+          {metrics.topDepartamentos.length === 0 ? (
+            <p className="otsDashboard__muted">Sin datos de departamento.</p>
           ) : (
             <table className="otsDashboard__table">
               <thead>
                 <tr>
-                  <th>Semana</th>
-                  <th>Solicitante líder</th>
+                  <th>Departamento</th>
                   <th>Solicitudes</th>
                 </tr>
               </thead>
               <tbody>
-                {metrics.weeklySolicitanteLeaders.map((row) => (
-                  <tr key={row.weekStart}>
-                    <td>{row.weekLabel}</td>
-                    <td>{row.leader?.name ?? "—"}</td>
-                    <td>{row.leader?.count ?? 0}</td>
+                {metrics.topDepartamentos.map((row) => (
+                  <tr key={row.name}>
+                    <td>{row.name}</td>
+                    <td>{row.count}</td>
                   </tr>
                 ))}
               </tbody>
@@ -302,22 +291,53 @@ export default function OTsDashboardPage() {
           )}
         </div>
 
-        <div className="otsDashboard__card">
-          <h2 className="otsDashboard__card-title">Días de baja demanda</h2>
-          <p className="otsDashboard__card-hint">
-            Días en el umbral inferior (~percentil 25 de solicitudes/día).
-          </p>
-          {metrics.lowTraffic.hints.length === 0 ? (
-            <p className="otsDashboard__muted">No hay suficientes datos o el período es muy corto.</p>
+        <div className="otsDashboard__card otsDashboard__card--half">
+          <h2 className="otsDashboard__card-title">Áreas más impactadas</h2>
+          <p className="otsDashboard__card-hint">Lugar del problema con más solicitudes en el período</p>
+          {metrics.topLugaresProblema.length === 0 ? (
+            <p className="otsDashboard__muted">Sin datos de lugar de problema.</p>
           ) : (
-            <ul className="otsDashboard__alerts">
-              {metrics.lowTraffic.hints.map((h) => (
-                <li key={h.date}>
-                  <strong>{h.label}</strong> — solo {h.count} solicitud{h.count !== 1 ? "es" : ""} (umbral ≤{" "}
-                  {metrics.lowTraffic.threshold})
-                </li>
-              ))}
-            </ul>
+            <table className="otsDashboard__table">
+              <thead>
+                <tr>
+                  <th>Lugar / Área</th>
+                  <th>Solicitudes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.topLugaresProblema.map((row) => (
+                  <tr key={row.name}>
+                    <td>{row.name}</td>
+                    <td>{row.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="otsDashboard__card otsDashboard__card--half">
+          <h2 className="otsDashboard__card-title">Tipos de problemas recurrentes</h2>
+          <p className="otsDashboard__card-hint">Clasificación por tipo de problema en el período</p>
+          {metrics.topTiposProblema.length === 0 ? (
+            <p className="otsDashboard__muted">Sin datos de tipo de problema.</p>
+          ) : (
+            <table className="otsDashboard__table">
+              <thead>
+                <tr>
+                  <th>Tipo de problema</th>
+                  <th>Solicitudes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.topTiposProblema.map((row) => (
+                  <tr key={row.name}>
+                    <td>{row.name}</td>
+                    <td>{row.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
 

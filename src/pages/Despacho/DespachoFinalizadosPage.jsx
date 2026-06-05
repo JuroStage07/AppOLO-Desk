@@ -38,6 +38,9 @@ function FinalizadoRow({ row }) {
         <span style={ui.dot}>·</span>
         Placa: <b>{row.placa || "—"}</b>
       </div>
+      <div style={ui.rowUid}>
+        UID: <span style={ui.uidValue}>{row.id}</span>
+      </div>
       <div style={ui.rowDates}>
         <span>Cierre / actualización: {fmtTs(row.closedAt || row.finalizadoAt || row.updatedAt)}</span>
         <span style={ui.dot}>·</span>
@@ -342,6 +345,8 @@ const ui = {
     flexShrink: 0,
   },
   rowMeta: { marginTop: 8, fontSize: 13, color: SLATE },
+  rowUid: { marginTop: 6, fontSize: 12, color: "#94A3B8" },
+  uidValue: { fontFamily: "monospace", fontWeight: 600, color: "#475569", userSelect: "all" },
   rowDates: { marginTop: 6, fontSize: 12, color: "#94A3B8", display: "flex", flexWrap: "wrap", gap: 6 },
   dot: { opacity: 0.6 },
 };

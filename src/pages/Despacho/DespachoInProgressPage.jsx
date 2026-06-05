@@ -207,6 +207,9 @@ function DespachoCard({ item }) {
                     <div style={ui.cardSub}>
                         Estado: <b>{item.estado || "en proceso"}</b>
                     </div>
+                    <div style={ui.cardUid}>
+                        UID: <span style={ui.uidValue}>{item.id}</span>
+                    </div>
                 </div>
 
                 <div style={ui.badgeLive}>En tiempo real</div>
@@ -641,6 +644,8 @@ const ui = {
     },
     cardTitle: { fontSize: 16, fontWeight: 900 },
     cardSub: { color: SLATE, fontSize: 12, marginTop: 4 },
+    cardUid: { color: "#94A3B8", fontSize: 11, marginTop: 4 },
+    uidValue: { fontFamily: "monospace", fontWeight: 600, color: "#475569", userSelect: "all" },
     badgeLive: {
         padding: "6px 10px",
         borderRadius: 999,

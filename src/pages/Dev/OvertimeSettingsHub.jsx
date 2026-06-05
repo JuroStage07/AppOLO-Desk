@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { httpsCallable } from "firebase/functions";
 import {
   ArrowLeft,
   Clock,
@@ -9,7 +8,11 @@ import {
   Search,
   Users,
 } from "lucide-react";
-import { functions, auth } from "../../firebase";
+import { auth } from "../../firebase";
+import {
+  getOvertimeCoordinators,
+  saveCoordinatorEmails,
+} from "../../services/overtimeApi";
 import {
   Badge,
   Brand,
@@ -87,12 +90,8 @@ export default function OvertimeSettingsHub() {
     setError("");
     setOkMsg("");
     try {
-      const getOvertimeCoordinators = httpsCallable(
-        functions,
-        "getOvertimeCoordinators"
-      );
       const res = await getOvertimeCoordinators();
-      const list = res.data.coordinators || [];
+      const list = res.coordinators || [];
       setCoordinators(list);
       setEmails(
         list.reduce((acc, c) => {
@@ -102,7 +101,7 @@ export default function OvertimeSettingsHub() {
       );
     } catch (e) {
       console.error("Error cargando coordinadores:", e);
-      setError("No se pudieron cargar los coordinadores. Intentá de nuevo.");
+      setError(e.message || "No se pudieron cargar los coordinadores. Intentá de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -145,19 +144,15 @@ export default function OvertimeSettingsHub() {
     setError("");
     setOkMsg("");
     try {
-      const saveCoordinatorEmails = httpsCallable(
-        functions,
-        "saveCoordinatorEmails"
-      );
       const payload = coordinators.map((c) => ({
         name: c.name,
         email: (emails[c.name] || "").trim(),
       }));
-      await saveCoordinatorEmails({ coordinators: payload });
+      await saveCoordinatorEmails(payload);
       setOkMsg("Configuración guardada correctamente.");
     } catch (e) {
       console.error("Error guardando correos:", e);
-      setError("No se pudo guardar la configuración. Intentá de nuevo.");
+      setError(e.message || "No se pudo guardar la configuración. Intentá de nuevo.");
     } finally {
       setSaving(false);
     }

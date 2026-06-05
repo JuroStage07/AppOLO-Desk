@@ -43,6 +43,11 @@ import { NewOTModal } from "./NewOTModal";
 import { isSolicitudOtInScope } from "../../../utils/dataScope";
 import useIsMobile from "../../../hooks/useIsMobile";
 import {
+  Brand,
+  GhostButton,
+  Topbar,
+} from "../../../components/ui";
+import {
   collection,
   collectionGroup,
   serverTimestamp,
@@ -3685,37 +3690,23 @@ export default function OTsPage() {
 
   return (
     <div style={{ ...ui.shell, ...(isMobile ? ui.mShell : {}) }}>
-      <div style={{ ...ui.topbar, ...(isMobile ? ui.mTopbar : {}) }}>
-        <div style={ui.brand} role="button" tabIndex={0} onClick={() => nav("/mantenimiento")} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && nav("/mantenimiento")}>
-          <div style={ui.brandMark}>
-            <Wrench size={20} strokeWidth={2.25} color="#fff" />
-          </div>
-
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>Órdenes de Trabajo</div>
-            <div style={ui.brandSub}>Gestión de OTs</div>
-          </div>
-        </div>
-
-        <div style={{ ...ui.topbarRight, ...(isMobile ? ui.mTopbarRight : {}) }}>
-          <button
-            type="button"
-            onClick={() => nav("/mantenimiento")}
-            style={{ ...ui.btnGhost, ...(isMobile ? ui.mBtnGhost : {}) }}
-          >
-            <ArrowLeft size={16} />
+      <Topbar>
+        <Brand
+          icon={Wrench}
+          title="Órdenes de Trabajo"
+          subtitle="Gestión de OTs"
+          onClick={() => nav("/mantenimiento")}
+        />
+        <Topbar.Right>
+          <Topbar.UserHint title={authCtx?.user?.email || ""}>
+            {authCtx?.user?.displayName || authCtx?.user?.email || "Sesión activa"}
+          </Topbar.UserHint>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/mantenimiento")}>
             Inicio
-          </button>
-
-          <button
-            type="button"
-            style={{ ...ui.btnGhost, ...(isMobile ? ui.mBtnGhost : {}) }}
-            onClick={refetchSolicitudesOnce}
-          >
-            <RotateCcw size={16} />
+          </GhostButton>
+          <GhostButton icon={RotateCcw} onClick={refetchSolicitudesOnce}>
             Actualizar
-          </button>
-
+          </GhostButton>
           <button
             type="button"
             onClick={() => setModalOpen(true)}
@@ -3724,8 +3715,8 @@ export default function OTsPage() {
             <Plus size={16} />
             Nueva OT
           </button>
-        </div>
-      </div>
+        </Topbar.Right>
+      </Topbar>
 
       <div style={{ ...ui.main, ...(isMobile ? ui.mMain : {}) }}>
         <div style={{ ...ui.container, ...(isMobile ? ui.mContainer : {}) }}>
@@ -4829,6 +4820,26 @@ const ui = {
     cursor: "pointer",
     textAlign: "left",
   },
+
+  // mobile overrides
+  mShell: { minHeight: "100dvh" },
+  mTopbar: {
+    height: "auto",
+    minHeight: 56,
+    padding: "10px 12px",
+    alignItems: "flex-start",
+    flexDirection: "column",
+  },
+  mTopbarRight: { width: "100%", justifyContent: "flex-start", gap: 8 },
+  mBtnGhost: { width: "100%", justifyContent: "center", minHeight: 40 },
+  mBtnPrimary: { width: "100%", justifyContent: "center", minHeight: 42 },
+  mMain: { padding: 10 },
+  mContainer: { gap: 10 },
+  mHeroGrid: { gridTemplateColumns: "1fr", padding: 12, gap: 12 },
+  mHeroStats: { gridTemplateColumns: "1fr", gap: 8 },
+  mColumnHeadFilter: { gap: 8 },
+  mColumnFilterSelect: { fontSize: 13, minHeight: 40 },
+  mBoardWrap: { paddingBottom: 8 },
 };
 
 const modal = {
@@ -5002,26 +5013,6 @@ const picker = {
     color: "#64748B",
     fontWeight: 800,
   },
-
-  // mobile overrides
-  mShell: { minHeight: "100dvh" },
-  mTopbar: {
-    height: "auto",
-    minHeight: 56,
-    padding: "10px 12px",
-    alignItems: "flex-start",
-    flexDirection: "column",
-  },
-  mTopbarRight: { width: "100%", justifyContent: "flex-start", gap: 8 },
-  mBtnGhost: { width: "100%", justifyContent: "center", minHeight: 40 },
-  mBtnPrimary: { width: "100%", justifyContent: "center", minHeight: 42 },
-  mMain: { padding: 10 },
-  mContainer: { gap: 10 },
-  mHeroGrid: { gridTemplateColumns: "1fr", padding: 12, gap: 12 },
-  mHeroStats: { gridTemplateColumns: "1fr", gap: 8 },
-  mColumnHeadFilter: { gap: 8 },
-  mColumnFilterSelect: { fontSize: 13, minHeight: 40 },
-  mBoardWrap: { paddingBottom: 8 },
 };
 
 /** Modal de éxito al crear OT desde el tablero (misma línea visual que Servicios generales). */

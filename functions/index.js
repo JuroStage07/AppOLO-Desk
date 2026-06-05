@@ -75,7 +75,7 @@ function calculateCompanyOvertime({ startEnroll, endEnroll, scheduleRange }) {
 
   const [outHour, outMinute] = parsedSchedule.outTime.split(":").map(Number);
   const scheduledOutDate = new Date(endDate);
-  scheduledOutDate.setHours(outHour, outMinute, 0, 0);
+  scheduledOutDate.setUTCHours(outHour, outMinute, 0, 0);
 
   if (startEnroll) {
     const startDate = new Date(startEnroll);

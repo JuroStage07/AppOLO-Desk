@@ -12,7 +12,8 @@
       "Bash(git ls-tree *)",
       "Bash(npm run *)",
       "Bash(powershell *)",
-      "PowerShell(git *)"
+      "PowerShell(git *)",
+      "PowerShell(Get-Command *)"
     ]
   }
 }
