@@ -11,7 +11,8 @@ import {
   User,
   X,
 } from "lucide-react";
-import { auth } from "../firebase";
+import { doc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { auth, db } from "../firebase";
 import { AuthCtx } from "../auth/AuthProvider";
 import { getOvertimeRecords, decideOvertimeRecord } from "../services/overtimeApi";
 import {
@@ -58,6 +59,8 @@ const STATUS_FILTERS = [
 ];
 
 const STALE_DAYS = 15;
+const CONTROL_COLLECTION = "overtime_control";
+const CONTROL_STATUSES = new Set(["approved", "rejected"]);
 
 function statusInfo(raw) {
   const key = String(raw || "pending").toLowerCase();
@@ -74,6 +77,111 @@ function getDaysOld(date) {
   const recordDate = new Date(date);
   const diffMs = today - recordDate;
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+function cleanFirestoreValue(value) {
+  if (value === undefined) return null;
+  if (Array.isArray(value)) return value.map(cleanFirestoreValue);
+  if (value && Object.prototype.toString.call(value) === "[object Object]") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, cleanFirestoreValue(entry)])
+    );
+  }
+  return value;
+}
+
+function getEmployeeName(record) {
+  return String(record?.fullName || record?.employeeName || "").trim() || "Sin nombre";
+}
+
+function buildDocId(value, fallback) {
+  const cleaned = String(value || "")
+    .trim()
+    .replace(/\//g, "-")
+    .replace(/\s+/g, " ");
+
+  if (!cleaned || cleaned === "." || cleaned === ".." || /^__.*__$/.test(cleaned)) {
+    return fallback;
+  }
+
+  return cleaned;
+}
+
+function buildDayKey(value) {
+  const raw = String(value || "").trim();
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}-${iso[2]}-${iso[1].slice(-2)}`;
+
+  const parsed = raw ? new Date(raw) : null;
+  if (parsed && !Number.isNaN(parsed.getTime())) {
+    const day = String(parsed.getDate()).padStart(2, "0");
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const year = String(parsed.getFullYear()).slice(-2);
+    return `${day}-${month}-${year}`;
+  }
+
+  return buildDocId(raw, "sin-fecha");
+}
+
+async function saveOvertimeControlRecord({ record, status, note }) {
+  if (!CONTROL_STATUSES.has(status)) return;
+
+  const employeeName = getEmployeeName(record);
+  const fallbackEmployeeId = `empleado-${record?.idEmployee || record?.attendanceId || "sin-id"}`;
+  const employeeDocId = buildDocId(employeeName, fallbackEmployeeId);
+  const dayKey = buildDayKey(record?.date);
+  const previousStatus = statusInfo(record?.status).key;
+  const cleanRecord = cleanFirestoreValue(record || {});
+  const user = auth.currentUser;
+
+  const employeeRef = doc(db, CONTROL_COLLECTION, employeeDocId);
+  const statusRef = doc(db, CONTROL_COLLECTION, employeeDocId, status, dayKey);
+
+  const batch = writeBatch(db);
+
+  batch.set(
+    employeeRef,
+    {
+      ...cleanFirestoreValue({
+        employeeDocId,
+        employeeName,
+        fullName: employeeName,
+        idEmployee: record?.idEmployee,
+        codeEmployee: record?.codeEmployee,
+        nameJobPosition: record?.nameJobPosition,
+        lastDayKey: dayKey,
+        lastStatus: status,
+      }),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  if (CONTROL_STATUSES.has(previousStatus) && previousStatus !== status) {
+    batch.delete(doc(db, CONTROL_COLLECTION, employeeDocId, previousStatus, dayKey));
+  }
+
+  batch.set(
+    statusRef,
+    {
+      ...cleanRecord,
+      payload: cleanRecord,
+      employeeDocId,
+      employeeName,
+      fullName: employeeName,
+      dayKey,
+      status,
+      note: String(note || ""),
+      decidedByUid: user?.uid || cleanRecord.decidedByUid || null,
+      decidedByEmail: user?.email || cleanRecord.decidedByEmail || null,
+      decidedAt: serverTimestamp(),
+      savedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  await batch.commit();
 }
 
 function OvertimeCard({ record, savingId, onDecide }) {
@@ -271,7 +379,21 @@ export default function OvertimeApprovals() {
         note,
         record,
       });
+      let controlError = null;
+      try {
+        await saveOvertimeControlRecord({ record, status, note });
+      } catch (e) {
+        controlError = e;
+        console.error("Error guardando overtime_control:", e);
+      }
+
       await loadRecords();
+      if (controlError) {
+        setError(
+          controlError.message ||
+            "La decision se guardo, pero no se pudo registrar en overtime_control."
+        );
+      }
     } catch (e) {
       console.error("Error guardando decisión:", e);
       setError(e.message || "No se pudo guardar la decisión. Intentá de nuevo.");

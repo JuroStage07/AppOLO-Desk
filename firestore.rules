@@ -544,8 +544,48 @@ match /{path=**}/fotos/{fotoId} {
     }
 
     // =========================
+    // Control de horas extra
+    // overtime_control/{empleado}/{approved|rejected}/{DD-MM-YY}
+    // =========================
+    match /overtime_control/{employeeDocId} {
+      function canOvertimeControl() {
+        return isAdminRequester();
+      }
+
+      allow get, list: if canOvertimeControl();
+
+      allow create, update: if canOvertimeControl()
+        && request.resource.data.employeeDocId == employeeDocId
+        && request.resource.data.employeeName is string
+        && request.resource.data.employeeName.size() > 0
+        && request.resource.data.lastStatus in ['approved', 'rejected']
+        && request.resource.data.lastDayKey is string
+        && request.resource.data.updatedAt is timestamp;
+
+      allow delete: if false;
+
+      match /{decisionStatus}/{dayKey} {
+        allow get, list: if canOvertimeControl()
+          && decisionStatus in ['approved', 'rejected'];
+
+        allow create, update: if canOvertimeControl()
+          && decisionStatus in ['approved', 'rejected']
+          && request.resource.data.employeeDocId == employeeDocId
+          && request.resource.data.employeeName is string
+          && request.resource.data.employeeName.size() > 0
+          && request.resource.data.dayKey == dayKey
+          && request.resource.data.status == decisionStatus
+          && request.resource.data.payload is map
+          && request.resource.data.updatedAt is timestamp;
+
+        allow delete: if canOvertimeControl()
+          && decisionStatus in ['approved', 'rejected'];
+      }
+    }
+
+    // =========================
     // Control de marcas (ControlMarcas.jsx)
-    // controlMarcas/{YYYY-MM-DD} + subcolección marcas
+    // controlMarcas/{YYYY-MM-DD} + subcoleccion marcas
     // =========================
     match /controlMarcas/{dayId} {
       allow get: if authed();
