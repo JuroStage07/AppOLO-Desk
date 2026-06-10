@@ -11,7 +11,8 @@ import {
   User,
   X,
 } from "lucide-react";
-import { auth } from "../firebase";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { auth, db } from "../firebase";
 import { AuthCtx } from "../auth/AuthProvider";
 import { getOvertimeRecords, decideOvertimeRecord } from "../services/overtimeApi";
 import {
@@ -59,6 +60,76 @@ const STATUS_FILTERS = [
 
 const STALE_DAYS = 15;
 
+/**
+ * Clasificación de horas extra:
+ * - MB02 (×1.5): extra entre semana no feriado, o sábado no feriado (dentro de horario laboral)
+ * - MB03 (×1.5 recargo): sábado no feriado, horas que exceden el horario laboral programado
+ * - MB17 (×3 triple): domingo, día feriado, o sábado que cae en feriado
+ */
+const OT_TYPES = {
+  MB02: { code: "MB02", label: "Extra normal ×1.5", color: "#0D9488", bg: "rgba(13,148,136,0.12)", border: "rgba(13,148,136,0.30)" },
+  MB03: { code: "MB03", label: "Extra sábado excedente", color: "#7C3AED", bg: "rgba(124,58,237,0.10)", border: "rgba(124,58,237,0.25)" },
+  MB17: { code: "MB17", label: "Triple ×3", color: "#DC2626", bg: "rgba(220,38,38,0.10)", border: "rgba(220,38,38,0.25)" },
+};
+
+/**
+ * Determina el tipo de hora extra para un registro.
+ * @param {object} record - El registro de hora extra
+ * @param {string[]} feriadoDates - Arreglo de fechas YYYY-MM-DD que son feriados
+ * @returns {{ code, label, color, bg, border } | null}
+ */
+function classifyOvertime(record, feriadoDates) {
+  if (!record.date) return null;
+
+  const dateStr = String(record.date).trim();
+  // Intentar parsear la fecha (puede venir como YYYY-MM-DD o DD/MM/YYYY)
+  let dateObj;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    dateObj = new Date(dateStr + "T12:00:00");
+  } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+    const [dd, mm, yyyy] = dateStr.split("/");
+    dateObj = new Date(`${yyyy}-${mm}-${dd}T12:00:00`);
+  } else {
+    dateObj = new Date(dateStr);
+  }
+
+  if (isNaN(dateObj.getTime())) return null;
+
+  const dayOfWeek = dateObj.getDay(); // 0=Sun, 6=Sat
+  const isoDate = dateObj.toISOString().slice(0, 10); // YYYY-MM-DD
+  const isFeriado = feriadoDates.includes(isoDate);
+  const isSunday = dayOfWeek === 0;
+  const isSaturday = dayOfWeek === 6;
+
+  // Domingo → MB17
+  if (isSunday) return OT_TYPES.MB17;
+
+  // Feriado (cualquier día) → MB17
+  if (isFeriado) return OT_TYPES.MB17;
+
+  // Sábado no feriado
+  if (isSaturday) {
+    // Si el registro tiene horas extra que exceden el horario, esas son MB03
+    // El campo isWeekend y/o que tenga horas extra en sábado indica trabajo en sábado
+    // Si hay companyOvertimeReason === "weekend-all" → todo es MB02 (viene a trabajar sábado)
+    // Si hay extra más allá del horario programado → MB03
+    if (record.companyOvertimeReason === "weekend-all") {
+      // Vino a trabajar sábado, todo se paga como MB02
+      return OT_TYPES.MB02;
+    }
+    // Sábado con horario programado: si hay extra, la parte que excede es MB03
+    // Para simplificar: si tiene systemOvertime > companyOvertime, tiene excedente
+    // Por ahora marcamos sábado con extra como MB03 cuando hay extra más allá del horario
+    if (record.hasCompanyOvertime) {
+      return OT_TYPES.MB03;
+    }
+    return OT_TYPES.MB02;
+  }
+
+  // Día entre semana no feriado → MB02
+  return OT_TYPES.MB02;
+}
+
 function statusInfo(raw) {
   const key = String(raw || "pending").toLowerCase();
   return {
@@ -76,7 +147,171 @@ function getDaysOld(date) {
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
-function OvertimeCard({ record, savingId, onDecide }) {
+/* ─── Modal para motivo de aprobación/rechazo ─── */
+function ReasonModal({ open, action, onConfirm, onClose }) {
+  const [note, setNote] = useState("");
+  const isReject = action === "rejected";
+  const MIN_REJECT_CHARS = 15;
+  const canSubmit = isReject ? note.trim().length >= MIN_REJECT_CHARS : true;
+
+  // Reset cuando se abre
+  useEffect(() => {
+    if (open) setNote("");
+  }, [open]);
+
+  if (!open) return null;
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey && canSubmit) {
+      e.preventDefault();
+      onConfirm(note.trim());
+    }
+  };
+
+  return (
+    <div style={reasonModalStyles.backdrop} onClick={onClose}>
+      <div style={reasonModalStyles.dialog} onClick={(e) => e.stopPropagation()}>
+        <div style={reasonModalStyles.header}>
+          <div>
+            <div style={reasonModalStyles.title}>
+              {isReject ? "Rechazar hora extra" : "Aprobar hora extra"}
+            </div>
+            <div style={reasonModalStyles.subtitle}>
+              {isReject
+                ? "Indicá el motivo del rechazo (mínimo 15 caracteres)."
+                : "Podés agregar una observación (opcional)."}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={reasonModalStyles.closeBtn}
+            aria-label="Cerrar"
+          >
+            <X size={18} strokeWidth={2.4} />
+          </button>
+        </div>
+
+        <textarea
+          autoFocus
+          rows={3}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={isReject ? "Motivo de rechazo…" : "Observación (opcional)…"}
+          style={reasonModalStyles.textarea}
+        />
+
+        <div style={reasonModalStyles.footer}>
+          <span style={reasonModalStyles.hint}>
+            {isReject && note.trim().length < MIN_REJECT_CHARS
+              ? `${note.trim().length}/${MIN_REJECT_CHARS} caracteres`
+              : "Enter para confirmar"}
+          </span>
+          <div style={reasonModalStyles.actions}>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={isReject ? X : Check}
+              disabled={!canSubmit}
+              onClick={() => onConfirm(note.trim())}
+              style={isReject ? { background: DANGER } : undefined}
+            >
+              {isReject ? "Rechazar" : "Aprobar"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const reasonModalStyles = {
+  backdrop: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 50000,
+    background: "rgba(15,23,42,0.45)",
+    backdropFilter: "blur(4px)",
+    display: "grid",
+    placeItems: "center",
+    padding: 16,
+  },
+  dialog: {
+    background: SURFACE,
+    border: `1px solid ${BORDER}`,
+    borderRadius: 22,
+    boxShadow: "0 24px 60px rgba(15,23,42,0.18)",
+    padding: 24,
+    width: "100%",
+    maxWidth: 420,
+    display: "grid",
+    gap: 18,
+  },
+  header: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: 950,
+    color: TEXT,
+    lineHeight: 1.2,
+  },
+  subtitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: SLATE,
+    marginTop: 4,
+  },
+  closeBtn: {
+    display: "grid",
+    placeItems: "center",
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    border: `1px solid ${BORDER}`,
+    background: "transparent",
+    color: SLATE,
+    cursor: "pointer",
+    flexShrink: 0,
+  },
+  textarea: {
+    width: "100%",
+    border: `1px solid ${BORDER}`,
+    borderRadius: 14,
+    padding: "12px 14px",
+    fontSize: 14,
+    fontWeight: 700,
+    color: TEXT,
+    resize: "vertical",
+    minHeight: 72,
+    outline: "none",
+    fontFamily: "inherit",
+  },
+  footer: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  hint: {
+    fontSize: 11.5,
+    fontWeight: 700,
+    color: SLATE,
+  },
+  actions: {
+    display: "flex",
+    gap: 8,
+  },
+};
+
+function OvertimeCard({ record, savingId, onDecide, feriadoDates, feriadosMap }) {
   const { tone, label, key } = statusInfo(record.status);
   const busy = savingId === record.attendanceId;
 
@@ -84,6 +319,24 @@ function OvertimeCard({ record, savingId, onDecide }) {
   const daysOld = isPending ? getDaysOld(record.date) : null;
   const isStale = daysOld != null && daysOld >= STALE_DAYS;
   const isDecided = key === "approved" || key === "rejected";
+
+  const otType = classifyOvertime(record, feriadoDates);
+
+  // Detectar si el día es feriado
+  const recordIsoDate = (() => {
+    if (!record.date) return "";
+    const ds = String(record.date).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(ds)) return ds;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(ds)) {
+      const [dd, mm, yyyy] = ds.split("/");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    const d = new Date(ds);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return "";
+  })();
+  const isFeriado = recordIsoDate && feriadoDates.includes(recordIsoDate);
+  const feriadoName = isFeriado ? (feriadosMap[recordIsoDate] || "Feriado") : "";
 
   const companyOvertime = record.companyOvertime || record.overtime || "00:00";
   const systemOvertime = record.systemOvertime || "—";
@@ -124,6 +377,26 @@ function OvertimeCard({ record, savingId, onDecide }) {
         </div>
       )}
 
+      {otType && (
+        <div style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          alignSelf: "start",
+          background: otType.bg,
+          color: otType.color,
+          border: `1px solid ${otType.border}`,
+          borderRadius: 999,
+          padding: "5px 12px",
+          fontSize: 12,
+          fontWeight: 950,
+          letterSpacing: 0.2,
+        }}>
+          <Clock size={12} strokeWidth={2.4} />
+          {otType.code} · {otType.label}
+        </div>
+      )}
+
       {isPending && daysOld != null && (
         <div style={isStale ? styles.ageBadgeStale : styles.ageBadge}>
           <Clock size={12} strokeWidth={2.4} />
@@ -142,6 +415,23 @@ function OvertimeCard({ record, savingId, onDecide }) {
           <span style={styles.metaValue}>{record.date || "—"}</span>
           {record.dayName && (
             <span style={styles.metaSub}>{record.dayName}</span>
+          )}
+          {isFeriado && (
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              marginTop: 3,
+              fontSize: 11,
+              fontWeight: 900,
+              color: "#DC2626",
+              background: "rgba(220,38,38,0.08)",
+              border: "1px solid rgba(220,38,38,0.20)",
+              borderRadius: 8,
+              padding: "2px 8px",
+            }}>
+              🎉 Feriado: {feriadoName}
+            </span>
           )}
         </div>
         <div style={styles.metaItem}>
@@ -234,8 +524,37 @@ export default function OvertimeApprovals() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
   const [error, setError] = useState("");
+  const [feriadoDates, setFeriadoDates] = useState([]);
+  const [feriadosMap, setFeriadosMap] = useState({});
+
+  // Modal state
+  const [reasonModal, setReasonModal] = useState({ open: false, record: null, action: null });
 
   const isDev = role === "dev";
+
+  // Cargar feriados anuales desde Firestore
+  useEffect(() => {
+    (async () => {
+      try {
+        const snap = await getDocs(
+          query(collection(db, "feriadosAnuales"), orderBy("date", "asc"))
+        );
+        const dates = [];
+        const map = {};
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          if (data.date) {
+            dates.push(data.date);
+            map[data.date] = data.name || "Feriado";
+          }
+        });
+        setFeriadoDates(dates);
+        setFeriadosMap(map);
+      } catch (e) {
+        console.error("Error cargando feriados:", e);
+      }
+    })();
+  }, []);
 
   const [statusFilter, setStatusFilter] = useState("pending");
   const [coordinatorFilter, setCoordinatorFilter] = useState("all");
@@ -256,18 +575,18 @@ export default function OvertimeApprovals() {
   };
 
   const decideRecord = async (record, status) => {
-    const promptMsg =
-      status === "approved"
-        ? "Observación de aprobación:"
-        : "Motivo de rechazo:";
-    const note = window.prompt(promptMsg, "");
-    if (note === null) return; // canceló
+    setReasonModal({ open: true, record, action: status });
+  };
+
+  const handleReasonConfirm = async (note) => {
+    const { record, action } = reasonModal;
+    setReasonModal({ open: false, record: null, action: null });
 
     setSavingId(record.attendanceId);
     try {
       await decideOvertimeRecord({
         attendanceId: record.attendanceId,
-        status,
+        status: action,
         note,
         record,
       });
@@ -419,12 +738,21 @@ export default function OvertimeApprovals() {
                   record={record}
                   savingId={savingId}
                   onDecide={decideRecord}
+                  feriadoDates={feriadoDates}
+                  feriadosMap={feriadosMap}
                 />
               ))}
             </div>
           )}
         </Container>
       </Main>
+
+      <ReasonModal
+        open={reasonModal.open}
+        action={reasonModal.action}
+        onConfirm={handleReasonConfirm}
+        onClose={() => setReasonModal({ open: false, record: null, action: null })}
+      />
     </Shell>
   );
 }

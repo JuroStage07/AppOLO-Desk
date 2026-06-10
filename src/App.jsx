@@ -50,6 +50,7 @@ import AccionDetalle from "./pages/Recepcion/AccionDescarga/AccionDetalle";
 import MetricaRecepcion from "./pages/Recepcion/MetricaRecepcion";
 
 import OvertimeApprovals from "./pages/OvertimeApprovals";
+import OvertimeManagerApprovals from "./pages/OvertimeManagerApprovals";
 
 import EPAHubPage from "./pages/EPA/EPAHubPage";
 import AperturasFinalizadasEPA from "./pages/EPA/AperturasFinalizadasEPA";
@@ -552,6 +553,16 @@ export default function App() {
               <PrivateRoute>
                 <RequireRole roles={["administrativo", "dev"]}>
                   <OvertimeApprovals />
+                </RequireRole>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/horas-extra/gerencia"
+            element={
+              <PrivateRoute>
+                <RequireRole roles={["administrativo", "dev"]}>
+                  <OvertimeManagerApprovals />
                 </RequireRole>
               </PrivateRoute>
             }
