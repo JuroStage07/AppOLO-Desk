@@ -334,15 +334,6 @@ match /{path=**}/fotos/{fotoId} {
           );
       }
 
-      function canCreateByApertura() {
-        return authed()
-          && request.resource.data.aperturaId is string
-          && (
-            isOwnerAperturaGlobal(request.resource.data.aperturaId) ||
-            isAperturaAssignedToMeGlobal(request.resource.data.aperturaId)
-          );
-      }
-
       function canTouch() {
         return authed() && (
           isAdminRequester() ||
@@ -1939,6 +1930,49 @@ match /controlTerceros/{eventId} {
         isAdminRequester() ||
         resource.data.creadoPor == request.auth.uid
       );
+    }
+
+    // =========================
+    // ✅ Feriados anuales (config horas extra)
+    // =========================
+    match /feriadosAnuales/{feriadoId} {
+      allow get, list: if authed();
+
+      allow create: if authed()
+        && request.resource.data.keys().hasOnly([
+          'date',
+          'name',
+          'createdAt',
+          'createdBy'
+        ])
+        && request.resource.data.date is string
+        && request.resource.data.date.size() == 10
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.createdAt is string
+        && (request.resource.data.createdBy == null || request.resource.data.createdBy == request.auth.uid);
+
+      allow delete: if isAdminRequester();
+    }
+
+    // =========================
+    // ✅ Configuración módulo horas extra (relación coordinador → gerente, etc.)
+    // =========================
+    match /overtimeConfig/{docId} {
+      allow get, list: if authed();
+
+      allow create, update: if authed()
+        && request.resource.data.keys().hasOnly([
+          'relations',
+          'updatedAt',
+          'updatedBy'
+        ])
+        && request.resource.data.relations is list
+        && request.resource.data.updatedAt is string
+        && (request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid);
+
+      allow delete: if isAdminRequester();
     }
   }
 }
