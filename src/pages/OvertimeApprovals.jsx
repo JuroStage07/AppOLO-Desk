@@ -11,7 +11,17 @@ import {
   User,
   X,
 } from "lucide-react";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { AuthCtx } from "../auth/AuthProvider";
 import { getOvertimeRecords, decideOvertimeRecord } from "../services/overtimeApi";
@@ -38,6 +48,8 @@ import {
   SURFACE,
   TEXT,
 } from "../styles/theme";
+import { useOvertimeCutoff } from "../hooks/useOvertimeCutoff";
+import OvertimeCutoffBanner from "../components/OvertimeCutoffBanner";
 
 const STATUS_TONE = {
   approved: "ok",
@@ -58,7 +70,175 @@ const STATUS_FILTERS = [
   { key: "rejected", label: "Rechazadas" },
 ];
 
-const STALE_DAYS = 15;
+const OVERTIME_CONTROL_COLLECTION = "overtime_control";
+const DECISION_COLLECTIONS = {
+  approved: "approved",
+  rejected: "rejected",
+};
+
+function safeText(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeMatchKey(value) {
+  return safeText(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function makeDocSegment(value, fallback) {
+  const cleaned = safeText(value).replace(/[/?#[\]]/g, "-").slice(0, 240);
+  if (cleaned && cleaned !== "." && cleaned !== "..") return cleaned;
+  return safeText(fallback).replace(/[/?#[\]]/g, "-") || "sin-nombre";
+}
+
+function getDayKey(rawDate, fallback) {
+  const dateText = safeText(rawDate);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
+    const [yyyy, mm, dd] = dateText.split("-");
+    return `${dd}-${mm}-${yyyy.slice(-2)}`;
+  }
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateText)) {
+    const [dd, mm, yyyy] = dateText.split("/");
+    return `${dd}-${mm}-${yyyy.slice(-2)}`;
+  }
+
+  const parsed = new Date(dateText);
+  if (!Number.isNaN(parsed.getTime())) {
+    const dd = String(parsed.getDate()).padStart(2, "0");
+    const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+    const yy = String(parsed.getFullYear()).slice(-2);
+    return `${dd}-${mm}-${yy}`;
+  }
+
+  return `sin-fecha-${safeText(fallback) || Date.now()}`;
+}
+
+function findManagerRelation(relations, record) {
+  const coordinatorNameKey = normalizeMatchKey(record.coordinatorName);
+  const match = relations.find(
+    (relation) => normalizeMatchKey(relation?.coordinatorName) === coordinatorNameKey
+  );
+
+  if (!match) return null;
+
+  return {
+    coordinatorName: safeText(match.coordinatorName) || safeText(record.coordinatorName),
+    coordinatorEmail: safeText(match.coordinatorEmail),
+    managerName: safeText(match.managerName),
+    managerEmail: safeText(match.managerEmail),
+  };
+}
+
+async function getManagerRelation(record) {
+  const snap = await getDoc(doc(db, "overtimeConfig", "managerRelations"));
+  const relations = snap.exists() && Array.isArray(snap.data()?.relations)
+    ? snap.data().relations
+    : [];
+  const relation = findManagerRelation(relations, record);
+
+  if (!relation?.managerName && !relation?.managerEmail) {
+    throw new Error(
+      `No hay un gerente asignado para el coordinador ${record.coordinatorName || "sin nombre"}. Revisá la configuración de horas extra.`
+    );
+  }
+
+  return relation;
+}
+
+function buildDecisionContext(record, relation) {
+  return {
+    coordinatorName: safeText(record.coordinatorName) || relation.coordinatorName || null,
+    coordinatorEmail: relation.coordinatorEmail || null,
+    managerName: relation.managerName || null,
+    managerEmail: relation.managerEmail || null,
+    coordinatorManagerRelation: relation,
+  };
+}
+
+async function saveOvertimeControlDecision({
+  record,
+  status,
+  note,
+  relation,
+  feriadoDates,
+}) {
+  const user = auth.currentUser;
+  const employeeName = safeText(record.fullName) || "Sin nombre";
+  const employeeDocId = makeDocSegment(
+    employeeName,
+    record.codeEmployee || record.idEmployee || record.attendanceId
+  );
+  const dayKey = getDayKey(record.date, record.attendanceId);
+  const statusCollection = DECISION_COLLECTIONS[status];
+  const oppositeCollection =
+    status === "approved" ? DECISION_COLLECTIONS.rejected : DECISION_COLLECTIONS.approved;
+  const otType = classifyOvertime(record, feriadoDates);
+  const decisionContext = buildDecisionContext(record, relation);
+
+  const employeeRef = doc(db, OVERTIME_CONTROL_COLLECTION, employeeDocId);
+  const decisionRef = doc(
+    db,
+    OVERTIME_CONTROL_COLLECTION,
+    employeeDocId,
+    statusCollection,
+    dayKey
+  );
+  const oppositeDecisionRef = doc(
+    db,
+    OVERTIME_CONTROL_COLLECTION,
+    employeeDocId,
+    oppositeCollection,
+    dayKey
+  );
+
+  await setDoc(
+    employeeRef,
+    {
+      employeeName,
+      employeeKey: normalizeMatchKey(employeeName),
+      idEmployee: record.idEmployee ?? null,
+      codeEmployee: record.codeEmployee ?? null,
+      nameJobPosition: record.nameJobPosition ?? null,
+      lastStatus: status,
+      lastDayKey: dayKey,
+      lastAttendanceId: record.attendanceId ?? null,
+      updatedAt: serverTimestamp(),
+      updatedByUid: user?.uid || null,
+      updatedByEmail: user?.email || null,
+    },
+    { merge: true }
+  );
+
+  await setDoc(
+    decisionRef,
+    {
+      ...record,
+      ...decisionContext,
+      status,
+      statusCollection,
+      note: safeText(note),
+      dayKey,
+      employeeDocId,
+      employeeName,
+      employeeKey: normalizeMatchKey(employeeName),
+      overtimeType: otType ? { code: otType.code, label: otType.label } : null,
+      managerKey: normalizeMatchKey(relation.managerEmail || relation.managerName),
+      coordinatorKey: normalizeMatchKey(
+        relation.coordinatorEmail || relation.coordinatorName || record.coordinatorName
+      ),
+      decidedByUid: user?.uid || null,
+      decidedByEmail: user?.email || null,
+      decidedAt: serverTimestamp(),
+      archivedAt: serverTimestamp(),
+      source: "OvertimeApprovals",
+    },
+    { merge: true }
+  );
+
+  await deleteDoc(oppositeDecisionRef);
+}
 
 /**
  * Clasificación de horas extra:
@@ -130,6 +310,23 @@ function classifyOvertime(record, feriadoDates) {
   return OT_TYPES.MB02;
 }
 
+// Convierte la fecha de un registro (YYYY-MM-DD o DD/MM/YYYY) a un Date a medianoche.
+function recordToDate(rawDate) {
+  const ds = safeText(rawDate);
+  if (!ds) return null;
+  let d;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ds)) {
+    d = new Date(`${ds}T00:00:00`);
+  } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(ds)) {
+    const [dd, mm, yyyy] = ds.split("/");
+    d = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+  } else {
+    d = new Date(ds);
+  }
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
 function statusInfo(raw) {
   const key = String(raw || "pending").toLowerCase();
   return {
@@ -139,25 +336,12 @@ function statusInfo(raw) {
   };
 }
 
-function getDaysOld(date) {
-  if (!date) return null;
-  const today = new Date();
-  const recordDate = new Date(date);
-  const diffMs = today - recordDate;
-  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
-}
-
 /* ─── Modal para motivo de aprobación/rechazo ─── */
 function ReasonModal({ open, action, onConfirm, onClose }) {
   const [note, setNote] = useState("");
   const isReject = action === "rejected";
   const MIN_REJECT_CHARS = 15;
   const canSubmit = isReject ? note.trim().length >= MIN_REJECT_CHARS : true;
-
-  // Reset cuando se abre
-  useEffect(() => {
-    if (open) setNote("");
-  }, [open]);
 
   if (!open) return null;
 
@@ -315,9 +499,6 @@ function OvertimeCard({ record, savingId, onDecide, feriadoDates, feriadosMap })
   const { tone, label, key } = statusInfo(record.status);
   const busy = savingId === record.attendanceId;
 
-  const isPending = key === "pending";
-  const daysOld = isPending ? getDaysOld(record.date) : null;
-  const isStale = daysOld != null && daysOld >= STALE_DAYS;
   const isDecided = key === "approved" || key === "rejected";
 
   const otType = classifyOvertime(record, feriadoDates);
@@ -394,16 +575,6 @@ function OvertimeCard({ record, savingId, onDecide, feriadoDates, feriadosMap })
         }}>
           <Clock size={12} strokeWidth={2.4} />
           {otType.code} · {otType.label}
-        </div>
-      )}
-
-      {isPending && daysOld != null && (
-        <div style={isStale ? styles.ageBadgeStale : styles.ageBadge}>
-          <Clock size={12} strokeWidth={2.4} />
-          {daysOld === 0
-            ? "Registrada hoy"
-            : `Hace ${daysOld} día${daysOld === 1 ? "" : "s"}`}
-          {isStale ? " · requiere atención" : ""}
         </div>
       )}
 
@@ -526,6 +697,7 @@ export default function OvertimeApprovals() {
   const [error, setError] = useState("");
   const [feriadoDates, setFeriadoDates] = useState([]);
   const [feriadosMap, setFeriadosMap] = useState({});
+  const { next: cutoff, loading: cutoffLoading } = useOvertimeCutoff();
 
   // Modal state
   const [reasonModal, setReasonModal] = useState({ open: false, record: null, action: null });
@@ -559,6 +731,7 @@ export default function OvertimeApprovals() {
   const [statusFilter, setStatusFilter] = useState("pending");
   const [coordinatorFilter, setCoordinatorFilter] = useState("all");
   const [onlyCompanyOvertime, setOnlyCompanyOvertime] = useState(true);
+  const [ignoreCutoffRange, setIgnoreCutoffRange] = useState(false); // solo dev: ver todo sin rango
 
   const loadRecords = async () => {
     setLoading(true);
@@ -584,11 +757,25 @@ export default function OvertimeApprovals() {
 
     setSavingId(record.attendanceId);
     try {
+      const relation = await getManagerRelation(record);
+      const decisionContext = buildDecisionContext(record, relation);
+      const recordWithDecisionContext = {
+        ...record,
+        ...decisionContext,
+      };
+
       await decideOvertimeRecord({
         attendanceId: record.attendanceId,
         status: action,
         note,
-        record,
+        record: recordWithDecisionContext,
+      });
+      await saveOvertimeControlDecision({
+        record: recordWithDecisionContext,
+        status: action,
+        note,
+        relation,
+        feriadoDates,
       });
       await loadRecords();
     } catch (e) {
@@ -616,6 +803,10 @@ export default function OvertimeApprovals() {
     [records]
   );
 
+  // Rango del corte activo (Fecha inicio → Fecha final). El dev puede ignorarlo.
+  const range = cutoff?.range || null;
+  const applyRange = !(isDev && ignoreCutoffRange) && !!range;
+
   const filteredRecords = useMemo(() => {
     return records.filter((r) => {
       const key = statusInfo(r.status).key;
@@ -623,9 +814,13 @@ export default function OvertimeApprovals() {
       const coordinatorOk =
         coordinatorFilter === "all" || r.coordinatorName === coordinatorFilter;
       if (onlyCompanyOvertime && !r.hasCompanyOvertime) return false;
+      if (applyRange) {
+        const d = recordToDate(r.date);
+        if (!d || d < range.start || d > range.end) return false;
+      }
       return statusOk && coordinatorOk;
     });
-  }, [records, statusFilter, coordinatorFilter, onlyCompanyOvertime]);
+  }, [records, statusFilter, coordinatorFilter, onlyCompanyOvertime, applyRange, range]);
 
   return (
     <Shell>
@@ -670,6 +865,8 @@ export default function OvertimeApprovals() {
             }
           />
 
+          <OvertimeCutoffBanner next={cutoff} loading={cutoffLoading} />
+
           <div style={styles.filters}>
             <div style={styles.filterChips}>
               {STATUS_FILTERS.map((f) => {
@@ -713,6 +910,17 @@ export default function OvertimeApprovals() {
               />
               Solo con extra empresa
             </label>
+
+            {isDev && (
+              <label style={{ ...styles.toggle, color: ACCENT }}>
+                <input
+                  type="checkbox"
+                  checked={ignoreCutoffRange}
+                  onChange={(e) => setIgnoreCutoffRange(e.target.checked)}
+                />
+                Ver todas (sin rango de corte) · dev
+              </label>
+            )}
           </div>
 
           {!!error && <div style={styles.errorBanner}>{error}</div>}
@@ -748,6 +956,7 @@ export default function OvertimeApprovals() {
       </Main>
 
       <ReasonModal
+        key={`${reasonModal.record?.attendanceId || "empty"}-${reasonModal.action || "none"}`}
         open={reasonModal.open}
         action={reasonModal.action}
         onConfirm={handleReasonConfirm}

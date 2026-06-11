@@ -13,7 +13,9 @@
       "Bash(npm run *)",
       "Bash(powershell *)",
       "PowerShell(git *)",
-      "PowerShell(Get-Command *)"
+      "PowerShell(Get-Command *)",
+      "Bash(firebase deploy *)",
+      "PowerShell(firebase deploy *)"
     ]
   }
 }

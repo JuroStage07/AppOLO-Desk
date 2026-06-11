@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Clock,
+  FileSpreadsheet,
   Lock,
   ShieldCheck,
   UserCheck,
@@ -83,6 +84,20 @@ function OvertimeFlowModal({ open, onClose, onSelect }) {
             <div style={modalStyles.optionText}>
               <div style={modalStyles.optionTitle}>Validar horas extra</div>
               <div style={modalStyles.optionDesc}>Gerente</div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            style={modalStyles.optionCard}
+            onClick={() => onSelect("reporte")}
+          >
+            <div style={{ ...modalStyles.optionIcon, background: "rgba(234,88,12,0.12)", color: "#EA580C" }}>
+              <FileSpreadsheet size={22} strokeWidth={2.2} />
+            </div>
+            <div style={modalStyles.optionText}>
+              <div style={modalStyles.optionTitle}>Reporte Mensual</div>
+              <div style={modalStyles.optionDesc}>Exportar reporte</div>
             </div>
           </button>
         </div>
@@ -200,6 +215,8 @@ export default function AdministracionHub() {
     setShowOTModal(false);
     if (flow === "coordinador") {
       nav("/horas-extra");
+    } else if (flow === "reporte") {
+      nav("/horas-extra/reporte");
     } else {
       nav("/horas-extra/gerencia");
     }

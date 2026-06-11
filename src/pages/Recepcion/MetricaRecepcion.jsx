@@ -537,9 +537,16 @@ function buildTeamTimes(docs = []) {
     .sort((a, b) => b.tiempoPromedioMs - a.tiempoPromedioMs);
 }
 
+function normalizeProveedorLabel(name) {
+  if (!name) return "Sin proveedor";
+  const lower = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (lower.startsWith("binter")) return "Binter";
+  return name;
+}
+
 function actionProveedorLabel(row) {
   const name = String(row?.proveedorNombre ?? "").trim();
-  return name || "Sin proveedor";
+  return normalizeProveedorLabel(name) || "Sin proveedor";
 }
 
 /** Acciones cerradas en el período, listas para métricas por proveedor (sin agregar). */
@@ -5769,6 +5776,39 @@ export default function MetricaRecepcion() {
           });
           built.providerTimesAcciones = providerAcciones;
           built.providerTimes = aggregateProviderTimesByProveedor(providerAcciones);
+
+          // Sincronizar "Unidades procesadas" con el total real de la tabla de proveedores
+          // (suma de unidades de acciones completadas en el período).
+          const providerUnidadesTotal = built.providerTimes.reduce(
+            (acc, p) => acc + Number(p.unidades || 0), 0
+          );
+          if (providerUnidadesTotal > 0) {
+            const kpiUnidades = built.kpis?.find((k) => k.label === "Unidades procesadas");
+            if (kpiUnidades) {
+              const accionesFinalizadasVal = built.providerTimes.reduce(
+                (acc, p) => acc + Number(p.finalizadas || 0), 0
+              );
+              const bultosPorDescargaVal = accionesFinalizadasVal > 0
+                ? Math.round(providerUnidadesTotal / accionesFinalizadasVal)
+                : 0;
+              kpiUnidades.value = fmtInt(providerUnidadesTotal);
+              kpiUnidades.comparison = `${fmtInt(bultosPorDescargaVal)} por descarga`;
+            }
+            const kpiPorHora = built.kpis?.find((k) => k.label === "Unidades por hora");
+            if (kpiPorHora) {
+              const tiempoTotalProv = built.providerTimes.reduce(
+                (acc, p) => acc + Number(p.tiempoTotalMs || 0), 0
+              );
+              const horasTotalesProv = tiempoTotalProv > 0 ? tiempoTotalProv / 3600000 : 0;
+              const bultosPorHoraProv = horasTotalesProv > 0
+                ? Math.round(providerUnidadesTotal / horasTotalesProv)
+                : 0;
+              kpiPorHora.value = fmtInt(bultosPorHoraProv);
+              kpiPorHora.comparison = horasTotalesProv > 0
+                ? `${fmtOneDecimal(horasTotalesProv)} h trabajadas`
+                : "Sin horas registradas";
+            }
+          }
         } catch (provErr) {
           console.error("loadDashboard providerTimes:", provErr);
           built.providerTimes = [];

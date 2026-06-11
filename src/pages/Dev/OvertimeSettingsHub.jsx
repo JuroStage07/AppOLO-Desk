@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Calendar,
+  CalendarRange,
   Clock,
   Mail,
   Network,
   Save,
+  Scissors,
   Search,
   UserMinus,
   UserPlus,
@@ -137,6 +139,16 @@ export default function OvertimeSettingsHub() {
   const [feriados, setFeriados] = useState([]);
   const [feriadosLoading, setFeriadosLoading] = useState(false);
 
+  // Fecha de corte (ciclo mensual de horas extra)
+  const [cutoffModalOpen, setCutoffModalOpen] = useState(false);
+  const [cutoffStart, setCutoffStart] = useState(""); // "YYYY-MM-DD"
+  const [cutoffEnd, setCutoffEnd] = useState(""); // "YYYY-MM-DD"
+  const [cutoffPicker, setCutoffPicker] = useState(null); // "start" | "end" | null
+  const [cutoffPickerValue, setCutoffPickerValue] = useState("");
+  const [cutoffSaving, setCutoffSaving] = useState(false);
+  const [cutoffError, setCutoffError] = useState("");
+  const [cutoffOk, setCutoffOk] = useState("");
+
   // Relación Coordinador → Gerente (segunda aprobación)
   const [relModalOpen, setRelModalOpen] = useState(false);
   const [relAssign, setRelAssign] = useState({}); // { [coordinatorName]: managerName }
@@ -181,6 +193,110 @@ export default function OvertimeSettingsHub() {
     );
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    const ref = doc(db, "overtimeConfig", "cutoffDates");
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        const data = snap.data();
+        setCutoffStart(data?.startDate || "");
+        setCutoffEnd(data?.endDate || "");
+      },
+      (err) => console.error("Error cargando fechas de corte:", err)
+    );
+    return () => unsub();
+  }, []);
+
+  const dayOf = (dateStr) =>
+    dateStr ? new Date(dateStr + "T12:00:00").getDate() : null;
+
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const fmtDMY = (d) =>
+    d ? `${pad2(d.getDate())}-${pad2(d.getMonth() + 1)}-${d.getFullYear()}` : "";
+
+  // Calcula los periodos de corte: el ACTUAL (el que contiene hoy) y el PRÓXIMO.
+  // El final del corte cae en el mes siguiente al inicio cuando su día es menor
+  // (ej: inicio 21 → final 20 del mes siguiente). El periodo activo es aquel cuyo
+  // final es la próxima ocurrencia de endDay a partir de hoy.
+  const cutoffDates = useMemo(() => {
+    const startDay = dayOf(cutoffStart);
+    const endDay = dayOf(cutoffEnd);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    let actStart = null;
+    let actEnd = null;
+    let nextStart = null;
+    let nextEnd = null;
+
+    // Deriva el inicio de un periodo a partir de su fecha de final.
+    const startFor = (endDate) => {
+      if (!startDay || !endDate) return null;
+      return startDay <= endDay
+        ? new Date(endDate.getFullYear(), endDate.getMonth(), startDay)
+        : new Date(endDate.getFullYear(), endDate.getMonth() - 1, startDay);
+    };
+
+    if (endDay) {
+      actEnd = new Date(today.getFullYear(), today.getMonth(), endDay);
+      if (actEnd < today) {
+        actEnd = new Date(today.getFullYear(), today.getMonth() + 1, endDay);
+      }
+      nextEnd = new Date(actEnd.getFullYear(), actEnd.getMonth() + 1, endDay);
+      actStart = startFor(actEnd);
+      nextStart = startFor(nextEnd);
+    } else if (startDay) {
+      // Sin final definido: aproximar inicio del mes actual y del siguiente.
+      actStart = new Date(today.getFullYear(), today.getMonth(), startDay);
+      nextStart = new Date(today.getFullYear(), today.getMonth() + 1, startDay);
+    }
+
+    return { actStart, actEnd, nextStart, nextEnd };
+  }, [cutoffStart, cutoffEnd]);
+
+  const dayLabel = (dateStr) => {
+    const d = dayOf(dateStr);
+    return d ? `Día ${d}` : "Sin definir";
+  };
+
+  // Etiqueta de contexto del mes para la fecha "próxima".
+  const monthContext = (d) => {
+    if (!d) return "";
+    const now = new Date();
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+      ? "del mes actual"
+      : "del siguiente mes";
+  };
+
+  const cutoffSummary =
+    cutoffStart && cutoffEnd
+      ? `${dayOf(cutoffEnd)} → ${dayOf(cutoffStart)}`
+      : "Sin definir";
+
+  const handleSaveCutoff = async () => {
+    setCutoffSaving(true);
+    setCutoffError("");
+    setCutoffOk("");
+    try {
+      await setDoc(doc(db, "overtimeConfig", "cutoffDates"), {
+        startDate: cutoffStart || null,
+        endDate: cutoffEnd || null,
+        startDay: dayOf(cutoffStart),
+        endDay: dayOf(cutoffEnd),
+        updatedAt: new Date().toISOString(),
+        updatedBy: auth.currentUser?.uid || null,
+      });
+      setCutoffOk("Fechas de corte guardadas correctamente.");
+    } catch (e) {
+      console.error("Error guardando fechas de corte:", e);
+      setCutoffError(
+        e.message || "No se pudieron guardar las fechas. Revisá permisos de Firestore."
+      );
+    } finally {
+      setCutoffSaving(false);
+    }
+  };
 
   const handleAddFeriado = async (date, name) => {
     try {
@@ -455,7 +571,7 @@ export default function OvertimeSettingsHub() {
         <Container>
           <Hero
             kicker="Configuración"
-            title="Configuración de Horas Extras"
+            title="Configuración de Módulo Horas Extras"
             subtitle="Gestioná los parámetros del módulo de horas extra. Elegí una configuración para editarla."
             badge={<Badge icon={Clock}>Módulo Horas Extra</Badge>}
           />
@@ -486,6 +602,19 @@ export default function OvertimeSettingsHub() {
               tag={`${relSummary} asignados`}
               cta="Configurar relaciones"
               onClick={openRelModal}
+            />
+            <ModuleCard
+              title="Fecha de corte"
+              desc="Definí el día de inicio y final del corte mensual de horas extra. El corte funciona por días del mes (ej: cierra el 20 y reinicia el 21)."
+              icon={CalendarRange}
+              tone="accent"
+              tag={`Corte: ${cutoffSummary}`}
+              cta="Configurar fecha de corte"
+              onClick={() => {
+                setCutoffError("");
+                setCutoffOk("");
+                setCutoffModalOpen(true);
+              }}
             />
           </ModuleGrid>
         </Container>
@@ -828,6 +957,165 @@ export default function OvertimeSettingsHub() {
         </Sheet.Actions>
       </Sheet>
 
+      {/* Modal: fecha de corte */}
+      <Sheet
+        open={cutoffModalOpen}
+        onClose={() => setCutoffModalOpen(false)}
+        title="Fecha de corte"
+        placement="center"
+        maxWidth={520}
+      >
+        <Sheet.Body>
+          <p style={styles.modalIntro}>
+            Definí el inicio y el final del corte mensual. El corte funciona por
+            días del mes: por ejemplo, el corte cierra el día 20 y reinicia el día 21.
+          </p>
+
+          {!!cutoffError && <div style={styles.errorBanner}>{cutoffError}</div>}
+          {!!cutoffOk && <div style={styles.okBanner}>{cutoffOk}</div>}
+
+          <div style={styles.modalList}>
+            <div style={styles.row}>
+              <div style={styles.coordInfo}>
+                <div style={styles.avatar}>
+                  <Calendar size={16} strokeWidth={2.2} />
+                </div>
+                <div style={styles.excludedInfo}>
+                  <span style={styles.coordName}>Inicio del corte</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: SLATE }}>
+                    {cutoffStart
+                      ? `${dayLabel(cutoffStart)} · ${monthContext(cutoffDates.nextStart)}`
+                      : "Sin definir"}
+                  </span>
+                  {cutoffStart && (
+                    <span style={styles.cutoffDetail}>
+                      Próximo inicio:{" "}
+                      <strong style={styles.cutoffNext}>
+                        {fmtDMY(cutoffDates.nextStart)}
+                      </strong>
+                      {cutoffDates.actStart && (
+                        <>
+                          {" · Inicio actual: "}
+                          <strong style={styles.cutoffCurrent}>
+                            {fmtDMY(cutoffDates.actStart)}
+                          </strong>
+                        </>
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCutoffPicker("start");
+                  setCutoffPickerValue(cutoffStart);
+                }}
+                style={styles.includeBtn}
+              >
+                <Calendar size={15} strokeWidth={2.4} />
+                Elegir día
+              </button>
+            </div>
+
+            <div style={styles.row}>
+              <div style={styles.coordInfo}>
+                <div style={styles.avatar}>
+                  <Scissors size={16} strokeWidth={2.2} />
+                </div>
+                <div style={styles.excludedInfo}>
+                  <span style={styles.coordName}>Final del corte</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: SLATE }}>
+                    {cutoffEnd
+                      ? `${dayLabel(cutoffEnd)} · ${monthContext(cutoffDates.nextEnd)}`
+                      : "Sin definir"}
+                  </span>
+                  {cutoffEnd && (
+                    <span style={styles.cutoffDetail}>
+                      Próximo final:{" "}
+                      <strong style={styles.cutoffNext}>
+                        {fmtDMY(cutoffDates.nextEnd)}
+                      </strong>
+                      {cutoffDates.actEnd && (
+                        <>
+                          {" · Final actual: "}
+                          <strong style={styles.cutoffCurrent}>
+                            {fmtDMY(cutoffDates.actEnd)}
+                          </strong>
+                        </>
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCutoffPicker("end");
+                  setCutoffPickerValue(cutoffEnd);
+                }}
+                style={styles.includeBtn}
+              >
+                <Calendar size={15} strokeWidth={2.4} />
+                Elegir día
+              </button>
+            </div>
+          </div>
+        </Sheet.Body>
+        <Sheet.Actions>
+          <SecondaryButton onClick={() => setCutoffModalOpen(false)}>
+            Cerrar
+          </SecondaryButton>
+          <PrimaryButton
+            icon={Save}
+            onClick={handleSaveCutoff}
+            loading={cutoffSaving}
+            disabled={cutoffSaving}
+          >
+            Guardar fechas
+          </PrimaryButton>
+        </Sheet.Actions>
+      </Sheet>
+
+      {/* Sub-modal: seleccionar día de corte */}
+      <Sheet
+        open={cutoffPicker !== null}
+        onClose={() => setCutoffPicker(null)}
+        title={
+          cutoffPicker === "start" ? "Inicio del corte" : "Final del corte"
+        }
+        placement="center"
+        maxWidth={380}
+      >
+        <Sheet.Body>
+          <p style={styles.modalIntro}>
+            Elegí el día en el calendario. El corte se aplica por día del mes.
+          </p>
+          <input
+            type="date"
+            value={cutoffPickerValue}
+            onChange={(e) => setCutoffPickerValue(e.target.value)}
+            style={styles.select}
+          />
+        </Sheet.Body>
+        <Sheet.Actions>
+          <SecondaryButton onClick={() => setCutoffPicker(null)}>
+            Cancelar
+          </SecondaryButton>
+          <PrimaryButton
+            disabled={!cutoffPickerValue}
+            onClick={() => {
+              setCutoffOk("");
+              if (cutoffPicker === "start") setCutoffStart(cutoffPickerValue);
+              else if (cutoffPicker === "end") setCutoffEnd(cutoffPickerValue);
+              setCutoffPicker(null);
+            }}
+          >
+            Confirmar día
+          </PrimaryButton>
+        </Sheet.Actions>
+      </Sheet>
+
       {/* Modal: relación coordinador → gerente */}
       <Sheet
         open={relModalOpen}
@@ -1049,6 +1337,20 @@ const styles = {
     color: ACCENT,
     fontWeight: 850,
     fontSize: 11,
+  },
+  cutoffDetail: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: SLATE,
+    lineHeight: 1.4,
+  },
+  cutoffNext: {
+    color: ACCENT,
+    fontWeight: 900,
+  },
+  cutoffCurrent: {
+    color: TEXT,
+    fontWeight: 900,
   },
   avatar: {
     width: 38,

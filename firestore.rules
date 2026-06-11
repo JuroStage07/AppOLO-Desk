@@ -310,6 +310,10 @@ match /{path=**}/fotos/{fotoId} {
       allow read: if canMantenimientoOT();
     }
 
+    match /{path=**}/approved/{dayKey} {
+      allow read: if isAdminRequester();
+    }
+
     // ------------------------------------------------------------------
 
     // =========================
@@ -351,13 +355,14 @@ match /{path=**}/fotos/{fotoId} {
           'aperturaId','reservaId','tenantId','company',
           'creadoPorUid','creadoPorNombre','creadoAt',
           'proveedorNombre','idAnden','nombreAccion',
+          'tipo','traslado',
           'startedAt','completedAt','tipoDescarga','cantidadBultos',
           'starter','starterUid',
           'dayKeyCreado','dayKeyStarted','dayKeyCompleted',
           'totalTimeMs','totalTimeMin','totalTimeTxt',
           'updatedAt'
         ])
-        && request.resource.data.aperturaId is string
+        && (request.resource.data.aperturaId is string || request.resource.data.aperturaId == null)
         && (!('reservaId' in request.resource.data) || request.resource.data.reservaId == null || request.resource.data.reservaId is string)
         && request.resource.data.tenantId is string
         && request.resource.data.company is string
@@ -374,6 +379,8 @@ match /{path=**}/fotos/{fotoId} {
           request.resource.data.idAnden is float
         )
         && (!('nombreAccion' in request.resource.data) || request.resource.data.nombreAccion is string)
+        && (!('tipo' in request.resource.data) || request.resource.data.tipo is string)
+        && (!('traslado' in request.resource.data) || request.resource.data.traslado is bool)
         && (!('startedAt' in request.resource.data) || request.resource.data.startedAt == null)
         && (!('completedAt' in request.resource.data) || request.resource.data.completedAt == null)
         && (!('tipoDescarga' in request.resource.data) || request.resource.data.tipoDescarga == null)
@@ -971,6 +978,8 @@ allow create: if authed()
           'checklistD_hasFallas',
           'checklistD_fallas',
           'checklistD_lastAt',
+          'checklistD_manana',
+          'checklistD_manana_at',
           'fallaActiva',
           'fallaUpdatedAt',
           'updatedAt'
@@ -995,6 +1004,7 @@ allow create: if authed()
           'responsable',
           'familia',
           'marca',
+          'turno',
           'respuestas',
           'hasFallas',
           'fallas',
@@ -1714,6 +1724,7 @@ match /controlTerceros/{eventId} {
 
       allow update: if
         canStartApertura()
+        || isAdminRequester()
         || resource.data.creadoPor == request.auth.uid
         || (('assignedTo' in resource.data) && resource.data.assignedTo == request.auth.uid);
 
@@ -1899,6 +1910,7 @@ match /controlTerceros/{eventId} {
 
       allow update: if
         canStartApertura()
+        || isAdminRequester()
         || resource.data.creadoPor == request.auth.uid
         || (('assignedTo' in resource.data) && resource.data.assignedTo == request.auth.uid)
         || (
@@ -1956,6 +1968,35 @@ match /controlTerceros/{eventId} {
     }
 
     // =========================
+    // Control histórico de horas extra por colaborador
+    // Estructura: overtime_control/{empleado}/{approved|rejected}/{dayKey}
+    // =========================
+    match /overtime_control/{employeeId} {
+      allow get, list: if isAdminRequester();
+
+      allow create, update: if isAdminRequester()
+        && request.resource.data.employeeName is string
+        && request.resource.data.updatedByUid == request.auth.uid;
+
+      allow delete: if isAdminRequester();
+
+      match /{decisionStatus}/{dayKey} {
+        allow get, list: if isAdminRequester()
+          && decisionStatus in ['approved', 'rejected'];
+
+        allow create, update: if isAdminRequester()
+          && decisionStatus in ['approved', 'rejected']
+          && request.resource.data.status == decisionStatus
+          && request.resource.data.employeeDocId == employeeId
+          && request.resource.data.dayKey == dayKey
+          && request.resource.data.decidedByUid == request.auth.uid;
+
+        allow delete: if isAdminRequester()
+          && decisionStatus in ['approved', 'rejected'];
+      }
+    }
+
+    // =========================
     // ✅ Configuración módulo horas extra (relación coordinador → gerente, etc.)
     // =========================
     match /overtimeConfig/{docId} {
@@ -1971,6 +2012,55 @@ match /controlTerceros/{eventId} {
         && request.resource.data.updatedAt is string
         && (request.resource.data.updatedBy == null
             || request.resource.data.updatedBy == request.auth.uid);
+
+      allow delete: if isAdminRequester();
+    }
+
+    // =========================
+    // ✅ Fecha de corte del módulo horas extra (overtimeConfig/cutoffDates)
+    // Regla específica: el doc cutoffDates usa otro esquema de campos.
+    // Se evalúa en OR con la regla genérica de overtimeConfig de arriba.
+    // =========================
+    match /overtimeConfig/cutoffDates {
+      allow get, list: if authed();
+
+      allow create, update: if authed()
+        && request.resource.data.keys().hasOnly([
+          'startDate',
+          'endDate',
+          'startDay',
+          'endDay',
+          'updatedAt',
+          'updatedBy'
+        ])
+        && (request.resource.data.startDate == null
+            || request.resource.data.startDate is string)
+        && (request.resource.data.endDate == null
+            || request.resource.data.endDate is string)
+        && (request.resource.data.startDay == null
+            || request.resource.data.startDay is int)
+        && (request.resource.data.endDay == null
+            || request.resource.data.endDay is int)
+        && request.resource.data.updatedAt is string
+        && (request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid);
+
+      allow delete: if isAdminRequester();
+    }
+
+    // =========================
+    // Validación de horas extra por gerencia
+    // Estructura: overtime_manager_validated/{autoId}
+    // =========================
+    match /overtime_manager_validated/{docId} {
+      allow get, list: if isAdminRequester();
+
+      allow create: if isAdminRequester()
+        && request.resource.data.employeeName is string
+        && request.resource.data.validatedByUid == request.auth.uid;
+
+      allow update: if isAdminRequester()
+        && request.resource.data.validatedByUid == request.auth.uid;
 
       allow delete: if isAdminRequester();
     }
