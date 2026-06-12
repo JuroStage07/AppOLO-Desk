@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronRight, Pin, X } from "lucide-react";
 import { AuthCtx } from "../../auth/AuthProvider";
@@ -31,7 +31,7 @@ const T = {
  *  - open: whether the drawer is visible
  *  - onClose: close the drawer
  */
-export default function AreasSidebar({ open, onClose }) {
+export default function AreasSidebar({ open, onClose, openPins = false }) {
   const nav = useNavigate();
   const toast = useToast();
   const { profile, epaAdmin, role, user: ctxUser } = useContext(AuthCtx);
@@ -40,6 +40,11 @@ export default function AreasSidebar({ open, onClose }) {
   const [expandedModules, setExpandedModules] = useState(() => new Set());
   const [pinsOpen, setPinsOpen] = useState(false);
   const { pins } = useAllPinnedModules();
+
+  // Open directly on the "Mis Pin" section when requested by the opener.
+  useEffect(() => {
+    if (open && openPins) setPinsOpen(true);
+  }, [open, openPins]);
 
   const toggleArea = (key) => {
     setExpandedModules(new Set());

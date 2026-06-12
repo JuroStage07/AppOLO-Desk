@@ -1,9 +1,8 @@
-import React, { useContext, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { AuthCtx } from "../auth/AuthProvider";
 import {
-  Activity,
   ArrowRight,
   BarChart3,
   ChevronRight,
@@ -16,7 +15,10 @@ import {
   LogOut,
   Lock,
   Menu,
+  Pin,
   Search,
+  Send,
+  Trash2,
   User,
   X,
 } from "lucide-react";
@@ -24,7 +26,7 @@ import { auth } from "../firebase";
 
 import { isEpaRestrictedUser } from "../config/epaOnlyUids";
 import { getVisibleAreas } from "../config/workAreas";
-import { AreasSidebar, SidebarAreaIcon } from "../components/ui";
+import { AreasSidebar, SidebarAreaIcon, useConfirm } from "../components/ui";
 import logoAppolo from "../assets/AppOLO_logo.png";
 import imgApolo from "../assets/Apolo.png";
 
@@ -65,10 +67,36 @@ const DASHED_ARC_RADIUS = 51; // dashed arc just before (inward of) the grey arc
  */
 const MENU_ACTIONS = [
   { key: "areas", title: "Áreas", icon: <LayoutGrid />, angle: 225, accent: "#2563EB", soft: "rgba(37,99,235,0.12)" },
-  { key: "operacion", title: "Operación", icon: <Activity />, angle: 315, accent: "#089F8A", soft: "rgba(8,159,138,0.12)" },
+  { key: "pins", title: "Mis Pin", icon: <Pin />, angle: 315, accent: "#089F8A", soft: "rgba(8,159,138,0.12)" },
   { key: "reportes", title: "Reportes", icon: <BarChart3 />, angle: 135, accent: "#7C3AED", soft: "rgba(124,58,237,0.12)" },
   { key: "configuracion", title: "Configuración", icon: <Cog />, angle: 45, accent: "#EA580C", soft: "rgba(234,88,12,0.12)" },
 ];
+
+/* ─── Assistant chat (mock / local — n8n wired in a later step) ─── */
+const ASSISTANT_INTRO =
+  "Hola, soy el asistente de AppoloDesk. Puedo ayudarte a consultar módulos, procesos y funcionamiento del sistema.";
+const ASSISTANT_MOCK_REPLY =
+  "Todavía estoy en modo de prueba. En el siguiente paso me conectaremos a n8n para responder con la documentación real de AppoloDesk.";
+const ASSISTANT_SUGGESTIONS = [
+  "¿Cómo uso las áreas?",
+  "¿Qué puedo hacer en mantenimiento?",
+  "¿Dónde veo reportes?",
+  "Explicame el flujo general",
+];
+/* n8n webhook (optional). When absent, the chat falls back to a local mock. */
+const ASSISTANT_WEBHOOK_URL = import.meta.env.VITE_ASSISTANT_WEBHOOK_URL;
+const ASSISTANT_ERROR_REPLY =
+  "No pude conectar con el asistente en este momento. Podés intentar de nuevo en unos segundos.";
+
+/* Local conversation id (no deps). */
+function newConversationId() {
+  try {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  } catch {
+    /* ignore */
+  }
+  return `conv-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+}
 
 /* Turn an area accent (hex) into a soft rgba tint — used to derive module colors. */
 function hexToRgba(hex, alpha) {
@@ -419,18 +447,194 @@ function AreasModal({ areas, onClose, onNavigate, onComingSoon }) {
   );
 }
 
+/* ─── Assistant chat window (mock responses) ─── */
+function AssistantChat({ phase, messages, input, setInput, typing, onSend, onClear, onClose, onAction }) {
+  const scrollRef = useRef(null);
+  const taRef = useRef(null);
+
+  // Auto-scroll to the latest message / typing indicator.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, typing]);
+
+  // Focus the textarea when the chat opens.
+  useEffect(() => {
+    if (phase === "chat" && taRef.current) taRef.current.focus();
+  }, [phase]);
+
+  const submit = () => {
+    const text = input.trim();
+    if (!text) return;
+    onSend(text);
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      submit();
+    }
+  };
+
+  const showSuggestions = messages.length <= 1;
+
+  return (
+    <div
+      role="dialog"
+      aria-label="Asistente AppoloDesk"
+      style={{
+        ...styles.chat,
+        animation:
+          phase === "chatOut"
+            ? "hhChatOut 240ms ease forwards"
+            : "hhChatIn 320ms cubic-bezier(0.22,1,0.36,1)",
+      }}
+    >
+      {/* Header */}
+      <div style={styles.chatHeader}>
+        <div style={styles.chatHeaderLeft}>
+          <span style={styles.chatHeaderIcon}>
+            <img src={imgApolo} alt="" style={{ width: "78%", height: "78%", objectFit: "contain" }} draggable={false} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div style={styles.chatTitle}>Asistente AppoloDesk</div>
+            <div style={styles.chatSubtitle}>Consultá procesos, módulos y funcionamiento</div>
+          </div>
+        </div>
+        <div style={styles.chatHeaderActions}>
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={messages.length <= 1 && !typing}
+            aria-label="Limpiar chat"
+            title="Limpiar chat"
+            style={{
+              ...styles.chatClose,
+              opacity: messages.length <= 1 && !typing ? 0.45 : 1,
+              cursor: messages.length <= 1 && !typing ? "not-allowed" : "pointer",
+            }}
+          >
+            <Trash2 size={17} strokeWidth={2.2} />
+          </button>
+          <button type="button" onClick={onClose} aria-label="Cerrar asistente" style={styles.chatClose}>
+            <X size={18} strokeWidth={2.4} />
+          </button>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} style={styles.chatBody}>
+        {messages.map((m, i) => {
+          const isUser = m.role === "user";
+          const actions = !isUser && Array.isArray(m.suggestedActions) ? m.suggestedActions.filter((a) => a && a.path) : [];
+          const sources = !isUser && Array.isArray(m.sources)
+            ? m.sources.map((s) => (s && (s.title || s.ref)) || "").filter(Boolean)
+            : [];
+          return (
+            <div key={i} style={{ ...styles.msgRow, justifyContent: isUser ? "flex-end" : "flex-start" }}>
+              {!isUser && (
+                <span style={styles.msgAvatar}>
+                  <img src={imgApolo} alt="" style={{ width: "80%", height: "80%", objectFit: "contain" }} draggable={false} />
+                </span>
+              )}
+              <div style={{ ...styles.msgCol, alignItems: isUser ? "flex-end" : "flex-start" }}>
+                <div style={isUser ? styles.bubbleUser : styles.bubbleBot}>{m.text}</div>
+
+                {actions.length > 0 && (
+                  <div style={styles.msgActions}>
+                    {actions.map((a, idx) => (
+                      <button key={idx} type="button" onClick={() => onAction(a.path)} style={styles.msgActionChip}>
+                        {a.label || a.path}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {sources.length > 0 && (
+                  <div style={styles.msgSources}>Fuentes: {sources.join(" · ")}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {typing && (
+          <div style={{ ...styles.msgRow, justifyContent: "flex-start" }}>
+            <span style={styles.msgAvatar}>
+              <img src={imgApolo} alt="" style={{ width: "80%", height: "80%", objectFit: "contain" }} draggable={false} />
+            </span>
+            <div style={styles.typingBubble}>
+              <span style={{ ...styles.typingDot, animationDelay: "0ms" }} />
+              <span style={{ ...styles.typingDot, animationDelay: "150ms" }} />
+              <span style={{ ...styles.typingDot, animationDelay: "300ms" }} />
+            </div>
+          </div>
+        )}
+
+        {showSuggestions && (
+          <div style={styles.suggWrap}>
+            <div style={styles.suggLabel}>Sugerencias</div>
+            <div style={styles.suggRow}>
+              {ASSISTANT_SUGGESTIONS.map((s) => (
+                <button key={s} type="button" onClick={() => onSend(s)} style={styles.suggChip}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div style={styles.chatInputBar}>
+        <textarea
+          ref={taRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={onKeyDown}
+          rows={1}
+          placeholder="Escribí tu consulta…"
+          style={styles.chatTextarea}
+          aria-label="Mensaje para el asistente"
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!input.trim()}
+          aria-label="Enviar mensaje"
+          style={{ ...styles.chatSend, opacity: input.trim() ? 1 : 0.45, cursor: input.trim() ? "pointer" : "not-allowed" }}
+        >
+          <Send size={18} strokeWidth={2.2} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AreasTrabajoHubPage() {
   const nav = useNavigate();
-  const { profile, epaAdmin, role, user: ctxUser } = useContext(AuthCtx);
+  const location = useLocation();
+  const { profile, epaAdmin, role, permisos, user: ctxUser } = useContext(AuthCtx);
   const user = ctxUser ?? auth.currentUser;
+  const confirm = useConfirm();
   const [hovered, setHovered] = useState(null);
   const [busyLogout, setBusyLogout] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarPins, setSidebarPins] = useState(false); // open sidebar directly on "Mis Pin"
   const [query, setQuery] = useState("");
   const [searchFocus, setSearchFocus] = useState(false);
   const [comingSoonArea, setComingSoonArea] = useState(null);
   const [areasModalOpen, setAreasModalOpen] = useState(false);
+
+  // Assistant chat (mock). Phase drives the menu -> chat transition.
+  // "menu" | "menuOut" | "chat" | "chatOut"
+  const [assistantPhase, setAssistantPhase] = useState("menu");
+  const [assistantMessages, setAssistantMessages] = useState([{ role: "assistant", text: ASSISTANT_INTRO }]);
+  const [assistantInput, setAssistantInput] = useState("");
+  const [assistantTyping, setAssistantTyping] = useState(false);
+  const [assistantConvId, setAssistantConvId] = useState(() => newConversationId());
+  const assistantTimers = useRef([]);
 
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
@@ -496,8 +700,9 @@ export default function AreasTrabajoHubPage() {
       case "areas":
         setAreasModalOpen(true);
         break;
-      case "operacion":
-        nav("/areas");
+      case "pins":
+        setSidebarPins(true);
+        setSidebarOpen(true);
         break;
       case "configuracion":
         nav("/config-region");
@@ -508,6 +713,113 @@ export default function AreasTrabajoHubPage() {
       default:
         break;
     }
+  };
+
+  /* Clear any pending assistant timers on unmount. */
+  useEffect(() => () => assistantTimers.current.forEach((t) => clearTimeout(t)), []);
+
+  /* Menu -> chat: animate the wheel out, then mount the chat. */
+  const openAssistant = () => {
+    setAssistantPhase("menuOut");
+    const t = setTimeout(() => setAssistantPhase("chat"), 280);
+    assistantTimers.current.push(t);
+  };
+
+  /* Chat -> menu: animate the chat out, then bring the wheel back. */
+  const closeAssistant = () => {
+    setAssistantPhase("chatOut");
+    const t = setTimeout(() => setAssistantPhase("menu"), 240);
+    assistantTimers.current.push(t);
+  };
+
+  /* Reset the conversation back to the intro message (after confirmation). */
+  const clearAssistant = async () => {
+    const ok = await confirm({
+      title: "Limpiar chat",
+      message: "¿Deseás limpiar el chat? Esta acción es permanente.",
+      confirmText: "Limpiar",
+      tone: "danger",
+    });
+    if (!ok) return;
+    assistantTimers.current.forEach((t) => clearTimeout(t));
+    assistantTimers.current = [];
+    setAssistantTyping(false);
+    setAssistantInput("");
+    setAssistantMessages([{ role: "assistant", text: ASSISTANT_INTRO }]);
+    setAssistantConvId(newConversationId());
+  };
+
+  /* Send a message: POST to the n8n webhook when configured, otherwise reply
+     with the local mock. Always pushes the user message and toggles typing. */
+  const sendAssistant = (text) => {
+    const clean = (text || "").trim();
+    if (!clean) return;
+
+    const userMsg = { role: "user", text: clean };
+    setAssistantMessages((prev) => [...prev, userMsg]);
+    setAssistantInput("");
+    setAssistantTyping(true);
+
+    // Fallback mock when no webhook is configured.
+    if (!ASSISTANT_WEBHOOK_URL) {
+      const t = setTimeout(() => {
+        setAssistantTyping(false);
+        setAssistantMessages((prev) => [...prev, { role: "assistant", text: ASSISTANT_MOCK_REPLY }]);
+      }, 900);
+      assistantTimers.current.push(t);
+      return;
+    }
+
+    // Recent history (lightweight) + the new user message.
+    const history = [...assistantMessages, userMsg]
+      .slice(-12)
+      .map((m) => ({ role: m.role, text: m.text }));
+
+    const payload = {
+      userMessage: clean,
+      userId: user?.uid || null,
+      tenantId: profile?.tenantId || null,
+      company: profile?.company || null,
+      role: role || null,
+      permisos: permisos || {},
+      epaAdmin: !!epaAdmin,
+      currentRoute: location.pathname,
+      conversationId: assistantConvId,
+      history,
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    assistantTimers.current.push(timeoutId);
+
+    fetch(ASSISTANT_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((raw) => {
+        clearTimeout(timeoutId);
+        // n8n webhooks sometimes wrap the result in an array.
+        const data = Array.isArray(raw) ? raw[0] || {} : raw || {};
+        const answer =
+          typeof data.answer === "string" && data.answer.trim()
+            ? data.answer.trim()
+            : "Recibí tu mensaje, pero no obtuve una respuesta válida.";
+        const sources = Array.isArray(data.sources) ? data.sources : [];
+        const suggestedActions = Array.isArray(data.suggestedActions) ? data.suggestedActions : [];
+        setAssistantTyping(false);
+        setAssistantMessages((prev) => [...prev, { role: "assistant", text: answer, sources, suggestedActions }]);
+      })
+      .catch(() => {
+        clearTimeout(timeoutId);
+        setAssistantTyping(false);
+        setAssistantMessages((prev) => [...prev, { role: "assistant", text: ASSISTANT_ERROR_REPLY }]);
+      });
   };
 
   /* Pre-compute radial coordinates + sector wedges for the 4 fixed actions. */
@@ -537,7 +849,14 @@ export default function AreasTrabajoHubPage() {
       <style>{cssAnimations}</style>
 
       {/* ─── Shared global sidebar drawer ─── */}
-      <AreasSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <AreasSidebar
+        open={sidebarOpen}
+        openPins={sidebarPins}
+        onClose={() => {
+          setSidebarOpen(false);
+          setSidebarPins(false);
+        }}
+      />
 
       {/* ─── Header ─── */}
       <header style={styles.header}>
@@ -613,48 +932,32 @@ export default function AreasTrabajoHubPage() {
               </div>
               <h1 style={styles.heroTitle}>{user?.displayName || "Operador"}</h1>
               <p style={styles.heroSubtitle}>
-                Tu plataforma operativa está lista. Elegí un área para comenzar.
+                Tu plataforma operativa. Elegí una opción para comenzar.
               </p>
             </div>
 
-            <div style={styles.heroLogoWrap} aria-hidden="true">
-              <img src={logoAppolo} alt="" style={styles.heroLogo} draggable={false} />
+            <div style={styles.heroRight}>
+              <img src={logoAppolo} alt="AppOLO Desk" style={styles.heroLogo} draggable={false} />
+              <div style={{ ...styles.searchWrap, ...(searchFocus ? styles.searchWrapFocus : {}) }}>
+                <Search size={17} strokeWidth={2.2} color={searchFocus ? T.accent : T.textMuted} />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onFocus={() => setSearchFocus(true)}
+                  onBlur={() => setSearchFocus(false)}
+                  placeholder="Buscar área o sección…"
+                  style={styles.searchInput}
+                  aria-label="Buscar área"
+                />
+                {query && (
+                  <button type="button" onClick={() => setQuery("")} style={styles.searchClear} aria-label="Limpiar búsqueda">
+                    <X size={14} strokeWidth={2.4} />
+                  </button>
+                )}
+              </div>
             </div>
           </section>
-
-          {/* Search row (compact, below the hero) */}
-          <div
-            style={{
-              ...styles.searchRow,
-              opacity: mounted ? 1 : 0,
-              transform: mounted ? "translateY(0)" : "translateY(10px)",
-              transitionDelay: "60ms",
-            }}
-          >
-            <div style={{ ...styles.searchWrap, ...(searchFocus ? styles.searchWrapFocus : {}) }}>
-              <Search size={17} strokeWidth={2.2} color={searchFocus ? T.accent : T.textMuted} />
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onFocus={() => setSearchFocus(true)}
-                onBlur={() => setSearchFocus(false)}
-                placeholder="Buscar área o sección…"
-                style={styles.searchInput}
-                aria-label="Buscar área"
-              />
-              {query && (
-                <button type="button" onClick={() => setQuery("")} style={styles.searchClear} aria-label="Limpiar búsqueda">
-                  <X size={14} strokeWidth={2.4} />
-                </button>
-              )}
-            </div>
-            <span style={styles.heroBadge}>
-              {term
-                ? `${filteredSubModules.length} ${filteredSubModules.length === 1 ? "resultado" : "resultados"}`
-                : `${areas.length} disponibles`}
-            </span>
-          </div>
 
           {/* Search results panel (secondary) OR the circular menu (default) */}
           {term ? (
@@ -719,14 +1022,33 @@ export default function AreasTrabajoHubPage() {
             </section>
           ) : (
             <section style={styles.wheelSection}>
+              {assistantPhase === "chat" || assistantPhase === "chatOut" ? (
+                <AssistantChat
+                  phase={assistantPhase}
+                  messages={assistantMessages}
+                  input={assistantInput}
+                  setInput={setAssistantInput}
+                  typing={assistantTyping}
+                  onSend={sendAssistant}
+                  onClear={clearAssistant}
+                  onClose={closeAssistant}
+                  onAction={(path) => path && nav(path)}
+                />
+              ) : (
               <div
                 className="hh-wheel"
                 style={{
                   ...styles.wheel,
+                  // 25% smaller — scales the whole menu uniformly. The wheel
+                  // animates out when opening the assistant, and back in on return.
+                  transform: "scale(0.75)",
+                  animation:
+                    assistantPhase === "menuOut"
+                      ? "hhWheelOut 280ms ease forwards"
+                      : mounted
+                      ? "hhWheelIn 420ms cubic-bezier(0.22,1,0.36,1)"
+                      : "none",
                   opacity: mounted ? 1 : 0,
-                  // 25% smaller — scales the whole menu uniformly (icons, borders,
-                  // strokes, labels, highlights and hit areas) keeping proportions.
-                  transform: mounted ? "scale(0.75)" : "scale(0.72)",
                 }}
               >
                 {/* subtle outer ring */}
@@ -825,7 +1147,7 @@ export default function AreasTrabajoHubPage() {
                 {/* central configuration core */}
                 <button
                   type="button"
-                  onClick={() => nav("/welcome")}
+                  onClick={openAssistant}
                   onMouseEnter={() => setHovered("__core__")}
                   onMouseLeave={() => setHovered(null)}
                   onFocus={() => setHovered("__core__")}
@@ -845,6 +1167,7 @@ export default function AreasTrabajoHubPage() {
                   <span style={styles.coreLabel}>Asistente</span>
                 </button>
               </div>
+              )}
             </section>
           )}
         </div>
@@ -898,6 +1221,12 @@ const cssAnimations = `
   /* areas modal: staggered cards + panel content */
   @keyframes hhCardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes hhPanelIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  /* wheel <-> assistant chat transition */
+  @keyframes hhWheelIn { from { opacity: 0; transform: scale(0.66) translateY(16px); } to { opacity: 1; transform: scale(0.75); } }
+  @keyframes hhWheelOut { from { opacity: 1; transform: scale(0.75); } to { opacity: 0; transform: scale(0.66) translateY(18px); } }
+  @keyframes hhChatIn { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes hhChatOut { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(12px) scale(0.98); } }
+  @keyframes hhTyping { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-3px); opacity: 1; } }
   * { box-sizing: border-box; }
 
   /* staggered entrance for the lateral area cards when the modal opens */
@@ -1091,18 +1420,24 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 24,
+    gap: 20,
     flexWrap: "wrap",
-    padding: "26px 30px",
-    borderRadius: 22,
+    padding: "16px 24px",
+    borderRadius: 18,
     background: `linear-gradient(135deg, #fff 0%, ${T.accentSoft} 150%)`,
     border: `1px solid ${T.border}`,
     boxShadow: T.shadow,
     transition: "opacity 400ms ease, transform 400ms ease",
   },
-  heroText: { display: "grid", gap: 10, minWidth: 0, flex: "1 1 300px" },
-  heroLogoWrap: { display: "grid", placeItems: "center", flexShrink: 0 },
-  heroLogo: { width: "clamp(96px, 14vw, 150px)", height: "auto", objectFit: "contain", opacity: 0.96 },
+  heroText: { display: "grid", gap: 7, minWidth: 0, flex: "1 1 300px" },
+  heroRight: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 10,
+    flexShrink: 0,
+  },
+  heroLogo: { width: "clamp(84px, 11vw, 120px)", height: "auto", objectFit: "contain", opacity: 0.96 },
   greetingChip: {
     display: "inline-flex",
     alignItems: "center",
@@ -1120,22 +1455,13 @@ const styles = {
   greetingDot: { width: 7, height: 7, borderRadius: 999, background: T.accent, boxShadow: `0 0 0 3px ${T.accentSoft}` },
   heroTitle: {
     margin: 0,
-    fontSize: "clamp(24px, 3.6vw, 34px)",
+    fontSize: "clamp(20px, 2.8vw, 27px)",
     fontWeight: 850,
     color: T.text,
-    letterSpacing: -0.6,
+    letterSpacing: -0.5,
     lineHeight: 1.1,
   },
-  heroSubtitle: { margin: 0, fontSize: 15, fontWeight: 500, color: T.textSecondary, lineHeight: 1.5, maxWidth: 480 },
-
-  /* Search row (below the hero) */
-  searchRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-    transition: "opacity 400ms ease, transform 400ms ease",
-  },
+  heroSubtitle: { margin: 0, fontSize: 13.5, fontWeight: 500, color: T.textSecondary, lineHeight: 1.45, maxWidth: 480 },
 
   /* Search */
   searchWrap: {
@@ -1176,16 +1502,6 @@ const styles = {
     padding: 0,
     fontFamily: "inherit",
   },
-  heroBadge: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: T.textMuted,
-    padding: "5px 12px",
-    borderRadius: 999,
-    background: T.surface,
-    border: `1px solid ${T.border}`,
-  },
-
   /* ─── Circular menu ─── */
   wheelSection: { display: "grid", placeItems: "center", padding: "clamp(8px, 3vh, 28px) 0 24px" },
   wheel: {
@@ -1332,6 +1648,199 @@ const styles = {
   },
   coreImg: { width: "62%", height: "62%", objectFit: "contain" },
   coreLabel: { fontSize: "clamp(11px, 2.1vw, 15px)", fontWeight: 800, letterSpacing: 0.2, color: "#fff", whiteSpace: "nowrap" },
+
+  /* ─── Assistant chat window ─── */
+  chat: {
+    width: "min(760px, 96%)",
+    height: "min(600px, calc(100vh - 240px))",
+    display: "flex",
+    flexDirection: "column",
+    background: T.surface,
+    border: `1px solid ${T.border}`,
+    borderRadius: 20,
+    boxShadow: T.shadowLg,
+    overflow: "hidden",
+  },
+  chatHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "14px 16px",
+    borderBottom: `1px solid ${T.borderSoft}`,
+    background: `linear-gradient(135deg, ${T.accentSoft} 0%, #fff 70%)`,
+    flexShrink: 0,
+  },
+  chatHeaderLeft: { display: "flex", alignItems: "center", gap: 11, minWidth: 0 },
+  chatHeaderActions: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
+  chatHeaderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accentDark} 100%)`,
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+    boxShadow: `0 4px 14px ${T.accentGlow}`,
+  },
+  chatTitle: { fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: -0.3, lineHeight: 1.2 },
+  chatSubtitle: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: T.textMuted,
+    lineHeight: 1.25,
+    marginTop: 1,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  chatClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    border: `1px solid ${T.border}`,
+    background: T.surface,
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+    color: T.textSecondary,
+    flexShrink: 0,
+    padding: 0,
+  },
+  chatBody: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    padding: "18px 16px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+    background: T.bg,
+  },
+  msgRow: { display: "flex", alignItems: "flex-end", gap: 8, width: "100%" },
+  msgCol: { display: "flex", flexDirection: "column", gap: 6, maxWidth: "82%", minWidth: 0 },
+  msgActions: { display: "flex", flexWrap: "wrap", gap: 6 },
+  msgActionChip: {
+    padding: "7px 12px",
+    borderRadius: 999,
+    border: `1px solid ${T.accent}`,
+    background: T.accentSoft,
+    color: T.accentDark,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    transition: "filter 150ms ease",
+  },
+  msgSources: { fontSize: 11, fontWeight: 600, color: T.textMuted, lineHeight: 1.4, paddingLeft: 2 },
+  msgAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accentDark} 100%)`,
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+    boxShadow: T.shadow,
+  },
+  bubbleBot: {
+    maxWidth: "78%",
+    padding: "10px 14px",
+    borderRadius: "4px 16px 16px 16px",
+    background: T.surface,
+    border: `1px solid ${T.border}`,
+    color: T.text,
+    fontSize: 13.5,
+    fontWeight: 500,
+    lineHeight: 1.5,
+    boxShadow: T.shadow,
+    whiteSpace: "pre-wrap",
+  },
+  bubbleUser: {
+    maxWidth: "78%",
+    padding: "10px 14px",
+    borderRadius: "16px 4px 16px 16px",
+    background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accentDark} 100%)`,
+    color: "#fff",
+    fontSize: 13.5,
+    fontWeight: 500,
+    lineHeight: 1.5,
+    boxShadow: `0 4px 14px ${T.accentGlow}`,
+    whiteSpace: "pre-wrap",
+  },
+  typingBubble: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "12px 14px",
+    borderRadius: "4px 16px 16px 16px",
+    background: T.surface,
+    border: `1px solid ${T.border}`,
+    boxShadow: T.shadow,
+  },
+  typingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    background: T.textMuted,
+    display: "inline-block",
+    animation: "hhTyping 1s ease-in-out infinite",
+  },
+  suggWrap: { marginTop: 4, display: "grid", gap: 8 },
+  suggLabel: { fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 0.4, paddingLeft: 2 },
+  suggRow: { display: "flex", flexWrap: "wrap", gap: 8 },
+  suggChip: {
+    padding: "8px 14px",
+    borderRadius: 999,
+    border: `1px solid ${T.border}`,
+    background: T.surface,
+    color: T.textSecondary,
+    fontSize: 12.5,
+    fontWeight: 600,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    boxShadow: T.shadow,
+    transition: "border-color 150ms ease, color 150ms ease",
+  },
+  chatInputBar: {
+    display: "flex",
+    alignItems: "flex-end",
+    gap: 10,
+    padding: "12px 14px",
+    borderTop: `1px solid ${T.borderSoft}`,
+    background: T.surface,
+    flexShrink: 0,
+  },
+  chatTextarea: {
+    flex: 1,
+    minWidth: 0,
+    maxHeight: 120,
+    resize: "none",
+    border: `1px solid ${T.border}`,
+    borderRadius: 14,
+    padding: "11px 14px",
+    fontSize: 14,
+    fontWeight: 500,
+    fontFamily: "inherit",
+    color: T.text,
+    outline: "none",
+    background: T.bg,
+    lineHeight: 1.45,
+  },
+  chatSend: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    border: "none",
+    background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accentDark} 100%)`,
+    color: "#fff",
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+    fontFamily: "inherit",
+    boxShadow: `0 6px 18px ${T.accentGlow}`,
+    transition: "opacity 150ms ease",
+  },
 
   /* ─── Search results (secondary panel) ─── */
   resultsSection: { display: "grid", gap: 14, transition: "opacity 400ms ease, transform 400ms ease" },
