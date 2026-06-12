@@ -6,6 +6,7 @@ import { doc, getDoc } from "firebase/firestore";
 import {
   Brand,
   Container,
+  EmptyState,
   GhostButton,
   Main,
   Shell,
@@ -24,18 +25,18 @@ export default function ConsultarTarimas() {
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState("");
+  const [buscado, setBuscado] = useState(false);
 
   const buscar = async () => {
     if (!numero.trim()) { setError("Ingresá un número."); return; }
     setLoading(true);
     setError("");
     setResultado(null);
+    setBuscado(true);
     try {
       const snap = await getDoc(doc(db, "pesajes", numero.trim()));
       if (snap.exists()) {
         setResultado(snap.data());
-      } else {
-        setError("No se encontró ningún registro con ese número.");
       }
     } catch {
       setError("Ocurrió un error al consultar. Intentá de nuevo.");
@@ -106,7 +107,7 @@ export default function ConsultarTarimas() {
                   type="text"
                   placeholder="Ej. TAR-001"
                   value={numero}
-                  onChange={(e) => { setNumero(e.target.value); setError(""); setResultado(null); }}
+                  onChange={(e) => { setNumero(e.target.value); setError(""); setResultado(null); setBuscado(false); }}
                   onKeyDown={handleKeyDown}
                   style={ui.input}
                   autoComplete="off"
@@ -171,6 +172,17 @@ export default function ConsultarTarimas() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* sin resultados */}
+          {buscado && !loading && !error && !resultado && (
+            <EmptyState
+              center
+              icon={Search}
+              title="Sin resultados"
+              description="No encontramos tarimas para esa búsqueda."
+              style={{ marginTop: 16 }}
+            />
           )}
 
         </Container>

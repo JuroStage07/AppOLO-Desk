@@ -22,6 +22,7 @@ import {
   isInUserScope,
   normalizeScopeValue,
 } from "../../../utils/dataScope";
+import { Brand, Topbar, useToast, useConfirm } from "../../../components/ui";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -112,6 +113,8 @@ export default function EquipoInfoPage() {
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [equipo, setEquipo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -288,9 +291,10 @@ export default function EquipoInfoPage() {
         updatedAt: serverTimestamp(),
       });
       // onSnapshot actualiza UI
+      toast.success("Estado actualizado.");
     } catch (e) {
       console.error("setEstadoEquipo error:", e);
-      alert("No se pudo actualizar el estado. Intentá de nuevo.");
+      toast.error("No se pudo actualizar el estado. Intentá de nuevo.");
     }
   };
 
@@ -299,20 +303,23 @@ export default function EquipoInfoPage() {
     const activa = equipo?.fallaActiva === true;
     const next = !activa;
 
-    const ok = window.confirm(
-      `¿Deseás cambiar la falla a ${next ? "Activa" : "Inactiva"}?`
-    );
+    const ok = await confirm({
+      title: "Cambiar estado de falla",
+      message: `¿Deseás cambiar la falla a ${next ? "Activa" : "Inactiva"}?`,
+      confirmText: "Cambiar",
+      tone: "warning",
+    });
     if (!ok) return;
 
     try {
       await updateDoc(doc(db, "equipos", id), {
-        fallaActiva: next, // ✅ correcto
+        fallaActiva: next,
         fallaUpdatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
     } catch (e) {
       console.error("toggleFalla error:", e);
-      alert("No se pudo cambiar el estado de la falla.");
+      toast.error("No se pudo cambiar el estado de la falla.");
     }
   };
 
@@ -486,7 +493,7 @@ export default function EquipoInfoPage() {
     const supl = safe(editSuplente);
 
     if (!nombre) {
-      alert("El campo Nombre no puede quedar vacío.");
+      toast.warning("El campo Nombre no puede quedar vacío.");
       return;
     }
 
@@ -499,9 +506,10 @@ export default function EquipoInfoPage() {
         updatedAt: serverTimestamp(),
       });
       setEditOpen(false);
+      toast.success("Equipo actualizado.");
     } catch (e) {
       console.error("saveEdit error:", e);
-      alert("No se pudo guardar. Revisá permisos.");
+      toast.error("No se pudo guardar. Revisá permisos.");
     } finally {
       setSavingEdit(false);
     }
@@ -509,37 +517,20 @@ export default function EquipoInfoPage() {
 
   return (
     <div style={ui.shell}>
-      {/* Topbar */}
-      <div style={ui.topbar}>
-        <div
-          style={ui.brand}
+      <Topbar>
+        <Brand
+          icon={FileText}
+          title="Mantenimiento"
+          subtitle="Equipo · Información"
           onClick={() => nav("/mantenimiento/equipos")}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              nav("/mantenimiento/equipos");
-            }
-          }}
-          aria-label="Ir a panel de equipos"
-        >
-          <div style={ui.brandMark} aria-hidden>
-            <FileText size={20} strokeWidth={2.2} color="#fff" />
-          </div>
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>Mantenimiento</div>
-            <div style={ui.brandSub}>Equipo · Información</div>
-          </div>
-        </div>
-
-        <div style={ui.topbarActions}>
+        />
+        <Topbar.Right>
           <button type="button" onClick={() => nav("/mantenimiento/equipos")} style={ui.btnGhost}>
             <ArrowLeft size={17} strokeWidth={2} aria-hidden />
             Equipos
           </button>
-        </div>
-      </div>
+        </Topbar.Right>
+      </Topbar>
 
       <div style={ui.main}>
         <div style={ui.container}>

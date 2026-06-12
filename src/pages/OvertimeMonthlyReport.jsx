@@ -9,7 +9,7 @@ import {
   User,
 } from "lucide-react";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { db } from "../firebase";
 import {
   Badge,
   Brand,
@@ -21,6 +21,7 @@ import {
   Main,
   Shell,
   Spinner,
+  TableScroll,
   Topbar,
 } from "../components/ui";
 import {
@@ -81,7 +82,6 @@ function groupByEmployeeAndMB(records) {
 
 export default function OvertimeMonthlyReport() {
   const nav = useNavigate();
-  const user = auth.currentUser;
 
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -121,9 +121,6 @@ export default function OvertimeMonthlyReport() {
           onClick={() => nav("/administracion")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesion activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => nav("/administracion")}>
             Volver
           </GhostButton>
@@ -176,6 +173,7 @@ export default function OvertimeMonthlyReport() {
               </div>
 
               <div style={styles.tableScroll}>
+                <TableScroll minWidth={720} bordered={false}>
                 <table style={styles.table}>
                   <thead>
                     <tr>
@@ -221,6 +219,7 @@ export default function OvertimeMonthlyReport() {
                     })}
                   </tbody>
                 </table>
+                </TableScroll>
               </div>
             </div>
           )}

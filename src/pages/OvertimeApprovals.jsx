@@ -688,7 +688,6 @@ function OvertimeCard({ record, savingId, onDecide, feriadoDates, feriadosMap })
 
 export default function OvertimeApprovals() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const { role } = useContext(AuthCtx);
 
   const [records, setRecords] = useState([]);
@@ -832,9 +831,6 @@ export default function OvertimeApprovals() {
           onClick={() => nav("/administracion")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => nav("/administracion")}>
             Volver
           </GhostButton>

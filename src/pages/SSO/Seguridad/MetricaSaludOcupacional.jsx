@@ -8,8 +8,8 @@ import {
     Main,
     Shell,
     Topbar,
-} from "../../components/ui";
-import { auth, db } from "../../firebase";
+} from "../../../components/ui";
+import { auth, db } from "../../../firebase";
 import {
     collection,
     doc,
@@ -172,13 +172,10 @@ export default function MetricaSaludOcupacional() {
                     icon={BarChart3}
                     title="Salud Ocupacional"
                     subtitle="Panel de métricas"
-                    onClick={() => nav("/salud")}
+                    onClick={() => nav("/seguridad")}
                 />
                 <Topbar.Right>
-                    <Topbar.UserHint title={user?.email || ""}>
-                        {user?.displayName || user?.email || "Sesión activa"}
-                    </Topbar.UserHint>
-                    <GhostButton icon={ArrowLeft} onClick={() => nav("/salud")}>
+                    <GhostButton icon={ArrowLeft} onClick={() => nav("/seguridad")}>
                         Menú Salud
                     </GhostButton>
                 </Topbar.Right>

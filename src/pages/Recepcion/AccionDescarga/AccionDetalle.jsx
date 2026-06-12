@@ -1,7 +1,7 @@
 // screens/AccionDetalle.jsx
 import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Truck, User } from "lucide-react";
+import { ArrowLeft, Truck } from "lucide-react";
 import {
   doc,
   getDoc,
@@ -13,6 +13,7 @@ import {
 import { auth, db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { isInUserScope } from "../../../utils/dataScope";
+import { Brand, Topbar, useToast, useConfirm } from "../../../components/ui";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -189,7 +190,8 @@ export default function AccionDetalle() {
   const nav = useNavigate();
   const params = useParams();
   const authCtx = useContext(AuthCtx);
-  const user = authCtx?.user || null;
+  const toast = useToast();
+  const confirm = useConfirm();
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
 
@@ -373,18 +375,11 @@ export default function AccionDetalle() {
     return [...prefer.filter((k) => keys.includes(k)), ...rest];
   }, [accion]);
 
-  const toast = (msg) => {
-    // mini “toast” sin dependencias: usamos alert suave
-    // si querés algo más pro, lo cambiamos a un componente flotante
-    window?.navigator?.vibrate?.(10);
-    // eslint-disable-next-line no-alert
-    alert(msg);
-  };
-
   const copiar = async (txt, label = "Copiado") => {
+    window?.navigator?.vibrate?.(10);
     const ok = await copyToClipboard(txt);
-    if (ok) toast(`${label}: listo`);
-    else toast("No se pudo copiar");
+    if (ok) toast.success(`${label}: listo`);
+    else toast.error("No se pudo copiar");
   };
 
   const onStartPress = () => {
@@ -398,66 +393,56 @@ export default function AccionDetalle() {
     try {
       const n = Number(cantidadBultos);
       if (!Number.isFinite(n) || n <= 0) {
-        toast("Ingresá una cantidad de bultos válida (mayor a 0).");
+        toast.warning("Ingresá una cantidad de bultos válida (mayor a 0).");
         return;
       }
       await iniciarAccion(accion.id, tipoDescarga, n);
       setStartModalOpen(false);
-      toast("✅ Iniciado");
+      toast.success("Iniciado");
     } catch (e) {
       console.error(e);
-      toast(e?.message || "No se pudo iniciar la descarga.");
+      toast.error(e?.message || "No se pudo iniciar la descarga.");
     }
   };
 
   const confirmFinish = async () => {
     if (!accion?.id) return;
-    const ok = window.confirm("¿Deseas finalizar esta descarga?");
+    const ok = await confirm({
+      title: "Finalizar descarga",
+      message: "¿Deseas finalizar esta descarga?",
+      confirmText: "Finalizar",
+      cancelText: "Cancelar",
+      tone: "warning",
+    });
     if (!ok) return;
 
     try {
       await finalizarAccion(accion.id);
-      toast("✅ Finalizada");
+      toast.success("Finalizada");
     } catch (e) {
       console.error(e);
-      toast(e?.message || "No se pudo finalizar la descarga.");
+      toast.error(e?.message || "No se pudo finalizar la descarga.");
     }
   };
 
   return (
     <div style={ui.shell}>
-      <header style={ui.topbar}>
-        <div style={ui.topbarInner}>
-          <div style={ui.brand} role="button" tabIndex={0} onClick={() => nav(-1)}>
-            <div style={ui.brandMark}>
-              <Truck size={20} strokeWidth={2.25} color="#fff" />
-            </div>
-            <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-              <div style={ui.brandTitle}>Acción de Descarga</div>
-              <div style={ui.brandSub}>Detalle y control</div>
-            </div>
-          </div>
-
-          <div style={ui.topbarRight}>
-            <div style={ui.userBox}>
-              <div style={ui.userAvatar}>
-                <User size={16} strokeWidth={2.2} />
-              </div>
-              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-                <div style={ui.userName}>{user?.displayName || "Usuario"}</div>
-                <div style={ui.userMail}>{user?.email || "—"}</div>
-              </div>
-            </div>
-
-            <button type="button" onClick={() => nav(-1)} style={ui.btnGhost} title="Volver">
-              <span style={ui.btnInlineIcon}>
-                <ArrowLeft size={16} strokeWidth={2.2} />
-                Volver
-              </span>
-            </button>
-          </div>
-        </div>
-      </header>
+      <Topbar>
+        <Brand
+          icon={Truck}
+          title="Acción de Descarga"
+          subtitle="Detalle y control"
+          onClick={() => nav(-1)}
+        />
+        <Topbar.Right>
+          <button type="button" onClick={() => nav(-1)} style={ui.btnGhost} title="Volver">
+            <span style={ui.btnInlineIcon}>
+              <ArrowLeft size={16} strokeWidth={2.2} />
+              Volver
+            </span>
+          </button>
+        </Topbar.Right>
+      </Topbar>
 
       <main style={ui.main}>
         <div style={ui.container}>

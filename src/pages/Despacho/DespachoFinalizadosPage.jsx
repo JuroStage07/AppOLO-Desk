@@ -52,7 +52,6 @@ function FinalizadoRow({ row }) {
 
 export default function DespachoFinalizadosPage() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const isMobile = useIsMobile();
 
   const [tenantScope, setTenantScope] = useState({ tenantId: "", company: "" });
@@ -138,9 +137,6 @@ export default function DespachoFinalizadosPage() {
           onClick={() => nav("/despacho")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => nav("/despacho")}>
             Volver
           </GhostButton>

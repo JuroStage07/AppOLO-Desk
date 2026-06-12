@@ -20,6 +20,7 @@ import {
 import { auth, db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { filterEquiposByScope } from "../../../utils/dataScope";
+import { Brand, GhostButton, Topbar } from "../../../components/ui";
 
 // 👇 Ajustá rutas reales de tus imágenes
 import ApiladorPng from "../../../assets/equipos/apilador_icon.png";
@@ -271,76 +272,19 @@ export default function PanelEquiposMantenimiento() {
 
     return (
         <div style={ui.shell}>
-            {/* Topbar */}
-            <div style={ui.topbar}>
-                <div
-                    style={ui.brand}
+            <Topbar>
+                <Brand
+                    icon={LayoutGrid}
+                    title="Mantenimiento"
+                    subtitle="Panel · Equipos"
                     onClick={() => nav("/mantenimiento")}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            nav("/mantenimiento");
-                        }
-                    }}
-                    aria-label="Ir a mantenimiento"
-                >
-                    <div style={ui.brandMark} aria-hidden>
-                        <LayoutGrid size={20} strokeWidth={2.2} color="#fff" />
-                    </div>
-                    <div style={{ display: "grid", gap: 2 }}>
-                        <div style={ui.brandTitle}>Mantenimiento</div>
-                        <div style={ui.brandSub}>Panel · Equipos</div>
-                    </div>
-                </div>
-
-                <div style={ui.topbarActions}>                    <button
-                        type="button"
-                        onClick={() => setShowFilters((v) => !v)}
-                        style={{
-                            ...ui.btnGhost,
-                            ...(showFilters ? ui.btnGhostActive : {}),
-                        }}
-                        aria-expanded={showFilters}
-                    >
-                        <Filter size={17} strokeWidth={2} aria-hidden />
-                        {showFilters ? "Ocultar filtros" : "Filtros"}
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={openAddEquipo}
-                        style={ui.btnPrimary}
-                        disabled={authLoading}
-                        title="Agregar equipo"
-                    >
-                        <Plus size={17} strokeWidth={2} aria-hidden />
-                        Agregar equipo
-                    </button>
-
-                    {hasActiveFilters ? (
-                        <button
-                            type="button"
-                            onClick={resetFilters}
-                            style={ui.btnGhost}
-                            title="Quitar todos los filtros"
-                        >
-                            <RotateCcw size={17} strokeWidth={2} aria-hidden />
-                            Limpiar
-                        </button>
-                    ) : null}
-
-                    <button
-                        type="button"
-                        onClick={() => nav("/mantenimiento")}
-                        style={ui.btnGhost}
-                    >
-                        <ArrowLeft size={17} strokeWidth={2} aria-hidden />
-                        Inicio
-                    </button>
-                </div>
-            </div>
+                />
+                <Topbar.Right>
+                    <GhostButton icon={ArrowLeft} onClick={() => nav("/mantenimiento")}>
+                        Mantenimiento
+                    </GhostButton>
+                </Topbar.Right>
+            </Topbar>
 
             <div style={ui.main}>
                 <div style={ui.container}>
@@ -393,6 +337,44 @@ export default function PanelEquiposMantenimiento() {
                                 </span>
                             </div>
                         )}
+
+                        <div style={ui.headerActions}>
+                            <button
+                                type="button"
+                                onClick={() => setShowFilters((v) => !v)}
+                                style={{
+                                    ...ui.btnGhost,
+                                    ...(showFilters ? ui.btnGhostActive : {}),
+                                }}
+                                aria-expanded={showFilters}
+                            >
+                                <Filter size={17} strokeWidth={2} aria-hidden />
+                                {showFilters ? "Ocultar filtros" : "Filtros"}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={openAddEquipo}
+                                style={ui.btnPrimary}
+                                disabled={authLoading}
+                                title="Agregar equipo"
+                            >
+                                <Plus size={17} strokeWidth={2} aria-hidden />
+                                Agregar equipo
+                            </button>
+
+                            {hasActiveFilters ? (
+                                <button
+                                    type="button"
+                                    onClick={resetFilters}
+                                    style={ui.btnGhost}
+                                    title="Quitar todos los filtros"
+                                >
+                                    <RotateCcw size={17} strokeWidth={2} aria-hidden />
+                                    Limpiar
+                                </button>
+                            ) : null}
+                        </div>
                     </div>
 
                     {/* Filters */}
@@ -926,6 +908,13 @@ const ui = {
         alignItems: "center",
         gap: 10,
         width: "fit-content",
+    },
+    headerActions: {
+        marginTop: 16,
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 10,
+        alignItems: "center",
     },
 
     filtersCard: {

@@ -31,6 +31,7 @@ import {
   Main,
   Shell,
   Topbar,
+  useToast,
 } from "../../../components/ui";
 
 const ACCENT = "#089F8A";
@@ -51,6 +52,7 @@ function formatDate(val) {
 
 export default function OTsFinalizadasPage() {
   const nav = useNavigate();
+  const toast = useToast();
   const { permisos, loading, profile } = useContext(AuthCtx);
 
   const [items, setItems] = useState([]);
@@ -69,10 +71,10 @@ export default function OTsFinalizadasPage() {
   useEffect(() => {
     if (loading) return;
     if (!permisos?.mantenimiento) {
-      alert("Este usuario no puede acceder por falta de permisos.");
+      toast.error("No tenés permisos para acceder a este módulo.");
       nav(-1);
     }
-  }, [loading, permisos, nav]);
+  }, [loading, permisos, nav, toast]);
 
   const fetchPage = async ({ reset } = { reset: false }) => {
     if (pageLoading) return;

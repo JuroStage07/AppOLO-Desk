@@ -15,7 +15,23 @@
       "PowerShell(git *)",
       "PowerShell(Get-Command *)",
       "Bash(firebase deploy *)",
-      "PowerShell(firebase deploy *)"
+      "PowerShell(firebase deploy *)",
+      "Bash(xargs grep -l \"handleSubmit\\\\|<form\\\\|<input\\\\|<textarea\")",
+      "Bash(grep -v \":0$\")",
+      "Bash(xargs grep -L \"Topbar\\\\|Shell\")",
+      "PowerShell(npx eslint \"src/pages/Mantenimiento/Equipos/EquipoInfoPage.jsx\" \"src/pages/Mantenimiento/Mantenimiento.jsx\" \"src/pages/Dev/OvertimeSettingsHub.jsx\" \"src/pages/ServiciosGenerales/ServiciosGeneralesOTGestion.jsx\")",
+      "Bash(git stash *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(echo \"EXIT=$?\")",
+      "PowerShell(npx eslint \"src/pages/MRP/MRPInventarioPage.jsx\" \"src/pages/MRP/MRPReparacionesPage.jsx\" \"src/pages/MRP/MRPMaterialesPage.jsx\" \"src/pages/MRP/MRPDashboardPage.jsx\" \"src/pages/MRP/MRPTarimas.jsx\" \"src/pages/OvertimeApprovals.jsx\" \"src/pages/OvertimeManagerApprovals.jsx\" \"src/pages/OvertimeMonthlyReport.jsx\" \"src/pages/Dev/OvertimeSettingsHub.jsx\" \"src/pages/Dev/ModulesConfigHub.jsx\" \"src/pages/Dev/DevHub.jsx\" \"src/pages/Administracion/AdministracionHub.jsx\" \"src/pages/EPA/EPAHubPage.jsx\" \"src/pages/Zona Franca/PesajeTarimas.jsx\")",
+      "PowerShell(npx eslint \"src/pages/Salud Ocupacional/Visados/AdministrarVisados.jsx\" \"src/pages/Salud Ocupacional/Visados/Visados.jsx\" \"src/pages/Salud Ocupacional/SaludOcupacional.jsx\" \"src/pages/Salud Ocupacional/MetricaSaludOcupacional.jsx\" \"src/pages/Salud Ocupacional/Aperturas/AperturasFinalizadas.jsx\" \"src/pages/Salud Ocupacional/Aperturas/AperturaDetalle.jsx\" \"src/pages/Salud Ocupacional/Aperturas/AdministrarAperturas.jsx\")",
+      "PowerShell(npx eslint \"src/pages/Despacho/Despacho.jsx\" \"src/pages/Despacho/DespachoInProgressPage.jsx\" \"src/pages/Despacho/DespachoFinalizadosPage.jsx\" \"src/pages/Recepcion/Recepcion.jsx\" \"src/pages/Recepcion/MetricaRecepcion.jsx\" \"src/pages/Recepcion/AccionDescarga/AccionDescarga.jsx\")",
+      "PowerShell(npx eslint \"src/pages/Mantenimiento/OTs/OTsPage.jsx\" \"src/pages/Mantenimiento/OTs/OTsHubMantenimiento.jsx\" \"src/pages/Mantenimiento/OTs/OTsFinalizadasPage.jsx\" \"src/pages/Mantenimiento/OTs/OTsDashboardPage.jsx\" \"src/pages/Mantenimiento/Mantenimiento.jsx\" \"src/pages/ServiciosGenerales/ServiciosGenerales.jsx\" \"src/pages/ServiciosGenerales/ServiciosGeneralesOrdenesTrabajo.jsx\" \"src/pages/ServiciosGenerales/ServiciosGeneralesOTGestion.jsx\" \"src/pages/ServiciosGenerales/ServiciosGeneralesOTCrear.jsx\")",
+      "PowerShell(npx eslint \"src/pages/Dev/ModulesConfigHub.jsx\")",
+      "Bash(mkdir -p \"src/pages/SSO/Seguridad\")",
+      "Bash(git mv *)",
+      "Bash(rmdir \"src/pages/Salud Ocupacional\")",
+      "Bash(git commit *)"
     ]
   }
 }

@@ -44,8 +44,10 @@ import { isSolicitudOtInScope } from "../../../utils/dataScope";
 import useIsMobile from "../../../hooks/useIsMobile";
 import {
   Brand,
+  ErrorState,
   GhostButton,
   Topbar,
+  useToast,
 } from "../../../components/ui";
 import {
   collection,
@@ -1330,6 +1332,7 @@ function SubtasksListModal({
   nroLabel,
   nombreOT,
 }) {
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [rows, setRows] = useState([]);
@@ -1426,8 +1429,8 @@ function SubtasksListModal({
       });
     } catch (e) {
       console.error(e);
-      alert(
-        "No se pudo iniciar el cronómetro. Revisá reglas Firestore (campos chrono* en subtareas)."
+      toast.error(
+        "No se pudo iniciar el cronómetro. Revisá las reglas de Firestore."
       );
     } finally {
       setChronoBusyId(null);
@@ -1458,7 +1461,7 @@ function SubtasksListModal({
       await updateDoc(subRef(row.id), patch);
     } catch (e) {
       console.error(e);
-      alert("No se pudo registrar tiempo muerto.");
+      toast.error("No se pudo registrar tiempo muerto.");
     } finally {
       setChronoBusyId(null);
     }
@@ -1478,7 +1481,7 @@ function SubtasksListModal({
 
     if (deadMotivoMode === "edit") {
       if (t.length < 2) {
-        alert("El motivo debe tener al menos 2 caracteres.");
+        toast.warning("El motivo debe tener al menos 2 caracteres.");
         return;
       }
       try {
@@ -1488,9 +1491,10 @@ function SubtasksListModal({
           updatedAt: serverTimestamp(),
         });
         cancelDeadMotivoModal();
+        toast.success("Motivo actualizado.");
       } catch (e) {
         console.error(e);
-        alert("No se pudo guardar el motivo.");
+        toast.error("No se pudo guardar el motivo.");
       } finally {
         setDeadMotivoSaving(false);
       }
@@ -1498,7 +1502,7 @@ function SubtasksListModal({
     }
 
     if (t.length < 2) {
-      alert("Escribí el motivo de tiempo muerto (al menos 2 caracteres).");
+      toast.warning("Escribí el motivo de tiempo muerto (al menos 2 caracteres).");
       return;
     }
     try {
@@ -1555,7 +1559,7 @@ function SubtasksListModal({
       });
     } catch (e) {
       console.error(e);
-      alert("No se pudo detener el tiempo muerto.");
+      toast.error("No se pudo detener el tiempo muerto.");
     } finally {
       setChronoBusyId(null);
     }
@@ -1565,7 +1569,7 @@ function SubtasksListModal({
     if (!solicitudId?.trim() || !row?.id || chronoBusyId) return;
     if (!otStateLive) return;
     if (otStateLive === OT_STATE_FINALIZADA) {
-      alert("La OT está finalizada. No se pueden modificar subtareas ni tiempos.");
+      toast.warning("La OT está finalizada. No se pueden modificar subtareas ni tiempos.");
       return;
     }
     const currentlyDone = isSubtaskFirestoreCompleted(row);
@@ -1576,8 +1580,8 @@ function SubtasksListModal({
       nextStatus === SUBTASK_STATUS_PENDIENTE &&
       otStateLive === OT_STATE_REVISION
     ) {
-      alert(
-        "En revisión no podés volver una subtarea a pendiente. Solo se permite mientras la OT está en proceso."
+      toast.warning(
+        "En revisión no podés volver una subtarea a pendiente. Solo mientras la OT está en proceso."
       );
       return;
     }
@@ -1597,7 +1601,7 @@ function SubtasksListModal({
       }
     } catch (e) {
       console.error(e);
-      alert("No se pudo actualizar el estado de la subtarea.");
+      toast.error("No se pudo actualizar el estado de la subtarea.");
     } finally {
       setChronoBusyId(null);
     }
@@ -2454,6 +2458,7 @@ function AssignResponsableModal({
   company,
   initialPriority,
 }) {
+  const toast = useToast();
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -2540,7 +2545,7 @@ function AssignResponsableModal({
         e instanceof Error && e.message
           ? e.message
           : "No se pudo completar la acción. Intentá de nuevo.";
-      alert(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -2779,6 +2784,7 @@ function AssignResponsableModal({
 export default function OTsPage() {
   const nav = useNavigate();
   const isMobile = useIsMobile();
+  const toast = useToast();
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile;
   const loading = authCtx?.loading;
@@ -2790,6 +2796,7 @@ export default function OTsPage() {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [loadingPendientes, setLoadingPendientes] = useState(false);
+  const [boardError, setBoardError] = useState("");
   const [pendingDragActive, setPendingDragActive] = useState(false);
   const [revisionDragActive, setRevisionDragActive] = useState(false);
   const [revisionToProcesoDragActive, setRevisionToProcesoDragActive] =
@@ -2951,11 +2958,13 @@ export default function OTsPage() {
   const refetchSolicitudesOnce = useCallback(async () => {
     try {
       setLoadingPendientes(true);
+      setBoardError("");
       const snap = await getDocs(solicitudesQuery);
       solicitudesSnapRef.current = snap;
       await syncSubtaskCountsFromServer();
     } catch (err) {
       console.error("Error recargando solicitudesOT:", err);
+      setBoardError("No se pudieron cargar las órdenes de trabajo. Revisá tu conexión o los permisos.");
       setLoadingPendientes(false);
     }
   }, [solicitudesQuery, syncSubtaskCountsFromServer]);
@@ -2968,10 +2977,12 @@ export default function OTsPage() {
       solicitudesQuery,
       (snap) => {
         solicitudesSnapRef.current = snap;
+        setBoardError("");
         void syncSubtaskCountsFromServer();
       },
       (err) => {
         console.error("Listener solicitudesOT:", err);
+        setBoardError("No se pudieron cargar las órdenes de trabajo. Revisá tu conexión o los permisos.");
         setLoadingPendientes(false);
       }
     );
@@ -3353,14 +3364,15 @@ export default function OTsPage() {
         await deleteSolicitudOtFromFirestore(solicitudId);
         removeFromBoard();
         closeDeleteConfirmModal();
+        toast.success("Solicitud OT eliminada.");
       } catch (err) {
         console.error("Error eliminando solicitudOT:", err);
-        alert(
-          "❌ No se pudo eliminar. Revisá permisos y que las reglas de Firestore permitan borrar en solicitudesOT y subtareas."
+        toast.error(
+          "No se pudo eliminar. Revisá permisos y las reglas de Firestore para solicitudesOT y subtareas."
         );
       }
     },
-    [closeDeleteConfirmModal]
+    [closeDeleteConfirmModal, toast]
   );
 
   const deleteCard = useCallback((itemId, columnIndex) => {
@@ -3480,8 +3492,8 @@ export default function OTsPage() {
       });
     } catch (err) {
       console.error(err);
-      alert(
-        "❌ No se pudo guardar «En proceso» ni los responsables/prioridad. Revisá las reglas de Firestore: en solicitudesOT/update deben permitirse OTState, updatedAt, responsableUid, responsableNombre, responsablesUids, responsablesNombres y prioridadOT. Se recargará el tablero."
+      toast.error(
+        "No se pudo guardar «En proceso» ni los responsables/prioridad. Revisá las reglas de Firestore. Se recargará el tablero."
       );
       void refetchSolicitudesOnce();
       throw err;
@@ -3535,8 +3547,8 @@ export default function OTsPage() {
         });
       } catch (err) {
         console.error(err);
-        alert(
-          "❌ No se pudo guardar «En revisión». Se volverá a cargar el tablero."
+        toast.error(
+          "No se pudo guardar «En revisión». Se volverá a cargar el tablero."
         );
         void refetchSolicitudesOnce();
       }
@@ -3587,8 +3599,8 @@ export default function OTsPage() {
         });
       } catch (err) {
         console.error(err);
-        alert(
-          "❌ No se pudo guardar «En proceso». Se volverá a cargar el tablero."
+        toast.error(
+          "No se pudo guardar «En proceso». Se volverá a cargar el tablero."
         );
         void refetchSolicitudesOnce();
       }
@@ -3620,7 +3632,7 @@ export default function OTsPage() {
       (i) => i.id === itemId && i.type === "solicitud"
     );
     if (!item || !isProcesoOtSubtasksComplete(item)) {
-      alert(
+      toast.warning(
         "Solo podés enviar a revisión cuando todas las subtareas estén completadas (100%)."
       );
       return;
@@ -3698,9 +3710,6 @@ export default function OTsPage() {
           onClick={() => nav("/mantenimiento")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={authCtx?.user?.email || ""}>
-            {authCtx?.user?.displayName || authCtx?.user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => nav("/mantenimiento")}>
             Inicio
           </GhostButton>
@@ -3757,6 +3766,14 @@ export default function OTsPage() {
               </div>
             </div>
           </div>
+
+          {boardError ? (
+            <ErrorState
+              description={boardError}
+              onRetry={refetchSolicitudesOnce}
+              style={{ marginBottom: 14 }}
+            />
+          ) : null}
 
           <div style={{ ...ui.boardWrap, ...(isMobile ? ui.mBoardWrap : {}) }}>
             <div style={ui.board}>

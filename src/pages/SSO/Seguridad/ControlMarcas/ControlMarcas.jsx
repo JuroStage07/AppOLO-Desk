@@ -14,15 +14,18 @@ import {
   getDocsFromServer,
   onSnapshot,
 } from "firebase/firestore";
-import { ArrowLeft, ScanLine } from "lucide-react";
-import { auth, db } from "../../../firebase";
-import { AuthCtx } from "../../../auth/AuthProvider";
-import { filterByUserScope } from "../../../utils/dataScope";
+import { ArrowLeft, ScanLine, Users } from "lucide-react";
+import { auth, db } from "../../../../firebase";
+import { AuthCtx } from "../../../../auth/AuthProvider";
+import { filterByUserScope } from "../../../../utils/dataScope";
 import {
   Brand,
+  EmptyState,
+  ErrorState,
   GhostButton,
   Topbar,
-} from "../../../components/ui";
+  useToast,
+} from "../../../../components/ui";
 
 const ACCENT = "#089F8A";
 const DANGER = "#DC2626";
@@ -89,6 +92,7 @@ function buildActivosEnSitioDesdeMarcasDelDia(marcasRows, tenantId, company) {
 
 export default function ControlMarcas() {
   const nav = useNavigate();
+  const uiToast = useToast();
   const inputRef = useRef(null);
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
@@ -102,6 +106,7 @@ export default function ControlMarcas() {
 
   /** En sitio según última marca del día en controlMarcas (no usuariosTerceros.entrada) */
   const [activosEnSitio, setActivosEnSitio] = useState([]);
+  const [loadError, setLoadError] = useState("");
   const [diaKeyActivos, setDiaKeyActivos] = useState(() => getTodayId());
   const [activosModalOpen, setActivosModalOpen] = useState(false);
   const [showActivosFilters, setShowActivosFilters] = useState(false);
@@ -158,8 +163,12 @@ export default function ControlMarcas() {
             profile?.company
           )
         );
+        setLoadError("");
       },
-      (err) => console.log("ControlMarcas activos (marcas del día):", err)
+      (err) => {
+        console.error("ControlMarcas activos (marcas del día):", err);
+        setLoadError("No se pudieron cargar las personas en sitio.");
+      }
     );
 
     return () => unsub();
@@ -276,15 +285,15 @@ export default function ControlMarcas() {
       const usuario = await buscarUsuarioPorCedula(cedulaLimpia);
 
       if (!usuario) {
-        window.alert(
-          `No encontrado\nNo existe un usuario en usuariosTerceros con la cédula ${cedulaLimpia}.`
+        uiToast.warning(
+          `No existe un usuario en usuariosTerceros con la cédula ${cedulaLimpia}.`
         );
         return;
       }
 
       if (usuario.usuarioBloqueado === true) {
-        window.alert(
-          "Usuario bloqueado\nEste usuario está bloqueado y no puede marcar."
+        uiToast.warning(
+          "Usuario bloqueado: no puede marcar."
         );
         return;
       }
@@ -351,14 +360,10 @@ export default function ControlMarcas() {
     } catch (error) {
       console.error("Error registrando marca:", paso, error);
       const denied = error?.code === "permission-denied";
-      window.alert(
+      uiToast.error(
         denied
-          ? "Permisos insuficientes en Firestore.\n\n" +
-              `Paso que falló: ${paso}\n\n` +
-              "Si el paso es usuariosTerceros: ampliá get/list con " +
-              "sameTenantCompanyData(resource.data) o permiso salud.\n" +
-              "Si es controlMarcas: revisá create/update del día y create en marcas."
-          : `Error\n${error?.message || "No se pudo registrar la marca."}`
+          ? `Permisos insuficientes en Firestore. Paso que falló: ${paso}.`
+          : error?.message || "No se pudo registrar la marca."
       );
     } finally {
       setLoading(false);
@@ -402,10 +407,10 @@ export default function ControlMarcas() {
           icon={ScanLine}
           title="Control de marcas"
           subtitle="Entrada / Salida · Asistencia"
-          onClick={() => nav("/salud")}
+          onClick={() => nav("/seguridad")}
         />
         <Topbar.Right>
-          <GhostButton icon={ArrowLeft} onClick={() => nav("/salud")}>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/seguridad")}>
             Salud
           </GhostButton>
         </Topbar.Right>
@@ -667,7 +672,7 @@ export default function ControlMarcas() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => nav("/salud/control-marcas/historial")}
+                  onClick={() => nav("/seguridad/control-marcas/historial")}
                   style={ui.btnGhostSmall}
                   disabled={loading}
                 >
@@ -823,11 +828,18 @@ export default function ControlMarcas() {
                 </div>
               )}
               <div style={ui.activosScroll}>
-                {activosFiltrados.length === 0 ? (
+                {loadError ? (
+                  <ErrorState description={loadError} />
+                ) : activosEnSitio.length === 0 ? (
+                  <EmptyState
+                    center
+                    icon={Users}
+                    title="Sin personas en sitio"
+                    description="Nadie tiene como última marca de hoy una entrada (en tu ámbito)."
+                  />
+                ) : activosFiltrados.length === 0 ? (
                   <div style={ui.emptyStateModal}>
-                    {activosEnSitio.length === 0
-                      ? "Nadie tiene como última marca de hoy una entrada (en tu ámbito)."
-                      : "No hay resultados con esos filtros."}
+                    No hay resultados con esos filtros.
                   </div>
                 ) : (
                   <div style={ui.activosList}>

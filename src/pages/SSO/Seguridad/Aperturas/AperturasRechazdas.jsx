@@ -18,9 +18,9 @@ import {
   Filter,
 } from "lucide-react";
 
-import { db } from "../../../firebase";
-import { AuthCtx } from "../../../auth/AuthProvider";
-import { filterByUserScope } from "../../../utils/dataScope";
+import { db } from "../../../../firebase";
+import { AuthCtx } from "../../../../auth/AuthProvider";
+import { filterByUserScope } from "../../../../utils/dataScope";
 import {
   Brand,
   Container,
@@ -28,7 +28,7 @@ import {
   Main,
   Shell,
   Topbar,
-} from "../../../components/ui";
+} from "../../../../components/ui";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -131,7 +131,7 @@ export default function AperturasRechazadas() {
 
   const goDetalle = (id) => {
     // ✅ ajustá la ruta si tu detalle es otra
-    nav(`/salud/aperturas/detalle/${encodeURIComponent(id)}?source=rechazada`);
+    nav(`/seguridad/aperturas/detalle/${encodeURIComponent(id)}?source=rechazada`);
   };
 
   return (
@@ -141,10 +141,10 @@ export default function AperturasRechazadas() {
           icon={ClipboardList}
           title="Aperturas"
           subtitle="Rechazadas"
-          onClick={() => nav("/salud/aperturas")}
+          onClick={() => nav("/seguridad/aperturas")}
         />
         <Topbar.Right>
-          <GhostButton icon={ArrowLeft} onClick={() => nav("/salud/aperturas")}>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/seguridad/aperturas")}>
             Administrar
           </GhostButton>
         </Topbar.Right>

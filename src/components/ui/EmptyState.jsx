@@ -10,16 +10,16 @@ import { BORDER, SHADOW_CARD, SLATE, TEXT } from "../../styles/theme";
  *     action={<PrimaryButton onClick={create}>Nueva acción</PrimaryButton>}
  *   />
  */
-export default function EmptyState({ icon: Icon, title, description, action, style }) {
+export default function EmptyState({ icon: Icon, title, description, action, center = false, style }) {
   return (
-    <div style={{ ...wrap, ...style }}>
+    <div style={{ ...wrap, ...(center ? centerWrap : {}), ...style }}>
       {Icon ? (
         <div style={iconBox}>
           <Icon size={22} strokeWidth={2.2} color={SLATE} />
         </div>
       ) : null}
       {title ? <div style={titleStyle}>{title}</div> : null}
-      {description ? <div style={text}>{description}</div> : null}
+      {description ? <div style={{ ...text, ...(center ? { maxWidth: 380 } : {}) }}>{description}</div> : null}
       {action ? <div style={{ marginTop: 12 }}>{action}</div> : null}
     </div>
   );
@@ -34,6 +34,11 @@ const wrap = {
   display: "grid",
   gap: 6,
   justifyItems: "start",
+};
+const centerWrap = {
+  padding: "32px 20px",
+  justifyItems: "center",
+  textAlign: "center",
 };
 const iconBox = {
   width: 44,

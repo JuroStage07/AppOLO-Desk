@@ -29,16 +29,18 @@ import {
 
 import JSZip from "jszip";
 
-import { auth, db } from "../../../firebase";
-import { AuthCtx } from "../../../auth/AuthProvider";
-import { listenApertura } from "../../../services/aperturas";
-import { isInUserScope } from "../../../utils/dataScope";
-import { isEpaRestrictedUser } from "../../../config/epaOnlyUids";
+import { auth, db } from "../../../../firebase";
+import { AuthCtx } from "../../../../auth/AuthProvider";
+import { listenApertura } from "../../../../services/aperturas";
+import { isInUserScope } from "../../../../utils/dataScope";
+import { isEpaRestrictedUser } from "../../../../config/epaOnlyUids";
 import {
   Brand,
   GhostButton,
   Topbar,
-} from "../../../components/ui";
+  useToast,
+  useConfirm,
+} from "../../../../components/ui";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -442,7 +444,9 @@ function orderedFormEntries(formData, tipoFormulario) {
 /* ===================== Component ===================== */
 export default function AperturaDetalle() {
   const nav = useNavigate();
-  const { id } = useParams(); // /salud/aperturas/detalle/:id
+  const toast = useToast();
+  const confirm = useConfirm();
+  const { id } = useParams(); // /seguridad/aperturas/detalle/:id
   const authCtx = useContext(AuthCtx);
   const { profile = {}, epaAdmin, user: ctxUser } = authCtx || {};
   const user = ctxUser ?? auth.currentUser;
@@ -567,7 +571,7 @@ export default function AperturaDetalle() {
   useEffect(() => {
     if (!apertura) return;
     if (!isInUserScope(apertura, profile?.tenantId, profile?.company)) {
-      alert("No tenés acceso a esta apertura.");
+      toast.error("No tenés acceso a esta apertura.");
       nav(-1);
     }
   }, [apertura, nav, profile?.tenantId, profile?.company]);
@@ -580,7 +584,7 @@ export default function AperturaDetalle() {
     if (!apertura?.id) return;
     try {
       await navigator.clipboard.writeText(String(apertura.id));
-      alert("Copiado: ID de la apertura");
+      toast.success("Copiado: ID de la apertura");
     } catch {
       const ta = document.createElement("textarea");
       ta.value = String(apertura.id);
@@ -588,16 +592,24 @@ export default function AperturaDetalle() {
       ta.select();
       document.execCommand("copy");
       document.body.removeChild(ta);
-      alert("Copiado: ID de la apertura");
+      toast.success("Copiado: ID de la apertura");
     }
   };
 
   /* ===================== Actions (Firestore) ===================== */
   const iniciarApertura = async () => {
     if (!apertura?.id) return;
-    if (apertura?.tiempoIniciada) return alert("Esta apertura ya fue iniciada.");
+    if (apertura?.tiempoIniciada) {
+      toast.warning("Esta apertura ya fue iniciada.");
+      return;
+    }
 
-    const ok = window.confirm("¿Deseas iniciar la tarea?");
+    const ok = await confirm({
+      title: "Iniciar apertura",
+      message: "¿Deseas iniciar la tarea?",
+      confirmText: "Iniciar",
+      tone: "warning",
+    });
     if (!ok) return;
 
     try {
@@ -608,21 +620,30 @@ export default function AperturaDetalle() {
         iniciadoPorUid: user?.uid || null,
         iniciadoPorNombre: user?.displayName || null,
       });
-      alert("✅ Apertura iniciada");
+      toast.success("Apertura iniciada");
     } catch (e) {
       console.error(e);
-      alert("No se pudo iniciar la apertura.");
+      toast.error("No se pudo iniciar la apertura.");
     }
   };
 
   const confirmarFinalizar = async () => {
     if (!apertura?.id) return;
-    if (isFinalizada) return alert("Ya finalizada");
+    if (isFinalizada) {
+      toast.warning("Ya finalizada");
+      return;
+    }
     if (!allReady) {
-      return alert("Para finalizar, completa: Formulario, Revisión de Seguridad y Registro Fotográfico.");
+      toast.warning("Para finalizar, completa: Formulario, Revisión de Seguridad y Registro Fotográfico.");
+      return;
     }
 
-    const ok = window.confirm("¿Deseas finalizar la apertura y generar una acción de descarga?");
+    const ok = await confirm({
+      title: "Finalizar apertura",
+      message: "¿Deseas finalizar la apertura y generar una acción de descarga?",
+      confirmText: "Finalizar",
+      tone: "warning",
+    });
     if (!ok) return;
 
     try {
@@ -671,41 +692,51 @@ export default function AperturaDetalle() {
         cantidadBultos: null,
       });
 
-      alert(`✅ Apertura finalizada\nAcción de descarga creada: ${accionRef.id}`);
-      go("/salud/aperturas/finalizadas");
+      toast.success(`Apertura finalizada. Acción de descarga creada: ${accionRef.id}`);
+      go("/seguridad/aperturas/finalizadas");
     } catch (e) {
       console.error(e);
-      alert("No se pudo finalizar la apertura y/o generar la acción de descarga.");
+      toast.error("No se pudo finalizar la apertura y/o generar la acción de descarga.");
     }
   };
 
   const confirmarReabrir = async () => {
     if (!apertura?.id) return;
-    const ok = window.confirm("¿Deseas reabrir esta apertura?");
+    const ok = await confirm({
+      title: "Reabrir apertura",
+      message: "¿Deseas reabrir esta apertura?",
+      confirmText: "Reabrir",
+      tone: "warning",
+    });
     if (!ok) return;
 
     try {
       const ref = doc(db, aperturaCollection, apertura.id);
       await updateDoc(ref, { estado: "en_proceso" });
-      alert("🔓 Reabierta");
+      toast.success("Reabierta");
     } catch (e) {
       console.error(e);
-      alert("No se pudo reabrir.");
+      toast.error("No se pudo reabrir.");
     }
   };
 
   const confirmarEliminar = async () => {
     if (!apertura?.id) return;
-    const ok = window.confirm(`¿Eliminar "${apertura?.nombre || "(sin nombre)"}"?`);
+    const ok = await confirm({
+      title: "Eliminar apertura",
+      message: `¿Eliminar "${apertura?.nombre || "(sin nombre)"}"?`,
+      confirmText: "Eliminar",
+      tone: "danger",
+    });
     if (!ok) return;
 
     try {
       await deleteDoc(doc(db, aperturaCollection, apertura.id));
-      alert("🗑️ Eliminada");
-      go("/salud/aperturas");
+      toast.success("Eliminada");
+      go("/seguridad/aperturas");
     } catch (e) {
       console.error(e);
-      alert("No se pudo eliminar la apertura.");
+      toast.error("No se pudo eliminar la apertura.");
     }
   };
 
@@ -719,7 +750,7 @@ export default function AperturaDetalle() {
     if (!apertura?.id) return;
 
     if (!canSubmitReject) {
-      alert(rejectMotivo === "Otro" ? "Especifica el motivo (mínimo 3 caracteres)." : "Selecciona un motivo.");
+      toast.warning(rejectMotivo === "Otro" ? "Especifica el motivo (mínimo 3 caracteres)." : "Selecciona un motivo.");
       return;
     }
 
@@ -740,11 +771,11 @@ export default function AperturaDetalle() {
       });
 
       setRejectOpen(false);
-      alert("🚫 Apertura rechazada");
-      go("/salud/aperturas");
+      toast.success("Apertura rechazada");
+      go("/seguridad/aperturas");
     } catch (e) {
       console.error(e);
-      alert("No se pudo rechazar la apertura.");
+      toast.error("No se pudo rechazar la apertura.");
     } finally {
       setRejectSaving(false);
     }
@@ -758,13 +789,16 @@ export default function AperturaDetalle() {
       setRestrictedFormRsOpen(true);
       return;
     }
-    if (!apertura?.id || !tipoFormulario) return alert("Sin tipo de formulario");
+    if (!apertura?.id || !tipoFormulario) {
+      toast.warning("Sin tipo de formulario");
+      return;
+    }
     if (tipoFormulario === "Proveedor Nacional")
-      return go(`/salud/aperturas/form/proveedor-n/${encodeURIComponent(apertura.id)}${viewQS}`);
+      return go(`/seguridad/aperturas/form/proveedor-n/${encodeURIComponent(apertura.id)}${viewQS}`);
     if (tipoFormulario === "Zona Franca")
-      return go(`/salud/aperturas/form/zona-franca/${encodeURIComponent(apertura.id)}${viewQS}`);
+      return go(`/seguridad/aperturas/form/zona-franca/${encodeURIComponent(apertura.id)}${viewQS}`);
     if (tipoFormulario === "Nacionalizados")
-      return go(`/salud/aperturas/form/nacionalizados/${encodeURIComponent(apertura.id)}${viewQS}`);
+      return go(`/seguridad/aperturas/form/nacionalizados/${encodeURIComponent(apertura.id)}${viewQS}`);
   };
 
   const goToRS = () => {
@@ -772,23 +806,29 @@ export default function AperturaDetalle() {
       setRestrictedFormRsOpen(true);
       return;
     }
-    if (!isReadOnly && !isFormCompleted) return alert("Debes completar el formulario para abrir RS.");
+    if (!isReadOnly && !isFormCompleted) {
+      toast.warning("Debes completar el formulario para abrir RS.");
+      return;
+    }
     if (tipoFormulario === "Proveedor Nacional")
-      return go(`/salud/aperturas/rs/proveedor-n/${encodeURIComponent(apertura.id)}${viewQS}`);
+      return go(`/seguridad/aperturas/rs/proveedor-n/${encodeURIComponent(apertura.id)}${viewQS}`);
     if (tipoFormulario === "Zona Franca")
-      return go(`/salud/aperturas/rs/zona-franca/${encodeURIComponent(apertura.id)}${viewQS}`);
+      return go(`/seguridad/aperturas/rs/zona-franca/${encodeURIComponent(apertura.id)}${viewQS}`);
     if (tipoFormulario === "Nacionalizados")
-      return go(`/salud/aperturas/rs/nacionalizados/${encodeURIComponent(apertura.id)}${viewQS}`);
+      return go(`/seguridad/aperturas/rs/nacionalizados/${encodeURIComponent(apertura.id)}${viewQS}`);
   };
 
   const goToRF = () => {
-    if (!tipoFormulario) return alert("Sin formulario asignado");
+    if (!tipoFormulario) {
+      toast.warning("Sin formulario asignado");
+      return;
+    }
     if (tipoFormulario === "Proveedor Nacional")
-      return go(`/salud/aperturas/rf/proveedor-n/${encodeURIComponent(apertura.id)}${viewQS}`);
+      return go(`/seguridad/aperturas/rf/proveedor-n/${encodeURIComponent(apertura.id)}${viewQS}`);
     if (tipoFormulario === "Zona Franca")
-      return go(`/salud/aperturas/rf/zona-franca/${encodeURIComponent(apertura.id)}${viewQS}`);
+      return go(`/seguridad/aperturas/rf/zona-franca/${encodeURIComponent(apertura.id)}${viewQS}`);
     if (tipoFormulario === "Nacionalizados")
-      return go(`/salud/aperturas/rf/nacionalizados/${encodeURIComponent(apertura.id)}${viewQS}`);
+      return go(`/seguridad/aperturas/rf/nacionalizados/${encodeURIComponent(apertura.id)}${viewQS}`);
   };
 
   const enterPhotoFullscreen = async () => {
@@ -900,7 +940,7 @@ export default function AperturaDetalle() {
         }
       }
       if (ok === 0) {
-        alert("No se pudo descargar ninguna foto. Revisá tu conexión o los permisos de las URLs.");
+        toast.error("No se pudo descargar ninguna foto. Revisá tu conexión o los permisos de las URLs.");
         return;
       }
       const outBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
@@ -914,11 +954,11 @@ export default function AperturaDetalle() {
       a.remove();
       URL.revokeObjectURL(objUrl);
       if (fail > 0) {
-        alert(`Se incluyeron ${ok} de ${rfUrls.length} fotos. ${fail} no se pudieron descargar.`);
+        toast.warning(`Se incluyeron ${ok} de ${rfUrls.length} fotos. ${fail} no se pudieron descargar.`);
       }
     } catch (e) {
       console.error(e);
-      alert("No se pudo generar el archivo ZIP. Intentá de nuevo.");
+      toast.error("No se pudo generar el archivo ZIP. Intentá de nuevo.");
     } finally {
       setRfDownloadAllBusy(false);
     }
@@ -982,13 +1022,10 @@ export default function AperturaDetalle() {
           icon={ClipboardList}
           title="Salud ocupacional"
           subtitle="Detalle de apertura"
-          onClick={() => go("/salud/aperturas")}
+          onClick={() => go("/seguridad/aperturas")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
-          <GhostButton icon={ArrowLeft} onClick={() => go("/salud/aperturas")}>
+          <GhostButton icon={ArrowLeft} onClick={() => go("/seguridad/aperturas")}>
             Administrar
           </GhostButton>
         </Topbar.Right>
@@ -1182,7 +1219,10 @@ export default function AperturaDetalle() {
                           setRestrictedFormRsOpen(true);
                           return;
                         }
-                        if (!isReadOnly && !isFormCompleted) return alert("Debes completar el formulario para abrir RS.");
+                        if (!isReadOnly && !isFormCompleted) {
+                          toast.warning("Debes completar el formulario para abrir RS.");
+                          return;
+                        }
                         setRsOpen(true);
                       }}
                       style={{

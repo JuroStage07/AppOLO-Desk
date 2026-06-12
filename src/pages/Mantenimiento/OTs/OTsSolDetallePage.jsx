@@ -39,6 +39,7 @@ import { db, auth } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { OT_STATE_FINALIZADA } from "./OTsFinalizadasPage";
 import { isSolicitudOtInScope } from "../../../utils/dataScope";
+import { Brand, Topbar, useToast, useConfirm } from "../../../components/ui";
 
 const ACCENT = "#089F8A";
 const OT_STATE_EN_PROCESO = "En proceso";
@@ -274,6 +275,8 @@ function DetailRow({ label, value }) {
 
 export default function OTsDetallePage() {
   const nav = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
   const { id } = useParams();
   const authCtx = useContext(AuthCtx);
   const permisos = authCtx?.permisos || {};
@@ -309,10 +312,10 @@ export default function OTsDetallePage() {
   useEffect(() => {
     if (authLoading) return;
     if (!canAccess) {
-      alert("Acceso denegado. Necesitás permisos de Mantenimiento o rol dev.");
+      toast.error("Acceso denegado. Necesitás permisos de Mantenimiento o rol dev.");
       nav(-1);
     }
-  }, [authLoading, canAccess, nav]);
+  }, [authLoading, canAccess, nav, toast]);
 
   useEffect(() => {
     if (authLoading || !canAccess) return;
@@ -396,7 +399,7 @@ export default function OTsDetallePage() {
       setCatalogSubtasks(rows);
     } catch (err) {
       console.error(err);
-      alert("No se pudo cargar la lista global de subtareas.");
+      toast.error("No se pudo cargar la lista global de subtareas.");
     } finally {
       setCatalogLoading(false);
     }
@@ -438,9 +441,10 @@ export default function OTsDetallePage() {
       setNote(next);
       setNoteSaved(next);
       setOt((prev) => (prev ? { ...prev, note: next } : prev));
+      toast.success("Nota guardada.");
     } catch (err) {
       console.error(err);
-      window.alert("No se pudo guardar la nota. Revisá permisos o intentá de nuevo.");
+      toast.error("No se pudo guardar la nota. Revisá permisos o intentá de nuevo.");
     } finally {
       setSavingNote(false);
     }
@@ -453,14 +457,18 @@ export default function OTsDetallePage() {
   const handleFinalizeOt = async () => {
     if (!id?.trim()) return;
     if (ot?.estado !== OT_STATE_REVISION) {
-      window.alert(
-        "Solo podés finalizar la OT cuando está en revisión. Antes no se puede cerrar: tiene que pasar por revisión."
+      toast.warning(
+        "Solo podés finalizar la OT cuando está en revisión. Tiene que pasar por revisión antes de cerrarse."
       );
       return;
     }
-    const ok = window.confirm(
-      "¿Finalizar esta OT? Quedará cerrada (Finalizada): no se podrán editar tiempos ni subtareas."
-    );
+    const ok = await confirm({
+      title: "Finalizar OT",
+      message:
+        "Quedará cerrada (Finalizada): no se podrán editar tiempos ni subtareas.",
+      confirmText: "Finalizar",
+      tone: "warning",
+    });
     if (!ok) return;
     try {
       setFinalizingOt(true);
@@ -472,7 +480,7 @@ export default function OTsDetallePage() {
       const snap = await getDoc(ref);
       if (snap.exists()) {
         if (!isSolicitudOtInScope(snap.data(), profile?.tenantId, profile?.company)) {
-          window.alert("No tenés acceso a esta OT.");
+          toast.error("No tenés acceso a esta OT.");
           return;
         }
         const normalized = normalizeTask(snap.id, snap.data());
@@ -486,10 +494,11 @@ export default function OTsDetallePage() {
       setSubtasks(
         subtareasSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
       );
+      toast.success("OT finalizada correctamente.");
     } catch (err) {
       console.error(err);
-      window.alert(
-        "No se pudo finalizar la OT. Revisá que en Firestore exista el estado «Finalizada» en validOTState y que las reglas permitan actualizar OTState."
+      toast.error(
+        "No se pudo finalizar la OT. Revisá los estados válidos y los permisos en Firestore."
       );
     } finally {
       setFinalizingOt(false);
@@ -498,7 +507,7 @@ export default function OTsDetallePage() {
 
   const handleOpenSubtaskModal = async () => {
     if (!canAddSubtasks || readOnlyOt) {
-      window.alert(
+      toast.warning(
         readOnlyOt
           ? "La OT está finalizada. Solo lectura."
           : "Solo podés agregar subtareas mientras la OT está en proceso."
@@ -534,12 +543,12 @@ export default function OTsDetallePage() {
     const normalizedName = rawName.replace(/\s+/g, " ").trim();
 
     if (!normalizedName) {
-      alert("Escribí el nombre de la subtarea.");
+      toast.warning("Escribí el nombre de la subtarea.");
       return;
     }
 
     if (!auth.currentUser?.uid) {
-      alert("No hay usuario autenticado.");
+      toast.error("No hay usuario autenticado.");
       return;
     }
 
@@ -574,7 +583,7 @@ export default function OTsDetallePage() {
       await handleAttachSubtaskToOt(newCatalogItem);
     } catch (err) {
       console.error(err);
-      alert("No se pudo crear la subtarea en la lista global.");
+      toast.error("No se pudo crear la subtarea en la lista global.");
     } finally {
       setCreatingCatalogSubtask(false);
     }
@@ -583,12 +592,15 @@ export default function OTsDetallePage() {
   const handleRemoveFromGlobalCatalog = async (item) => {
     if (!item?.id) return;
     const label = catalogItemLabel(item);
-    const ok = window.confirm(
-      `¿Quitar "${label}" del catálogo global? Dejará de mostrarse para nuevas OT; las subtareas ya agregadas a órdenes no se borran.`
-    );
+    const ok = await confirm({
+      title: "Quitar del catálogo global",
+      message: `¿Quitar "${label}"? Dejará de mostrarse para nuevas OT; las subtareas ya agregadas a órdenes no se borran.`,
+      confirmText: "Quitar",
+      tone: "danger",
+    });
     if (!ok) return;
     if (!auth.currentUser?.uid) {
-      alert("No hay usuario autenticado.");
+      toast.error("No hay usuario autenticado.");
       return;
     }
     try {
@@ -599,10 +611,11 @@ export default function OTsDetallePage() {
         updatedAt: serverTimestamp(),
       });
       setCatalogSubtasks((prev) => prev.filter((x) => x.id !== item.id));
+      toast.success(`"${label}" se quitó del catálogo.`);
     } catch (err) {
       console.error(err);
-      alert(
-        "No se pudo quitar del catálogo. Revisá permisos en Firestore (subtaskList/update) o intentá de nuevo."
+      toast.error(
+        "No se pudo quitar del catálogo. Revisá permisos en Firestore o intentá de nuevo."
       );
     } finally {
       setRemovingCatalogId("");
@@ -611,24 +624,24 @@ export default function OTsDetallePage() {
 
   const handleAttachSubtaskToOt = async (catalogItem) => {
     if (readOnlyOt) {
-      alert("La OT está finalizada. Solo lectura.");
+      toast.warning("La OT está finalizada. Solo lectura.");
       return;
     }
 
     if (!canAddSubtasks) {
-      alert("Solo podés agregar subtareas mientras la OT está en proceso.");
+      toast.warning("Solo podés agregar subtareas mientras la OT está en proceso.");
       return;
     }
 
     const catalogId = catalogItem?.id;
     const label = catalogItemLabel(catalogItem);
     if (!catalogId || !label) {
-      alert("La subtarea seleccionada no es válida.");
+      toast.error("La subtarea seleccionada no es válida.");
       return;
     }
 
     if (!auth.currentUser?.uid) {
-      alert("No hay usuario autenticado.");
+      toast.error("No hay usuario autenticado.");
       return;
     }
 
@@ -640,7 +653,7 @@ export default function OTsDetallePage() {
     );
 
     if (alreadyExists) {
-      alert("Esta subtarea ya fue agregada a la OT.");
+      toast.warning("Esta subtarea ya fue agregada a la OT.");
       return;
     }
 
@@ -676,9 +689,10 @@ export default function OTsDetallePage() {
 
       setSubtaskSearch("");
       setDetailView("subtareas");
+      toast.success("Subtarea agregada a la OT.");
     } catch (err) {
       console.error(err);
-      alert("No se pudo agregar la subtarea a la OT.");
+      toast.error("No se pudo agregar la subtarea a la OT.");
     } finally {
       setSavingSubtask(false);
     }
@@ -693,11 +707,16 @@ export default function OTsDetallePage() {
   const handleDeleteSubtask = async (subtaskId) => {
     if (!subtaskId) return;
     if (readOnlyOt) {
-      alert("La OT está finalizada. Solo lectura.");
+      toast.warning("La OT está finalizada. Solo lectura.");
       return;
     }
 
-    const confirmed = window.confirm("¿Eliminar esta subtarea?");
+    const confirmed = await confirm({
+      title: "Eliminar subtarea",
+      message: "Esta acción no se puede deshacer.",
+      confirmText: "Eliminar",
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     try {
@@ -707,9 +726,10 @@ export default function OTsDetallePage() {
       await deleteDoc(subtaskRef);
 
       setSubtasks((prev) => prev.filter((item) => item.id !== subtaskId));
+      toast.success("Subtarea eliminada.");
     } catch (err) {
       console.error(err);
-      alert("No se pudo eliminar la subtarea.");
+      toast.error("No se pudo eliminar la subtarea.");
     } finally {
       setDeletingSubtaskId("");
     }
@@ -732,7 +752,7 @@ export default function OTsDetallePage() {
     if (!deadMotivoEdit?.subtaskId || !id?.trim()) return;
     const t = deadMotivoEdit.text.replace(/\s+/g, " ").trim();
     if (t.length < 2) {
-      alert("El motivo debe tener al menos 2 caracteres.");
+      toast.warning("El motivo debe tener al menos 2 caracteres.");
       return;
     }
     try {
@@ -754,9 +774,10 @@ export default function OTsDetallePage() {
         )
       );
       setDeadMotivoEdit(null);
+      toast.success("Motivo actualizado.");
     } catch (err) {
       console.error(err);
-      alert("No se pudo guardar el motivo.");
+      toast.error("No se pudo guardar el motivo.");
     } finally {
       setDeadMotivoEditSaving(false);
     }
@@ -783,22 +804,20 @@ export default function OTsDetallePage() {
 
   return (
     <div style={ui.shell}>
-      <div style={ui.topbar}>
-        <div style={ui.brand}>
-          <div style={ui.brandMark}>OT</div>
-          <div style={{ display: "grid", gap: 2 }}>
-            <div style={ui.brandTitle}>AppoloDesk</div>
-            <div style={ui.brandSub}>Detalle de orden de trabajo</div>
-          </div>
-        </div>
-
-        <div style={ui.topbarRight}>
+      <Topbar>
+        <Brand
+          icon={Wrench}
+          title="Mantenimiento"
+          subtitle="Detalle de orden de trabajo"
+          onClick={() => nav("/mantenimiento/ots")}
+        />
+        <Topbar.Right>
           <button type="button" onClick={() => nav(-1)} style={ui.btnGhost}>
             <ArrowLeft size={16} />
             Volver
           </button>
-        </div>
-      </div>
+        </Topbar.Right>
+      </Topbar>
 
       <div style={ui.main}>
         <div style={ui.container}>
@@ -1294,8 +1313,8 @@ export default function OTsDetallePage() {
                 onClick={() => {
                   if (finalizingOt || readOnlyOt) return;
                   if (!canFinalizeOt) {
-                    window.alert(
-                      "Solo podés finalizar la OT cuando está en revisión. Antes no se puede cerrar: tiene que pasar por revisión."
+                    toast.warning(
+                      "Solo podés finalizar la OT cuando está en revisión."
                     );
                     return;
                   }

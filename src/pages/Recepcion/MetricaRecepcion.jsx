@@ -44,8 +44,12 @@ import {
   Brand,
   Chip,
   ChipsRow,
+  ErrorState,
   GhostButton,
+  Spinner,
+  TableScroll,
   Topbar,
+  useToast,
 } from "../../components/ui";
 
 const ACCENT = "#089F8A";
@@ -3123,6 +3127,7 @@ function TeamCombinedTable({
       </div>
 
       <div style={tableStyles.wrapper}>
+        <TableScroll minWidth={760}>
         <table style={tableStyles.table}>
           <thead>
             <tr>
@@ -3159,6 +3164,7 @@ function TeamCombinedTable({
             ))}
           </tbody>
         </table>
+        </TableScroll>
       </div>
     </div>
   );
@@ -3573,6 +3579,7 @@ function VolumenPorFechaChart({ actions = [], accentColor = "#0F172A", accentSof
       <details style={volStyles.details}>
         <summary style={volStyles.summary}>Ver tabla de datos ({dailyMap.length} días)</summary>
         <div style={volStyles.tableWrap}>
+          <TableScroll minWidth={360}>
           <table style={volStyles.table}>
             <thead>
               <tr>
@@ -3589,6 +3596,7 @@ function VolumenPorFechaChart({ actions = [], accentColor = "#0F172A", accentSof
               ))}
             </tbody>
           </table>
+          </TableScroll>
         </div>
       </details>
     </div>
@@ -3704,6 +3712,7 @@ const volStyles = {
  * Los enteros se ajustan con el método de mayor resto para sumar exactamente 100.
  */
 function ProviderTimeShareCard({ data = [], periodLabel = "" }) {
+  const toast = useToast();
   const PAGE_SIZE = 10;
   const [page, setPage] = React.useState(0);
   const [search, setSearch] = React.useState("");
@@ -3895,7 +3904,7 @@ function ProviderTimeShareCard({ data = [], periodLabel = "" }) {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("ProviderTimeShareCard export:", e);
-      window.alert("No se pudo generar el Excel. Revisa la consola.");
+      toast.error("No se pudo generar el Excel. Revisa la consola.");
     } finally {
       setExporting(false);
     }
@@ -4042,6 +4051,7 @@ function ProviderTimeShareCard({ data = [], periodLabel = "" }) {
         <div style={ui.emptyMiniText}>Ningún proveedor coincide con «{search}».</div>
       ) : (
         <div style={tableStyles.wrapper}>
+          <TableScroll minWidth={760}>
           <table style={tableStyles.table}>
             <thead>
               <tr>
@@ -4082,6 +4092,7 @@ function ProviderTimeShareCard({ data = [], periodLabel = "" }) {
               </tr>
             </tfoot>
           </table>
+          </TableScroll>
 
           {totalPages > 1 && (
             <div style={{
@@ -4220,6 +4231,7 @@ const shareStyles = {
 
 export default function MetricaRecepcion() {
   const nav = useNavigate();
+  const toast = useToast();
   const user = auth.currentUser;
   const isMobile = useIsMobile();
   const [activeFilter, setActiveFilter] = useState("hoy");
@@ -4231,6 +4243,7 @@ export default function MetricaRecepcion() {
   const [dashboardData, setDashboardData] = useState(null);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [noDataMessage, setNoDataMessage] = useState("");
   const [tenantScope, setTenantScope] = useState({ tenantId: "", company: "" });
   const [aperturasModalOpen, setAperturasModalOpen] = useState(false);
@@ -4616,7 +4629,7 @@ export default function MetricaRecepcion() {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("handleExportExcel:", e);
-      window.alert(
+      toast.error(
         "No se pudo generar el archivo Excel. Revisa la consola o inténtalo de nuevo."
       );
     }
@@ -4630,11 +4643,12 @@ export default function MetricaRecepcion() {
     selectedDate,
     user?.email,
     user?.displayName,
+    toast,
   ]);
 
   const handleExportTeamExcel = useCallback(async (mergedUsers = []) => {
     if (!tenantScope.tenantId || !tenantScope.company) {
-      window.alert("No se pudo determinar el tenant para exportar.");
+      toast.warning("No se pudo determinar el tenant para exportar.");
       return;
     }
     try {
@@ -4877,7 +4891,7 @@ export default function MetricaRecepcion() {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("handleExportTeamExcel:", e);
-      window.alert("No se pudo generar el Excel. Revisa la consola.");
+      toast.error("No se pudo generar el Excel. Revisa la consola.");
     }
   }, [
     tenantScope.tenantId,
@@ -4888,6 +4902,7 @@ export default function MetricaRecepcion() {
     excludedAndenUsersSet,
     excludedActionsSet,
     currentData.label,
+    toast,
   ]);
 
   const addExcludedAndenUser = () => {
@@ -5854,7 +5869,12 @@ export default function MetricaRecepcion() {
     customRange,
     excludedAndenUsersSet,
     excludedActionsSet,
+    reloadKey,
   ]);
+
+  const retryLoadDashboard = useCallback(() => {
+    setReloadKey((k) => k + 1);
+  }, []);
 
   // Backfill (una sola vez): clasifica acciones de descarga sin `tipo` leyendo su
   // apertura. Si la apertura es EPA, guarda su tipo EPA real; si no, guarda "Cofersa".
@@ -6036,9 +6056,6 @@ export default function MetricaRecepcion() {
           onClick={() => nav("/recepcion")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => nav("/recepcion")}>
             Recepción
           </GhostButton>
@@ -6053,6 +6070,13 @@ export default function MetricaRecepcion() {
 
       <main style={{ ...ui.main, ...(m ? ui.mMain : {}) }}>
         <div style={{ ...ui.container, ...(m ? ui.mContainer : {}) }}>
+          {/* Gating de nivel superior: sin datos aún, mostrar carga/error de página completa. */}
+          {!dashboardData && loadingData ? (
+            <Spinner label="Cargando métricas…" />
+          ) : !dashboardData && loadError ? (
+            <ErrorState description={loadError} onRetry={retryLoadDashboard} />
+          ) : (
+            <>
           {loadingData && (
             <div style={ui.infoBanner}>
               <span style={ui.btnInlineIcon}>
@@ -6392,6 +6416,8 @@ export default function MetricaRecepcion() {
             onOpenUserDetail={openUserTimeDetail}
             onExportExcel={handleExportTeamExcel}
           />
+            </>
+          )}
         </div>
       </main>
 
@@ -7502,7 +7528,7 @@ export default function MetricaRecepcion() {
                       URL.revokeObjectURL(url);
                     } catch (e) {
                       console.error("Error exportando tendencias:", e);
-                      window.alert("No se pudo generar el archivo Excel. Revisa la consola.");
+                      toast.error("No se pudo generar el archivo Excel. Revisa la consola.");
                     }
                   }}
                   disabled={tendenciasCofersaModal.loading || tendenciasCofersaModal.providers.length === 0}
@@ -8184,7 +8210,7 @@ export default function MetricaRecepcion() {
                       URL.revokeObjectURL(url);
                     } catch (e) {
                       console.error("Error exportando tendencias EPA:", e);
-                      window.alert("No se pudo generar el archivo Excel. Revisa la consola.");
+                      toast.error("No se pudo generar el archivo Excel. Revisa la consola.");
                     }
                   }}
                   disabled={tendenciasEpaModal.loading || tendenciasEpaModal.providers.length === 0}

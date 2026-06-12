@@ -65,11 +65,11 @@ Page modules live under `src/pages/<Module>/`:
 - `EPA/` — EPA hub and finished openings.
 - `Mantenimiento/Equipos/` and `Mantenimiento/OTs/` — equipment registry and work orders (`solicitudesOT` with `subtareas` subcollection plus a global `subtaskList` catalog). The OTs dashboard at `/mantenimiento/ots/dashboard` is fed by helpers in `src/pages/Mantenimiento/OTs/dashboard/` (`computeOTsDashboardMetrics.js`, `periodUtils.js`, `useOTsDashboardMetrics.js`) — keep period math and metric aggregation in those files rather than inside the page component.
 - `Recepcion/AccionDescarga/` — unload actions; `MetricaRecepcion.jsx` is a large analytics page that queries `accion_descarga` directly and exports via `src/utils/metricaRecepcionExcelPro.js` (multi-sheet xlsx, incl. `Tiempos_proveedor` and the EPA trend section).
-- `Salud Ocupacional/` (note the space in the path) — `Aperturas`, `ControlMarcas`, `ControlTerceros`, `Visados`, plus `MetricaSaludOcupacional.jsx` at `/salud/metricas` (reads `dashboard_salud_daily` + `aperturas`).
+- `SSO/Seguridad/` — `Aperturas`, `ControlMarcas`, `ControlTerceros`, `Visados`, plus `MetricaSaludOcupacional.jsx` at `/seguridad/metricas` (reads `dashboard_salud_daily` + `aperturas`). Branded **"Seguridad"** (routes `/seguridad/*`; legacy `/salud/*` redirects to it via `SaludLegacyRedirect` in App.jsx). `SSO` ("Salud y Seguridad Ocupacional") is the umbrella folder; a separate **"Salud Ocupacional"** work area exists only as a coming-soon placeholder (`/salud-ocupacional`).
 - `ServiciosGenerales/` — work orders + tarima validation.
 - `Zona Franca/` (note the space) — tarima weighing and lookup.
 
-Two directories have spaces (`Salud Ocupacional`, `Zona Franca`); quote them in shell commands.
+`Zona Franca` has a space in its path; quote it in shell commands.
 
 ### Shared UI kit
 

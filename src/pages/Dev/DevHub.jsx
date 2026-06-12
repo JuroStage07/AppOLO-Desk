@@ -1,7 +1,6 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Code2, Database, Lock, SlidersHorizontal } from "lucide-react";
-import { auth } from "../../firebase";
 import {
   Badge,
   Brand,
@@ -19,7 +18,6 @@ import usePinnedModules from "../../hooks/usePinnedModules";
 
 export default function DevHub() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const { isPinned, togglePin } = usePinnedModules("dev");
 
   const go = (path) => nav(path);
@@ -56,9 +54,6 @@ export default function DevHub() {
           onClick={() => go("/dev")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => go("/")}>
             Inicio
           </GhostButton>

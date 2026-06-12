@@ -8,6 +8,7 @@ import { getVisibleAreas } from "../../config/workAreas";
 import { useAllPinnedModules } from "../../hooks/usePinnedModules";
 import PinsFlyout from "./PinsFlyout";
 import SidebarAreaIcon from "./SidebarAreaIcon";
+import { useToast } from "./Toast";
 
 /* ─── Local design tokens (mirror AreasTrabajoHubPage drawer) ─── */
 const T = {
@@ -32,11 +33,27 @@ const T = {
  */
 export default function AreasSidebar({ open, onClose }) {
   const nav = useNavigate();
+  const toast = useToast();
   const { profile, epaAdmin, role, user: ctxUser } = useContext(AuthCtx);
   const user = ctxUser ?? auth.currentUser;
   const [expandedArea, setExpandedArea] = useState(null);
+  const [expandedModules, setExpandedModules] = useState(() => new Set());
   const [pinsOpen, setPinsOpen] = useState(false);
   const { pins } = useAllPinnedModules();
+
+  const toggleArea = (key) => {
+    setExpandedModules(new Set());
+    setExpandedArea((cur) => (cur === key ? null : key));
+  };
+
+  const toggleModule = (key) => {
+    setExpandedModules((cur) => {
+      const next = new Set(cur);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const epaOnly = isEpaRestrictedUser({ epaAdmin, profile, user });
   const areas = useMemo(
@@ -47,6 +64,7 @@ export default function AreasSidebar({ open, onClose }) {
   const closeAll = () => {
     setPinsOpen(false);
     setExpandedArea(null);
+    setExpandedModules(new Set());
     onClose();
   };
 
@@ -86,22 +104,33 @@ export default function AreasSidebar({ open, onClose }) {
           {areas.map((a) => {
             const blocked = a.blocked === true;
             const isExpanded = expandedArea === a.key;
-            const hasSubs = a.subModules && a.subModules.length > 0;
+            const modules = a.modules || [];
+            const hasModules = modules.length > 0;
 
             return (
               <div key={a.key}>
+                {/* Level 0 — Área */}
                 <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
                   <button
                     type="button"
                     disabled={blocked}
                     onClick={() => {
-                      if (!blocked) goTo(a.path);
+                      if (blocked) return;
+                      if (a.comingSoon) {
+                        toast.info(
+                          a.comingSoonMsg ||
+                            `${a.title} estará disponible próximamente.`
+                        );
+                        closeAll();
+                        return;
+                      }
+                      goTo(a.path);
                     }}
                     style={{
                       ...styles.sidebarItem,
                       ...(blocked ? styles.sidebarItemBlocked : {}),
                       flex: 1,
-                      paddingRight: hasSubs ? 4 : 14,
+                      paddingRight: hasModules ? 4 : 14,
                     }}
                   >
                     <SidebarAreaIcon img={a.img} fallback={a.icon} />
@@ -111,14 +140,13 @@ export default function AreasSidebar({ open, onClose }) {
                     </div>
                   </button>
 
-                  {hasSubs && !blocked && (
+                  {hasModules && !blocked && (
                     <button
                       type="button"
-                      onClick={() =>
-                        setExpandedArea(isExpanded ? null : a.key)
-                      }
+                      onClick={() => toggleArea(a.key)}
                       style={styles.sidebarExpandBtn}
                       aria-label={`Expandir ${a.title}`}
+                      aria-expanded={isExpanded}
                     >
                       <ChevronDown
                         size={16}
@@ -131,24 +159,81 @@ export default function AreasSidebar({ open, onClose }) {
                     </button>
                   )}
 
-                  {!hasSubs && !blocked && (
+                  {(!hasModules || blocked) && (
                     <div style={{ width: 32, flexShrink: 0 }} />
                   )}
                 </div>
 
-                {isExpanded && hasSubs && (
-                  <div style={styles.sidebarSubList}>
-                    {a.subModules.map((sub) => (
-                      <button
-                        key={sub.path}
-                        type="button"
-                        onClick={() => goTo(sub.path)}
-                        style={styles.sidebarSubItem}
-                      >
-                        <span style={styles.sidebarSubDot} />
-                        <span style={styles.sidebarSubLabel}>{sub.label}</span>
-                      </button>
-                    ))}
+                {/* Level 1 — Módulos */}
+                {isExpanded && hasModules && (
+                  <div style={styles.sidebarModuleList}>
+                    {modules.map((m) => {
+                      const feats = m.features || [];
+                      const hasFeats = feats.length > 0;
+                      const modKey = `${a.key}::${m.path}`;
+                      const modExpanded = expandedModules.has(modKey);
+
+                      return (
+                        <div key={m.path}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+                            <button
+                              type="button"
+                              onClick={() => goTo(m.path)}
+                              style={{
+                                ...styles.sidebarModuleItem,
+                                flex: 1,
+                                paddingRight: hasFeats ? 4 : 12,
+                              }}
+                            >
+                              <span style={styles.sidebarModuleDot} />
+                              <span style={styles.sidebarModuleLabel}>{m.label}</span>
+                            </button>
+
+                            {hasFeats && (
+                              <button
+                                type="button"
+                                onClick={() => toggleModule(modKey)}
+                                style={styles.sidebarExpandBtnSm}
+                                aria-label={`Expandir ${m.label}`}
+                                aria-expanded={modExpanded}
+                              >
+                                <ChevronDown
+                                  size={14}
+                                  strokeWidth={2}
+                                  style={{
+                                    transition: "transform 200ms ease",
+                                    transform: modExpanded
+                                      ? "rotate(180deg)"
+                                      : "rotate(0deg)",
+                                  }}
+                                />
+                              </button>
+                            )}
+
+                            {!hasFeats && <div style={{ width: 28, flexShrink: 0 }} />}
+                          </div>
+
+                          {/* Level 2 — Features */}
+                          {modExpanded && hasFeats && (
+                            <div style={styles.sidebarFeatureList}>
+                              {feats.map((f) => (
+                                <button
+                                  key={f.path}
+                                  type="button"
+                                  onClick={() => goTo(f.path)}
+                                  style={styles.sidebarFeatureItem}
+                                >
+                                  <span style={styles.sidebarFeatureDash} />
+                                  <span style={styles.sidebarFeatureLabel}>
+                                    {f.label}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -347,6 +432,95 @@ const styles = {
   },
   sidebarSubLabel: {
     fontSize: 12,
+    fontWeight: 550,
+    color: T.textSecondary,
+    lineHeight: 1.2,
+  },
+
+  /* Level 1 — Módulos */
+  sidebarModuleList: {
+    paddingLeft: 20,
+    paddingBottom: 4,
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  sidebarModuleItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "9px 12px",
+    borderRadius: 10,
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    textAlign: "left",
+    width: "100%",
+    transition: "background 150ms ease",
+  },
+  sidebarModuleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    background: T.accent,
+    flexShrink: 0,
+  },
+  sidebarModuleLabel: {
+    fontSize: 12.5,
+    fontWeight: 650,
+    color: T.text,
+    lineHeight: 1.2,
+  },
+  sidebarExpandBtnSm: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    border: "none",
+    background: "transparent",
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+    color: T.textMuted,
+    flexShrink: 0,
+    transition: "background 150ms ease",
+    fontFamily: "inherit",
+    padding: 0,
+  },
+
+  /* Level 2 — Features */
+  sidebarFeatureList: {
+    paddingLeft: 26,
+    paddingTop: 1,
+    paddingBottom: 4,
+    display: "flex",
+    flexDirection: "column",
+    gap: 1,
+  },
+  sidebarFeatureItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+    padding: "7px 12px",
+    borderRadius: 8,
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    textAlign: "left",
+    width: "100%",
+    transition: "background 150ms ease",
+  },
+  sidebarFeatureDash: {
+    width: 8,
+    height: 2,
+    borderRadius: 2,
+    background: T.textMuted,
+    flexShrink: 0,
+    opacity: 0.7,
+  },
+  sidebarFeatureLabel: {
+    fontSize: 11.5,
     fontWeight: 550,
     color: T.textSecondary,
     lineHeight: 1.2,

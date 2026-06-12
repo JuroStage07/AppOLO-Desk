@@ -1,0 +1,10 @@
+/**
+ * Tiny event bus to open the global <CommandPalette/> from anywhere (e.g. the
+ * Topbar search button) without prop drilling. Kept in a plain module so
+ * importing it doesn't break React Fast Refresh.
+ */
+export const OPEN_COMMAND_PALETTE_EVENT = "appolo:open-command-palette";
+
+export function openCommandPalette() {
+  window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
+}

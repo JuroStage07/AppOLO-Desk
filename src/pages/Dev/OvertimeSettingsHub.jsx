@@ -47,6 +47,7 @@ import {
   Shell,
   Spinner,
   Topbar,
+  useToast,
 } from "../../components/ui";
 import {
   ACCENT,
@@ -127,7 +128,7 @@ function CoordinatorRow({ coordinator, value, role, onChange, onRoleChange, onEx
 
 export default function OvertimeSettingsHub() {
   const nav = useNavigate();
-  const user = auth.currentUser;
+  const toast = useToast();
 
   const [coordModalOpen, setCoordModalOpen] = useState(false);
   const [excludedModalOpen, setExcludedModalOpen] = useState(false);
@@ -309,7 +310,7 @@ export default function OvertimeSettingsHub() {
       });
     } catch (e) {
       console.error("Error guardando feriado:", e);
-      alert("No se pudo guardar el feriado. Revisá permisos de Firestore.");
+      toast.error("No se pudo guardar el feriado. Revisá permisos de Firestore.");
     }
   };
 
@@ -318,7 +319,7 @@ export default function OvertimeSettingsHub() {
       await deleteDoc(doc(db, "feriadosAnuales", feriadoId));
     } catch (e) {
       console.error("Error eliminando feriado:", e);
-      alert("No se pudo eliminar el feriado. Revisá permisos de Firestore.");
+      toast.error("No se pudo eliminar el feriado. Revisá permisos de Firestore.");
     }
   };
 
@@ -558,9 +559,6 @@ export default function OvertimeSettingsHub() {
           onClick={() => nav("/dev/config-modulos")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => nav("/dev/config-modulos")}>
             Volver
           </GhostButton>

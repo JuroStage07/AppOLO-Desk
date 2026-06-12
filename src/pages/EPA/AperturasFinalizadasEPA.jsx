@@ -635,11 +635,11 @@ export default function AperturasFinalizadasEPA() {
                       onMouseEnter={() => setHovered(item.id ?? idx)}
                       onMouseLeave={() => setHovered(null)}
                       onClick={() =>
-                        go(`/salud/aperturas/detalle/${encodeURIComponent(String(item.id ?? idx))}`)
+                        go(`/seguridad/aperturas/detalle/${encodeURIComponent(String(item.id ?? idx))}`)
                       }
                       onKeyDown={(e) =>
                         (e.key === "Enter" || e.key === " ") &&
-                        go(`/salud/aperturas/detalle/${encodeURIComponent(String(item.id ?? idx))}`)
+                        go(`/seguridad/aperturas/detalle/${encodeURIComponent(String(item.id ?? idx))}`)
                       }
                       style={{
                         ...ui.itemCard,

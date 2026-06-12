@@ -11,20 +11,22 @@ import {
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { db, storage } from "../../../firebase";
+import { db, storage } from "../../../../firebase";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import LogoPng from "../../../assets/Logo.png";
+import LogoPng from "../../../../assets/Logo.png";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAuth } from "firebase/auth";
 import { ArrowLeft, FileText } from "lucide-react";
-import { AuthCtx } from "../../../auth/AuthProvider";
-import { filterByUserScope } from "../../../utils/dataScope";
+import { AuthCtx } from "../../../../auth/AuthProvider";
+import { filterByUserScope } from "../../../../utils/dataScope";
 import {
   Brand,
   GhostButton,
   Topbar,
-} from "../../../components/ui";
+  useToast,
+  useConfirm,
+} from "../../../../components/ui";
 
 // Convierte un import de imagen (url) a DataURL para jsPDF
 async function loadImageAsDataURL(src) {
@@ -521,6 +523,8 @@ function safe(v) {
 
 export default function AdministrarVisados() {
   const nav = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
@@ -545,7 +549,7 @@ export default function AdministrarVisados() {
     return () => (document.body.style.overflow = prev);
   }, []);
 
-  const back = () => nav("/salud/visado");
+  const back = () => nav("/seguridad/visado");
 
   const canSearch = useMemo(() => {
     if (busy) return false;
@@ -620,14 +624,14 @@ export default function AdministrarVisados() {
       const firmas = await resolveFirmasFromVisOrStorage(vis);
 
       if (!firmas.colabUrl || !firmas.reprUrl) {
-        alert("Faltan firmas: colaborador y/o representante.");
+        toast.warning("Faltan firmas: colaborador y/o representante.");
         return null;
       }
 
       const result = await buildVisadoPDF(vis, firmas, { uploadAndSave: true });
 
       await onSearch(); // refresca para que ya aparezca pdfUrl
-      alert("✅ PDF firmado generado y guardado.");
+      toast.success("PDF firmado generado y guardado.");
 
       // Si buildVisadoPDF retornó pdfUrl, lo abrimos
       if (result?.pdfUrl) window.open(result.pdfUrl, "_blank");
@@ -635,7 +639,7 @@ export default function AdministrarVisados() {
       return result?.pdfUrl || null;
     } catch (e) {
       console.error(e);
-      alert("❌ No se pudo generar el PDF firmado.");
+      toast.error("No se pudo generar el PDF firmado.");
       return null;
     } finally {
       setBusy(false);
@@ -650,7 +654,7 @@ export default function AdministrarVisados() {
           icon={FileText}
           title="Salud Ocupacional"
           subtitle="Administración · Visados"
-          onClick={() => nav("/salud/visado")}
+          onClick={() => nav("/seguridad/visado")}
         />
         <Topbar.Right>
           <Topbar.UserHint>
@@ -834,9 +838,13 @@ export default function AdministrarVisados() {
                         type="button"
                         onClick={async () => {
                           if (busy) return;
-                          const ok = window.confirm(
-                            "¿Generar el PDF? Esto reemplazará el enlace guardado (pdfUrl) por uno nuevo."
-                          );
+                          const ok = await confirm({
+                            title: "Generar PDF",
+                            message:
+                              "Esto reemplazará el enlace guardado (pdfUrl) por uno nuevo. ¿Continuar?",
+                            confirmText: "Generar",
+                            tone: "warning",
+                          });
                           if (!ok) return;
                           await generarPDF(v);
                         }}

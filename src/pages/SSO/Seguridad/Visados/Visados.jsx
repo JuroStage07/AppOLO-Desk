@@ -1,7 +1,6 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText, Lock, PenLine, Search } from "lucide-react";
-import { auth } from "../../../firebase";
 import {
   Badge,
   Brand,
@@ -13,12 +12,11 @@ import {
   ModuleGrid,
   Shell,
   Topbar,
-} from "../../../components/ui";
-import usePinnedModules from "../../../hooks/usePinnedModules";
+} from "../../../../components/ui";
+import usePinnedModules from "../../../../hooks/usePinnedModules";
 
 export default function Visados() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const { isPinned, togglePin } = usePinnedModules("salud");
 
   const go = (path) => nav(path);
@@ -29,7 +27,7 @@ export default function Visados() {
         key: "generar",
         title: "Generar visado",
         desc: "Crear un nuevo visado y registrarlo en el sistema.",
-        path: "/salud/visado/generar",
+        path: "/seguridad/visado/generar",
         icon: PenLine,
         tag: "Nuevo",
       },
@@ -37,7 +35,7 @@ export default function Visados() {
         key: "admin",
         title: "Administrar visados",
         desc: "Buscar, filtrar y descargar visados existentes.",
-        path: "/salud/visados",
+        path: "/seguridad/visados",
         icon: Search,
         tag: "Historial",
       },
@@ -52,13 +50,10 @@ export default function Visados() {
           icon={FileText}
           title="Salud Ocupacional"
           subtitle="Visados · Panel"
-          onClick={() => go("/salud/visado")}
+          onClick={() => go("/seguridad/visado")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
-          <GhostButton icon={ArrowLeft} onClick={() => go("/salud")}>
+          <GhostButton icon={ArrowLeft} onClick={() => go("/seguridad")}>
             Menú Salud
           </GhostButton>
         </Topbar.Right>

@@ -1,7 +1,6 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ClipboardList, Lock } from "lucide-react";
-import { auth } from "../../firebase";
 import {
   Badge,
   Brand,
@@ -20,7 +19,6 @@ import imgEpa from "../../assets/epalogo.jpeg";
 
 export default function EPAHubPage() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const { isPinned, togglePin } = usePinnedModules("epa");
 
   const go = (path) => nav(path);
@@ -50,10 +48,6 @@ export default function EPAHubPage() {
           onClick={() => go("/epa")}
         />
         <Topbar.Right>
-          <Topbar.UserBox
-            name={user?.displayName || "Usuario"}
-            email={user?.email || "—"}
-          />
           <GhostButton icon={ArrowLeft} onClick={() => go("/")}>
             Inicio
           </GhostButton>

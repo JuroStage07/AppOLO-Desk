@@ -33,6 +33,7 @@ import {
   Main,
   Shell,
   Spinner,
+  TableScroll,
   Topbar,
 } from "../components/ui";
 import {
@@ -451,9 +452,6 @@ export default function OvertimeManagerApprovals() {
           onClick={() => nav("/administracion")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesion activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => nav("/administracion")}>
             Volver
           </GhostButton>
@@ -544,6 +542,7 @@ export default function OvertimeManagerApprovals() {
               </div>
 
               <div style={styles.tableScroll}>
+                <TableScroll minWidth={760} bordered={false}>
                 <table style={styles.table}>
                   <thead>
                     <tr>
@@ -650,6 +649,7 @@ export default function OvertimeManagerApprovals() {
                             <tr>
                               <td style={styles.detailCell} colSpan={7}>
                                 <div style={styles.detailPanel}>
+                                  <TableScroll minWidth={720} bordered={false}>
                                   <table style={styles.detailTable}>
                                     <thead>
                                       <tr>
@@ -761,6 +761,7 @@ export default function OvertimeManagerApprovals() {
                                       })}
                                     </tbody>
                                   </table>
+                                  </TableScroll>
                                 </div>
                               </td>
                             </tr>
@@ -770,6 +771,7 @@ export default function OvertimeManagerApprovals() {
                     })}
                   </tbody>
                 </table>
+                </TableScroll>
               </div>
             </div>
           )}

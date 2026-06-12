@@ -9,7 +9,6 @@ import {
   PackageOpen,
   Truck,
 } from "lucide-react";
-import { auth } from "../../firebase";
 import {
   Badge,
   Brand,
@@ -28,7 +27,6 @@ import usePinnedModules from "../../hooks/usePinnedModules";
 export default function Recepcion() {
   const nav = useNavigate();
   const location = useLocation();
-  const user = auth.currentUser;
   const { isPinned, togglePin } = usePinnedModules("recepcion");
 
   const go = (path) => nav(path);
@@ -67,7 +65,7 @@ export default function Recepcion() {
         key: "aperturas",
         title: "Aperturas",
         desc: "Gestión y seguimiento de aperturas de recepción",
-        path: "/salud/aperturas",
+        path: "/seguridad/aperturas",
         tone: "accent",
         icon: ClipboardList,
         tag: "Operativo",
@@ -109,9 +107,6 @@ export default function Recepcion() {
           onClick={() => go("/recepcion")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => go("/")}>
             Inicio
           </GhostButton>

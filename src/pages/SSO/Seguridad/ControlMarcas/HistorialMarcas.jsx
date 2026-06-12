@@ -2,14 +2,14 @@ import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import { ArrowLeft, History } from "lucide-react";
-import { db } from "../../../firebase";
-import { AuthCtx } from "../../../auth/AuthProvider";
-import { filterByUserScope } from "../../../utils/dataScope";
+import { db } from "../../../../firebase";
+import { AuthCtx } from "../../../../auth/AuthProvider";
+import { filterByUserScope } from "../../../../utils/dataScope";
 import {
   Brand,
   GhostButton,
   Topbar,
-} from "../../../components/ui";
+} from "../../../../components/ui";
 
 const ACCENT = "#089F8A";
 const DANGER = "#DC2626";
@@ -150,10 +150,10 @@ export default function HistorialMarcas() {
           icon={History}
           title="Historial de marcas"
           subtitle="Control de marcas"
-          onClick={() => nav("/salud/control-marcas")}
+          onClick={() => nav("/seguridad/control-marcas")}
         />
         <Topbar.Right>
-          <GhostButton icon={ArrowLeft} onClick={() => nav("/salud/control-marcas")}>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/seguridad/control-marcas")}>
             Volver
           </GhostButton>
         </Topbar.Right>

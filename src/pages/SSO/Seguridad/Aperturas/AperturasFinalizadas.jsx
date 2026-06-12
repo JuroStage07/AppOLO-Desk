@@ -12,26 +12,27 @@ import {
   Filter,
   Hash,
   LayoutList,
-  Loader2,
   Lock,
   RotateCcw,
   Search,
   SlidersHorizontal,
   User,
 } from "lucide-react";
-import { auth } from "../../../firebase";
-import useIsMobile from "../../../hooks/useIsMobile";
-import { AuthCtx } from "../../../auth/AuthProvider";
+import useIsMobile from "../../../../hooks/useIsMobile";
+import { AuthCtx } from "../../../../auth/AuthProvider";
 import {
   Brand,
   Container,
+  EmptyState,
+  ErrorState,
   GhostButton,
   Main,
   Shell,
+  Skeleton,
   Topbar,
-} from "../../../components/ui";
+} from "../../../../components/ui";
 
-import { listenAperturasFinalizadasGlobal } from "../../../services/aperturas";
+import { listenAperturasFinalizadasGlobal } from "../../../../services/aperturas";
 
 const ACCENT = "#089F8A";
 const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
@@ -213,7 +214,6 @@ const formatFecha = (isoOrTs) => {
 
 export default function AperturasFinalizadas() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const isMobile = useIsMobile();
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
@@ -223,6 +223,8 @@ export default function AperturasFinalizadas() {
 
   // data
   const [aperturasFinalizadas, setAperturasFinalizadas] = useState(undefined);
+  const [loadError, setLoadError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // filtros
   const [showFilters, setShowFilters] = useState(false);
@@ -235,15 +237,31 @@ export default function AperturasFinalizadas() {
 
   const go = (path) => nav(path);
 
+  const reload = () => {
+    setLoadError(null);
+    setAperturasFinalizadas(undefined);
+    setReloadKey((k) => k + 1);
+  };
+
   useEffect(() => {
     if (authLoading) return;
     const unsub = listenAperturasFinalizadasGlobal(
-      setAperturasFinalizadas,
+      (rows) => {
+        setLoadError(null);
+        setAperturasFinalizadas(rows);
+      },
       profile?.tenantId,
-      profile?.company
+      profile?.company,
+      (err) => {
+        setLoadError(
+          err?.message || "No se pudieron cargar las aperturas finalizadas."
+        );
+        // Salir del estado de carga para que se muestre el error.
+        setAperturasFinalizadas((prev) => (prev === undefined ? [] : prev));
+      }
     );
     return () => unsub?.();
-  }, [authLoading, profile?.tenantId, profile?.company]);
+  }, [authLoading, profile?.tenantId, profile?.company, reloadKey]);
 
   useEffect(() => {
     setVisibleCount(10);
@@ -337,13 +355,10 @@ export default function AperturasFinalizadas() {
           icon={ClipboardList}
           title="Salud ocupacional"
           subtitle="Aperturas finalizadas"
-          onClick={() => go("/salud/aperturas")}
+          onClick={() => go("/seguridad/aperturas")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
-          <GhostButton icon={ArrowLeft} onClick={() => go("/salud/aperturas")}>
+          <GhostButton icon={ArrowLeft} onClick={() => go("/seguridad/aperturas")}>
             Administrar
           </GhostButton>
         </Topbar.Right>
@@ -552,30 +567,17 @@ export default function AperturasFinalizadas() {
             </section>
           ) : null}
 
-          {isLoading ? (
-            <div style={ui.emptyWrap}>
-              <div style={ui.emptyIcon}>
-                <Loader2
-                  size={22}
-                  color={ACCENT}
-                  strokeWidth={2.2}
-                  style={{ animation: "aperturasFinalizadasSpin 0.85s linear infinite" }}
-                />
-              </div>
-              <div style={ui.emptyTitle}>Cargando aperturas…</div>
-              <div style={ui.emptyText}>Sincronizando con el servidor.</div>
-            </div>
+          {loadError ? (
+            <ErrorState description={loadError} onRetry={reload} />
+          ) : isLoading ? (
+            <Skeleton.List rows={5} height={120} />
           ) : data.items.length === 0 ? (
-            <div style={ui.emptyWrap}>
-              <div style={ui.emptyIconMuted}>
-                <FileText size={22} color={SLATE} strokeWidth={2} />
-              </div>
-              <div style={ui.emptyTitle}>Sin resultados</div>
-              <div style={ui.emptyText}>
-                No hay aperturas que coincidan con la búsqueda o los filtros. Probá ampliar criterios o
-                limpiar filtros.
-              </div>
-            </div>
+            <EmptyState
+              center
+              icon={FileText}
+              title="Sin resultados"
+              description="No hay aperturas que coincidan con la búsqueda o los filtros. Probá ampliar criterios o limpiar filtros."
+            />
           ) : (
             <>
               <div style={{ ...ui.listGrid, ...(m ? ui.mListGrid : {}) }}>
@@ -598,11 +600,11 @@ export default function AperturasFinalizadas() {
                       onMouseEnter={() => setHovered(item.id ?? idx)}
                       onMouseLeave={() => setHovered(null)}
                       onClick={() =>
-                        go(`/salud/aperturas/detalle/${encodeURIComponent(String(item.id ?? idx))}`)
+                        go(`/seguridad/aperturas/detalle/${encodeURIComponent(String(item.id ?? idx))}`)
                       }
                       onKeyDown={(e) =>
                         (e.key === "Enter" || e.key === " ") &&
-                        go(`/salud/aperturas/detalle/${encodeURIComponent(String(item.id ?? idx))}`)
+                        go(`/seguridad/aperturas/detalle/${encodeURIComponent(String(item.id ?? idx))}`)
                       }
                       style={{
                         ...ui.itemCard,

@@ -31,7 +31,9 @@ import {
   GhostButton,
   Main,
   Shell,
+  TableScroll,
   Topbar,
+  useToast,
 } from "../../../components/ui";
 import "./OTsDashboardPage.css";
 
@@ -44,18 +46,19 @@ function defaultCustomRange() {
 
 export default function OTsDashboardPage() {
   const nav = useNavigate();
+  const toast = useToast();
   const authCtx = useContext(AuthCtx);
-  const { user, permisos } = authCtx || {};
+  const { permisos } = authCtx || {};
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
 
   useEffect(() => {
     if (authLoading) return;
     if (!permisos?.mantenimiento) {
-      alert("Este usuario no puede acceder por falta de permisos.");
+      toast.error("No tenés permisos para acceder a este módulo.");
       nav(-1);
     }
-  }, [authLoading, permisos, nav]);
+  }, [authLoading, permisos, nav, toast]);
 
   const defaults = useMemo(() => defaultCustomRange(), []);
   const [period, setPeriod] = useState(PERIOD.MONTH);
@@ -125,9 +128,6 @@ export default function OTsDashboardPage() {
           onClick={() => nav("/mantenimiento/ots")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => nav("/mantenimiento/ots")}>
             Órdenes de trabajo
           </GhostButton>
@@ -272,6 +272,7 @@ export default function OTsDashboardPage() {
           {metrics.topDepartamentos.length === 0 ? (
             <p className="otsDashboard__muted">Sin datos de departamento.</p>
           ) : (
+            <TableScroll minWidth={360} bordered={false}>
             <table className="otsDashboard__table">
               <thead>
                 <tr>
@@ -288,6 +289,7 @@ export default function OTsDashboardPage() {
                 ))}
               </tbody>
             </table>
+            </TableScroll>
           )}
         </div>
 
@@ -297,6 +299,7 @@ export default function OTsDashboardPage() {
           {metrics.topLugaresProblema.length === 0 ? (
             <p className="otsDashboard__muted">Sin datos de lugar de problema.</p>
           ) : (
+            <TableScroll minWidth={360} bordered={false}>
             <table className="otsDashboard__table">
               <thead>
                 <tr>
@@ -313,6 +316,7 @@ export default function OTsDashboardPage() {
                 ))}
               </tbody>
             </table>
+            </TableScroll>
           )}
         </div>
 
@@ -322,6 +326,7 @@ export default function OTsDashboardPage() {
           {metrics.topTiposProblema.length === 0 ? (
             <p className="otsDashboard__muted">Sin datos de tipo de problema.</p>
           ) : (
+            <TableScroll minWidth={360} bordered={false}>
             <table className="otsDashboard__table">
               <thead>
                 <tr>
@@ -338,11 +343,13 @@ export default function OTsDashboardPage() {
                 ))}
               </tbody>
             </table>
+            </TableScroll>
           )}
         </div>
 
         <div className="otsDashboard__card otsDashboard__card--third">
           <h2 className="otsDashboard__card-title">Solicitantes con más solicitudes</h2>
+          <TableScroll minWidth={360} bordered={false}>
           <table className="otsDashboard__table">
             <thead>
               <tr>
@@ -367,11 +374,13 @@ export default function OTsDashboardPage() {
               )}
             </tbody>
           </table>
+          </TableScroll>
         </div>
 
         <div className="otsDashboard__card otsDashboard__card--third">
           <h2 className="otsDashboard__card-title">Responsables con más OTs</h2>
           <p className="otsDashboard__card-hint">Conteo por nombres en `responsableNombre`</p>
+          <TableScroll minWidth={360} bordered={false}>
           <table className="otsDashboard__table">
             <thead>
               <tr>
@@ -396,6 +405,7 @@ export default function OTsDashboardPage() {
               )}
             </tbody>
           </table>
+          </TableScroll>
         </div>
       </div>
         </Container>

@@ -4,6 +4,8 @@ import { signOut } from "firebase/auth";
 import { AuthCtx } from "../auth/AuthProvider";
 import {
   ArrowRight,
+  Clock,
+  Info,
   LayoutDashboard,
   Loader2,
   Lock,
@@ -53,20 +55,28 @@ function AreaHubCard({
   onHover,
   onLeave,
   onNavigate,
+  onComingSoon,
 }) {
   const { isPinned, togglePin } = usePinnedModules(area.key);
   const theme = area.theme || AREA_THEMES[area.key] || { accent: T.accent, soft: T.accentSoft };
   const pinned = isPinned(area.path);
+  const comingSoon = area.comingSoon === true;
+
+  const activate = () => {
+    if (blocked) return;
+    if (comingSoon) onComingSoon(area);
+    else onNavigate(area.path);
+  };
 
   return (
     <div
       role={blocked ? "group" : "button"}
       aria-disabled={blocked || undefined}
       tabIndex={blocked ? -1 : 0}
-      onClick={() => !blocked && onNavigate(area.path)}
+      onClick={activate}
       onKeyDown={(e) => {
         if (blocked) return;
-        if (e.key === "Enter" || e.key === " ") onNavigate(area.path);
+        if (e.key === "Enter" || e.key === " ") activate();
       }}
       onMouseEnter={() => !blocked && onHover(area.key)}
       onMouseLeave={onLeave}
@@ -85,7 +95,7 @@ function AreaHubCard({
           : "translateY(20px)",
       }}
     >
-      {!blocked && (
+      {!blocked && !comingSoon && (
         <button
           type="button"
           onClick={(e) => {
@@ -147,6 +157,11 @@ function AreaHubCard({
               <Lock size={13} strokeWidth={2.5} />
               <span>No disponible</span>
             </span>
+          ) : comingSoon ? (
+            <span style={{ ...styles.cardActionLink, color: theme.accent }}>
+              <Clock size={14} strokeWidth={2.5} />
+              <span>Próximamente</span>
+            </span>
           ) : (
             <span
               style={{
@@ -187,6 +202,7 @@ export default function AreasTrabajoHubPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchFocus, setSearchFocus] = useState(false);
+  const [comingSoonArea, setComingSoonArea] = useState(null);
 
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
@@ -434,6 +450,7 @@ export default function AreasTrabajoHubPage() {
                     onHover={setHovered}
                     onLeave={() => setHovered(null)}
                     onNavigate={go}
+                    onComingSoon={setComingSoonArea}
                   />
                 ))}
               </div>
@@ -477,6 +494,35 @@ export default function AreasTrabajoHubPage() {
           </section>
         </div>
       </main>
+
+      {comingSoonArea && (
+        <div style={styles.modalBackdrop} onClick={() => setComingSoonArea(null)}>
+          <div
+            style={styles.modalCard}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={comingSoonArea.title}
+          >
+            <div style={styles.modalIcon}>
+              <Info size={24} strokeWidth={2.2} color={T.accent} />
+            </div>
+            <div style={styles.modalChip}>Próximamente</div>
+            <h3 style={styles.modalTitle}>{comingSoonArea.title}</h3>
+            <p style={styles.modalText}>
+              {comingSoonArea.comingSoonMsg ||
+                "Esta área estará disponible próximamente."}
+            </p>
+            <button
+              type="button"
+              onClick={() => setComingSoonArea(null)}
+              style={styles.modalBtn}
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -978,5 +1024,75 @@ const styles = {
     fontWeight: 500,
     color: T.textMuted,
     lineHeight: 1.2,
+  },
+
+  /* Coming-soon modal */
+  modalBackdrop: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(15,23,42,0.45)",
+    display: "grid",
+    placeItems: "center",
+    padding: 16,
+    zIndex: 30060,
+  },
+  modalCard: {
+    width: "min(420px, 100%)",
+    background: "#fff",
+    borderRadius: 20,
+    border: `1px solid ${T.border}`,
+    boxShadow: "0 24px 60px rgba(15,23,42,0.28)",
+    padding: "26px 22px 20px",
+    display: "grid",
+    justifyItems: "center",
+    textAlign: "center",
+    gap: 8,
+  },
+  modalIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    background: T.accentSoft,
+    display: "grid",
+    placeItems: "center",
+    marginBottom: 2,
+  },
+  modalChip: {
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    color: T.accent,
+    background: T.accentSoft,
+    padding: "4px 12px",
+    borderRadius: 999,
+  },
+  modalTitle: {
+    margin: 0,
+    fontSize: 18,
+    fontWeight: 850,
+    color: T.text,
+    letterSpacing: -0.3,
+  },
+  modalText: {
+    margin: 0,
+    fontSize: 13.5,
+    fontWeight: 500,
+    color: T.textSecondary,
+    lineHeight: 1.5,
+    maxWidth: 340,
+  },
+  modalBtn: {
+    marginTop: 12,
+    padding: "11px 20px",
+    borderRadius: 12,
+    border: "none",
+    background: T.accent,
+    color: "#fff",
+    fontWeight: 800,
+    fontSize: 13.5,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    boxShadow: `0 8px 22px ${T.accentGlow}`,
   },
 };

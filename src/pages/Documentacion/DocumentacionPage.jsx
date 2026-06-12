@@ -19,6 +19,8 @@ import {
     Brand,
     GhostButton,
     Topbar,
+    useToast,
+    useConfirm,
 } from "../../components/ui";
 
 const ACCENT = "#089F8A";
@@ -58,6 +60,8 @@ function slugify(text) {
 
 export default function DocumentacionPage() {
     const nav = useNavigate();
+    const toast = useToast();
+    const confirm = useConfirm();
     const [showUploadModal, setShowUploadModal] = useState(false);
 
     //Buscar sction
@@ -434,9 +438,12 @@ export default function DocumentacionPage() {
     /** Eliminar documento: borra de Firestore y de Storage */
     const handleDeleteDoc = async () => {
         if (!viewerDoc?.id || !isDocumentacionUploader) return;
-        const confirmDelete = window.confirm(
-            `¿Estás seguro de eliminar "${safe(viewerDoc.title)}"? Esta acción no se puede deshacer.`
-        );
+        const confirmDelete = await confirm({
+            title: "Eliminar documento",
+            message: `¿Estás seguro de eliminar "${safe(viewerDoc.title)}"? Esta acción no se puede deshacer.`,
+            confirmText: "Eliminar",
+            tone: "danger",
+        });
         if (!confirmDelete) return;
 
         setBusy(true);
@@ -455,9 +462,11 @@ export default function DocumentacionPage() {
             await deleteDoc(doc(db, "documentacion", viewerDoc.id));
             setViewerDoc(null);
             await loadDocs();
+            toast.success("Documento eliminado correctamente.");
         } catch (e) {
             console.error(e);
             setErr(e?.message || "No se pudo eliminar el documento.");
+            toast.error(e?.message || "No se pudo eliminar el documento.");
         } finally {
             setBusy(false);
         }

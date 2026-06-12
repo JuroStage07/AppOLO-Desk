@@ -1,6 +1,6 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { auth } from "../../../firebase";
+import { auth } from "../../../../firebase";
 import {
   addDoc,
   collection,
@@ -10,9 +10,9 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { db } from "../../../firebase";
-import { AuthCtx } from "../../../auth/AuthProvider";
-import { isInUserScope } from "../../../utils/dataScope";
+import { db } from "../../../../firebase";
+import { AuthCtx } from "../../../../auth/AuthProvider";
+import { isInUserScope } from "../../../../utils/dataScope";
 import { ArrowLeft, PenLine } from "lucide-react";
 import {
   Brand,
@@ -21,7 +21,8 @@ import {
   Main,
   Shell,
   Topbar,
-} from "../../../components/ui";
+  useToast,
+} from "../../../../components/ui";
 
 const ACCENT = "#089F8A";
 
@@ -40,10 +41,12 @@ const yesNo = [
 
 export default function NuevoVisado() {
   const nav = useNavigate();
+  const toast = useToast();
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
 
   const [form, setForm] = useState({
     fecha: todayISO(),
@@ -76,29 +79,62 @@ export default function NuevoVisado() {
     aceptaNormas: false,
   });
 
-  const back = () => nav("/salud/visado");
+  const back = () => nav("/seguridad/visado");
 
-  const set = (key, value) => setForm((p) => ({ ...p, [key]: value }));
+  const set = (key, value) => {
+    setForm((p) => ({ ...p, [key]: value }));
+    setErrors((e) => ({ ...e, [key]: undefined }));
+  };
+
+  const validate = () => {
+    const e = {};
+    const req = "Este campo es obligatorio.";
+
+    if (!String(form.fecha).trim()) e.fecha = req;
+    if (!String(form.identificacion).trim()) e.identificacion = req;
+    if (!String(form.nombres).trim()) e.nombres = req;
+    if (!String(form.empresaProveedora).trim()) e.empresaProveedora = req;
+    if (!String(form.labores).trim()) e.labores = req;
+
+    if (form.tipoTramite === "MENOR_3M" && !String(form.tipoTramiteDetalle).trim()) {
+      e.tipoTramiteDetalle = "Especificá la duración del trámite.";
+    }
+
+    if (form.familiares === "SI") {
+      if (!String(form.familiarNombre).trim()) e.familiarNombre = req;
+      if (!String(form.familiarParentesco).trim()) e.familiarParentesco = req;
+    }
+
+    if (!form.aceptaNormas) {
+      e.aceptaNormas = "Debés aceptar las normas para continuar.";
+    }
+
+    return e;
+  };
 
   const showFamiliares = form.familiares === "SI";
   const showTramiteDetalle = form.tipoTramite === "MENOR_3M";
 
-  const canSave = useMemo(() => {
-    if (saving) return false;
-    if (!String(form.fecha).trim()) return false;
-    if (!String(form.nombres).trim()) return false;
-    if (!String(form.identificacion).trim()) return false;
-    if (!String(form.empresaProveedora).trim()) return false;
-    if (!String(form.labores).trim()) return false;
-    if (showTramiteDetalle && !String(form.tipoTramiteDetalle).trim()) return false;
-    if (!form.aceptaNormas) return false;
-    return true;
-  }, [form, saving, showTramiteDetalle]);
-
   const onSubmit = async (e) => {
     e?.preventDefault?.();
-    if (!canSave) return;
     if (authLoading) return;
+    if (saving) return;
+
+    const it = validate();
+    if (Object.keys(it).length) {
+      setErrors(it);
+      toast.warning("Revisá los campos marcados.");
+      // Focus + scroll the first invalid control into view.
+      setTimeout(() => {
+        const el = document.querySelector('[aria-invalid="true"]');
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.focus?.({ preventScroll: true });
+        }
+      }, 0);
+      return;
+    }
+    setErrors({});
 
     setSaving(true);
     let step = "init";
@@ -223,12 +259,12 @@ export default function NuevoVisado() {
         },
       });
 
-      alert("✅ Visado guardado correctamente.");
-      nav("/salud/visado", { replace: true });
+      toast.success("Visado guardado correctamente.");
+      nav("/seguridad/visado", { replace: true });
     } catch (err) {
       console.error("NuevoVisado error:", step, err?.code, err?.message, err);
-      alert(
-        `❌ Error guardando visado\n\nPaso: ${step}\nCódigo: ${err?.code || "error"}\nMensaje: ${
+      toast.error(
+        `Error guardando visado (paso: ${step}, código: ${err?.code || "error"}): ${
           err?.message || "falló"
         }`
       );
@@ -263,7 +299,7 @@ export default function NuevoVisado() {
               desc="Completá los datos básicos del colaborador externo."
             >
               <div style={styles.grid2}>
-                <Field label="Fecha" required>
+                <Field label="Fecha" required error={errors.fecha}>
                   <input
                     type="date"
                     value={form.fecha}
@@ -274,7 +310,7 @@ export default function NuevoVisado() {
                   />
                 </Field>
 
-                <Field label="No. identificación" required hint="Ej: cédula / DIMEX / pasaporte">
+                <Field label="No. identificación" required hint="Ej: cédula / DIMEX / pasaporte" error={errors.identificacion}>
                   <input
                     value={form.identificacion}
                     onChange={(e) => set("identificacion", e.target.value)}
@@ -287,7 +323,7 @@ export default function NuevoVisado() {
               </div>
 
               <div style={styles.grid2}>
-                <Field label="Nombres y apellidos" required>
+                <Field label="Nombres y apellidos" required error={errors.nombres}>
                   <input
                     value={form.nombres}
                     onChange={(e) => set("nombres", e.target.value)}
@@ -297,7 +333,7 @@ export default function NuevoVisado() {
                   />
                 </Field>
 
-                <Field label="Empresa proveedora" required>
+                <Field label="Empresa proveedora" required error={errors.empresaProveedora}>
                   <input
                     value={form.empresaProveedora}
                     onChange={(e) => set("empresaProveedora", e.target.value)}
@@ -354,7 +390,7 @@ export default function NuevoVisado() {
                 </Field>
               </div>
 
-              <Field label="Labores a realizar" required hint="Sé específico (área, equipo, actividad).">
+              <Field label="Labores a realizar" required hint="Sé específico (área, equipo, actividad)." error={errors.labores}>
                 <textarea
                   value={form.labores}
                   onChange={(e) => set("labores", e.target.value)}
@@ -376,14 +412,23 @@ export default function NuevoVisado() {
                   ]}
                 />
                 {showTramiteDetalle && (
-                  <div style={{ marginTop: 10 }}>
+                  <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
                     <input
                       value={form.tipoTramiteDetalle}
                       onChange={(e) => set("tipoTramiteDetalle", e.target.value)}
                       placeholder="Especifique (ej: 2 semanas, 1 mes)"
-                      style={styles.input}
+                      style={{
+                        ...styles.input,
+                        ...(errors.tipoTramiteDetalle ? styles.inputInvalid : {}),
+                      }}
+                      aria-invalid={errors.tipoTramiteDetalle ? true : undefined}
                       disabled={saving}
                     />
+                    {errors.tipoTramiteDetalle ? (
+                      <div style={styles.errorMsg} role="alert">
+                        {errors.tipoTramiteDetalle}
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </Field>
@@ -402,7 +447,7 @@ export default function NuevoVisado() {
 
               {showFamiliares && (
                 <div style={styles.grid2}>
-                  <Field label="Nombre">
+                  <Field label="Nombre" required error={errors.familiarNombre}>
                     <input
                       value={form.familiarNombre}
                       onChange={(e) => set("familiarNombre", e.target.value)}
@@ -412,7 +457,7 @@ export default function NuevoVisado() {
                     />
                   </Field>
 
-                  <Field label="Parentesco">
+                  <Field label="Parentesco" required error={errors.familiarParentesco}>
                     <input
                       value={form.familiarParentesco}
                       onChange={(e) => set("familiarParentesco", e.target.value)}
@@ -468,7 +513,12 @@ export default function NuevoVisado() {
 
             {/* ACEPTACIÓN */}
             <Section title="Aceptación" desc="Requerido para registrar el visado.">
-              <div style={styles.acceptBox}>
+              <div
+                style={{
+                  ...styles.acceptBox,
+                  ...(errors.aceptaNormas ? styles.acceptBoxInvalid : {}),
+                }}
+              >
                 <label style={styles.acceptRow}>
                   <input
                     type="checkbox"
@@ -476,6 +526,7 @@ export default function NuevoVisado() {
                     onChange={(e) => set("aceptaNormas", e.target.checked)}
                     disabled={saving}
                     style={styles.checkbox}
+                    aria-invalid={errors.aceptaNormas ? true : undefined}
                   />
                   <span style={styles.acceptText}>
                     He recibido, leído y acepto cumplir con las Normas de Seguridad para Personal Externo
@@ -484,6 +535,11 @@ export default function NuevoVisado() {
                     que nos representa.
                   </span>
                 </label>
+                {errors.aceptaNormas ? (
+                  <div style={{ ...styles.errorMsg, marginTop: 8 }} role="alert">
+                    {errors.aceptaNormas}
+                  </div>
+                ) : null}
               </div>
             </Section>
 
@@ -497,8 +553,8 @@ export default function NuevoVisado() {
 
               <button
                 type="submit"
-                disabled={!canSave}
-                style={{ ...styles.btnPrimary, ...(canSave ? {} : styles.btnDisabled) }}
+                disabled={saving}
+                style={{ ...styles.btnPrimary, ...(saving ? styles.btnDisabled : {}) }}
               >
                 {saving ? "Guardando…" : "Guardar visado"}
               </button>
@@ -527,16 +583,38 @@ function Section({ title, desc, children }) {
   );
 }
 
-function Field({ label, hint, required, children }) {
+function Field({ label, hint, required, error, children }) {
+  const invalid = !!error;
+  // When invalid, inject a red border + aria-invalid into the field's control(s)
+  // so focusing/scrolling the first error works via [aria-invalid="true"].
+  const decorated = invalid
+    ? React.Children.map(children, (child) => {
+        if (!React.isValidElement(child)) return child;
+        const type = child.type;
+        if (type === "input" || type === "textarea") {
+          return React.cloneElement(child, {
+            "aria-invalid": true,
+            style: { ...(child.props.style || {}), ...styles.inputInvalid },
+          });
+        }
+        return child;
+      })
+    : children;
+
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <div style={styles.labelRow}>
         <div style={styles.label}>
           {label} {required ? <span style={styles.req}>*</span> : null}
         </div>
-        {hint ? <div style={styles.hint}>{hint}</div> : null}
+        {invalid ? null : hint ? <div style={styles.hint}>{hint}</div> : null}
       </div>
-      {children}
+      {decorated}
+      {invalid ? (
+        <div style={styles.errorMsg} role="alert">
+          {error}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -634,6 +712,13 @@ const styles = {
     resize: "vertical",
   },
 
+  inputInvalid: {
+    borderColor: "#FCA5A5",
+    background: "#FEF6F6",
+    boxShadow: "0 0 0 3px rgba(185,28,28,0.10)",
+  },
+  errorMsg: { color: "#DC2626", fontWeight: 800, fontSize: 12 },
+
   segmented: {
     display: "grid",
     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
@@ -675,6 +760,11 @@ const styles = {
     border: "1px solid #E7E9F2",
     background: "#FFFFFF",
     padding: 12,
+  },
+  acceptBoxInvalid: {
+    borderColor: "#FCA5A5",
+    background: "#FEF6F6",
+    boxShadow: "0 0 0 3px rgba(185,28,28,0.10)",
   },
   acceptRow: { display: "flex", gap: 10, alignItems: "flex-start" },
   checkbox: { marginTop: 2, width: 18, height: 18, accentColor: ACCENT },

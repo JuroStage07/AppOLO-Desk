@@ -5,12 +5,11 @@ import {
   BarChart3,
   BookOpen,
   ClipboardList,
-  HeartPulse,
   Lock,
   ScanLine,
+  Shield,
   Stamp,
 } from "lucide-react";
-import { auth } from "../../firebase";
 import {
   Badge,
   Brand,
@@ -23,12 +22,11 @@ import {
   QuickCard,
   Shell,
   Topbar,
-} from "../../components/ui";
-import usePinnedModules from "../../hooks/usePinnedModules";
+} from "../../../components/ui";
+import usePinnedModules from "../../../hooks/usePinnedModules";
 
-export default function SaludOcupacional() {
+export default function SSOHub() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const { isPinned, togglePin } = usePinnedModules("salud");
 
   const go = (path) => nav(path);
@@ -39,7 +37,7 @@ export default function SaludOcupacional() {
         key: "aperturas",
         title: "Aperturas",
         desc: "Gestión de aperturas y seguimiento",
-        path: "/salud/aperturas",
+        path: "/seguridad/aperturas",
         icon: ClipboardList,
         tag: "Operación",
       },
@@ -47,7 +45,7 @@ export default function SaludOcupacional() {
         key: "terceros",
         title: "Ingreso de terceros",
         desc: "Control de marcas: entrada y salida automática por cédula",
-        path: "/salud/control-marcas",
+        path: "/seguridad/control-marcas",
         icon: ScanLine,
         tag: "Prioritario",
       },
@@ -55,7 +53,7 @@ export default function SaludOcupacional() {
         key: "visado",
         title: "Visados",
         desc: "Generar y registrar visados",
-        path: "/salud/visado",
+        path: "/seguridad/visado",
         icon: Stamp,
         tag: "Prioritario",
       },
@@ -63,7 +61,7 @@ export default function SaludOcupacional() {
         key: "estadisticas",
         title: "Estadísticas",
         desc: "Métricas y visualización general del área",
-        path: "/salud/metricas",
+        path: "/seguridad/metricas",
         icon: BarChart3,
         tag: "Analítica",
       },
@@ -83,15 +81,12 @@ export default function SaludOcupacional() {
     <Shell>
       <Topbar>
         <Brand
-          icon={HeartPulse}
-          title="Salud Ocupacional"
+          icon={Shield}
+          title="Seguridad"
           subtitle="Panel de módulos"
-          onClick={() => go("/salud")}
+          onClick={() => go("/seguridad")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => go("/")}>
             Inicio
           </GhostButton>

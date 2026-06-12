@@ -7,7 +7,6 @@ import {
   ClipboardList,
   Lock,
 } from "lucide-react";
-import { auth } from "../../../firebase";
 import {
   Badge,
   Brand,
@@ -19,12 +18,11 @@ import {
   ModuleGrid,
   Shell,
   Topbar,
-} from "../../../components/ui";
-import usePinnedModules from "../../../hooks/usePinnedModules";
+} from "../../../../components/ui";
+import usePinnedModules from "../../../../hooks/usePinnedModules";
 
 export default function AdministrarAperturas() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const { isPinned, togglePin } = usePinnedModules("salud");
 
   const go = (path) => nav(path);
@@ -35,7 +33,7 @@ export default function AdministrarAperturas() {
         key: "proceso",
         title: "En proceso",
         desc: "Aperturas activas actualmente.",
-        path: "/salud/aperturas/proceso",
+        path: "/seguridad/aperturas/proceso",
         icon: ClipboardList,
         tag: "Prioritario",
       },
@@ -43,7 +41,7 @@ export default function AdministrarAperturas() {
         key: "finalizadas",
         title: "Finalizadas",
         desc: "Historial de aperturas cerradas.",
-        path: "/salud/aperturas/finalizadas",
+        path: "/seguridad/aperturas/finalizadas",
         icon: CheckSquare,
         tag: "Historial",
       },
@@ -51,7 +49,7 @@ export default function AdministrarAperturas() {
         key: "rechazadas",
         title: "Rechazadas",
         desc: "Aperturas marcadas como rechazadas.",
-        path: "/salud/aperturas/rechazadas",
+        path: "/seguridad/aperturas/rechazadas",
         icon: Ban,
         tag: "Control",
       },
@@ -66,13 +64,10 @@ export default function AdministrarAperturas() {
           icon={ClipboardList}
           title="Aperturas"
           subtitle="Administrar"
-          onClick={() => go("/salud/aperturas")}
+          onClick={() => go("/seguridad/aperturas")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
-          <GhostButton icon={ArrowLeft} onClick={() => go("/salud")}>
+          <GhostButton icon={ArrowLeft} onClick={() => go("/seguridad")}>
             Menú Salud
           </GhostButton>
         </Topbar.Right>
