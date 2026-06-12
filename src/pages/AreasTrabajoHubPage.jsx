@@ -5,8 +5,10 @@ import { AuthCtx } from "../auth/AuthProvider";
 import {
   ArrowRight,
   BarChart3,
+  Check,
   ChevronRight,
   Cog,
+  Copy,
   Inbox,
   Info,
   LayoutDashboard,
@@ -26,7 +28,7 @@ import { auth } from "../firebase";
 
 import { isEpaRestrictedUser } from "../config/epaOnlyUids";
 import { getVisibleAreas } from "../config/workAreas";
-import { AreasSidebar, SidebarAreaIcon, useConfirm } from "../components/ui";
+import { AreasSidebar, SidebarAreaIcon, useConfirm, useToast } from "../components/ui";
 import logoAppolo from "../assets/AppOLO_logo.png";
 import imgApolo from "../assets/Apolo.png";
 
@@ -448,9 +450,28 @@ function AreasModal({ areas, onClose, onNavigate, onComingSoon }) {
 }
 
 /* ─── Assistant chat window (mock responses) ─── */
-function AssistantChat({ phase, messages, input, setInput, typing, onSend, onClear, onClose, onAction }) {
+function AssistantChat({ phase, messages, input, setInput, typing, onSend, onClear, onClose, onAction, onCopied }) {
   const scrollRef = useRef(null);
   const taRef = useRef(null);
+  const [hoveredMsg, setHoveredMsg] = useState(null);
+  const [copiedIdx, setCopiedIdx] = useState(null);
+  const copyTimer = useRef(null);
+
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
+
+  const copyMsg = (i, text) => {
+    const value = (text || "").trim();
+    if (!value) return;
+    try {
+      navigator.clipboard?.writeText(value);
+    } catch {
+      /* clipboard not available */
+    }
+    setCopiedIdx(i);
+    clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopiedIdx(null), 1200);
+    onCopied?.();
+  };
 
   // Auto-scroll to the latest message / typing indicator.
   useEffect(() => {
@@ -458,15 +479,16 @@ function AssistantChat({ phase, messages, input, setInput, typing, onSend, onCle
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, typing]);
 
-  // Focus the textarea when the chat opens.
+  // Focus the textarea when the chat opens and after the bot finishes replying.
   useEffect(() => {
-    if (phase === "chat" && taRef.current) taRef.current.focus();
-  }, [phase]);
+    if (phase === "chat" && !typing && taRef.current) taRef.current.focus();
+  }, [phase, typing]);
+
+  const canSend = input.trim().length > 0 && !typing;
 
   const submit = () => {
-    const text = input.trim();
-    if (!text) return;
-    onSend(text);
+    if (!canSend) return; // ignore while empty or while the bot is responding
+    onSend(input.trim());
   };
 
   const onKeyDown = (e) => {
@@ -531,19 +553,53 @@ function AssistantChat({ phase, messages, input, setInput, typing, onSend, onCle
             ? m.sources.map((s) => (s && (s.title || s.ref)) || "").filter(Boolean)
             : [];
           return (
-            <div key={i} style={{ ...styles.msgRow, justifyContent: isUser ? "flex-end" : "flex-start" }}>
+            <div
+              key={i}
+              onMouseEnter={() => setHoveredMsg(i)}
+              onMouseLeave={() => setHoveredMsg((cur) => (cur === i ? null : cur))}
+              style={{
+                ...styles.msgRow,
+                justifyContent: isUser ? "flex-end" : "flex-start",
+                animation: "hhMsgIn 280ms cubic-bezier(0.22,1,0.36,1) both",
+              }}
+            >
               {!isUser && (
                 <span style={styles.msgAvatar}>
-                  <img src={imgApolo} alt="" style={{ width: "80%", height: "80%", objectFit: "contain" }} draggable={false} />
+                  <img src={imgApolo} alt="" style={{ width: "78%", height: "78%", objectFit: "contain" }} draggable={false} />
                 </span>
               )}
               <div style={{ ...styles.msgCol, alignItems: isUser ? "flex-end" : "flex-start" }}>
-                <div style={isUser ? styles.bubbleUser : styles.bubbleBot}>{m.text}</div>
+                <div style={styles.bubbleWrap}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => copyMsg(i, m.text)}
+                    onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && copyMsg(i, m.text)}
+                    title="Copiar mensaje"
+                    style={{ ...(isUser ? styles.bubbleUser : styles.bubbleBot), cursor: "pointer" }}
+                  >
+                    {m.text}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyMsg(i, m.text)}
+                    aria-label="Copiar mensaje"
+                    title={copiedIdx === i ? "Copiado" : "Copiar"}
+                    style={{
+                      ...styles.copyBtn,
+                      ...(isUser ? styles.copyBtnUser : styles.copyBtnBot),
+                      opacity: hoveredMsg === i ? 1 : 0,
+                      pointerEvents: hoveredMsg === i ? "auto" : "none",
+                    }}
+                  >
+                    {copiedIdx === i ? <Check size={13} strokeWidth={2.6} /> : <Copy size={13} strokeWidth={2.2} />}
+                  </button>
+                </div>
 
                 {actions.length > 0 && (
                   <div style={styles.msgActions}>
                     {actions.map((a, idx) => (
-                      <button key={idx} type="button" onClick={() => onAction(a.path)} style={styles.msgActionChip}>
+                      <button key={idx} type="button" className="hh-msg-chip" onClick={() => onAction(a.path)} style={styles.msgActionChip}>
                         {a.label || a.path}
                       </button>
                     ))}
@@ -576,7 +632,7 @@ function AssistantChat({ phase, messages, input, setInput, typing, onSend, onCle
             <div style={styles.suggLabel}>Sugerencias</div>
             <div style={styles.suggRow}>
               {ASSISTANT_SUGGESTIONS.map((s) => (
-                <button key={s} type="button" onClick={() => onSend(s)} style={styles.suggChip}>
+                <button key={s} type="button" className="hh-sugg-chip" onClick={() => onSend(s)} style={styles.suggChip}>
                   {s}
                 </button>
               ))}
@@ -600,11 +656,11 @@ function AssistantChat({ phase, messages, input, setInput, typing, onSend, onCle
         <button
           type="button"
           onClick={submit}
-          disabled={!input.trim()}
+          disabled={!canSend}
           aria-label="Enviar mensaje"
-          style={{ ...styles.chatSend, opacity: input.trim() ? 1 : 0.45, cursor: input.trim() ? "pointer" : "not-allowed" }}
+          style={{ ...styles.chatSend, opacity: canSend ? 1 : 0.45, cursor: canSend ? "pointer" : "not-allowed" }}
         >
-          <Send size={18} strokeWidth={2.2} />
+          <Send size={30} strokeWidth={2.2} style={{ width: 30, height: 30 }} />
         </button>
       </div>
     </div>
@@ -617,6 +673,7 @@ export default function AreasTrabajoHubPage() {
   const { profile, epaAdmin, role, permisos, user: ctxUser } = useContext(AuthCtx);
   const user = ctxUser ?? auth.currentUser;
   const confirm = useConfirm();
+  const toast = useToast();
   const [hovered, setHovered] = useState(null);
   const [busyLogout, setBusyLogout] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -1033,6 +1090,7 @@ export default function AreasTrabajoHubPage() {
                   onClear={clearAssistant}
                   onClose={closeAssistant}
                   onAction={(path) => path && nav(path)}
+                  onCopied={() => toast.success("Mensaje copiado")}
                 />
               ) : (
               <div
@@ -1227,7 +1285,11 @@ const cssAnimations = `
   @keyframes hhChatIn { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
   @keyframes hhChatOut { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(12px) scale(0.98); } }
   @keyframes hhTyping { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-3px); opacity: 1; } }
+  @keyframes hhMsgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   * { box-sizing: border-box; }
+
+  .hh-sugg-chip:hover { border-color: #089F8A; color: #089F8A; background: rgba(8,159,138,0.08); }
+  .hh-msg-chip:hover { filter: brightness(0.97); }
 
   /* staggered entrance for the lateral area cards when the modal opens */
   .hh-modal-side .hh-area-card { animation: hhCardIn 360ms cubic-bezier(0.22,1,0.36,1) both; }
@@ -1711,14 +1773,33 @@ const styles = {
     flex: 1,
     minHeight: 0,
     overflowY: "auto",
-    padding: "18px 16px",
+    padding: "20px 18px",
     display: "flex",
     flexDirection: "column",
-    gap: 12,
-    background: T.bg,
+    gap: 24,
+    background: `radial-gradient(900px 320px at 50% -40px, ${T.accentSoft} 0%, transparent 70%), ${T.bg}`,
   },
-  msgRow: { display: "flex", alignItems: "flex-end", gap: 8, width: "100%" },
-  msgCol: { display: "flex", flexDirection: "column", gap: 6, maxWidth: "82%", minWidth: 0 },
+  msgRow: { display: "flex", alignItems: "flex-start", gap: 9, width: "100%" },
+  msgCol: { display: "flex", flexDirection: "column", gap: 6, maxWidth: "84%", minWidth: 0 },
+  bubbleWrap: { position: "relative", width: "fit-content", maxWidth: "100%" },
+  copyBtn: {
+    position: "absolute",
+    top: "calc(100% + 4px)",
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    border: `1px solid ${T.border}`,
+    background: T.surface,
+    color: T.textSecondary,
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+    padding: 0,
+    boxShadow: T.shadow,
+    transition: "opacity 150ms ease",
+  },
+  copyBtnBot: { left: 0 },
+  copyBtnUser: { right: 0 },
   msgActions: { display: "flex", flexWrap: "wrap", gap: 6 },
   msgActionChip: {
     padding: "7px 12px",
@@ -1734,49 +1815,55 @@ const styles = {
   },
   msgSources: { fontSize: 11, fontWeight: 600, color: T.textMuted, lineHeight: 1.4, paddingLeft: 2 },
   msgAvatar: {
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
     borderRadius: 999,
     background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accentDark} 100%)`,
     display: "grid",
     placeItems: "center",
     flexShrink: 0,
-    boxShadow: T.shadow,
+    marginTop: 2,
+    border: "2px solid #fff",
+    boxShadow: `0 4px 12px ${T.accentGlow}`,
   },
   bubbleBot: {
-    maxWidth: "78%",
-    padding: "10px 14px",
-    borderRadius: "4px 16px 16px 16px",
+    width: "fit-content",
+    maxWidth: "100%",
+    padding: "11px 15px",
+    borderRadius: "6px 18px 18px 18px",
     background: T.surface,
     border: `1px solid ${T.border}`,
     color: T.text,
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: 500,
-    lineHeight: 1.5,
-    boxShadow: T.shadow,
+    lineHeight: 1.55,
+    boxShadow: "0 2px 8px rgba(15,23,42,0.05)",
     whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
   },
   bubbleUser: {
-    maxWidth: "78%",
-    padding: "10px 14px",
-    borderRadius: "16px 4px 16px 16px",
+    width: "fit-content",
+    maxWidth: "100%",
+    padding: "11px 15px",
+    borderRadius: "18px 6px 18px 18px",
     background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accentDark} 100%)`,
     color: "#fff",
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: 500,
-    lineHeight: 1.5,
-    boxShadow: `0 4px 14px ${T.accentGlow}`,
+    lineHeight: 1.55,
+    boxShadow: `0 6px 16px ${T.accentGlow}`,
     whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
   },
   typingBubble: {
     display: "inline-flex",
     alignItems: "center",
     gap: 5,
-    padding: "12px 14px",
-    borderRadius: "4px 16px 16px 16px",
+    padding: "13px 15px",
+    borderRadius: "6px 18px 18px 18px",
     background: T.surface,
     border: `1px solid ${T.border}`,
-    boxShadow: T.shadow,
+    boxShadow: "0 2px 8px rgba(15,23,42,0.05)",
   },
   typingDot: {
     width: 7,
@@ -1828,9 +1915,9 @@ const styles = {
     lineHeight: 1.45,
   },
   chatSend: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
+    width: 52,
+    height: 52,
+    borderRadius: 15,
     border: "none",
     background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accentDark} 100%)`,
     color: "#fff",
