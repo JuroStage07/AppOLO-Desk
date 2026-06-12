@@ -143,18 +143,21 @@ function ActionNode({ action, x, y, delay, mounted, hovered, badge }) {
     <div
       aria-hidden="true"
       style={{
-        ...styles.node,
+        ...styles.nodeWrap,
         left: `calc(50% + ${x}%)`,
         top: `calc(50% + ${y}%)`,
-        transitionDelay: `${delay}ms`,
-        opacity: mounted ? 1 : 0,
-        // The whole node scales up on hover/focus, keeping the centering
-        // translate so its anchor point (the icon centre) never moves.
-        transform: `translate(-50%, -50%) scale(${mounted ? (isHover ? 1.08 : 1) : 0.6})`,
         zIndex: isHover ? 9 : 6,
-        pointerEvents: "none",
       }}
     >
+      <div
+        style={{
+          ...styles.node,
+          // Hover grows the whole node smoothly (transition lives on .node, no
+          // delay); the mount stagger is handled by the entrance animation.
+          transform: `scale(${isHover ? 1.1 : 1})`,
+          animation: `hhNodeIn 480ms cubic-bezier(0.22,1,0.36,1) ${delay}ms backwards`,
+        }}
+      >
       <span
         style={{
           ...styles.nodeBtn,
@@ -182,6 +185,7 @@ function ActionNode({ action, x, y, delay, mounted, hovered, badge }) {
       >
         {action.title}
       </span>
+      </div>
     </div>
   );
 }
@@ -317,7 +321,7 @@ function AreasModal({ areas, onClose, onNavigate, onComingSoon }) {
               }}
             >
               {active && (
-                <>
+                <div key={active.key} style={styles.centerInner}>
                   <div style={styles.centerHero}>
                     <span style={{ ...styles.centerIcon, background: hexToRgba(accent, 0.14), color: accent }}>
                       {active.img ? (
@@ -402,7 +406,7 @@ function AreasModal({ areas, onClose, onNavigate, onComingSoon }) {
                       </div>
                     )}
                   </div>
-                </>
+                </div>
               )}
             </div>
 
@@ -720,7 +724,9 @@ export default function AreasTrabajoHubPage() {
                 style={{
                   ...styles.wheel,
                   opacity: mounted ? 1 : 0,
-                  transform: mounted ? "scale(1)" : "scale(0.96)",
+                  // 25% smaller — scales the whole menu uniformly (icons, borders,
+                  // strokes, labels, highlights and hit areas) keeping proportions.
+                  transform: mounted ? "scale(0.75)" : "scale(0.72)",
                 }}
               >
                 {/* subtle outer ring */}
@@ -744,7 +750,7 @@ export default function AreasTrabajoHubPage() {
                   {wedges
                     .filter((w) => hovered === w.key)
                     .map((w) => (
-                      <g key={w.key}>
+                      <g key={w.key} style={{ animation: "hhFadeIn 200ms ease" }}>
                         {/* white base fills the extension with the wheel look */}
                         <path d={w.dActive} fill="#FFFFFF" stroke="none" />
                         {/* soft accent overlay */}
@@ -887,7 +893,21 @@ const cssAnimations = `
   @keyframes homeSpin { to { transform: rotate(360deg); } }
   @keyframes hhFadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes hhPop { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  /* wheel action icons: soft scale-in on mount */
+  @keyframes hhNodeIn { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+  /* areas modal: staggered cards + panel content */
+  @keyframes hhCardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes hhPanelIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   * { box-sizing: border-box; }
+
+  /* staggered entrance for the lateral area cards when the modal opens */
+  .hh-modal-side .hh-area-card { animation: hhCardIn 360ms cubic-bezier(0.22,1,0.36,1) both; }
+  .hh-modal-side .hh-area-card:nth-child(1) { animation-delay: 40ms; }
+  .hh-modal-side .hh-area-card:nth-child(2) { animation-delay: 90ms; }
+  .hh-modal-side .hh-area-card:nth-child(3) { animation-delay: 140ms; }
+  .hh-modal-side .hh-area-card:nth-child(4) { animation-delay: 190ms; }
+  .hh-modal-side .hh-area-card:nth-child(5) { animation-delay: 240ms; }
+  .hh-modal-side .hh-area-card:nth-child(n+6) { animation-delay: 290ms; }
   input::placeholder { color: ${T.textMuted}; }
 
   /* Circular menu sizing — stable on laptop, scaled down on smaller screens. */
@@ -1179,6 +1199,8 @@ const styles = {
     boxShadow: "inset 0 1px 0 #fff, 0 22px 60px rgba(15,23,42,0.12), 0 6px 18px rgba(15,23,42,0.05)",
     transition: "opacity 520ms ease, transform 520ms cubic-bezier(0.22,1,0.36,1)",
     overflow: "visible", // let the active sector grow beyond the base circle
+    // the 0.75 scale leaves dead space top/bottom; pull it up a bit
+    marginTop: "calc(var(--areas-wheel-size, 600px) * -0.1)",
   },
   outerRing: {
     position: "absolute",
@@ -1201,6 +1223,8 @@ const styles = {
     cursor: "pointer",
     zIndex: 4,
     fontFamily: "inherit",
+    outline: "none", // focus is shown via the sector/icon highlight, not a square ring
+    WebkitTapHighlightColor: "transparent",
   },
   innerRing: {
     position: "absolute",
@@ -1216,15 +1240,20 @@ const styles = {
     pointerEvents: "none",
     zIndex: 3,
   },
-  node: {
+  nodeWrap: {
     position: "absolute",
+    transform: "translate(-50%, -50%)",
+    pointerEvents: "none",
+  },
+  node: {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     width: "clamp(72px, 14vw, 96px)",
     transformOrigin: "center center",
-    transition: "opacity 420ms ease, transform 360ms cubic-bezier(0.22,1,0.36,1)",
+    // smooth, slightly springy grow on hover (no delay → reacts immediately)
+    transition: "transform 320ms cubic-bezier(0.34, 1.4, 0.5, 1)",
     // native button reset (the whole node is a <button> now)
     border: "none",
     background: "transparent",
@@ -1448,6 +1477,13 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: 14,
+    transition: "background 260ms ease, border-color 260ms ease",
+  },
+  centerInner: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+    animation: "hhPanelIn 260ms cubic-bezier(0.22,1,0.36,1)",
   },
   centerHero: { display: "flex", alignItems: "center", gap: 14 },
   centerIcon: { width: 60, height: 60, borderRadius: 16, display: "grid", placeItems: "center", flexShrink: 0, overflow: "hidden" },
