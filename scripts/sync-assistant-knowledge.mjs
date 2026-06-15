@@ -8,6 +8,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const paths = {
   app: path.join(rootDir, "src", "App.jsx"),
   workAreas: path.join(rootDir, "src", "config", "workAreas.jsx"),
+  capabilities: path.join(rootDir, "docs", "assistant-knowledge", "appolo-capabilities.json"),
   docsKnowledge: path.join(rootDir, "docs", "assistant-knowledge", "appolo-knowledge.json"),
   publicKnowledge: path.join(rootDir, "public", "assistant-knowledge", "appolo-knowledge.json"),
 };
@@ -51,6 +52,15 @@ globalThis.__ASSISTANT_KNOWLEDGE_SYNC__ = {
 async function loadBaseKnowledge() {
   const raw = await readFile(paths.docsKnowledge, "utf8");
   return JSON.parse(raw);
+}
+
+async function loadCapabilities() {
+  const raw = await readFile(paths.capabilities, "utf8");
+  const value = JSON.parse(raw);
+  if (!Array.isArray(value)) {
+    throw new Error("docs/assistant-knowledge/appolo-capabilities.json debe ser un array.");
+  }
+  return value;
 }
 
 function cleanFeatures(features = []) {
@@ -196,17 +206,60 @@ function buildRoutes(appSource, existingRoutes = [], areas = []) {
   });
 }
 
-function buildKnowledge(baseKnowledge, syncedAreas, syncedRoutes) {
+function buildFlatNavigation(areas) {
+  const items = [];
+
+  for (const area of areas) {
+    items.push({
+      type: "area",
+      areaKey: area.key,
+      areaTitle: area.title,
+      label: area.title,
+      path: area.path,
+      keywords: [area.key, area.title, area.description, area.tag].filter(Boolean),
+    });
+
+    for (const module of area.modules || []) {
+      items.push({
+        type: "module",
+        areaKey: area.key,
+        areaTitle: area.title,
+        label: module.label,
+        path: module.path,
+        keywords: [area.key, area.title, module.label, module.path].filter(Boolean),
+      });
+
+      for (const feature of module.features || []) {
+        items.push({
+          type: "feature",
+          areaKey: area.key,
+          areaTitle: area.title,
+          moduleLabel: module.label,
+          label: feature.label,
+          path: feature.path,
+          keywords: [area.key, area.title, module.label, feature.label, feature.path].filter(Boolean),
+        });
+      }
+    }
+  }
+
+  return items.filter((item) => item.path);
+}
+
+function buildKnowledge(baseKnowledge, syncedAreas, syncedRoutes, capabilities) {
   return {
     ...baseKnowledge,
     generatedAt: new Date().toISOString(),
     generatedFrom: [
       "src/config/workAreas.jsx",
       "src/App.jsx",
+      "docs/assistant-knowledge/appolo-capabilities.json",
       "docs/assistant-knowledge/appolo-knowledge.json",
     ],
     areas: syncedAreas,
     routes: syncedRoutes,
+    navigationIndex: buildFlatNavigation(syncedAreas),
+    capabilities,
   };
 }
 
@@ -218,15 +271,16 @@ async function writeJson(filePath, value) {
 }
 
 async function main() {
-  const [baseKnowledge, appSource, { workAreas }] = await Promise.all([
+  const [baseKnowledge, appSource, { workAreas }, capabilities] = await Promise.all([
     loadBaseKnowledge(),
     readFile(paths.app, "utf8"),
     loadWorkAreas(),
+    loadCapabilities(),
   ]);
 
   const areas = buildAreas(workAreas, baseKnowledge.areas);
   const routes = buildRoutes(appSource, baseKnowledge.routes, areas);
-  const knowledge = buildKnowledge(baseKnowledge, areas, routes);
+  const knowledge = buildKnowledge(baseKnowledge, areas, routes, capabilities);
 
   await writeJson(paths.docsKnowledge, knowledge);
   await writeJson(paths.publicKnowledge, knowledge);
@@ -234,6 +288,7 @@ async function main() {
   console.log(`Assistant knowledge synced.`);
   console.log(`- Areas: ${areas.length}`);
   console.log(`- Routes: ${routes.length}`);
+  console.log(`- Capabilities: ${capabilities.length}`);
   console.log(`- Docs: ${path.relative(rootDir, paths.docsKnowledge)}`);
   console.log(`- Public: ${path.relative(rootDir, paths.publicKnowledge)}`);
 }
