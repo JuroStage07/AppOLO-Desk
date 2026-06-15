@@ -1,0 +1,53 @@
+// Opciones oficiales usadas por el flujo de creación de órdenes de trabajo.
+export const OT_DEPARTAMENTOS = [
+  "Control",
+  "Sistema",
+  "Personal",
+  "Comercio exterior",
+  "Ingeniería",
+  "Ventas",
+  "CEDI",
+  "Transportes",
+  "Otro",
+];
+
+export const OT_LUGARES_PROBLEMA = [
+  "Piso #1",
+  "Piso #2",
+  "Piso #3",
+  "CEDI",
+  "Parqueo",
+  "Vehículo/Flota",
+  "Otro",
+];
+
+export const OT_TIPOS_PROBLEMA = [
+  "Albañeria",
+  "Pisos",
+  "Techos",
+  "Goteras",
+  "Canoas",
+  "Cielo raso",
+  "Instalación eléctrica",
+  "Cañerías",
+  "Carpintería",
+  "Fontanería",
+  "Pintura",
+  "Soldadura",
+  "Tanques sépticos",
+  "Aire acondicionado",
+  "Remodelaciones",
+  "Puertas y portones",
+  "Accesos",
+  "Racks",
+  "Equipos",
+  "Rotulaciones",
+  "Sistema de incendios",
+  "Andenes de carga",
+  "Banda transportadora",
+  "Ilimunacion",
+  "Baños",
+  "Control de plagas",
+  "Camaras / CCTV",
+  "Otro",
+];

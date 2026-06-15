@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { AuthCtx } from "../auth/AuthProvider";
 import {
   ArrowRight,
@@ -24,9 +25,14 @@ import {
   User,
   X,
 } from "lucide-react";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
 
 import { isEpaRestrictedUser } from "../config/epaOnlyUids";
+import {
+  OT_DEPARTAMENTOS,
+  OT_LUGARES_PROBLEMA,
+  OT_TIPOS_PROBLEMA,
+} from "../config/otOptions";
 import { getVisibleAreas } from "../config/workAreas";
 import { AreasSidebar, SidebarAreaIcon, useConfirm, useToast } from "../components/ui";
 import logoAppolo from "../assets/AppOLO_logo.png";
@@ -85,10 +91,60 @@ const ASSISTANT_SUGGESTIONS = [
   "¿Dónde veo reportes?",
   "Explicame el flujo general",
 ];
+/* Human-readable labels for OT draft fields (used by the create_ot_draft card). */
+const OT_FIELD_LABELS = {
+  nombreOT: "Nombre de OT",
+  activoReferencia: "Activo referencia",
+  departamento: "Departamento",
+  lugarProblema: "Lugar del problema",
+  tipoProblema: "Tipo de problema",
+  descripcionOT: "Descripción",
+  notas: "Notas",
+};
+const OT_REQUIRED_FIELDS = [
+  "nombreOT",
+  "activoReferencia",
+  "departamento",
+  "lugarProblema",
+  "tipoProblema",
+  "descripcionOT",
+];
+const OT_SELECT_OPTIONS = {
+  departamento: OT_DEPARTAMENTOS,
+  lugarProblema: OT_LUGARES_PROBLEMA,
+  tipoProblema: OT_TIPOS_PROBLEMA,
+};
+const OT_SELECT_FIELDS = Object.keys(OT_SELECT_OPTIONS);
+const OT_PROBLEM_TYPE_RULES = [
+  { value: "Puertas y portones", terms: ["porton", "portones", "puerta", "puertas", "cerradura"] },
+  { value: "Goteras", terms: ["gotera", "goteras", "filtracion", "filtraciones", "agua cayendo"] },
+  { value: "Techos", terms: ["techo", "techos", "cubierta", "lamina"] },
+  { value: "Instalación eléctrica", terms: ["luz", "lampara", "apagado", "apagon", "toma", "breaker", "cableado", "electric"] },
+  { value: "Cañerías", terms: ["tuberia", "tubo", "cano", "fuga de agua", "llave de agua", "lavamanos"] },
+  { value: "Baños", terms: ["bano", "banos", "inodoro", "sanitario", "ducha", "urinario"] },
+  { value: "Aire acondicionado", terms: ["aire acondicionado", "a/c", " ac ", "no enfria"] },
+  { value: "Camaras / CCTV", terms: ["camara", "camaras", "cctv", "monitoreo"] },
+  { value: "Racks", terms: ["rack", "racks", "estanteria"] },
+  { value: "Andenes de carga", terms: ["anden", "andenes", "rampa de carga"] },
+  { value: "Banda transportadora", terms: ["banda transportadora"] },
+  { value: "Sistema de incendios", terms: ["extintor", "alarma", "detector", "rociador", "incendio"] },
+  { value: "Pintura", terms: ["pintura", "pintar", "despintada", "retoque"] },
+  { value: "Soldadura", terms: ["soldar", "soldadura", "pieza quebrada", "metalica"] },
+  { value: "Control de plagas", terms: ["plaga", "plagas", "insecto", "insectos", "fumigacion"] },
+];
+const OT_DRAFT_READY_REPLY =
+  "Ya tengo el borrador listo. En el siguiente paso voy a conectar la creación real de la OT.";
+const OT_DRAFT_INVALID_REPLY =
+  "Antes de crear la OT necesito que el borrador tenga datos válidos.\nElegí opciones oficiales en los campos pendientes para proteger las métricas.";
+const OT_STATE_SOLICITADA = "Solicitada";
+
 /* n8n webhook (optional). When absent, the chat falls back to a local mock. */
 const ASSISTANT_WEBHOOK_URL = import.meta.env.VITE_ASSISTANT_WEBHOOK_URL;
+const ASSISTANT_TIMEOUT_MS = 60000;
 const ASSISTANT_ERROR_REPLY =
   "No pude conectar con el asistente en este momento. Podés intentar de nuevo en unos segundos.";
+const ASSISTANT_TIMEOUT_REPLY =
+  "El asistente tardó más de lo esperado en responder. Intentá de nuevo en unos segundos o hacé una pregunta más corta.";
 
 /* Local conversation id (no deps). */
 function newConversationId() {
@@ -98,6 +154,168 @@ function newConversationId() {
     /* ignore */
   }
   return `conv-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+}
+
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function cleanOtValue(value) {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number") return String(value).trim();
+  return "";
+}
+
+function normalizeOtText(value) {
+  return cleanOtValue(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function findOfficialOtOption(field, value) {
+  const options = OT_SELECT_OPTIONS[field];
+  const clean = cleanOtValue(value);
+  if (!options || !clean) return "";
+  return options.find((opt) => opt === clean) || options.find((opt) => opt.toLowerCase() === clean.toLowerCase()) || "";
+}
+
+function isOtFieldComplete(field, draft) {
+  const value = cleanOtValue(draft?.[field]);
+  if (!value) return false;
+  if (OT_SELECT_OPTIONS[field]) return Boolean(findOfficialOtOption(field, value));
+  return true;
+}
+
+function getOtMissingFields(draft) {
+  return OT_REQUIRED_FIELDS.filter((field) => !isOtFieldComplete(field, draft));
+}
+
+function inferOtTipoProblema(draft) {
+  const current = findOfficialOtOption("tipoProblema", draft?.tipoProblema);
+  if (current) return current;
+
+  const haystack = normalizeOtText(
+    [
+      draft?.nombreOT,
+      draft?.activoReferencia,
+      draft?.descripcionOT,
+      draft?.notas,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  if (!haystack) return "";
+  return OT_PROBLEM_TYPE_RULES.find((rule) => rule.terms.some((term) => haystack.includes(term)))?.value || "";
+}
+
+function normalizeOtDraftAction(action) {
+  if (!action || action.type !== "create_ot_draft") return action || null;
+  if (action.status === "cancelled") return action;
+
+  const draft = {
+    ...(action.draft && typeof action.draft === "object" ? action.draft : {}),
+  };
+
+  OT_SELECT_FIELDS.forEach((field) => {
+    const official = findOfficialOtOption(field, draft[field]);
+    if (official) draft[field] = official;
+  });
+
+  if (!cleanOtValue(draft.tipoProblema)) {
+    const inferredType = inferOtTipoProblema(draft);
+    if (inferredType) draft.tipoProblema = inferredType;
+  }
+
+  const missingFields = getOtMissingFields(draft);
+  return {
+    ...action,
+    status: missingFields.length > 0 ? "missing_fields" : "ready",
+    draft,
+    missingFields,
+  };
+}
+
+function patchOtDraftAction(action, patch) {
+  if (!action || action.type !== "create_ot_draft") return action;
+
+  const draft = {
+    ...(action.draft && typeof action.draft === "object" ? action.draft : {}),
+    ...patch,
+  };
+  const missingFields = getOtMissingFields(draft);
+
+  return {
+    ...action,
+    status: missingFields.length > 0 ? "missing_fields" : "ready",
+    draft,
+    missingFields,
+  };
+}
+
+function buildOtDraftValidationReply(missingFields) {
+  if (!missingFields.length) return OT_DRAFT_READY_REPLY;
+  const list = missingFields
+    .map((field, index) => `${index + 1}. ${OT_FIELD_LABELS[field] || field}`)
+    .join("\n");
+  return `${OT_DRAFT_INVALID_REPLY}\n${list}`;
+}
+
+function buildAssistantOtPayload({ draft, user, profile }) {
+  const departamento = findOfficialOtOption("departamento", draft?.departamento);
+  const lugarProblema = findOfficialOtOption("lugarProblema", draft?.lugarProblema);
+  const tipoProblema = findOfficialOtOption("tipoProblema", draft?.tipoProblema);
+  const NroSolicitud = `SOL-OT-${Date.now()}`;
+  const createdByName =
+    cleanOtValue(profile?.displayName) ||
+    cleanOtValue(user?.displayName) ||
+    cleanOtValue(user?.email) ||
+    "Usuario";
+
+  const payload = {
+    solicitanteNombre: createdByName,
+    solicitanteFicha: cleanOtValue(profile?.numeroFicha || profile?.ficha),
+    fecha: todayISO(),
+    nombreOT: cleanOtValue(draft?.nombreOT),
+    activoReferencia: cleanOtValue(draft?.activoReferencia),
+
+    departamento,
+    departamentoBase: departamento,
+    departamentoOtro: departamento === "Otro" ? "" : "",
+
+    lugarProblema,
+    lugarProblemaBase: lugarProblema,
+    lugarProblemaOtro: lugarProblema === "Otro" ? "" : "",
+
+    tipoProblema,
+    tipoProblemaBase: tipoProblema,
+    tipoProblemaOtro: tipoProblema === "Otro" ? "" : "",
+
+    descripcionOT: cleanOtValue(draft?.descripcionOT),
+    notas: cleanOtValue(draft?.notas),
+
+    OTState: OT_STATE_SOLICITADA,
+    NroSolicitud,
+
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    createdBy: user?.uid || null,
+    createdByName,
+  };
+
+  const tenantId = cleanOtValue(profile?.tenantId);
+  const company = cleanOtValue(profile?.company);
+  if (tenantId && company) {
+    payload.tenantId = tenantId;
+    payload.company = company;
+  }
+
+  return payload;
 }
 
 /* Turn an area accent (hex) into a soft rgba tint — used to derive module colors. */
@@ -450,7 +668,124 @@ function AreasModal({ areas, onClose, onNavigate, onComingSoon }) {
 }
 
 /* ─── Assistant chat window (mock responses) ─── */
-function AssistantChat({ phase, messages, input, setInput, typing, onSend, onClear, onClose, onAction, onCopied }) {
+/* Visual card for action.type === "create_ot_draft". Renders the filled draft
+   fields + official selectors for metric-sensitive fields; never shows raw JSON. */
+function OtDraftCard({ action, creating, onCreate, onCompleteByChat, onDraftFieldChange }) {
+  if (!action || action.type !== "create_ot_draft") return null;
+
+  const draft = action.draft && typeof action.draft === "object" ? action.draft : {};
+  const computedMissing = getOtMissingFields(draft);
+  const missing = Array.from(new Set([...(Array.isArray(action.missingFields) ? action.missingFields : []), ...computedMissing]))
+    .filter((key) => OT_REQUIRED_FIELDS.includes(key) && !isOtFieldComplete(key, draft));
+  const isCancelled = action.status === "cancelled";
+  const isCreated = action.status === "created";
+  const isReady = !isCancelled && !isCreated && missing.length === 0;
+
+  // Filled fields: keep the documented field order, only those with a value.
+  const filled = Object.keys(OT_FIELD_LABELS)
+    .filter((key) => !OT_SELECT_FIELDS.includes(key))
+    .map((key) => [key, draft[key]])
+    .filter(([, value]) => typeof value === "string" && value.trim());
+
+  return (
+    <div style={styles.otCard}>
+      <div style={styles.otCardHead}>
+        <span style={styles.otCardTitle}>Borrador de OT</span>
+        <span
+          style={{
+            ...styles.otStatus,
+            ...(isCancelled || isCreated ? styles.otStatusCancelled : isReady ? styles.otStatusReady : styles.otStatusMissing),
+          }}
+        >
+          {isCancelled ? "Cancelado" : isCreated ? "Creada" : isReady ? "Listo para crear" : "Faltan datos"}
+        </span>
+      </div>
+
+      {filled.length > 0 && (
+        <div style={styles.otFields}>
+          {filled.map(([key, value]) => (
+            <div key={key} style={styles.otField}>
+              <span style={styles.otFieldLabel}>{OT_FIELD_LABELS[key]}</span>
+              <span style={styles.otFieldValue}>{value.trim()}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={styles.otSelectPanel}>
+        <div style={styles.otSelectPanelTitle}>Campos para métricas</div>
+        <div style={styles.otSelectGrid}>
+          {OT_SELECT_FIELDS.map((field) => {
+            const rawValue = cleanOtValue(draft[field]);
+            const selectedValue = findOfficialOtOption(field, rawValue);
+            const hasInvalidSuggestion = rawValue && !selectedValue;
+            return (
+              <label key={field} style={styles.otSelectField}>
+                <span style={styles.otFieldLabel}>{OT_FIELD_LABELS[field]}</span>
+                <select
+                  value={selectedValue}
+                  onChange={(e) => onDraftFieldChange?.(field, e.target.value)}
+                  style={{
+                    ...styles.otSelect,
+                    ...(missing.includes(field) ? styles.otSelectMissing : null),
+                  }}
+                  disabled={isCancelled}
+                >
+                  <option value="">Seleccionar opción oficial</option>
+                  {OT_SELECT_OPTIONS[field].map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+                {hasInvalidSuggestion && (
+                  <span style={styles.otInvalidHint}>
+                    Detectado: {rawValue}. Elegí una opción oficial para no afectar métricas.
+                  </span>
+                )}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      {!isReady && missing.length > 0 && (
+        <div style={styles.otPending}>
+          <span style={styles.otPendingLabel}>Pendiente</span>
+          <div style={styles.otPendingChips}>
+            {missing.map((key) => (
+              <span key={key} style={styles.otPendingChip}>
+                {OT_FIELD_LABELS[key] || key}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!isCancelled && !isCreated && (
+        <div style={styles.otActions}>
+          {isReady ? (
+            <button
+              type="button"
+              className="hh-msg-chip"
+              onClick={() => onCreate?.(action)}
+              disabled={creating}
+              style={{ ...styles.otBtnPrimary, opacity: creating ? 0.65 : 1, cursor: creating ? "not-allowed" : "pointer" }}
+            >
+              {creating ? "Creando..." : "Crear OT"}
+            </button>
+          ) : (
+            <button type="button" className="hh-msg-chip" onClick={onCompleteByChat} style={styles.otBtnSecondary}>
+              Completar por chat
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssistantChat({ phase, messages, input, setInput, typing, creatingOt, onSend, onClear, onClose, onAction, onCopied, onCreateOtDraft, onUpdateOtDraft }) {
   const scrollRef = useRef(null);
   const taRef = useRef(null);
   const [hoveredMsg, setHoveredMsg] = useState(null);
@@ -483,6 +818,8 @@ function AssistantChat({ phase, messages, input, setInput, typing, onSend, onCle
   useEffect(() => {
     if (phase === "chat" && !typing && taRef.current) taRef.current.focus();
   }, [phase, typing]);
+
+  const focusInput = () => taRef.current?.focus();
 
   const canSend = input.trim().length > 0 && !typing;
 
@@ -606,6 +943,16 @@ function AssistantChat({ phase, messages, input, setInput, typing, onSend, onCle
                   </div>
                 )}
 
+                {!isUser && m.action && m.action.type === "create_ot_draft" && (
+                  <OtDraftCard
+                    action={m.action}
+                    creating={creatingOt}
+                    onCreate={(nextAction) => onCreateOtDraft?.(i, nextAction)}
+                    onCompleteByChat={focusInput}
+                    onDraftFieldChange={(field, value) => onUpdateOtDraft?.(i, field, value)}
+                  />
+                )}
+
                 {sources.length > 0 && (
                   <div style={styles.msgSources}>Fuentes: {sources.join(" · ")}</div>
                 )}
@@ -690,6 +1037,7 @@ export default function AreasTrabajoHubPage() {
   const [assistantMessages, setAssistantMessages] = useState([{ role: "assistant", text: ASSISTANT_INTRO }]);
   const [assistantInput, setAssistantInput] = useState("");
   const [assistantTyping, setAssistantTyping] = useState(false);
+  const [assistantCreatingOt, setAssistantCreatingOt] = useState(false);
   const [assistantConvId, setAssistantConvId] = useState(() => newConversationId());
   const assistantTimers = useRef([]);
 
@@ -801,9 +1149,118 @@ export default function AreasTrabajoHubPage() {
     assistantTimers.current.forEach((t) => clearTimeout(t));
     assistantTimers.current = [];
     setAssistantTyping(false);
+    setAssistantCreatingOt(false);
     setAssistantInput("");
     setAssistantMessages([{ role: "assistant", text: ASSISTANT_INTRO }]);
     setAssistantConvId(newConversationId());
+  };
+
+  const updateAssistantOtDraft = (messageIndex, field, value) => {
+    setAssistantMessages((prev) =>
+      prev.map((message, index) => {
+        if (index !== messageIndex || message?.action?.type !== "create_ot_draft") return message;
+        return {
+          ...message,
+          action: patchOtDraftAction(message.action, { [field]: value }),
+        };
+      })
+    );
+  };
+
+  const requestAssistantOtCreate = async (messageIndex, action) => {
+    if (assistantCreatingOt) return;
+
+    const normalizedAction = normalizeOtDraftAction(action);
+    const draft = normalizedAction?.draft || {};
+    const missingFields = getOtMissingFields(draft);
+
+    const updateDraftMessage = (nextAction) => {
+      setAssistantMessages((prev) =>
+        prev.map((message, index) => {
+          if (index !== messageIndex || message?.action?.type !== "create_ot_draft") return message;
+          return {
+            ...message,
+            action: nextAction,
+          };
+        })
+      );
+    };
+
+    if (missingFields.length > 0) {
+      const reply = buildOtDraftValidationReply(missingFields);
+      setAssistantMessages((prev) => {
+        const next = prev.map((message, index) => {
+          if (index !== messageIndex || message?.action?.type !== "create_ot_draft") return message;
+          return {
+            ...message,
+            action: normalizedAction,
+          };
+        });
+
+        return [...next, { role: "assistant", text: reply }];
+      });
+      return;
+    }
+
+    if (!user?.uid) {
+      setAssistantMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: "No pude crear la OT porque no encontré una sesión activa. Volvé a iniciar sesión e intentá de nuevo.",
+        },
+      ]);
+      return;
+    }
+
+    try {
+      setAssistantCreatingOt(true);
+      updateDraftMessage(normalizedAction);
+
+      const payload = buildAssistantOtPayload({ draft, user, profile });
+      const docRef = await addDoc(collection(db, "solicitudesOT"), payload);
+      const createdAction = {
+        ...normalizedAction,
+        status: "created",
+        createdId: docRef.id,
+        createdNroSolicitud: payload.NroSolicitud,
+      };
+
+      setAssistantMessages((prev) => {
+        const next = prev.map((message, index) => {
+          if (index !== messageIndex || message?.action?.type !== "create_ot_draft") return message;
+          return {
+            ...message,
+            action: createdAction,
+          };
+        });
+
+        return [
+          ...next,
+          {
+            role: "assistant",
+            text: `OT creada correctamente.\n1. Solicitud: ${payload.NroSolicitud}\n2. Nombre: ${payload.nombreOT}\n3. Estado: ${OT_STATE_SOLICITADA}`,
+            suggestedActions: [
+              { label: "Gestión de OTs", path: "/mantenimiento/OTsPage" },
+              { label: "OTs Servicios Generales", path: "/servicios-generales/ordenes-trabajo/gestion" },
+            ],
+          },
+        ];
+      });
+      toast.success("Solicitud OT creada correctamente.");
+    } catch (err) {
+      console.error("assistant create OT", err);
+      setAssistantMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: "No pude crear la OT en este momento. Revisá permisos o intentá de nuevo en unos segundos.",
+        },
+      ]);
+      toast.error("No se pudo crear la solicitud OT.");
+    } finally {
+      setAssistantCreatingOt(false);
+    }
   };
 
   /* Send a message: POST to the n8n webhook when configured, otherwise reply
@@ -830,7 +1287,7 @@ export default function AreasTrabajoHubPage() {
     // Recent history (lightweight) + the new user message.
     const history = [...assistantMessages, userMsg]
       .slice(-12)
-      .map((m) => ({ role: m.role, text: m.text }));
+      .map((m) => ({ role: m.role, text: m.text, action: m.action || null }));
 
     const payload = {
       userMessage: clean,
@@ -846,7 +1303,7 @@ export default function AreasTrabajoHubPage() {
     };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), ASSISTANT_TIMEOUT_MS);
     assistantTimers.current.push(timeoutId);
 
     fetch(ASSISTANT_WEBHOOK_URL, {
@@ -869,13 +1326,20 @@ export default function AreasTrabajoHubPage() {
             : "Recibí tu mensaje, pero no obtuve una respuesta válida.";
         const sources = Array.isArray(data.sources) ? data.sources : [];
         const suggestedActions = Array.isArray(data.suggestedActions) ? data.suggestedActions : [];
+        const action = normalizeOtDraftAction(data.action && typeof data.action === "object" ? data.action : null);
         setAssistantTyping(false);
-        setAssistantMessages((prev) => [...prev, { role: "assistant", text: answer, sources, suggestedActions }]);
+        setAssistantMessages((prev) => [...prev, { role: "assistant", text: answer, sources, suggestedActions, action }]);
       })
-      .catch(() => {
+      .catch((err) => {
         clearTimeout(timeoutId);
         setAssistantTyping(false);
-        setAssistantMessages((prev) => [...prev, { role: "assistant", text: ASSISTANT_ERROR_REPLY }]);
+        setAssistantMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            text: err?.name === "AbortError" ? ASSISTANT_TIMEOUT_REPLY : ASSISTANT_ERROR_REPLY,
+          },
+        ]);
       });
   };
 
@@ -1086,11 +1550,14 @@ export default function AreasTrabajoHubPage() {
                   input={assistantInput}
                   setInput={setAssistantInput}
                   typing={assistantTyping}
+                  creatingOt={assistantCreatingOt}
                   onSend={sendAssistant}
                   onClear={clearAssistant}
                   onClose={closeAssistant}
                   onAction={(path) => path && nav(path)}
                   onCopied={() => toast.success("Mensaje copiado")}
+                  onCreateOtDraft={requestAssistantOtCreate}
+                  onUpdateOtDraft={updateAssistantOtDraft}
                 />
               ) : (
               <div
@@ -1814,6 +2281,93 @@ const styles = {
     transition: "filter 150ms ease",
   },
   msgSources: { fontSize: 11, fontWeight: 600, color: T.textMuted, lineHeight: 1.4, paddingLeft: 2 },
+  otCard: {
+    display: "grid",
+    gap: 10,
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: 14,
+    border: `1px solid ${T.border}`,
+    background: T.surface,
+    boxShadow: "0 2px 8px rgba(15,23,42,0.05)",
+  },
+  otCardHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  otCardTitle: { fontSize: 13.5, fontWeight: 800, color: T.text, letterSpacing: 0.1 },
+  otStatus: {
+    fontSize: 10.5,
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    padding: "3px 9px",
+    borderRadius: 999,
+    border: "1px solid transparent",
+    whiteSpace: "nowrap",
+  },
+  otStatusReady: { background: "rgba(16,185,129,0.12)", color: "#047857", borderColor: "rgba(16,185,129,0.35)" },
+  otStatusMissing: { background: "rgba(245,158,11,0.12)", color: "#b45309", borderColor: "rgba(245,158,11,0.35)" },
+  otStatusCancelled: { background: "rgba(100,116,139,0.12)", color: "#475569", borderColor: "rgba(100,116,139,0.28)" },
+  otFields: { display: "grid", gap: 7 },
+  otField: { display: "grid", gridTemplateColumns: "minmax(96px, 38%) 1fr", gap: 8, alignItems: "baseline" },
+  otFieldLabel: { fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 0.3 },
+  otFieldValue: { fontSize: 13, fontWeight: 600, color: T.text, lineHeight: 1.45, wordBreak: "break-word", overflowWrap: "anywhere" },
+  otSelectPanel: { display: "grid", gap: 8, padding: 10, borderRadius: 12, background: "#F8FAFC", border: `1px solid ${T.borderSoft}` },
+  otSelectPanelTitle: { fontSize: 11, fontWeight: 850, color: T.textSecondary, textTransform: "uppercase", letterSpacing: 0.35 },
+  otSelectGrid: { display: "grid", gap: 8 },
+  otSelectField: { display: "grid", gap: 5 },
+  otSelect: {
+    width: "100%",
+    minHeight: 38,
+    borderRadius: 10,
+    border: `1px solid ${T.border}`,
+    background: T.surface,
+    color: T.text,
+    padding: "0 10px",
+    fontSize: 12.5,
+    fontWeight: 700,
+    fontFamily: "inherit",
+    outline: "none",
+    boxShadow: "0 1px 2px rgba(15,23,42,0.03)",
+  },
+  otSelectMissing: { borderColor: "rgba(245,158,11,0.58)", background: "rgba(255,251,235,0.78)" },
+  otInvalidHint: { fontSize: 11.5, fontWeight: 650, color: "#b45309", lineHeight: 1.35 },
+  otPending: { display: "grid", gap: 6, paddingTop: 8, borderTop: `1px solid ${T.borderSoft}` },
+  otPendingLabel: { fontSize: 11, fontWeight: 800, color: T.textMuted, textTransform: "uppercase", letterSpacing: 0.4 },
+  otPendingChips: { display: "flex", flexWrap: "wrap", gap: 6 },
+  otPendingChip: {
+    fontSize: 11.5,
+    fontWeight: 700,
+    padding: "4px 10px",
+    borderRadius: 999,
+    background: "rgba(245,158,11,0.10)",
+    color: "#b45309",
+    border: "1px solid rgba(245,158,11,0.30)",
+  },
+  otActions: { display: "flex", flexWrap: "wrap", gap: 8, paddingTop: 2 },
+  otBtnPrimary: {
+    padding: "8px 16px",
+    borderRadius: 999,
+    border: "1px solid transparent",
+    background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accentDark} 100%)`,
+    color: "#fff",
+    fontSize: 12.5,
+    fontWeight: 800,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    boxShadow: `0 4px 12px ${T.accentGlow}`,
+    transition: "filter 150ms ease",
+  },
+  otBtnSecondary: {
+    padding: "8px 16px",
+    borderRadius: 999,
+    border: `1px solid ${T.accent}`,
+    background: T.accentSoft,
+    color: T.accentDark,
+    fontSize: 12.5,
+    fontWeight: 700,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    transition: "filter 150ms ease",
+  },
   msgAvatar: {
     width: 32,
     height: 32,

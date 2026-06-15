@@ -15,63 +15,15 @@ import {
 
 import { auth, db } from "../../../firebase";
 import { useToast } from "../../../components/ui";
+import {
+  OT_DEPARTAMENTOS as DEPARTAMENTOS,
+  OT_LUGARES_PROBLEMA as LUGARES_PROBLEMA,
+  OT_TIPOS_PROBLEMA as TIPOS_PROBLEMA,
+} from "../../../config/otOptions";
 
 const ACCENT = "#089F8A";
 
 const OT_STATE_SOLICITADA = "Solicitada";
-
-const DEPARTAMENTOS = [
-  "Control",
-  "Sistema",
-  "Personal",
-  "Comercio exterior",
-  "Ingeniería",
-  "Ventas",
-  "CEDI",
-  "Transportes",
-  "Otro",
-];
-
-const LUGARES_PROBLEMA = [
-  "Piso #1",
-  "Piso #2",
-  "Piso #3",
-  "CEDI",
-  "Parqueo",
-  "Vehículo/Flota",
-  "Otro",
-];
-
-const TIPOS_PROBLEMA = [
-  "Albañeria",
-  "Pisos",
-  "Techos",
-  "Goteras",
-  "Canoas",
-  "Cielo raso",
-  "Instalación eléctrica",
-  "Cañerías",
-  "Carpintería",
-  "Fontanería",
-  "Pintura",
-  "Soldadura",
-  "Tanques sépticos",
-  "Aire acondicionado",
-  "Remodelaciones",
-  "Puertas y portones",
-  "Accesos",
-  "Racks",
-  "Equipos",
-  "Rotulaciones",
-  "Sistema de incendios",
-  "Andenes de carga",
-  "Banda transportadora",
-  "Ilimunacion",
-  "Baños",
-  "Control de plagas",
-  "Camaras / CCTV",
-  "Otro",
-];
 
 function todayISO() {
   const d = new Date();
