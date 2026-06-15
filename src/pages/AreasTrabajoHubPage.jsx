@@ -35,27 +35,44 @@ import {
 } from "../config/otOptions";
 import { getVisibleAreas } from "../config/workAreas";
 import { AreasSidebar, SidebarAreaIcon, useConfirm, useToast } from "../components/ui";
+import {
+  ACCENT,
+  ACCENT_SHADOW,
+  accentAlpha,
+  BG,
+  BORDER,
+  FONT_STACK,
+  MUTED,
+  SLATE_DEEP,
+  SURFACE,
+  SURFACE_INSET,
+  TEXT,
+} from "../styles/theme";
 import logoAppolo from "../assets/AppOLO_logo.png";
 import imgApolo from "../assets/Apolo.png";
 
-/* ─── Design tokens (unified with app theme accent #089F8A) ─── */
+/* ─── Design tokens — thin adapter over the shared theme (src/styles/theme.js)
+   so the hub stays visually in sync with the rest of the app from a single
+   source of truth. Keys preserved to avoid churn across ~167 `T.` references.
+   Only `accentDark`, `borderSoft` and the custom shadow stack have no theme
+   token yet and remain literals. ─── */
 const T = {
-  accent: "#089F8A",
-  accentDark: "#06776A",
-  accentSoft: "rgba(8, 159, 138, 0.10)",
-  accentGlow: "rgba(8, 159, 138, 0.28)",
-  bg: "#F6F8FB",
-  surface: "#FFFFFF",
-  surfaceAlt: "#F1F5F9",
-  border: "#E5E9F0",
-  borderSoft: "rgba(226, 232, 240, 0.7)",
-  text: "#0F172A",
-  textSecondary: "#475569",
-  textMuted: "#94A3B8",
+  accent: ACCENT,
+  accentDark: "#06776A", // darker brand shade — no theme token yet
+  accentSoft: accentAlpha(0.1),
+  accentGlow: ACCENT_SHADOW,
+  bg: BG,
+  surface: SURFACE,
+  surfaceAlt: SURFACE_INSET,
+  border: BORDER,
+  borderSoft: "rgba(226, 232, 240, 0.7)", // translucent slate hairline
+  text: TEXT,
+  textSecondary: SLATE_DEEP,
+  textMuted: MUTED,
   shadow: "0 1px 2px rgba(15,23,42,0.04), 0 6px 16px rgba(15,23,42,0.05)",
   shadowMd: "0 4px 16px rgba(15,23,42,0.06), 0 12px 40px rgba(15,23,42,0.08)",
   shadowLg: "0 8px 24px rgba(15,23,42,0.08), 0 20px 60px rgba(15,23,42,0.12)",
-  font: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+  font: FONT_STACK,
 };
 
 /* Radial geometry (percentages relative to the wheel container / viewBox).
@@ -75,7 +92,7 @@ const DASHED_ARC_RADIUS = 51; // dashed arc just before (inward of) the grey arc
  */
 const MENU_ACTIONS = [
   { key: "areas", title: "Áreas", icon: <LayoutGrid />, angle: 225, accent: "#2563EB", soft: "rgba(37,99,235,0.12)" },
-  { key: "pins", title: "Mis Pin", icon: <Pin />, angle: 315, accent: "#089F8A", soft: "rgba(8,159,138,0.12)" },
+  { key: "pins", title: "Mis Pin", icon: <Pin />, angle: 315, accent: ACCENT, soft: accentAlpha(0.12) },
   { key: "reportes", title: "Reportes", icon: <BarChart3 />, angle: 135, accent: "#7C3AED", soft: "rgba(124,58,237,0.12)" },
   { key: "configuracion", title: "Configuración", icon: <Cog />, angle: 45, accent: "#EA580C", soft: "rgba(234,88,12,0.12)" },
 ];
@@ -1424,6 +1441,7 @@ export default function AreasTrabajoHubPage() {
               disabled={busyLogout}
               style={{ ...styles.logoutBtn, ...(busyLogout ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
               title="Cerrar sesión"
+              aria-label="Cerrar sesión"
             >
               {busyLogout ? (
                 <Loader2 size={16} strokeWidth={2.2} style={{ animation: "homeSpin 0.7s linear infinite" }} />

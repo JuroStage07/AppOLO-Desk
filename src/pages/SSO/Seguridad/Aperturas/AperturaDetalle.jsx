@@ -41,10 +41,7 @@ import {
   useToast,
   useConfirm,
 } from "../../../../components/ui";
-
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
-const SLATE = "#64748B";
+import { ACCENT, ACCENT_SOFT, SLATE } from "../../../../styles/theme";
 
 /* ===================== Helpers RS (igual RN) ===================== */
 const RS_KEY_BY_FORM = {
@@ -206,7 +203,7 @@ function Modal({ open, onClose, title, subtitle, children, maxWidth = 420, foote
             {subtitle ? <div style={ui.modalSubtitle}>{subtitle}</div> : null}
           </div>
 
-          <button type="button" onClick={onClose} style={ui.iconBtn} title="Cerrar (ESC)">
+          <button type="button" onClick={onClose} style={ui.iconBtn} title="Cerrar (ESC)" aria-label="Cerrar (ESC)">
             <X size={18} strokeWidth={2.25} />
           </button>
         </div>

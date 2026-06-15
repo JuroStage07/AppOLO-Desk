@@ -26,8 +26,8 @@ import {
   Topbar,
   useToast,
 } from "../../../../components/ui";
+import { ACCENT } from "../../../../styles/theme";
 
-const ACCENT = "#089F8A";
 const DANGER = "#DC2626";
 
 function getTodayId() {

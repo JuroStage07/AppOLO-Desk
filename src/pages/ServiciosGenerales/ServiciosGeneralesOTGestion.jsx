@@ -25,10 +25,8 @@ import {
   Topbar,
   useToast,
 } from "../../components/ui";
+import { ACCENT, ACCENT_SOFT, SLATE } from "../../styles/theme";
 
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
-const SLATE = "#64748B";
 const OT_STATE_EN_PROCESO = "En proceso";
 const OT_STATE_SOLICITADA = "Solicitada";
 

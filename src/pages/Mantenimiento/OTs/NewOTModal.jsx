@@ -20,8 +20,7 @@ import {
   OT_LUGARES_PROBLEMA as LUGARES_PROBLEMA,
   OT_TIPOS_PROBLEMA as TIPOS_PROBLEMA,
 } from "../../../config/otOptions";
-
-const ACCENT = "#089F8A";
+import { ACCENT } from "../../../styles/theme";
 
 const OT_STATE_SOLICITADA = "Solicitada";
 
@@ -340,7 +339,7 @@ function SearchSelectModal({
       <div style={picker.sheet} onClick={(e) => e.stopPropagation()}>
         <div style={picker.header}>
           <div style={picker.title}>{title}</div>
-          <button type="button" style={picker.close} onClick={onClose}>
+          <button type="button" style={picker.close} onClick={onClose} aria-label="Cerrar">
             <X size={18} />
           </button>
         </div>
@@ -688,7 +687,7 @@ export function NewOTModal({
             </div>
           </div>
 
-          <button type="button" style={modal.close} onClick={onClose} disabled={saving}>
+          <button type="button" style={modal.close} onClick={onClose} disabled={saving} aria-label="Cerrar">
             <X size={18} />
           </button>
         </div>

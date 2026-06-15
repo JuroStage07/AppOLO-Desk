@@ -27,6 +27,7 @@ import {
   useToast,
   useConfirm,
 } from "../../../../components/ui";
+import { ACCENT } from "../../../../styles/theme";
 
 // Convierte un import de imagen (url) a DataURL para jsPDF
 async function loadImageAsDataURL(src) {
@@ -873,7 +874,6 @@ export default function AdministrarVisados() {
 }
 
 /* ===== UI: lo dejé igual a tu UI (sin cambios) ===== */
-const ACCENT = "#089F8A";
 const ui = {
   shell: {
     height: "100vh",

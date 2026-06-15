@@ -21,14 +21,12 @@ import { auth, db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { filterEquiposByScope } from "../../../utils/dataScope";
 import { Brand, GhostButton, Topbar } from "../../../components/ui";
+import { ACCENT, ACCENT_SOFT } from "../../../styles/theme";
 
 // 👇 Ajustá rutas reales de tus imágenes
 import ApiladorPng from "../../../assets/equipos/apilador_icon.png";
 import CarretillaPng from "../../../assets/equipos/carretilla_icon.png";
 import MontacargasPng from "../../../assets/equipos/montacargas_icon.png";
-
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
 
 function safe(v) {
     return String(v ?? "").trim();

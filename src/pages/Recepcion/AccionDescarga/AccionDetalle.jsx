@@ -14,10 +14,7 @@ import { auth, db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { isInUserScope } from "../../../utils/dataScope";
 import { Brand, Topbar, useToast, useConfirm } from "../../../components/ui";
-
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
-const SLATE = "#64748B";
+import { ACCENT, ACCENT_SOFT, SLATE } from "../../../styles/theme";
 
 /* ===================== Helpers ===================== */
 const toDateSafe = (value) => {

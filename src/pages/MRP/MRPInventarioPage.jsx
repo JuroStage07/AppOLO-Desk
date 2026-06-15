@@ -297,6 +297,7 @@ export default function MRPInventarioPage() {
                           type="button"
                           style={styles.actionBtn}
                           title="Ver detalle"
+                          aria-label="Ver detalle"
                           onClick={() => setDetalleTarima(t)}
                         >
                           <Eye size={14} strokeWidth={2.2} />
@@ -306,6 +307,7 @@ export default function MRPInventarioPage() {
                             type="button"
                             style={styles.actionBtn}
                             title="Enviar a reparación"
+                            aria-label="Enviar a reparación"
                             onClick={() => openReparacion(t)}
                           >
                             <Send size={14} strokeWidth={2.2} />
@@ -316,6 +318,7 @@ export default function MRPInventarioPage() {
                             type="button"
                             style={{ ...styles.actionBtn, color: ACCENT }}
                             title="Marcar como reparada"
+                            aria-label="Marcar como reparada"
                             onClick={() => marcarReparada(t.id)}
                           >
                             <CheckCircle2 size={14} strokeWidth={2.2} />
@@ -326,6 +329,7 @@ export default function MRPInventarioPage() {
                             type="button"
                             style={{ ...styles.actionBtn, color: "#B91C1C" }}
                             title="Descartar"
+                            aria-label="Descartar"
                             onClick={() => descartar(t.id)}
                           >
                             <Trash2 size={14} strokeWidth={2.2} />

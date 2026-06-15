@@ -6,9 +6,7 @@ import Breadcrumbs from "./Breadcrumbs";
 import { isRootPath } from "./routeTrail";
 import TopbarAccount from "./TopbarAccount";
 import { openCommandPalette } from "./commandPaletteBus";
-import { ACCENT, ACCENT_SOFT, BORDER, CONTAINER_MAX, SLATE, TEXT } from "../../styles/theme";
-
-const SURFACE = "#FFFFFF";
+import { ACCENT, ACCENT_SOFT, BORDER, CONTAINER_MAX, SLATE, SURFACE, TEXT } from "../../styles/theme";
 
 const IS_MAC =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || "");

@@ -14,8 +14,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import useIsMobile from "../hooks/useIsMobile";
-
-const ACCENT = "#089F8A";
+import { ACCENT } from "../styles/theme";
 
 /** Provider Google (único) */
 const googleProvider = new GoogleAuthProvider();

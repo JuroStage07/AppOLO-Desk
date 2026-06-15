@@ -22,8 +22,7 @@ import {
     useToast,
     useConfirm,
 } from "../../components/ui";
-
-const ACCENT = "#089F8A";
+import { ACCENT } from "../../styles/theme";
 
 function safe(v) {
     return String(v ?? "").trim();

@@ -37,8 +37,7 @@ import {
 import ApiladorPng from "../../../assets/equipos/apilador_icon.png";
 import CarretillaPng from "../../../assets/equipos/carretilla_icon.png";
 import MontacargasPng from "../../../assets/equipos/montacargas_icon.png";
-
-const ACCENT = "#089F8A";
+import { ACCENT } from "../../../styles/theme";
 
 function safe(v) {
   return String(v ?? "").trim();

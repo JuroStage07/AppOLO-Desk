@@ -24,9 +24,8 @@ import {
     GhostButton,
     Topbar,
 } from "../../components/ui";
+import { ACCENT, SLATE } from "../../styles/theme";
 
-const ACCENT = "#089F8A";
-const SLATE = "#64748B";
 const CAPACITY = 24;
 
 function toNum(v) {

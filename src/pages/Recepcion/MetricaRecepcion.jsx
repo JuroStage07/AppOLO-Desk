@@ -51,10 +51,8 @@ import {
   Topbar,
   useToast,
 } from "../../components/ui";
+import { ACCENT, ACCENT_SOFT, SLATE } from "../../styles/theme";
 
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
-const SLATE = "#64748B";
 const ANDEN_SETTINGS_KEY = "recepcion.metrica.andenes.settings.v1";
 const EXCLUDED_ANDEN_USERS_LEGACY_KEY =
   "recepcion.metrica.andenes.excludedUsers.v1";

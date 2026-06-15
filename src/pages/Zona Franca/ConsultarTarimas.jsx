@@ -12,11 +12,10 @@ import {
   Shell,
   Topbar,
 } from "../../components/ui";
+import { ACCENT, SLATE, accentAlpha } from "../../styles/theme";
 
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8,159,138,0.10)";
-const ACCENT_MID = "rgba(8,159,138,0.25)";
-const SLATE = "#64748B";
+const ACCENT_SOFT = accentAlpha(0.1);
+const ACCENT_MID = accentAlpha(0.25);
 
 export default function ConsultarTarimas() {
   const nav = useNavigate();

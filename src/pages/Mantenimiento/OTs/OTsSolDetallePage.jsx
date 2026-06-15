@@ -40,8 +40,8 @@ import { AuthCtx } from "../../../auth/AuthProvider";
 import { OT_STATE_FINALIZADA } from "./OTsFinalizadasPage";
 import { isSolicitudOtInScope } from "../../../utils/dataScope";
 import { Brand, Topbar, useToast, useConfirm } from "../../../components/ui";
+import { ACCENT } from "../../../styles/theme";
 
-const ACCENT = "#089F8A";
 const OT_STATE_EN_PROCESO = "En proceso";
 const OT_STATE_REVISION = "En revisión";
 const BLUE = "#2563EB";
@@ -1172,6 +1172,7 @@ export default function OTsDetallePage() {
                                       ? "OT finalizada · solo lectura"
                                       : "Eliminar subtarea"
                                   }
+                                  aria-label="Eliminar subtarea"
                                   disabled={readOnlyOt || deletingSubtaskId === subtask.id}
                                 >
                                   <Trash2 size={15} />
@@ -1253,6 +1254,7 @@ export default function OTsDetallePage() {
                             ? "Agregar subtarea"
                             : "Solo podés agregar subtareas con la OT en proceso"
                       }
+                      aria-label="Agregar subtarea"
                     >
                       <Plus size={28} />
                     </button>

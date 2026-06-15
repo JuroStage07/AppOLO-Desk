@@ -63,9 +63,8 @@ import {
   deleteField,
   writeBatch,
 } from "firebase/firestore";
+import { ACCENT, ACCENT_SOFT } from "../../../styles/theme";
 
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
 const BLUE = "#2563EB";
 const AMBER = "#F59E0B";
 const RED = "#FF4D73";
@@ -888,6 +887,7 @@ function PendingCard({
             style={ui.iconBtn}
             onClick={() => onOpenDetail(item.id)}
             title="Ver detalle"
+            aria-label="Ver detalle"
           >
             <Eye size={17} />
           </button>
@@ -905,6 +905,7 @@ function PendingCard({
                 ? "Completá todas las subtareas (100%) para pasar a revisión"
                 : "Mover a la columna siguiente"
             }
+            aria-label="Mover a la columna siguiente"
             onClick={() => {
               if (!canMoveToNextColumn && columnIndex === 1) return;
               onMoveNext(item.id, columnIndex);
@@ -917,6 +918,7 @@ function PendingCard({
             type="button"
             style={ui.iconBtn}
             onClick={() => onDelete(item.id, columnIndex)}
+            aria-label="Eliminar"
           >
             <Trash2 size={17} />
           </button>
@@ -926,6 +928,7 @@ function PendingCard({
               type="button"
               style={ui.iconBtn}
               onClick={() => setOpenMenuId(menuOpen ? null : item.id)}
+              aria-label="Más opciones"
             >
               <MoreVertical size={17} />
             </button>
@@ -1026,6 +1029,7 @@ function OTCard({
           <button
             style={ui.iconBtn}
             onClick={() => setOpenMenuId(menuOpen ? null : item.id)}
+            aria-label="Más opciones"
           >
             <MoreVertical size={17} />
           </button>
@@ -1126,6 +1130,7 @@ function Column({
               style={ui.iconBtn}
               onClick={() => onRefreshBoard?.()}
               title="Actualizar tablero"
+              aria-label="Actualizar tablero"
             >
               <RefreshCw size={16} />
             </button>

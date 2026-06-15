@@ -9,9 +9,7 @@ import {
   GhostButton,
   Topbar,
 } from "../../components/ui";
-
-const ACCENT = "#089F8A";
-const SLATE = "#64748B";
+import { ACCENT, SLATE } from "../../styles/theme";
 
 /** Estados considerados cerrados (ajustá según lo que escriba el backend al cerrar). */
 const ESTADOS_FINALIZADOS = ["finalizado", "cerrado", "completado"];

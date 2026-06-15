@@ -23,8 +23,7 @@ import {
   Topbar,
   useToast,
 } from "../../../../components/ui";
-
-const ACCENT = "#089F8A";
+import { ACCENT } from "../../../../styles/theme";
 
 function todayISO() {
   const d = new Date();

@@ -222,6 +222,7 @@ export default function MRPMaterialesPage() {
                             type="button"
                             style={styles.actionBtn}
                             title="Ver detalle"
+                            aria-label="Ver detalle"
                             onClick={() => setDetailMat(m)}
                           >
                             <Eye size={14} strokeWidth={2.2} />
@@ -230,6 +231,7 @@ export default function MRPMaterialesPage() {
                             type="button"
                             style={{ ...styles.actionBtn, color: ACCENT }}
                             title="Agregar stock"
+                            aria-label="Agregar stock"
                             onClick={() => openAddStock(m)}
                           >
                             <Plus size={14} strokeWidth={2.2} />

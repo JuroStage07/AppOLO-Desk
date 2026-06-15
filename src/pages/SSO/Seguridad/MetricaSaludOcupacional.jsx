@@ -9,6 +9,7 @@ import {
     Shell,
     Topbar,
 } from "../../../components/ui";
+import { ACCENT } from "../../../styles/theme";
 import { auth, db } from "../../../firebase";
 import {
     collection,
@@ -19,8 +20,6 @@ import {
     where,
     orderBy,
 } from "firebase/firestore";
-
-const ACCENT = "#089F8A";
 
 // Helper functions para formatear los datos como en el ejemplo anterior
 function fmtMinutesFromMs(ms) {

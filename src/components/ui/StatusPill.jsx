@@ -1,4 +1,5 @@
 import React from "react";
+import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import {
   ACCENT,
   ACCENT_SOFT,
@@ -12,17 +13,29 @@ import {
   WARN_BORDER,
 } from "../../styles/theme";
 
+/* Default icon per semantic tone so status is never conveyed by color alone
+   (WCAG 1.4.1). An explicit `icon` prop overrides; pass `icon={null}` to hide. */
+const TONE_ICON = {
+  ok: CheckCircle2,
+  warn: AlertTriangle,
+  danger: XCircle,
+};
+
 /**
  * Status indicator pill. Tones: ok | warn | danger | neutral | accent | dark.
  *
  *   <StatusPill tone="ok">Completa</StatusPill>
  *   <StatusPill tone="warn">En proceso</StatusPill>
+ *
+ * ok/warn/danger render a default icon + text (color is not the only cue).
+ * Pass `icon={SomeIcon}` to override or `icon={null}` to suppress.
  */
-export default function StatusPill({ tone = "neutral", icon: Icon, children, style }) {
+export default function StatusPill({ tone = "neutral", icon, children, style }) {
   const t = tones[tone] || tones.neutral;
+  const Icon = icon === undefined ? TONE_ICON[tone] : icon;
   return (
-    <span style={{ ...base, ...t, ...style }}>
-      {Icon ? <Icon size={12} strokeWidth={2.5} style={{ marginRight: 4 }} /> : null}
+    <span style={{ ...base, ...t, ...style }} role="status">
+      {Icon ? <Icon size={12} strokeWidth={2.5} style={{ marginRight: 4, flexShrink: 0 }} /> : null}
       {children}
     </span>
   );

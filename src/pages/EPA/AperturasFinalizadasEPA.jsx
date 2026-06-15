@@ -24,10 +24,7 @@ import useIsMobile from "../../hooks/useIsMobile";
 import { AuthCtx } from "../../auth/AuthProvider";
 
 import { listenAperturasFinalizadasGlobal } from "../../services/aperturas";
-
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
-const SLATE = "#64748B";
+import { ACCENT, ACCENT_SOFT, SLATE } from "../../styles/theme";
 
 /** Tope en cliente tras ordenar por fecha (evita congelar la UI si hay muchísimas finalizadas). */
 const MAX_FINALIZADAS_EN_VISTA = 3000;

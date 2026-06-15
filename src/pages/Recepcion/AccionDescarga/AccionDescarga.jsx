@@ -18,9 +18,7 @@ import { AuthCtx } from "../../../auth/AuthProvider";
 import { db } from "../../../firebase";
 import { filterByUserScope } from "../../../utils/dataScope";
 import imgAccionDescarga from "../../../assets/accionDescarga.png";
-
-const ACCENT = "#089F8A";
-const SLATE = "#64748B";
+import { ACCENT, SLATE } from "../../../styles/theme";
 
 /* ===================== Helpers ===================== */
 function toDateSafe(value) {

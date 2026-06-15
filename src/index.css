@@ -3,9 +3,11 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* App is light-only; force native controls (selects, scrollbars, date
+     pickers) to render light for visual consistency. Was `light dark`. */
+  color-scheme: light;
+  color: #0F172A;
+  background-color: #F6F7FB;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -19,12 +21,12 @@ html {
 
 a {
   font-weight: 500;
-  color: #646cff;
+  color: #089F8A; /* ACCENT — was Vite default #646cff */
   text-decoration: inherit;
 }
 
 a:hover {
-  color: #535bf2;
+  color: #06776A; /* darker ACCENT — was Vite default #535bf2 */
 }
 
 body {
@@ -53,13 +55,17 @@ button {
   transition: border-color 0.25s;
 }
 
-button:hover {
-  border-color: #646cff;
+/* Accessible focus: a single brand-colored ring on keyboard focus for every
+   interactive element. `:focus-visible` only fires for keyboard/AT navigation,
+   so mouse clicks stay clean. (Was a webkit-only ring on buttons.) */
+:focus-visible {
+  outline: 2px solid #089F8A; /* ACCENT */
+  outline-offset: 2px;
 }
 
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+/* Remove the default outline only when a visible focus ring will be shown. */
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 @media (prefers-color-scheme: light) {
@@ -148,5 +154,19 @@ button {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+/* Accessibility: honor the OS "reduce motion" setting. Users who enable it
+   (vestibular disorders, etc.) get near-instant transitions instead of
+   animations, without losing the final state. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
