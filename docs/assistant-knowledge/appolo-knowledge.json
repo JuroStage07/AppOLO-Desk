@@ -3,7 +3,14 @@
     "name": "AppoloDesk",
     "language": "es",
     "summary": "Plataforma operativa interna (React 19 + Firebase) para gestionar procesos de planta de OLO Logistics: despacho, seguridad, recepción, mantenimiento, servicios generales, EPA, MRP de tarimas y administración. Interfaz en español.",
-    "stack": ["React 19", "Vite", "Firebase Auth", "Firestore", "Storage", "Cloud Functions (Node 20, us-central1)"],
+    "stack": [
+      "React 19",
+      "Vite",
+      "Firebase Auth",
+      "Firestore",
+      "Storage",
+      "Cloud Functions (Node 20, us-central1)"
+    ],
     "knowledgeScope": "Funcionamiento, módulos, rutas y procesos. No incluye datos operativos en vivo."
   },
   "auth": {
@@ -13,10 +20,31 @@
     "tenantRequired": true,
     "tenantSetupRoute": "/config-region",
     "localStorageProfileKey": "appolo_profile",
-    "contextExposes": ["user", "profile", "permisos", "role", "epaAdmin", "loading", "error"],
-    "routeGuards": ["RequireAuth", "RequireTenant", "EpaAdminRouteGuard"],
-    "roles": ["administrativo", "dev", "operativo"],
-    "permissions": ["mantenimiento", "saludOcupacional", "canRecepcionCofersa", "despachosEPA"],
+    "contextExposes": [
+      "user",
+      "profile",
+      "permisos",
+      "role",
+      "epaAdmin",
+      "loading",
+      "error"
+    ],
+    "routeGuards": [
+      "RequireAuth",
+      "RequireTenant",
+      "EpaAdminRouteGuard"
+    ],
+    "roles": [
+      "administrativo",
+      "dev",
+      "operativo"
+    ],
+    "permissions": [
+      "mantenimiento",
+      "saludOcupacional",
+      "canRecepcionCofersa",
+      "despachosEPA"
+    ],
     "flags": {
       "epaAdmin": "Cuando es true, el usuario solo puede ver el área EPA y rutas permitidas (/, /welcome, /areas, /epa/*, /config-region, /seguridad/aperturas/detalle/*)."
     }
@@ -28,34 +56,93 @@
       "path": "/despacho",
       "tag": "Operación",
       "description": "Coordinación de carga, asignación de docks y seguimiento de despachos en tiempo real.",
+      "theme": {
+        "accent": "#16A34A",
+        "soft": "rgba(22, 163, 74, 0.12)"
+      },
       "modules": [
-        { "label": "En progreso", "path": "/despacho/in-progress", "features": [] },
-        { "label": "Finalizados", "path": "/despacho/finalizados", "features": [] }
+        {
+          "label": "En progreso",
+          "path": "/despacho/in-progress",
+          "features": []
+        },
+        {
+          "label": "Finalizados",
+          "path": "/despacho/finalizados",
+          "features": []
+        }
       ],
-      "sampleQuestions": ["¿Cómo sigo un despacho?", "¿Dónde veo los despachos finalizados?"]
+      "sampleQuestions": [
+        "¿Cómo sigo un despacho?",
+        "¿Dónde veo los despachos finalizados?"
+      ],
+      "blockedDesc": "Acceso al módulo deshabilitado temporalmente."
     },
     {
       "key": "seguridad",
       "title": "Seguridad",
       "path": "/seguridad",
       "tag": "Seguridad",
-      "description": "Gestión de visados, control de ingreso de terceros y registros de seguridad. Las rutas legadas /salud/* redirigen a /seguridad/*.",
+      "description": "Gestión de visados, control de ingreso de terceros y registros de seguridad.",
+      "theme": {
+        "accent": "#2563EB",
+        "soft": "rgba(37, 99, 235, 0.12)"
+      },
       "modules": [
-        { "label": "Control de marcas", "path": "/seguridad/control-marcas", "features": [
-          { "label": "Historial", "path": "/seguridad/control-marcas/historial" }
-        ]},
-        { "label": "Aperturas", "path": "/seguridad/aperturas", "features": [
-          { "label": "Finalizadas", "path": "/seguridad/aperturas/finalizadas" },
-          { "label": "Rechazadas", "path": "/seguridad/aperturas/rechazadas" }
-        ]},
-        { "label": "Visados", "path": "/seguridad/visado", "features": [
-          { "label": "Generar visado", "path": "/seguridad/visado/generar" },
-          { "label": "Administrar visados", "path": "/seguridad/visados" }
-        ]},
-        { "label": "Documentación", "path": "/documentacion", "features": [] },
-        { "label": "Métricas", "path": "/seguridad/metricas", "features": [] }
+        {
+          "label": "Control de marcas",
+          "path": "/seguridad/control-marcas",
+          "features": [
+            {
+              "label": "Historial",
+              "path": "/seguridad/control-marcas/historial"
+            }
+          ]
+        },
+        {
+          "label": "Aperturas",
+          "path": "/seguridad/aperturas",
+          "features": [
+            {
+              "label": "Finalizadas",
+              "path": "/seguridad/aperturas/finalizadas"
+            },
+            {
+              "label": "Rechazadas",
+              "path": "/seguridad/aperturas/rechazadas"
+            }
+          ]
+        },
+        {
+          "label": "Visados",
+          "path": "/seguridad/visado",
+          "features": [
+            {
+              "label": "Generar visado",
+              "path": "/seguridad/visado/generar"
+            },
+            {
+              "label": "Administrar visados",
+              "path": "/seguridad/visados"
+            }
+          ]
+        },
+        {
+          "label": "Documentación",
+          "path": "/documentacion",
+          "features": []
+        },
+        {
+          "label": "Métricas",
+          "path": "/seguridad/metricas",
+          "features": []
+        }
       ],
-      "sampleQuestions": ["¿Cómo genero un visado?", "¿Dónde veo aperturas finalizadas o rechazadas?", "¿Cómo consulto el control de marcas?"]
+      "sampleQuestions": [
+        "¿Cómo genero un visado?",
+        "¿Dónde veo aperturas finalizadas o rechazadas?",
+        "¿Cómo consulto el control de marcas?"
+      ]
     },
     {
       "key": "salud-ocupacional",
@@ -63,9 +150,16 @@
       "path": "/salud-ocupacional",
       "tag": "Próximamente",
       "description": "Bienestar, exámenes y seguimiento de salud del personal.",
-      "comingSoon": true,
+      "theme": {
+        "accent": "#0D9488",
+        "soft": "rgba(13, 148, 136, 0.12)"
+      },
       "modules": [],
-      "sampleQuestions": ["¿Está disponible Salud Ocupacional?"]
+      "sampleQuestions": [
+        "¿Está disponible Salud Ocupacional?"
+      ],
+      "comingSoon": true,
+      "comingSoonMsg": "El área de Salud Ocupacional estará disponible próximamente. Los módulos de visados, control de ingreso de terceros y aperturas ahora viven en el área de Seguridad."
     },
     {
       "key": "recepcion",
@@ -73,11 +167,26 @@
       "path": "/recepcion",
       "tag": "Inbound",
       "description": "Registro de ingresos, validación documental y trazabilidad de mercadería.",
+      "theme": {
+        "accent": "#65A30D",
+        "soft": "rgba(101, 163, 13, 0.12)"
+      },
       "modules": [
-        { "label": "Acción descarga", "path": "/recepcion/accion-descarga", "features": [] },
-        { "label": "Métricas", "path": "/recepcion/metricas", "features": [] }
+        {
+          "label": "Acción descarga",
+          "path": "/recepcion/accion-descarga",
+          "features": []
+        },
+        {
+          "label": "Métricas",
+          "path": "/recepcion/metricas",
+          "features": []
+        }
       ],
-      "sampleQuestions": ["¿Qué es una acción de descarga?", "¿Dónde veo métricas de recepción?"]
+      "sampleQuestions": [
+        "¿Qué es una acción de descarga?",
+        "¿Dónde veo métricas de recepción?"
+      ]
     },
     {
       "key": "mantenimiento",
@@ -85,16 +194,41 @@
       "path": "/mantenimiento",
       "tag": "Mantenimiento",
       "description": "Control de equipos, checklists preventivos y gestión de fallas correctivas.",
-      "requiredPermission": "mantenimiento",
+      "theme": {
+        "accent": "#7C3AED",
+        "soft": "rgba(124, 58, 237, 0.12)"
+      },
       "modules": [
-        { "label": "Equipos", "path": "/mantenimiento/equipos", "features": [] },
-        { "label": "Órdenes de trabajo", "path": "/mantenimiento/ots", "features": [
-          { "label": "Tablero / Gestión", "path": "/mantenimiento/OTsPage" },
-          { "label": "Finalizadas", "path": "/mantenimiento/ots/finalizadas" },
-          { "label": "Dashboard", "path": "/mantenimiento/ots/dashboard" }
-        ]}
+        {
+          "label": "Equipos",
+          "path": "/mantenimiento/equipos",
+          "features": []
+        },
+        {
+          "label": "Órdenes de trabajo",
+          "path": "/mantenimiento/ots",
+          "features": [
+            {
+              "label": "Tablero / Gestión",
+              "path": "/mantenimiento/OTsPage"
+            },
+            {
+              "label": "Finalizadas",
+              "path": "/mantenimiento/ots/finalizadas"
+            },
+            {
+              "label": "Dashboard",
+              "path": "/mantenimiento/ots/dashboard"
+            }
+          ]
+        }
       ],
-      "sampleQuestions": ["¿Cómo creo o sigo una OT?", "¿Dónde está el dashboard de OTs?", "¿Cómo registro un equipo?"]
+      "sampleQuestions": [
+        "¿Cómo creo o sigo una OT?",
+        "¿Dónde está el dashboard de OTs?",
+        "¿Cómo registro un equipo?"
+      ],
+      "requiredPermission": "mantenimiento"
     },
     {
       "key": "servicios-generales",
@@ -102,18 +236,50 @@
       "path": "/servicios-generales",
       "tag": "Servicios",
       "description": "Solicitudes internas, seguimiento de tareas y control de servicios de planta.",
+      "theme": {
+        "accent": "#EA580C",
+        "soft": "rgba(234, 88, 12, 0.12)"
+      },
       "modules": [
-        { "label": "Órdenes de trabajo", "path": "/servicios-generales/ordenes-trabajo", "features": [
-          { "label": "Crear OT", "path": "/servicios-generales/ordenes-trabajo/crear" },
-          { "label": "Gestión de OTs", "path": "/servicios-generales/ordenes-trabajo/gestion" }
-        ]},
-        { "label": "Validar ingreso", "path": "/servicios-generales/validar-ingreso", "features": [] },
-        { "label": "Pesaje tarimas", "path": "/servicios-generales/pesaje-tarimas", "features": [
-          { "label": "Registrar tarimas", "path": "/servicios-generales/pesaje-tarimas/registrar" },
-          { "label": "Consultar tarimas", "path": "/servicios-generales/pesaje-tarimas/consultar" }
-        ]}
+        {
+          "label": "Órdenes de trabajo",
+          "path": "/servicios-generales/ordenes-trabajo",
+          "features": [
+            {
+              "label": "Crear OT",
+              "path": "/servicios-generales/ordenes-trabajo/crear"
+            },
+            {
+              "label": "Gestión de OTs",
+              "path": "/servicios-generales/ordenes-trabajo/gestion"
+            }
+          ]
+        },
+        {
+          "label": "Validar ingreso",
+          "path": "/servicios-generales/validar-ingreso",
+          "features": []
+        },
+        {
+          "label": "Pesaje tarimas",
+          "path": "/servicios-generales/pesaje-tarimas",
+          "features": [
+            {
+              "label": "Registrar tarimas",
+              "path": "/servicios-generales/pesaje-tarimas/registrar"
+            },
+            {
+              "label": "Consultar tarimas",
+              "path": "/servicios-generales/pesaje-tarimas/consultar"
+            }
+          ]
+        }
       ],
-      "sampleQuestions": ["¿Cómo creo una OT de servicios?", "¿Cómo peso o consulto una tarima?", "¿Dónde valido un ingreso?"]
+      "sampleQuestions": [
+        "¿Cómo creo una OT de servicios?",
+        "¿Cómo peso o consulto una tarima?",
+        "¿Dónde valido un ingreso?"
+      ]
     },
     {
       "key": "epa",
@@ -121,10 +287,21 @@
       "path": "/epa",
       "tag": "EPA",
       "description": "Panel exclusivo EPA: aperturas, reportes y administración centralizada.",
+      "theme": {
+        "accent": "#6D28D9",
+        "soft": "rgba(109, 40, 217, 0.12)"
+      },
       "modules": [
-        { "label": "Aperturas finalizadas", "path": "/epa/aperturas-finalizadas", "features": [] }
+        {
+          "label": "Aperturas finalizadas",
+          "path": "/epa/aperturas-finalizadas",
+          "features": []
+        }
       ],
-      "sampleQuestions": ["¿Qué ve un usuario EPA?", "¿Dónde están las aperturas finalizadas EPA?"]
+      "sampleQuestions": [
+        "¿Qué ve un usuario EPA?",
+        "¿Dónde están las aperturas finalizadas EPA?"
+      ]
     },
     {
       "key": "mrp-tarimas",
@@ -132,13 +309,36 @@
       "path": "/mrp-tarimas",
       "tag": "MRP",
       "description": "Gestión integral de tarimas: inventario, reparaciones, materiales y costos.",
+      "theme": {
+        "accent": "#B45309",
+        "soft": "rgba(180, 83, 9, 0.12)"
+      },
       "modules": [
-        { "label": "Dashboard", "path": "/mrp-tarimas/dashboard", "features": [] },
-        { "label": "Inventario", "path": "/mrp-tarimas/inventario", "features": [] },
-        { "label": "Reparaciones", "path": "/mrp-tarimas/reparaciones", "features": [] },
-        { "label": "Materiales", "path": "/mrp-tarimas/materiales", "features": [] }
+        {
+          "label": "Dashboard",
+          "path": "/mrp-tarimas/dashboard",
+          "features": []
+        },
+        {
+          "label": "Inventario",
+          "path": "/mrp-tarimas/inventario",
+          "features": []
+        },
+        {
+          "label": "Reparaciones",
+          "path": "/mrp-tarimas/reparaciones",
+          "features": []
+        },
+        {
+          "label": "Materiales",
+          "path": "/mrp-tarimas/materiales",
+          "features": []
+        }
       ],
-      "sampleQuestions": ["¿Dónde veo el inventario de tarimas?", "¿Cómo registro una reparación?"]
+      "sampleQuestions": [
+        "¿Dónde veo el inventario de tarimas?",
+        "¿Cómo registro una reparación?"
+      ]
     },
     {
       "key": "administracion",
@@ -146,16 +346,41 @@
       "path": "/administracion",
       "tag": "Administración",
       "description": "Gestión de usuarios, roles y permisos de la plataforma.",
-      "adminOnly": true,
-      "allowedRoles": ["administrativo", "dev"],
+      "theme": {
+        "accent": "#0891B2",
+        "soft": "rgba(8, 145, 178, 0.12)"
+      },
       "modules": [
-        { "label": "Usuarios", "path": "/administracion/usuarios", "features": [] },
-        { "label": "Horas Extra", "path": "/horas-extra", "features": [
-          { "label": "Aprobaciones gerencia", "path": "/horas-extra/gerencia" },
-          { "label": "Reporte mensual", "path": "/horas-extra/reporte" }
-        ]}
+        {
+          "label": "Usuarios",
+          "path": "/administracion/usuarios",
+          "features": []
+        },
+        {
+          "label": "Horas Extra",
+          "path": "/horas-extra",
+          "features": [
+            {
+              "label": "Aprobaciones gerencia",
+              "path": "/horas-extra/gerencia"
+            },
+            {
+              "label": "Reporte mensual",
+              "path": "/horas-extra/reporte"
+            }
+          ]
+        }
       ],
-      "sampleQuestions": ["¿Cómo se aprueban las horas extra?", "¿Dónde está el reporte mensual?", "¿Cómo gestiono usuarios?"]
+      "sampleQuestions": [
+        "¿Cómo se aprueban las horas extra?",
+        "¿Dónde está el reporte mensual?",
+        "¿Cómo gestiono usuarios?"
+      ],
+      "adminOnly": true,
+      "allowedRoles": [
+        "administrativo",
+        "dev"
+      ]
     },
     {
       "key": "dev",
@@ -163,51 +388,372 @@
       "path": "/dev",
       "tag": "Desarrollo",
       "description": "Herramientas internas de desarrollo: migraciones, sincronización y utilidades.",
-      "devOnly": true,
-      "allowedRoles": ["dev"],
+      "theme": {
+        "accent": "#475569",
+        "soft": "rgba(71, 85, 105, 0.12)"
+      },
       "modules": [
-        { "label": "Update AppOLO Supabase", "path": "/dev/update-supabase", "features": [] },
-        { "label": "Configuración de módulos", "path": "/dev/config-modulos", "features": [
-          { "label": "Horas Extra", "path": "/dev/config-modulos/horas-extra" }
-        ]}
+        {
+          "label": "Update AppOLO Supabase",
+          "path": "/dev/update-supabase",
+          "features": []
+        },
+        {
+          "label": "Configuración de módulos",
+          "path": "/dev/config-modulos",
+          "features": [
+            {
+              "label": "Horas Extra",
+              "path": "/dev/config-modulos/horas-extra"
+            }
+          ]
+        }
       ],
-      "sampleQuestions": ["¿Qué herramientas de dev existen?"]
+      "sampleQuestions": [
+        "¿Qué herramientas de dev existen?"
+      ],
+      "devOnly": true,
+      "allowedRoles": [
+        "dev"
+      ]
     }
   ],
   "routes": [
-    { "path": "/login", "access": "public", "screen": "Login" },
-    { "path": "/config-region", "access": "auth (sin tenant)", "screen": "Configuración de tenant/región" },
-    { "path": "/welcome", "access": "private", "screen": "Bienvenida post-login (HomeHub)" },
-    { "path": "/", "access": "private", "screen": "Hub principal (menú circular)" },
-    { "path": "/areas", "access": "private", "screen": "Hub principal (menú circular)" },
-    { "path": "/pesado", "access": "private", "screen": "Pesaje tarimas (atajo)" },
-    { "path": "/documentacion", "access": "private", "screen": "Documentación" },
-    { "path": "/despacho", "access": "private", "screen": "Despacho" },
-    { "path": "/seguridad", "access": "private", "screen": "Seguridad (SSO)" },
-    { "path": "/recepcion", "access": "private", "screen": "Recepción" },
-    { "path": "/mantenimiento", "access": "private", "screen": "Mantenimiento" },
-    { "path": "/servicios-generales", "access": "private", "screen": "Servicios Generales" },
-    { "path": "/epa", "access": "private", "screen": "EPA" },
-    { "path": "/mrp-tarimas", "access": "private", "screen": "MRP Tarimas" },
-    { "path": "/administracion", "access": "private (administrativo/dev)", "screen": "Administración" },
-    { "path": "/horas-extra", "access": "private (administrativo/dev)", "screen": "Horas Extra" },
-    { "path": "/dev", "access": "private (dev)", "screen": "Dev" }
+    {
+      "path": "/login",
+      "access": "public",
+      "screen": "Login"
+    },
+    {
+      "path": "/config-region",
+      "access": "auth (sin tenant)",
+      "screen": "Configuración de tenant/región"
+    },
+    {
+      "path": "/welcome",
+      "access": "private",
+      "screen": "Bienvenida post-login (HomeHub)"
+    },
+    {
+      "path": "/",
+      "access": "private",
+      "screen": "Hub principal (menú circular)"
+    },
+    {
+      "path": "/areas",
+      "access": "private",
+      "screen": "Hub principal (menú circular)"
+    },
+    {
+      "path": "/pesado",
+      "access": "private",
+      "screen": "Pesaje tarimas (atajo)"
+    },
+    {
+      "path": "/documentacion",
+      "access": "private",
+      "screen": "Documentación"
+    },
+    {
+      "path": "/despacho",
+      "access": "private",
+      "screen": "Despacho"
+    },
+    {
+      "path": "/despacho/in-progress",
+      "access": "private",
+      "screen": "Despacho: En progreso"
+    },
+    {
+      "path": "/despacho/finalizados",
+      "access": "private",
+      "screen": "Despacho: Finalizados"
+    },
+    {
+      "path": "/seguridad",
+      "access": "private",
+      "screen": "Seguridad (SSO)"
+    },
+    {
+      "path": "/seguridad/control-marcas",
+      "access": "private",
+      "screen": "Seguridad: Control de marcas"
+    },
+    {
+      "path": "/seguridad/control-marcas/historial",
+      "access": "private",
+      "screen": "Seguridad: Historial"
+    },
+    {
+      "path": "/seguridad/aperturas",
+      "access": "private",
+      "screen": "Seguridad: Aperturas"
+    },
+    {
+      "path": "/seguridad/aperturas/finalizadas",
+      "access": "private",
+      "screen": "Seguridad: Finalizadas"
+    },
+    {
+      "path": "/seguridad/aperturas/detalle/:id",
+      "access": "private",
+      "screen": "seguridad / aperturas / detalle / id"
+    },
+    {
+      "path": "/seguridad/aperturas/rechazadas",
+      "access": "private",
+      "screen": "Seguridad: Rechazadas"
+    },
+    {
+      "path": "/seguridad/equipos",
+      "access": "private",
+      "screen": "seguridad / equipos"
+    },
+    {
+      "path": "/seguridad/visado",
+      "access": "private",
+      "screen": "Seguridad: Visados"
+    },
+    {
+      "path": "/seguridad/visado/generar",
+      "access": "private",
+      "screen": "Seguridad: Generar visado"
+    },
+    {
+      "path": "/seguridad/visados",
+      "access": "private",
+      "screen": "Seguridad: Administrar visados"
+    },
+    {
+      "path": "/seguridad/metricas",
+      "access": "private",
+      "screen": "Seguridad: Métricas"
+    },
+    {
+      "path": "/salud",
+      "access": "private",
+      "screen": "salud"
+    },
+    {
+      "path": "/salud/*",
+      "access": "private",
+      "screen": "salud / wildcard"
+    },
+    {
+      "path": "/epa",
+      "access": "private",
+      "screen": "EPA"
+    },
+    {
+      "path": "/epa/aperturas-finalizadas",
+      "access": "private",
+      "screen": "EPA: Aperturas finalizadas"
+    },
+    {
+      "path": "/administracion",
+      "access": "private (administrativo/dev)",
+      "screen": "Administración"
+    },
+    {
+      "path": "/dev",
+      "access": "private (dev)",
+      "screen": "Dev"
+    },
+    {
+      "path": "/dev/update-supabase",
+      "access": "private (dev)",
+      "screen": "Dev: Update AppOLO Supabase"
+    },
+    {
+      "path": "/dev/config-modulos",
+      "access": "private (dev)",
+      "screen": "Dev: Configuración de módulos"
+    },
+    {
+      "path": "/dev/config-modulos/horas-extra",
+      "access": "private (dev)",
+      "screen": "Dev: Horas Extra"
+    },
+    {
+      "path": "/servicios-generales",
+      "access": "private",
+      "screen": "Servicios Generales"
+    },
+    {
+      "path": "/servicios-generales/ordenes-trabajo",
+      "access": "private",
+      "screen": "Servicios Generales: Órdenes de trabajo"
+    },
+    {
+      "path": "/servicios-generales/ordenes-trabajo/crear",
+      "access": "private",
+      "screen": "Servicios Generales: Crear OT"
+    },
+    {
+      "path": "/servicios-generales/ordenes-trabajo/gestion",
+      "access": "private",
+      "screen": "Servicios Generales: Gestión de OTs"
+    },
+    {
+      "path": "/servicios-generales/validar-ingreso",
+      "access": "private",
+      "screen": "Servicios Generales: Validar ingreso"
+    },
+    {
+      "path": "/servicios-generales/pesaje-tarimas",
+      "access": "private",
+      "screen": "Servicios Generales: Pesaje tarimas"
+    },
+    {
+      "path": "/servicios-generales/pesaje-tarimas/registrar",
+      "access": "private",
+      "screen": "Servicios Generales: Registrar tarimas"
+    },
+    {
+      "path": "/servicios-generales/pesaje-tarimas/consultar",
+      "access": "private",
+      "screen": "Servicios Generales: Consultar tarimas"
+    },
+    {
+      "path": "/recepcion",
+      "access": "private",
+      "screen": "Recepción"
+    },
+    {
+      "path": "/recepcion/accion-descarga",
+      "access": "private",
+      "screen": "Recepción: Acción descarga"
+    },
+    {
+      "path": "/recepcion/accion-descarga/:accionId",
+      "access": "private",
+      "screen": "recepcion / accion descarga / accionId"
+    },
+    {
+      "path": "/recepcion/metricas",
+      "access": "private",
+      "screen": "Recepción: Métricas"
+    },
+    {
+      "path": "/mantenimiento",
+      "access": "private",
+      "screen": "Mantenimiento"
+    },
+    {
+      "path": "/mantenimiento/equipos",
+      "access": "private",
+      "screen": "Mantenimiento: Equipos"
+    },
+    {
+      "path": "/mantenimiento/equipos/:id",
+      "access": "private",
+      "screen": "mantenimiento / equipos / id"
+    },
+    {
+      "path": "/mantenimiento/ots",
+      "access": "private",
+      "screen": "Mantenimiento: Órdenes de trabajo"
+    },
+    {
+      "path": "/mantenimiento/ots/finalizadas",
+      "access": "private",
+      "screen": "Mantenimiento: Finalizadas"
+    },
+    {
+      "path": "/mantenimiento/OTsPage",
+      "access": "private",
+      "screen": "Mantenimiento: Tablero / Gestión"
+    },
+    {
+      "path": "/mantenimiento/ots/dashboard",
+      "access": "private",
+      "screen": "Mantenimiento: Dashboard"
+    },
+    {
+      "path": "/mantenimiento/ots-solicitud/:id",
+      "access": "private",
+      "screen": "mantenimiento / ots solicitud / id"
+    },
+    {
+      "path": "/mrp-tarimas",
+      "access": "private",
+      "screen": "MRP Tarimas"
+    },
+    {
+      "path": "/mrp-tarimas/dashboard",
+      "access": "private",
+      "screen": "MRP Tarimas: Dashboard"
+    },
+    {
+      "path": "/mrp-tarimas/inventario",
+      "access": "private",
+      "screen": "MRP Tarimas: Inventario"
+    },
+    {
+      "path": "/mrp-tarimas/reparaciones",
+      "access": "private",
+      "screen": "MRP Tarimas: Reparaciones"
+    },
+    {
+      "path": "/mrp-tarimas/materiales",
+      "access": "private",
+      "screen": "MRP Tarimas: Materiales"
+    },
+    {
+      "path": "/horas-extra",
+      "access": "private (administrativo/dev)",
+      "screen": "Horas Extra"
+    },
+    {
+      "path": "/horas-extra/gerencia",
+      "access": "private (administrativo/dev)",
+      "screen": "Administración: Aprobaciones gerencia"
+    },
+    {
+      "path": "/horas-extra/reporte",
+      "access": "private (administrativo/dev)",
+      "screen": "Administración: Reporte mensual"
+    }
   ],
   "firestoreCollections": [
-    "profiles", "usernames", "pushTokens",
-    "despachos", "despachos/{id}/items", "despachos/{id}/fotos", "despachos/{id}/layout",
-    "equipos", "checklists_diarias",
-    "solicitudesOT", "solicitudesOT/{id}/subtareas", "subtaskList",
-    "accion_descarga", "aperturas", "aperturasRecepcion", "recepcionCofersa_lotes", "tareas_apertura",
-    "controlMarcas/{day}/marcas", "usuariosTerceros", "controlTerceros",
-    "visados", "visadosPorFirmar",
-    "documentacion", "colecciones", "fichas",
-    "chats/{id}/mensajes", "dashboard_salud_daily", "pesajes",
-    "overtimeApprovals", "appConfig/overtimeCoordinatorEmails", "mail_logs"
+    "profiles",
+    "usernames",
+    "pushTokens",
+    "despachos",
+    "despachos/{id}/items",
+    "despachos/{id}/fotos",
+    "despachos/{id}/layout",
+    "equipos",
+    "checklists_diarias",
+    "solicitudesOT",
+    "solicitudesOT/{id}/subtareas",
+    "subtaskList",
+    "accion_descarga",
+    "aperturas",
+    "aperturasRecepcion",
+    "recepcionCofersa_lotes",
+    "tareas_apertura",
+    "controlMarcas/{day}/marcas",
+    "usuariosTerceros",
+    "controlTerceros",
+    "visados",
+    "visadosPorFirmar",
+    "documentacion",
+    "colecciones",
+    "fichas",
+    "chats/{id}/mensajes",
+    "dashboard_salud_daily",
+    "pesajes",
+    "overtimeApprovals",
+    "appConfig/overtimeCoordinatorEmails",
+    "mail_logs"
   ],
   "security": {
     "authedRequired": true,
-    "adminRoles": ["administrativo", "dev"],
+    "adminRoles": [
+      "administrativo",
+      "dev"
+    ],
     "helpers": {
       "isAdminRequester": "role in ['administrativo','dev']",
       "hasPerm": "profiles/{uid}.permisos[clave] == true",
@@ -221,24 +767,84 @@
     ]
   },
   "cloudFunctions": [
-    { "name": "sendEquipoQrLabel", "region": "us-central1", "type": "onCall", "description": "Genera un PNG QR de un equipo y lo envía por correo (Gmail SMTP). Revalida perfil + tenant/company contra equipos/{id} y exige permiso de mantenimiento." },
-    { "name": "getOvertimeRecords", "region": "us-central1", "type": "onCall", "description": "Lee la vista de asistencia (SQL Server/Bit2), calcula horas extra (semana vs fin de semana) y filtra por coordinador (dev ve todo)." },
-    { "name": "decideOvertimeRecord", "region": "us-central1", "type": "onCall", "description": "Aprueba o rechaza un registro de horas extra (overtimeApprovals)." },
-    { "name": "getOvertimeCoordinators", "region": "us-central1", "type": "onCall", "description": "Lista coordinadores distintos y su email configurado." },
-    { "name": "saveCoordinatorEmails", "region": "us-central1", "type": "onCall", "description": "Guarda el mapeo coordinador -> email en appConfig/overtimeCoordinatorEmails." },
-    { "name": "testSqlConnection", "region": "us-central1", "type": "onCall", "description": "Utilidad de diagnóstico de conexión SQL." }
+    {
+      "name": "sendEquipoQrLabel",
+      "region": "us-central1",
+      "type": "onCall",
+      "description": "Genera un PNG QR de un equipo y lo envía por correo (Gmail SMTP). Revalida perfil + tenant/company contra equipos/{id} y exige permiso de mantenimiento."
+    },
+    {
+      "name": "getOvertimeRecords",
+      "region": "us-central1",
+      "type": "onCall",
+      "description": "Lee la vista de asistencia (SQL Server/Bit2), calcula horas extra (semana vs fin de semana) y filtra por coordinador (dev ve todo)."
+    },
+    {
+      "name": "decideOvertimeRecord",
+      "region": "us-central1",
+      "type": "onCall",
+      "description": "Aprueba o rechaza un registro de horas extra (overtimeApprovals)."
+    },
+    {
+      "name": "getOvertimeCoordinators",
+      "region": "us-central1",
+      "type": "onCall",
+      "description": "Lista coordinadores distintos y su email configurado."
+    },
+    {
+      "name": "saveCoordinatorEmails",
+      "region": "us-central1",
+      "type": "onCall",
+      "description": "Guarda el mapeo coordinador -> email en appConfig/overtimeCoordinatorEmails."
+    },
+    {
+      "name": "testSqlConnection",
+      "region": "us-central1",
+      "type": "onCall",
+      "description": "Utilidad de diagnóstico de conexión SQL."
+    }
   ],
   "faqSeeds": [
-    { "q": "¿Cómo uso las áreas de trabajo?", "topic": "navegacion" },
-    { "q": "¿Qué puedo hacer en Mantenimiento?", "topic": "mantenimiento" },
-    { "q": "¿Dónde veo los reportes / métricas?", "topic": "metricas" },
-    { "q": "¿Cómo genero un visado?", "topic": "seguridad" },
-    { "q": "¿Dónde reviso las aperturas finalizadas?", "topic": "seguridad" },
-    { "q": "¿Cómo se aprueban las horas extra?", "topic": "administracion" },
-    { "q": "¿Cómo registro o consulto una tarima?", "topic": "servicios-generales" },
-    { "q": "¿Qué significa mi rol y mis permisos?", "topic": "auth" },
-    { "q": "¿Por qué solo veo el área EPA?", "topic": "epa" },
-    { "q": "¿Cómo cambio mi región o tenant?", "topic": "config" }
+    {
+      "q": "¿Cómo uso las áreas de trabajo?",
+      "topic": "navegacion"
+    },
+    {
+      "q": "¿Qué puedo hacer en Mantenimiento?",
+      "topic": "mantenimiento"
+    },
+    {
+      "q": "¿Dónde veo los reportes / métricas?",
+      "topic": "metricas"
+    },
+    {
+      "q": "¿Cómo genero un visado?",
+      "topic": "seguridad"
+    },
+    {
+      "q": "¿Dónde reviso las aperturas finalizadas?",
+      "topic": "seguridad"
+    },
+    {
+      "q": "¿Cómo se aprueban las horas extra?",
+      "topic": "administracion"
+    },
+    {
+      "q": "¿Cómo registro o consulto una tarima?",
+      "topic": "servicios-generales"
+    },
+    {
+      "q": "¿Qué significa mi rol y mis permisos?",
+      "topic": "auth"
+    },
+    {
+      "q": "¿Por qué solo veo el área EPA?",
+      "topic": "epa"
+    },
+    {
+      "q": "¿Cómo cambio mi región o tenant?",
+      "topic": "config"
+    }
   ],
   "limitations": [
     "No inventa datos operativos en tiempo real mientras no esté conectado a fuentes en vivo.",
@@ -246,5 +852,11 @@
     "No responde con datos de otro tenantId/company.",
     "Si no tiene información suficiente, lo dice y sugiere el módulo/ruta adecuado.",
     "Distingue documentación general vs datos en vivo."
+  ],
+  "generatedAt": "2026-06-15T13:59:04.102Z",
+  "generatedFrom": [
+    "src/config/workAreas.jsx",
+    "src/App.jsx",
+    "docs/assistant-knowledge/appolo-knowledge.json"
   ]
 }

@@ -1840,6 +1840,7 @@ const styles = {
     boxShadow: "0 2px 8px rgba(15,23,42,0.05)",
     whiteSpace: "pre-wrap",
     wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   bubbleUser: {
     width: "fit-content",
@@ -1854,6 +1855,7 @@ const styles = {
     boxShadow: `0 6px 16px ${T.accentGlow}`,
     whiteSpace: "pre-wrap",
     wordBreak: "break-word",
+    overflowWrap: "anywhere",
   },
   typingBubble: {
     display: "inline-flex",

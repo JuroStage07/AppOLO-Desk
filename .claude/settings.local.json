@@ -31,7 +31,11 @@
       "Bash(mkdir -p \"src/pages/SSO/Seguridad\")",
       "Bash(git mv *)",
       "Bash(rmdir \"src/pages/Salud Ocupacional\")",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git restore *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('docs/assistant-knowledge/appolo-knowledge.json','utf8'\\)\\); console.log\\('JSON OK'\\)\")",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('public/assistant-knowledge/appolo-knowledge.json','utf8'\\)\\);console.log\\('copied + JSON OK'\\)\")"
     ]
   }
 }
