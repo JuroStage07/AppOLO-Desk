@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Menu, User, Search } from "lucide-react";
 import AreasSidebar from "./AreasSidebar";
@@ -6,6 +6,7 @@ import Breadcrumbs from "./Breadcrumbs";
 import { isRootPath } from "./routeTrail";
 import TopbarAccount from "./TopbarAccount";
 import { openCommandPalette } from "./commandPaletteBus";
+import { openPinsFlyout } from "./pinsBus";
 import { ACCENT, ACCENT_SOFT, BORDER, CONTAINER_MAX, SLATE, SURFACE, TEXT } from "../../styles/theme";
 
 const IS_MAC =
@@ -33,9 +34,25 @@ export default function Topbar({
   const location = useLocation();
   const showUtility = utilityBar && !isRootPath(location.pathname);
 
+  // F2 → open pins flyout (handled by AreasSidebar via pinsBus)
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === "F2" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        openPinsFlyout();
+      }
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, []);
+
+  const closeSidebar = () => {
+    setSidebarOpen(false);
+  };
+
   return (
     <>
-      <AreasSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <AreasSidebar open={sidebarOpen} onClose={closeSidebar} />
       <header style={{ ...topbar, ...(sticky ? topbarPinned : {}), ...style }}>
         <div style={{ ...topbarInner, ...innerStyle }}>
           <button

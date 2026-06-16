@@ -7,6 +7,7 @@ import { isEpaRestrictedUser } from "../../config/epaOnlyUids";
 import { getVisibleAreas } from "../../config/workAreas";
 import { useAllPinnedModules } from "../../hooks/usePinnedModules";
 import PinsFlyout from "./PinsFlyout";
+import { onOpenPins } from "./pinsBus";
 import SidebarAreaIcon from "./SidebarAreaIcon";
 import { useToast } from "./Toast";
 
@@ -39,12 +40,32 @@ export default function AreasSidebar({ open, onClose, openPins = false }) {
   const [expandedArea, setExpandedArea] = useState(null);
   const [expandedModules, setExpandedModules] = useState(() => new Set());
   const [pinsOpen, setPinsOpen] = useState(false);
+  const [forcedOpen, setForcedOpen] = useState(false);
   const { pins } = useAllPinnedModules();
 
   // Open directly on the "Mis Pin" section when requested by the opener.
   useEffect(() => {
     if (open && openPins) setPinsOpen(true);
   }, [open, openPins]);
+
+  // Listen to global pinsBus (F2 shortcut) — force-open this sidebar with pins.
+  useEffect(() => {
+    return onOpenPins(() => {
+      setForcedOpen(true);
+      setPinsOpen(true);
+    });
+  }, []);
+
+  // Derive effective open: either parent says open, or forced by shortcut.
+  const effectiveOpen = open || forcedOpen;
+
+  const closeAll = () => {
+    setPinsOpen(false);
+    setForcedOpen(false);
+    setExpandedArea(null);
+    setExpandedModules(new Set());
+    onClose();
+  };
 
   const toggleArea = (key) => {
     setExpandedModules(new Set());
@@ -66,13 +87,6 @@ export default function AreasSidebar({ open, onClose, openPins = false }) {
     [epaOnly, role]
   );
 
-  const closeAll = () => {
-    setPinsOpen(false);
-    setExpandedArea(null);
-    setExpandedModules(new Set());
-    onClose();
-  };
-
   const goTo = (path) => {
     closeAll();
     nav(path);
@@ -84,15 +98,15 @@ export default function AreasSidebar({ open, onClose, openPins = false }) {
 
   return (
     <>
-      {open && (
+      {effectiveOpen && (
         <div style={styles.backdrop} onClick={closeAll} aria-hidden="true" />
       )}
       <aside
         style={{
           ...styles.sidebar,
-          transform: open ? "translateX(0)" : "translateX(-100%)",
+          transform: effectiveOpen ? "translateX(0)" : "translateX(-100%)",
         }}
-        aria-hidden={!open}
+        aria-hidden={!effectiveOpen}
       >
         <div style={styles.sidebarHeader}>
           <span style={styles.sidebarTitle}>Áreas de trabajo</span>
@@ -274,7 +288,7 @@ export default function AreasSidebar({ open, onClose, openPins = false }) {
       </aside>
 
       <PinsFlyout
-        open={open && pinsOpen}
+        open={effectiveOpen && pinsOpen}
         onClose={() => setPinsOpen(false)}
         onNavigate={(path) => goTo(path)}
         restrictTo={epaOnly ? "epa" : undefined}
