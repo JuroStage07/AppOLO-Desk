@@ -63,9 +63,9 @@ service cloud.firestore {
         && requesterProfile().role == 'operativo';
     }
 
-    // Checklist diaria: operativo (sin permiso salud) o permiso saludOcupacional
+    // Checklist diaria: cualquier usuario autenticado con perfil
     function canChecklistDiariaEquipoApp() {
-      return canSaludOcupacionalEquipos() || isOperativoRequester();
+      return authed() && userExists(request.auth.uid);
     }
 
     function canLeerColeccionEquipos() {
@@ -2062,6 +2062,17 @@ match /controlTerceros/{eventId} {
       allow update: if isAdminRequester()
         && request.resource.data.validatedByUid == request.auth.uid;
 
+      allow delete: if isAdminRequester();
+    }
+
+    // =========================
+    // ✅ Usuarios Horas Extra (sync desde Bit2)
+    // Colección: overtimeUsers/{idEmployee}
+    // Escritura solo desde Cloud Functions (admin SDK); lectura para admin/dev.
+    // =========================
+    match /overtimeUsers/{empId} {
+      allow get, list: if isAdminRequester();
+      allow create, update: if isAdminRequester();
       allow delete: if isAdminRequester();
     }
   }

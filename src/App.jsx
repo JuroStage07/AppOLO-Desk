@@ -62,6 +62,7 @@ import UpdateSupabasePage from "./pages/Dev/UpdateSupabasePage";
 import ModulesConfigHub from "./pages/Dev/ModulesConfigHub";
 import OvertimeSettingsHub from "./pages/Dev/OvertimeSettingsHub";
 import AdministracionHub from "./pages/Administracion/AdministracionHub";
+import OvertimeUsersAdmin from "./pages/Administracion/OvertimeUsersAdmin";
 import ServiciosGenerales from "./pages/ServiciosGenerales/ServiciosGenerales";
 import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGenerales/ServiciosGeneralesOrdenesTrabajo";
 import ServiciosGeneralesOTCrear from "./pages/ServiciosGenerales/ServiciosGeneralesOTCrear";
@@ -640,6 +641,16 @@ export default function App() {
               <PrivateRoute>
                 <RequireRole roles={["administrativo", "dev"]}>
                   <OvertimeMonthlyReport />
+                </RequireRole>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/horas-extra/usuarios"
+            element={
+              <PrivateRoute>
+                <RequireRole roles={["administrativo", "dev"]}>
+                  <OvertimeUsersAdmin />
                 </RequireRole>
               </PrivateRoute>
             }

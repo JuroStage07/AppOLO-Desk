@@ -37,6 +37,7 @@ const EXTRA_SECTIONS = [
   // Horas Extra sub-pages (the "Horas Extra" subModule lives under Administración).
   { path: "/horas-extra/gerencia", label: "Aprobaciones gerencia", area: "/administracion" },
   { path: "/horas-extra/reporte", label: "Reporte mensual", area: "/administracion" },
+  { path: "/horas-extra/usuarios", label: "Usuarios", area: "/administracion" },
   // Dev: overtime settings nested under "Configuración de módulos".
   { path: "/dev/config-modulos/horas-extra", label: "Horas Extra", area: "/dev" },
   // Salud: equipment-review route (not in the sidebar).

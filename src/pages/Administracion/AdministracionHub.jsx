@@ -5,6 +5,7 @@ import {
   Clock,
   FileSpreadsheet,
   Lock,
+  Settings,
   ShieldCheck,
   UserCheck,
   Users,
@@ -97,6 +98,20 @@ function OvertimeFlowModal({ open, onClose, onSelect }) {
             <div style={modalStyles.optionText}>
               <div style={modalStyles.optionTitle}>Reporte Mensual</div>
               <div style={modalStyles.optionDesc}>Exportar reporte</div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            style={modalStyles.optionCard}
+            onClick={() => onSelect("usuarios")}
+          >
+            <div style={{ ...modalStyles.optionIcon, background: "rgba(30,64,175,0.12)", color: "#1E40AF" }}>
+              <Settings size={22} strokeWidth={2.2} />
+            </div>
+            <div style={modalStyles.optionText}>
+              <div style={modalStyles.optionTitle}>Gestión de Usuarios</div>
+              <div style={modalStyles.optionDesc}>Configurar parámetros</div>
             </div>
           </button>
         </div>
@@ -215,6 +230,8 @@ export default function AdministracionHub() {
       nav("/horas-extra");
     } else if (flow === "reporte") {
       nav("/horas-extra/reporte");
+    } else if (flow === "usuarios") {
+      nav("/horas-extra/usuarios");
     } else {
       nav("/horas-extra/gerencia");
     }
