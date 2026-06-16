@@ -2199,7 +2199,7 @@ const styles = {
   /* ─── Assistant chat window ─── */
   chat: {
     width: "min(760px, 96%)",
-    height: "min(600px, calc(100vh - 240px))",
+    height: "min(750px, calc(100vh - 160px))",
     display: "flex",
     flexDirection: "column",
     background: T.surface,
