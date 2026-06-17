@@ -597,7 +597,7 @@ export default function EquipoInfoPage() {
                       title="Generar y enviar QR"
                       aria-label="Generar y enviar QR"
                     >
-                      <QrCode size={18} strokeWidth={2.2} aria-hidden />
+                      <QrCode size={18} strokeWidth={2.2} color="#0F172A" aria-hidden />
                     </button>
                     <button type="button" onClick={openEdit} style={ui.editBtn}>
                       <Pencil size={16} strokeWidth={2.2} aria-hidden />
@@ -1152,11 +1152,13 @@ const ui = {
     background: "rgba(255,255,255,0.92)",
     width: 44,
     height: 44,
+    padding: 0,
     cursor: "pointer",
     display: "grid",
     placeItems: "center",
     color: "#0F172A",
     boxShadow: "0 12px 26px rgba(15,23,42,0.10)",
+    overflow: "visible",
   },
 
   editBtn: {
