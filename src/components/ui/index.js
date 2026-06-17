@@ -45,7 +45,11 @@ export { default as ConfirmProvider, useConfirm } from "./ConfirmDialog";
 export { default as Breadcrumbs } from "./Breadcrumbs";
 export { default as TopbarAccount } from "./TopbarAccount";
 export { default as CommandPalette } from "./CommandPalette";
+export { default as CircleMenu } from "./CircleMenu";
+export { default as AreasModal } from "./AreasModal";
+export { default as AssistantModal } from "./AssistantModal";
 export { openCommandPalette } from "./commandPaletteBus";
+export { openAssistantModal } from "./assistantBus";
 
 export * as theme from "../../styles/theme";
 export { default as themeDefault } from "../../styles/theme";

@@ -392,11 +392,8 @@ const emptyForm = () => ({
   nombreOT: "",
   activoReferencia: "",
   departamento: "",
-  departamentoOtro: "",
   lugarProblema: "",
-  lugarProblemaOtro: "",
   tipoProblema: "",
-  tipoProblemaOtro: "",
   descripcionOT: "",
   notas: "",
 });
@@ -501,20 +498,9 @@ export function NewOTModal({
     setErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
-  const departamentoFinal =
-    form.departamento === "Otro"
-      ? form.departamentoOtro.trim()
-      : form.departamento;
-
-  const lugarProblemaFinal =
-    form.lugarProblema === "Otro"
-      ? form.lugarProblemaOtro.trim()
-      : form.lugarProblema;
-
-  const tipoProblemaFinal =
-    form.tipoProblema === "Otro"
-      ? form.tipoProblemaOtro.trim()
-      : form.tipoProblema;
+  const departamentoFinal = form.departamento;
+  const lugarProblemaFinal = form.lugarProblema;
+  const tipoProblemaFinal = form.tipoProblema;
 
   const validate = () => {
     const next = {};
@@ -534,20 +520,14 @@ export function NewOTModal({
 
     if (!form.departamento.trim()) {
       next.departamento = "Seleccioná un departamento.";
-    } else if (form.departamento === "Otro" && !form.departamentoOtro.trim()) {
-      next.departamentoOtro = "Especificá el departamento.";
     }
 
     if (!form.lugarProblema.trim()) {
       next.lugarProblema = "Seleccioná el lugar del problema.";
-    } else if (form.lugarProblema === "Otro" && !form.lugarProblemaOtro.trim()) {
-      next.lugarProblemaOtro = "Especificá el lugar del problema.";
     }
 
     if (!form.tipoProblema.trim()) {
       next.tipoProblema = "Seleccioná el tipo de problema.";
-    } else if (form.tipoProblema === "Otro" && !form.tipoProblemaOtro.trim()) {
-      next.tipoProblemaOtro = "Especificá el tipo de problema.";
     }
 
     if (!form.descripcionOT.trim()) {
@@ -590,18 +570,12 @@ export function NewOTModal({
 
         departamento: departamentoFinal,
         departamentoBase: form.departamento,
-        departamentoOtro:
-          form.departamento === "Otro" ? form.departamentoOtro.trim() : "",
 
         lugarProblema: lugarProblemaFinal,
         lugarProblemaBase: form.lugarProblema,
-        lugarProblemaOtro:
-          form.lugarProblema === "Otro" ? form.lugarProblemaOtro.trim() : "",
 
         tipoProblema: tipoProblemaFinal,
         tipoProblemaBase: form.tipoProblema,
-        tipoProblemaOtro:
-          form.tipoProblema === "Otro" ? form.tipoProblemaOtro.trim() : "",
 
         descripcionOT: form.descripcionOT.trim(),
         notas: form.notas.trim(),
@@ -802,25 +776,6 @@ export function NewOTModal({
               <ChevronRight size={16} />
             </button>
             {errText(errors.departamento)}
-
-            {form.departamento === "Otro" && (
-              <>
-                <input
-                  value={form.departamentoOtro}
-                  onChange={(e) =>
-                    setField("departamentoOtro", e.target.value)
-                  }
-                  style={{
-                    ...ui.input,
-                    ...(errors.departamentoOtro ? invalidStyle : null),
-                  }}
-                  data-invalid={errors.departamentoOtro ? "true" : undefined}
-                  placeholder="Especifique departamento"
-                  disabled={saving}
-                />
-                {errText(errors.departamentoOtro)}
-              </>
-            )}
           </div>
 
           <div style={ui.fieldGroup}>
@@ -843,25 +798,6 @@ export function NewOTModal({
               <ChevronRight size={16} />
             </button>
             {errText(errors.lugarProblema)}
-
-            {form.lugarProblema === "Otro" && (
-              <>
-                <input
-                  value={form.lugarProblemaOtro}
-                  onChange={(e) =>
-                    setField("lugarProblemaOtro", e.target.value)
-                  }
-                  style={{
-                    ...ui.input,
-                    ...(errors.lugarProblemaOtro ? invalidStyle : null),
-                  }}
-                  data-invalid={errors.lugarProblemaOtro ? "true" : undefined}
-                  placeholder="Especifique lugar"
-                  disabled={saving}
-                />
-                {errText(errors.lugarProblemaOtro)}
-              </>
-            )}
           </div>
         </div>
 
@@ -885,23 +821,6 @@ export function NewOTModal({
             <ChevronRight size={16} />
           </button>
           {errText(errors.tipoProblema)}
-
-          {form.tipoProblema === "Otro" && (
-            <>
-              <input
-                value={form.tipoProblemaOtro}
-                onChange={(e) => setField("tipoProblemaOtro", e.target.value)}
-                style={{
-                  ...ui.input,
-                  ...(errors.tipoProblemaOtro ? invalidStyle : null),
-                }}
-                data-invalid={errors.tipoProblemaOtro ? "true" : undefined}
-                placeholder="Especifique tipo de problema"
-                disabled={saving}
-              />
-              {errText(errors.tipoProblemaOtro)}
-            </>
-          )}
         </div>
 
         <div style={ui.fieldGroup}>
@@ -963,7 +882,6 @@ export function NewOTModal({
         value={form.departamento}
         onSelect={(value) => {
           setField("departamento", value);
-          if (value !== "Otro") setField("departamentoOtro", "");
         }}
         onClose={() =>
           setPickerOpen((prev) => ({ ...prev, departamento: false }))
@@ -977,7 +895,6 @@ export function NewOTModal({
         value={form.lugarProblema}
         onSelect={(value) => {
           setField("lugarProblema", value);
-          if (value !== "Otro") setField("lugarProblemaOtro", "");
         }}
         onClose={() =>
           setPickerOpen((prev) => ({ ...prev, lugarProblema: false }))
@@ -991,7 +908,6 @@ export function NewOTModal({
         value={form.tipoProblema}
         onSelect={(value) => {
           setField("tipoProblema", value);
-          if (value !== "Otro") setField("tipoProblemaOtro", "");
         }}
         onClose={() =>
           setPickerOpen((prev) => ({ ...prev, tipoProblema: false }))

@@ -7,7 +7,7 @@ import RequireAuth from "./auth/RequireAuth";
 import PrivateRoute from "./auth/PrivateRoute";
 import RequireRole from "./auth/RequireRole";
 
-import { ToastProvider, ConfirmProvider, CommandPalette } from "./components/ui";
+import { ToastProvider, ConfirmProvider, CircleMenu, AssistantModal, CommandPalette } from "./components/ui";
 
 import Login from "./pages/Login";
 import HomeHub from "./pages/HomeHub";
@@ -123,6 +123,8 @@ export default function App() {
         <ToastProvider>
         <ConfirmProvider>
         <TenantScopeBadge />
+        <CircleMenu />
+        <AssistantModal />
         <CommandPalette />
         <Routes>
           {/* Públicas */}
@@ -666,37 +668,37 @@ export default function App() {
 const scopeBadge = {
   wrap: {
     position: "fixed",
-    bottom: "max(10px, env(safe-area-inset-bottom))",
-    right: 10,
+    bottom: "max(8px, env(safe-area-inset-bottom))",
+    right: 8,
     zIndex: 20000,
     background:
-      "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.96) 100%)",
+      "linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(248,250,252,0.94) 100%)",
     color: "#0F172A",
-    border: "1px solid rgba(15,23,42,0.10)",
-    borderRadius: 14,
-    padding: "8px 10px",
+    border: "1px solid rgba(15,23,42,0.08)",
+    borderRadius: 10,
+    padding: "5px 8px",
     display: "grid",
-    gap: 2,
+    gap: 1,
     pointerEvents: "none",
-    boxShadow: "0 10px 22px rgba(15,23,42,0.13)",
+    boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
     backdropFilter: "blur(4px)",
-    maxWidth: "min(88vw, 320px)",
+    maxWidth: "min(70vw, 200px)",
   },
   kicker: {
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: 900,
     color: "#089F8A",
-    letterSpacing: 0.35,
+    letterSpacing: 0.3,
     textTransform: "uppercase",
   },
   primary: {
-    fontSize: 12.5,
+    fontSize: 10,
     fontWeight: 900,
-    lineHeight: 1.25,
+    lineHeight: 1.2,
     color: "#0F172A",
   },
   secondary: {
-    fontSize: 11.5,
+    fontSize: 9,
     fontWeight: 800,
     color: "#64748B",
   },

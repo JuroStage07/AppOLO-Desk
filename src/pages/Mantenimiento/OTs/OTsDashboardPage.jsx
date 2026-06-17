@@ -90,12 +90,8 @@ export default function OTsDashboardPage() {
             solicitanteFicha: data.solicitanteFicha || "",
             responsableNombre: data.responsableNombre || "",
             departamento: data.departamento || data.departamentoBase || "",
-            lugarProblema: data.lugarProblema === "Otro"
-              ? (data.lugarProblemaOtro || "Otro")
-              : (data.lugarProblema || ""),
-            tipoProblema: data.tipoProblema === "Otro"
-              ? (data.tipoProblemaOtro || "Otro")
-              : (data.tipoProblema || ""),
+            lugarProblema: data.lugarProblema || "",
+            tipoProblema: data.tipoProblema || "",
           });
         });
         setRows(list);

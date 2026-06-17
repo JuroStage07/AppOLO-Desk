@@ -303,15 +303,12 @@ function buildAssistantOtPayload({ draft, user, profile }) {
 
     departamento,
     departamentoBase: departamento,
-    departamentoOtro: departamento === "Otro" ? "" : "",
 
     lugarProblema,
     lugarProblemaBase: lugarProblema,
-    lugarProblemaOtro: lugarProblema === "Otro" ? "" : "",
 
     tipoProblema,
     tipoProblemaBase: tipoProblema,
-    tipoProblemaOtro: tipoProblema === "Otro" ? "" : "",
 
     descripcionOT: cleanOtValue(draft?.descripcionOT),
     notas: cleanOtValue(draft?.notas),
@@ -1383,7 +1380,7 @@ export default function AreasTrabajoHubPage() {
   }, []);
 
   return (
-    <div style={styles.shell}>
+    <div style={styles.shell} onClick={() => setHovered(null)}>
       <style>{cssAnimations}</style>
 
       {/* ─── Shared global sidebar drawer ─── */}
@@ -1560,171 +1557,219 @@ export default function AreasTrabajoHubPage() {
               )}
             </section>
           ) : (
-            <section style={styles.wheelSection}>
-              {assistantPhase === "chat" || assistantPhase === "chatOut" ? (
-                <AssistantChat
-                  phase={assistantPhase}
-                  messages={assistantMessages}
-                  input={assistantInput}
-                  setInput={setAssistantInput}
-                  typing={assistantTyping}
-                  creatingOt={assistantCreatingOt}
-                  onSend={sendAssistant}
-                  onClear={clearAssistant}
-                  onClose={closeAssistant}
-                  onAction={(path) => path && nav(path)}
-                  onCopied={() => toast.success("Mensaje copiado")}
-                  onCreateOtDraft={requestAssistantOtCreate}
-                  onUpdateOtDraft={updateAssistantOtDraft}
-                />
-              ) : (
-              <div
-                className="hh-wheel"
-                style={{
-                  ...styles.wheel,
-                  // 25% smaller — scales the whole menu uniformly. The wheel
-                  // animates out when opening the assistant, and back in on return.
-                  transform: "scale(0.75)",
-                  animation:
-                    assistantPhase === "menuOut"
-                      ? "hhWheelOut 280ms ease forwards"
-                      : mounted
-                      ? "hhWheelIn 420ms cubic-bezier(0.22,1,0.36,1)"
-                      : "none",
-                  opacity: mounted ? 1 : 0,
-                }}
-              >
-                {/* subtle outer ring */}
-                <div style={styles.outerRing} aria-hidden="true" />
-
-                {/* sectors: inactive first (base circle), then the active one
-                    expanded beyond the rim on top */}
-                <svg style={styles.sectors} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                  {wedges
-                    .filter((w) => hovered !== w.key)
-                    .map((w) => (
-                      <path
-                        key={w.key}
-                        d={w.d}
-                        fill="transparent"
-                        stroke={T.border}
-                        strokeWidth={0.45}
-                        strokeLinejoin="round"
-                      />
-                    ))}
-                  {wedges
-                    .filter((w) => hovered === w.key)
-                    .map((w) => (
-                      <g key={w.key} style={{ animation: "hhFadeIn 200ms ease" }}>
-                        {/* white base fills the extension with the wheel look */}
-                        <path d={w.dActive} fill="#FFFFFF" stroke="none" />
-                        {/* soft accent overlay */}
-                        <path d={w.dActive} fill={w.soft} stroke="none" style={{ transition: "fill 200ms ease" }} />
-                        {/* dashed arc just before (inward of) the grey arc */}
-                        <path
-                          d={w.dDash}
-                          fill="none"
-                          stroke={T.textMuted}
-                          strokeWidth={0.38}
-                          strokeLinecap="round"
-                          strokeDasharray="0.9 1.6"
-                        />
-                        {/* grey arc echoing the normal rim curvature, on top of the fill */}
-                        <path
-                          d={w.dArc}
-                          fill="none"
-                          stroke={T.border}
-                          strokeWidth={0.7}
-                          strokeLinecap="round"
-                        />
-                        {/* outer + inner + radial borders in the action accent, on top */}
-                        <path
-                          d={w.dActive}
-                          fill="none"
-                          stroke={w.accent}
-                          strokeWidth={0.7}
-                          strokeLinejoin="round"
-                        />
-                      </g>
-                    ))}
-                </svg>
-
-                {/* inner ring around the core */}
-                <div style={styles.innerRing} aria-hidden="true" />
-
-                {/* invisible quadrant hit areas — own the hover/focus/click so the
-                    user doesn't have to aim exactly at the icon. Above the sectors,
-                    below the central Asistente core. */}
-                {nodes.map(({ action, x, y }) => (
-                  <button
-                    key={`hit-${action.key}`}
-                    type="button"
-                    onClick={() => handleMenuAction(action.key)}
-                    onMouseEnter={() => setHovered(action.key)}
-                    onMouseLeave={() => setHovered(null)}
-                    onFocus={() => setHovered(action.key)}
-                    onBlur={() => setHovered(null)}
-                    aria-label={`Abrir ${action.title}`}
-                    style={{
-                      ...styles.hitArea,
-                      left: x < 0 ? 0 : "50%",
-                      top: y < 0 ? 0 : "50%",
-                    }}
-                  />
-                ))}
-
-                {/* fixed action icons placed radially (visual only) */}
-                {nodes.map(({ action, x, y }, i) => (
-                  <ActionNode
-                    key={action.key}
-                    action={action}
-                    x={x}
-                    y={y}
-                    delay={140 + i * 55}
-                    mounted={mounted}
-                    hovered={hovered}
-                    badge={action.key === "areas" ? areas.length : null}
-                  />
-                ))}
-
-                {/* central configuration core */}
-                <button
-                  type="button"
-                  onClick={openAssistant}
-                  onMouseEnter={() => setHovered("__core__")}
-                  onMouseLeave={() => setHovered(null)}
-                  onFocus={() => setHovered("__core__")}
-                  onBlur={() => setHovered(null)}
-                  style={{
-                    ...styles.core,
-                    transform: `translate(-50%, -50%) scale(${mounted ? (hovered === "__core__" ? 1.04 : 1) : 0.5})`,
-                    boxShadow:
-                      hovered === "__core__"
-                        ? `0 16px 44px ${T.accentGlow}, 0 0 0 6px rgba(255,255,255,0.9)`
-                        : `0 10px 30px ${T.accentGlow}, 0 0 0 6px rgba(255,255,255,0.9)`,
-                  }}
-                  title="Asistente"
-                  aria-label="Asistente"
-                >
-                  <img src={imgApolo} alt="" style={styles.coreImg} draggable={false} />
-                  <span style={styles.coreLabel}>Asistente</span>
-                </button>
+            <section style={styles.areasSection} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.areasPanelHead}>
+                <div style={styles.areasPanelHeadTitle}>
+                  <span style={{ ...styles.areasPanelHeadIcon, background: `rgba(37,99,235,0.12)`, color: "#2563EB" }}>
+                    <LayoutGrid size={18} strokeWidth={2.2} />
+                  </span>
+                  <div>
+                    <div style={styles.areasPanelTitle}>Áreas de trabajo</div>
+                    <div style={styles.areasPanelSubtitle}>Seleccioná un área para comenzar</div>
+                  </div>
+                </div>
               </div>
+
+              {areas.length === 0 ? (
+                <div style={styles.areasPanelEmpty}>
+                  <Inbox size={28} strokeWidth={1.8} color={T.textMuted} />
+                  <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>No hay áreas disponibles</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: T.textMuted }}>Tu usuario no tiene áreas asignadas por el momento.</div>
+                </div>
+              ) : (
+                <div className="hh-areas-grid">
+                  {/* Left column */}
+                  <div className="hh-areas-side">
+                    {areas.slice(0, Math.ceil(areas.length / 2)).map((area) => {
+                      const isActive = area.key === hovered;
+                      const ac = area.theme?.accent || T.accent;
+                      const blocked = area.blocked === true;
+                      return (
+                        <button
+                          key={area.key}
+                          type="button"
+                          className="hh-area-card"
+                          onClick={() => {
+                            if (blocked) return;
+                            if (area.comingSoon) setComingSoonArea(area);
+                            else nav(area.path);
+                          }}
+                          onMouseEnter={() => setHovered(area.key)}
+                          onFocus={() => setHovered(area.key)}
+                          aria-label={`Ver área ${area.title}`}
+                          style={{
+                            ...styles.areaCard,
+                            borderColor: isActive ? ac : T.border,
+                            background: isActive ? hexToRgba(ac, 0.08) : T.surface,
+                            boxShadow: isActive ? `0 6px 18px ${hexToRgba(ac, 0.18)}` : T.shadow,
+                            opacity: blocked ? 0.6 : 1,
+                          }}
+                        >
+                          <span style={{ ...styles.areaCardIcon, background: hexToRgba(ac, 0.12), color: ac }}>
+                            {area.img ? (
+                              <img src={area.img} alt="" style={styles.areaCardImg} draggable={false} />
+                            ) : React.isValidElement(area.icon) ? (
+                              React.cloneElement(area.icon, { size: 20, strokeWidth: 2 })
+                            ) : (area.icon)}
+                          </span>
+                          <span style={{ ...styles.areaCardTitle, color: isActive ? ac : T.text }}>{area.title}</span>
+                          {blocked ? (
+                            <Lock size={14} strokeWidth={2.2} style={{ marginLeft: "auto", color: T.textMuted, flexShrink: 0 }} />
+                          ) : (
+                            <ChevronRight size={16} strokeWidth={2.2} style={{ marginLeft: "auto", color: isActive ? ac : T.textMuted, flexShrink: 0 }} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Center detail panel */}
+                  <div className="hh-areas-center" style={(() => {
+                    const active = hovered ? areas.find((a) => a.key === hovered) : null;
+                    const accent = active?.theme?.accent || T.accent;
+                    return {
+                      ...styles.center,
+                      background: active
+                        ? `linear-gradient(160deg, ${hexToRgba(accent, 0.07)} 0%, #fff 55%)`
+                        : T.surface,
+                      borderColor: active ? hexToRgba(accent, 0.25) : T.border,
+                    };
+                  })()}>
+                    {(() => {
+                      const active = hovered ? areas.find((a) => a.key === hovered) : null;
+                      if (!active) {
+                        // Default state: show the logo centered
+                        return (
+                          <div style={styles.centerPlaceholder}>
+                            <img src={logoAppolo} alt="AppOLO Desk" style={styles.centerPlaceholderLogo} draggable={false} />
+                            <span style={styles.centerPlaceholderText}>Pasá el cursor sobre un área para ver sus módulos</span>
+                          </div>
+                        );
+                      }
+                      const accent = active.theme?.accent || T.accent;
+                      return (
+                        <div key={active.key} style={styles.centerInner}>
+                          <div style={styles.centerHero}>
+                            <span style={{ ...styles.centerIcon, background: hexToRgba(accent, 0.14), color: accent }}>
+                              {active.img ? (
+                                <img src={active.img} alt="" style={styles.centerImg} draggable={false} />
+                              ) : React.isValidElement(active.icon) ? (
+                                React.cloneElement(active.icon, { size: 30, strokeWidth: 1.9 })
+                              ) : (active.icon)}
+                            </span>
+                            <div style={{ minWidth: 0 }}>
+                              {active.tag && (
+                                <span style={{ ...styles.centerTag, background: hexToRgba(accent, 0.12), color: accent }}>
+                                  {active.tag}
+                                </span>
+                              )}
+                              <h3 style={styles.centerTitle}>{active.title}</h3>
+                            </div>
+                          </div>
+                          <p style={styles.centerDesc}>{active.desc}</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (active.blocked) return;
+                              if (active.comingSoon) setComingSoonArea(active);
+                              else nav(active.path);
+                            }}
+                            disabled={active.blocked}
+                            style={{
+                              ...styles.centerCta,
+                              background: active.blocked ? T.textMuted : accent,
+                              boxShadow: active.blocked ? "none" : `0 8px 20px ${hexToRgba(accent, 0.3)}`,
+                              cursor: active.blocked ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            <span>{active.blocked ? "No disponible" : active.comingSoon ? "Ver detalle" : `Abrir ${active.title}`}</span>
+                            {!active.blocked && <ArrowRight size={16} strokeWidth={2.4} />}
+                          </button>
+                          <div style={styles.modulesWrap}>
+                            {active.modules && active.modules.length > 0 ? (
+                              active.modules.map((m, i) => (
+                                <div key={m.path || m.label} style={styles.modBlock}>
+                                  <button
+                                    type="button"
+                                    className="hh-mod-btn"
+                                    onClick={() => m.path && nav(m.path)}
+                                    disabled={!m.path}
+                                    style={{ ...styles.modBtn, background: hexToRgba(accent, 0.09 + (i % 3) * 0.03), borderColor: hexToRgba(accent, 0.22), cursor: m.path ? "pointer" : "default" }}
+                                  >
+                                    <span style={{ ...styles.modDot, background: accent }} />
+                                    <span style={styles.modLabel}>{m.label}</span>
+                                    {m.path && <ChevronRight size={15} strokeWidth={2.2} style={{ color: accent, flexShrink: 0 }} />}
+                                  </button>
+                                  {m.features && m.features.length > 0 && (
+                                    <div style={styles.featuresRow}>
+                                      {m.features.map((f) => (
+                                        <button key={f.path || f.label} type="button" onClick={() => f.path && nav(f.path)} style={{ ...styles.featureChip, borderColor: hexToRgba(accent, 0.28), color: accent }}>
+                                          {f.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <div style={styles.modEmpty}>{active.comingSoon ? "Disponible próximamente." : "Sin módulos por ahora."}</div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Right column */}
+                  <div className="hh-areas-side">
+                    {areas.slice(Math.ceil(areas.length / 2)).map((area) => {
+                      const isActive = area.key === hovered;
+                      const ac = area.theme?.accent || T.accent;
+                      const blocked = area.blocked === true;
+                      return (
+                        <button
+                          key={area.key}
+                          type="button"
+                          className="hh-area-card"
+                          onClick={() => {
+                            if (blocked) return;
+                            if (area.comingSoon) setComingSoonArea(area);
+                            else nav(area.path);
+                          }}
+                          onMouseEnter={() => setHovered(area.key)}
+                          onFocus={() => setHovered(area.key)}
+                          aria-label={`Ver área ${area.title}`}
+                          style={{
+                            ...styles.areaCard,
+                            borderColor: isActive ? ac : T.border,
+                            background: isActive ? hexToRgba(ac, 0.08) : T.surface,
+                            boxShadow: isActive ? `0 6px 18px ${hexToRgba(ac, 0.18)}` : T.shadow,
+                            opacity: blocked ? 0.6 : 1,
+                          }}
+                        >
+                          <span style={{ ...styles.areaCardIcon, background: hexToRgba(ac, 0.12), color: ac }}>
+                            {area.img ? (
+                              <img src={area.img} alt="" style={styles.areaCardImg} draggable={false} />
+                            ) : React.isValidElement(area.icon) ? (
+                              React.cloneElement(area.icon, { size: 20, strokeWidth: 2 })
+                            ) : (area.icon)}
+                          </span>
+                          <span style={{ ...styles.areaCardTitle, color: isActive ? ac : T.text }}>{area.title}</span>
+                          {blocked ? (
+                            <Lock size={14} strokeWidth={2.2} style={{ marginLeft: "auto", color: T.textMuted, flexShrink: 0 }} />
+                          ) : (
+                            <ChevronRight size={16} strokeWidth={2.2} style={{ marginLeft: "auto", color: isActive ? ac : T.textMuted, flexShrink: 0 }} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </section>
           )}
         </div>
       </main>
-
-      {/* Áreas modal (Encarta-style) */}
-      {areasModalOpen && (
-        <AreasModal
-          areas={areas}
-          onClose={() => setAreasModalOpen(false)}
-          onNavigate={nav}
-          onComingSoon={setComingSoonArea}
-        />
-      )}
 
       {/* Coming-soon dialog */}
       {comingSoonArea && (
@@ -1830,6 +1875,39 @@ const cssAnimations = `
   @media (max-width: 560px) {
     .hh-brand-text { display: none !important; }
     .hh-userpill-name { display: none !important; }
+  }
+
+  /* Inline areas grid (replaces the wheel) */
+  .hh-areas-grid {
+    display: grid;
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) minmax(180px, 220px);
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    padding: 12px;
+  }
+  .hh-areas-side {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: hidden;
+    padding: 2px;
+  }
+  .hh-areas-center { min-width: 0; overflow: hidden; }
+  .hh-areas-side .hh-area-card { animation: hhCardIn 360ms cubic-bezier(0.22,1,0.36,1) both; }
+  .hh-areas-side .hh-area-card:nth-child(1) { animation-delay: 40ms; }
+  .hh-areas-side .hh-area-card:nth-child(2) { animation-delay: 90ms; }
+  .hh-areas-side .hh-area-card:nth-child(3) { animation-delay: 140ms; }
+  .hh-areas-side .hh-area-card:nth-child(4) { animation-delay: 190ms; }
+  .hh-areas-side .hh-area-card:nth-child(5) { animation-delay: 240ms; }
+  .hh-areas-side .hh-area-card:nth-child(n+6) { animation-delay: 290ms; }
+
+  @media (max-width: 880px) {
+    .hh-areas-grid { grid-template-columns: 1fr; overflow-y: auto; }
+    .hh-areas-side { flex-direction: row; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; flex: 0 0 auto; }
+    .hh-areas-side .hh-area-card { width: auto; flex: 0 0 auto; min-width: 180px; }
+    .hh-areas-center { overflow: visible; }
   }
 `;
 
@@ -1956,27 +2034,30 @@ const styles = {
   main: {
     width: "100%",
     minHeight: 0,
-    overflow: "auto",
-    padding: "24px 24px 32px",
-    WebkitOverflowScrolling: "touch",
+    flex: 1,
+    overflow: "hidden",
+    padding: "12px 20px 12px",
+    display: "flex",
+    flexDirection: "column",
   },
-  container: { maxWidth: 1200, margin: "0 auto", display: "grid", gap: 22 },
+  container: { maxWidth: 1200, margin: "0 auto", display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 0, width: "100%" },
 
   /* Hero (card) */
   hero: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 20,
+    gap: 12,
     flexWrap: "wrap",
-    padding: "16px 24px",
-    borderRadius: 18,
+    padding: "10px 18px",
+    borderRadius: 14,
     background: `linear-gradient(135deg, #fff 0%, ${T.accentSoft} 150%)`,
     border: `1px solid ${T.border}`,
     boxShadow: T.shadow,
     transition: "opacity 400ms ease, transform 400ms ease",
+    flexShrink: 0,
   },
-  heroText: { display: "grid", gap: 7, minWidth: 0, flex: "1 1 300px" },
+  heroText: { display: "grid", gap: 4, minWidth: 0, flex: "1 1 260px" },
   heroRight: {
     display: "flex",
     flexDirection: "column",
@@ -1984,43 +2065,43 @@ const styles = {
     gap: 10,
     flexShrink: 0,
   },
-  heroLogo: { width: "clamp(84px, 11vw, 120px)", height: "auto", objectFit: "contain", opacity: 0.96 },
+  heroLogo: { width: "clamp(56px, 7vw, 72px)", height: "auto", objectFit: "contain", opacity: 0.96 },
   greetingChip: {
     display: "inline-flex",
     alignItems: "center",
-    gap: 8,
-    fontSize: 12,
+    gap: 6,
+    fontSize: 10,
     fontWeight: 700,
     color: T.accent,
     background: T.accentSoft,
-    padding: "5px 12px",
+    padding: "3px 10px",
     borderRadius: 999,
     width: "fit-content",
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
-  greetingDot: { width: 7, height: 7, borderRadius: 999, background: T.accent, boxShadow: `0 0 0 3px ${T.accentSoft}` },
+  greetingDot: { width: 6, height: 6, borderRadius: 999, background: T.accent, boxShadow: `0 0 0 2px ${T.accentSoft}` },
   heroTitle: {
     margin: 0,
-    fontSize: "clamp(20px, 2.8vw, 27px)",
+    fontSize: "clamp(16px, 2.2vw, 20px)",
     fontWeight: 850,
     color: T.text,
-    letterSpacing: -0.5,
-    lineHeight: 1.1,
+    letterSpacing: -0.4,
+    lineHeight: 1.15,
   },
-  heroSubtitle: { margin: 0, fontSize: 13.5, fontWeight: 500, color: T.textSecondary, lineHeight: 1.45, maxWidth: 480 },
+  heroSubtitle: { margin: 0, fontSize: 12, fontWeight: 500, color: T.textSecondary, lineHeight: 1.4, maxWidth: 400 },
 
   /* Search */
   searchWrap: {
     display: "flex",
     alignItems: "center",
-    gap: 10,
-    padding: "11px 14px",
+    gap: 8,
+    padding: "8px 12px",
     background: T.surface,
     border: `1px solid ${T.border}`,
-    borderRadius: 14,
+    borderRadius: 12,
     boxShadow: T.shadow,
-    width: "min(320px, 78vw)",
+    width: "min(260px, 70vw)",
     transition: "border-color 150ms ease, box-shadow 150ms ease",
   },
   searchWrapFocus: { borderColor: T.accent, boxShadow: `0 0 0 4px ${T.accentSoft}` },
@@ -2029,7 +2110,7 @@ const styles = {
     border: "none",
     outline: "none",
     background: "transparent",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 500,
     color: T.text,
     fontFamily: "inherit",
@@ -2049,7 +2130,63 @@ const styles = {
     padding: 0,
     fontFamily: "inherit",
   },
-  /* ─── Circular menu ─── */
+  /* ─── Inline areas panel (replaces the wheel) ─── */
+  areasSection: {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    minHeight: 0,
+    background: T.surface,
+    border: `1px solid ${T.border}`,
+    borderRadius: 22,
+    boxShadow: T.shadow,
+    overflow: "hidden",
+    animation: "hhPop 280ms cubic-bezier(0.22,1,0.36,1)",
+  },
+  areasPanelHead: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: "10px 14px",
+    borderBottom: `1px solid ${T.borderSoft}`,
+  },
+  areasPanelHeadTitle: { display: "flex", alignItems: "center", gap: 10, minWidth: 0 },
+  areasPanelHeadIcon: { width: 32, height: 32, borderRadius: 9, display: "grid", placeItems: "center", flexShrink: 0 },
+  areasPanelTitle: { fontSize: 14, fontWeight: 800, color: T.text, letterSpacing: -0.3, lineHeight: 1.2 },
+  areasPanelSubtitle: { fontSize: 11, fontWeight: 600, color: T.textMuted, lineHeight: 1.2, marginTop: 1 },
+  areasPanelEmpty: {
+    display: "grid",
+    justifyItems: "center",
+    gap: 8,
+    textAlign: "center",
+    padding: "48px 24px",
+  },
+  centerPlaceholder: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    flex: 1,
+    minHeight: "100%",
+    padding: 20,
+  },
+  centerPlaceholderLogo: {
+    width: "clamp(80px, 14vw, 120px)",
+    height: "auto",
+    objectFit: "contain",
+    opacity: 0.7,
+  },
+  centerPlaceholderText: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: T.textMuted,
+    textAlign: "center",
+    maxWidth: 200,
+    lineHeight: 1.4,
+  },
+  /* ─── Legacy wheel styles (kept for CircleMenu overlay) ─── */
   wheelSection: { display: "grid", placeItems: "center", padding: "clamp(8px, 3vh, 28px) 0 24px" },
   wheel: {
     position: "relative",
@@ -2504,7 +2641,7 @@ const styles = {
   },
 
   /* ─── Search results (secondary panel) ─── */
-  resultsSection: { display: "grid", gap: 14, transition: "opacity 400ms ease, transform 400ms ease" },
+  resultsSection: { display: "flex", flexDirection: "column", gap: 14, flex: 1, minHeight: 0, overflow: "hidden", transition: "opacity 400ms ease, transform 400ms ease" },
   sectionHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
   sectionTitle: { margin: 0, fontSize: 17, fontWeight: 800, color: T.text, letterSpacing: -0.2 },
   linkBtn: {
@@ -2517,7 +2654,7 @@ const styles = {
     fontFamily: "inherit",
     padding: 0,
   },
-  resultsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))", gap: 10 },
+  resultsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))", gap: 10, overflowY: "auto", flex: 1, minHeight: 0 },
   subModuleRow: {
     display: "flex",
     alignItems: "center",
@@ -2613,10 +2750,10 @@ const styles = {
   areaCard: {
     display: "flex",
     alignItems: "center",
-    gap: 11,
-    padding: "11px 14px",
-    minHeight: 60,
-    borderRadius: 14,
+    gap: 9,
+    padding: "8px 12px",
+    minHeight: 48,
+    borderRadius: 12,
     border: `1px solid ${T.border}`,
     background: T.surface,
     cursor: "pointer",
@@ -2625,12 +2762,12 @@ const styles = {
     transition: "border-color 180ms ease, background 180ms ease, box-shadow 180ms ease",
     flexShrink: 0,
   },
-  areaCardIcon: { width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0, overflow: "hidden" },
-  areaCardImg: { width: 30, height: 30, objectFit: "contain" },
+  areaCardIcon: { width: 32, height: 32, borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0, overflow: "hidden" },
+  areaCardImg: { width: 24, height: 24, objectFit: "contain" },
   areaCardTitle: {
     flex: 1,
     minWidth: 0,
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: 700,
     letterSpacing: -0.2,
     lineHeight: 1.15,
@@ -2641,64 +2778,65 @@ const styles = {
   },
 
   center: {
-    borderRadius: 18,
+    borderRadius: 16,
     border: `1px solid ${T.border}`,
-    padding: "20px 20px 22px",
+    padding: "14px 16px 16px",
     display: "flex",
     flexDirection: "column",
-    gap: 14,
+    gap: 10,
     transition: "background 260ms ease, border-color 260ms ease",
+    overflow: "hidden",
   },
   centerInner: {
     display: "flex",
     flexDirection: "column",
-    gap: 14,
+    gap: 10,
     animation: "hhPanelIn 260ms cubic-bezier(0.22,1,0.36,1)",
   },
-  centerHero: { display: "flex", alignItems: "center", gap: 14 },
-  centerIcon: { width: 60, height: 60, borderRadius: 16, display: "grid", placeItems: "center", flexShrink: 0, overflow: "hidden" },
-  centerImg: { width: 46, height: 46, objectFit: "contain" },
-  centerTag: { display: "inline-block", padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800, letterSpacing: 0.2, marginBottom: 6 },
-  centerTitle: { margin: 0, fontSize: 22, fontWeight: 850, color: T.text, letterSpacing: -0.5, lineHeight: 1.1 },
-  centerDesc: { margin: 0, fontSize: 14, fontWeight: 500, color: T.textSecondary, lineHeight: 1.55 },
+  centerHero: { display: "flex", alignItems: "center", gap: 12 },
+  centerIcon: { width: 48, height: 48, borderRadius: 14, display: "grid", placeItems: "center", flexShrink: 0, overflow: "hidden" },
+  centerImg: { width: 36, height: 36, objectFit: "contain" },
+  centerTag: { display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 800, letterSpacing: 0.2, marginBottom: 4 },
+  centerTitle: { margin: 0, fontSize: 18, fontWeight: 850, color: T.text, letterSpacing: -0.4, lineHeight: 1.1 },
+  centerDesc: { margin: 0, fontSize: 12.5, fontWeight: 500, color: T.textSecondary, lineHeight: 1.5 },
   centerCta: {
     display: "inline-flex",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
     width: "fit-content",
-    padding: "10px 18px",
-    fontSize: 14,
+    padding: "8px 14px",
+    fontSize: 13,
     fontWeight: 800,
     color: "#fff",
     border: "none",
-    borderRadius: 12,
+    borderRadius: 10,
     fontFamily: "inherit",
   },
   modulesWrap: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-    gap: 10,
+    gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+    gap: 8,
     marginTop: 2,
     alignItems: "start",
   },
-  modBlock: { display: "flex", flexDirection: "column", gap: 6, minHeight: 48 },
+  modBlock: { display: "flex", flexDirection: "column", gap: 4, minHeight: 40 },
   modBtn: {
     display: "flex",
     alignItems: "center",
-    gap: 9,
-    minHeight: 48,
-    padding: "10px 12px",
-    borderRadius: 12,
+    gap: 8,
+    minHeight: 40,
+    padding: "8px 10px",
+    borderRadius: 10,
     border: "1px solid",
     fontFamily: "inherit",
     textAlign: "left",
     transition: "filter 150ms ease",
   },
-  modDot: { width: 8, height: 8, borderRadius: 999, flexShrink: 0 },
+  modDot: { width: 6, height: 6, borderRadius: 999, flexShrink: 0 },
   modLabel: {
     flex: 1,
     minWidth: 0,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 700,
     color: T.text,
     lineHeight: 1.2,
@@ -2707,19 +2845,19 @@ const styles = {
     WebkitBoxOrient: "vertical",
     overflow: "hidden",
   },
-  featuresRow: { display: "flex", flexWrap: "wrap", gap: 6, paddingLeft: 8 },
+  featuresRow: { display: "flex", flexWrap: "wrap", gap: 4, paddingLeft: 6 },
   featureChip: {
-    padding: "4px 10px",
+    padding: "3px 8px",
     borderRadius: 999,
     border: "1px solid",
     background: "#fff",
-    fontSize: 11.5,
+    fontSize: 10.5,
     fontWeight: 700,
     cursor: "pointer",
     fontFamily: "inherit",
     transition: "all 150ms ease",
   },
-  modEmpty: { fontSize: 13, fontWeight: 600, color: T.textMuted, padding: "8px 2px" },
+  modEmpty: { fontSize: 12, fontWeight: 600, color: T.textMuted, padding: "6px 2px" },
 
   modalEmpty: {
     flex: 1,

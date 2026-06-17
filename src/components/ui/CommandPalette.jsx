@@ -12,7 +12,7 @@ import { auth } from "../../firebase";
 import { isEpaRestrictedUser } from "../../config/epaOnlyUids";
 import { getVisibleAreas } from "../../config/workAreas";
 import SidebarAreaIcon from "./SidebarAreaIcon";
-import { OPEN_COMMAND_PALETTE_EVENT } from "./commandPaletteBus";
+import { OPEN_COMMAND_PALETTE_EVENT, CLOSE_COMMAND_PALETTE_EVENT } from "./commandPaletteBus";
 import { ACCENT, ACCENT_SOFT, BORDER, SLATE, TEXT } from "../../styles/theme";
 
 /**
@@ -78,27 +78,34 @@ export default function CommandPalette() {
     return items.filter((it) => tokens.every((t) => it.hay.includes(t)));
   }, [items, query]);
 
-  // Global open shortcut + custom event. Resetting state in the handler (not in
-  // an effect) keeps the open transition free of cascading-render lint.
+  // Global open via custom event only (Ctrl+K is handled by CircleMenu).
   useEffect(() => {
     const openPalette = () => {
       setQuery("");
       setActive(0);
       setOpen(true);
     };
-    const onKey = (e) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
-        e.preventDefault();
-        openPalette();
-      }
-    };
-    window.addEventListener("keydown", onKey);
     window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, openPalette);
     return () => {
-      window.removeEventListener("keydown", onKey);
       window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, openPalette);
     };
   }, []);
+
+  // Capture Esc at the window level (capture phase) so it closes the palette
+  // WITHOUT propagating to the CircleMenu's bubble-phase listener.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onEsc = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setOpen(false);
+        window.dispatchEvent(new Event(CLOSE_COMMAND_PALETTE_EVENT));
+      }
+    };
+    window.addEventListener("keydown", onEsc, true); // capture phase
+    return () => window.removeEventListener("keydown", onEsc, true);
+  }, [open]);
 
   // Focus the input on open (DOM-only side effect).
   useEffect(() => {
@@ -109,7 +116,10 @@ export default function CommandPalette() {
 
   if (!open || !user) return null;
 
-  const close = () => setOpen(false);
+  const close = () => {
+    setOpen(false);
+    window.dispatchEvent(new Event(CLOSE_COMMAND_PALETTE_EVENT));
+  };
   const choose = (it) => {
     if (!it) return;
     close();
@@ -128,6 +138,7 @@ export default function CommandPalette() {
       choose(filtered[active]);
     } else if (e.key === "Escape") {
       e.preventDefault();
+      e.stopPropagation();
       close();
     }
   };

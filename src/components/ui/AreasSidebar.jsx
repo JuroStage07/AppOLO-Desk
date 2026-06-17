@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, Pin, X } from "lucide-react";
+import { ChevronDown, ChevronRight, MessageCircle, Pin, X } from "lucide-react";
 import { AuthCtx } from "../../auth/AuthProvider";
 import { auth } from "../../firebase";
 import { isEpaRestrictedUser } from "../../config/epaOnlyUids";
@@ -8,6 +8,7 @@ import { getVisibleAreas } from "../../config/workAreas";
 import { useAllPinnedModules } from "../../hooks/usePinnedModules";
 import PinsFlyout from "./PinsFlyout";
 import { onOpenPins } from "./pinsBus";
+import { openAssistantModal } from "./assistantBus";
 import SidebarAreaIcon from "./SidebarAreaIcon";
 import { useToast } from "./Toast";
 
@@ -260,31 +261,32 @@ export default function AreasSidebar({ open, onClose, openPins = false }) {
           })}
 
           <div style={styles.sidebarPinTab}>
-            <button
-              type="button"
-              onClick={() => setPinsOpen((v) => !v)}
-              style={{ ...styles.sidebarItem, ...(pinsOpen ? { background: T.accentSoft } : {}) }}
-            >
-              <div style={styles.sidebarItemIcon}>
-                <Pin size={16} strokeWidth={2.2} style={{ transform: "rotate(-45deg)" }} />
-              </div>
-              <div style={styles.sidebarItemText}>
-                <span style={styles.sidebarItemTitle}>Mis Pin</span>
-                <span style={styles.sidebarItemTag}>{pinCount} fijados</span>
-              </div>
-              <ChevronRight
-                size={16}
-                strokeWidth={2}
-                style={{
-                  marginRight: 8,
-                  color: T.textMuted,
-                  transition: "transform 200ms ease",
-                  transform: pinsOpen ? "rotate(90deg)" : "rotate(0deg)",
-                }}
-              />
-            </button>
+            {/* Removed — moved to footer */}
           </div>
         </nav>
+
+        {/* Fixed footer with Chatbot + Mis Pins */}
+        <div style={styles.sidebarFooter}>
+          <button
+            type="button"
+            onClick={() => { closeAll(); openAssistantModal(); }}
+            style={styles.footerBtn}
+            aria-label="Abrir asistente"
+          >
+            <MessageCircle size={16} strokeWidth={2.2} />
+            <span>Chatbot</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPinsOpen((v) => !v)}
+            style={{ ...styles.footerBtn, ...(pinsOpen ? styles.footerBtnActive : {}) }}
+            aria-label="Mis pins"
+          >
+            <Pin size={16} strokeWidth={2.2} style={{ transform: "rotate(-45deg)" }} />
+            <span>Mis Pins</span>
+            {pinCount > 0 && <span style={styles.footerBadge}>{pinCount}</span>}
+          </button>
+        </div>
       </aside>
 
       <PinsFlyout
@@ -545,8 +547,49 @@ const styles = {
     lineHeight: 1.2,
   },
   sidebarPinTab: {
-    marginTop: 8,
-    paddingTop: 8,
+    display: "none", // legacy — replaced by footer
+  },
+  sidebarFooter: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 8,
+    padding: "10px 12px",
     borderTop: `1px solid ${T.border}`,
+    flexShrink: 0,
+    background: T.surface,
+  },
+  footerBtn: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    padding: "10px 8px",
+    borderRadius: 10,
+    border: `1px solid ${T.border}`,
+    background: T.surfaceAlt,
+    color: T.text,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    transition: "all 150ms ease",
+  },
+  footerBtnActive: {
+    background: T.accentSoft,
+    borderColor: T.accent,
+    color: T.accent,
+  },
+  footerBadge: {
+    minWidth: 18,
+    height: 18,
+    padding: "0 5px",
+    borderRadius: 999,
+    background: T.accent,
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: 800,
+    display: "inline-grid",
+    placeItems: "center",
+    lineHeight: 1,
   },
 };
