@@ -1,0 +1,231 @@
+[
+  {
+    "id": "despacho-consulta",
+    "areaKey": "despacho",
+    "areaTitle": "Despacho",
+    "title": "Consultar despachos",
+    "summary": "Permite consultar despachos en progreso y despachos finalizados.",
+    "primaryRoute": "/despacho",
+    "routes": [
+      { "label": "Despachos en progreso", "path": "/despacho/in-progress" },
+      { "label": "Despachos finalizados", "path": "/despacho/finalizados" }
+    ],
+    "keywords": ["despacho", "despachos", "carga", "dock", "docks", "en progreso", "finalizados", "salida"]
+  },
+  {
+    "id": "seguridad-visados",
+    "areaKey": "seguridad",
+    "areaTitle": "Seguridad",
+    "title": "Visados",
+    "summary": "Permite acceder al módulo de visados, generar nuevos visados y administrar visados existentes.",
+    "primaryRoute": "/seguridad/visado",
+    "routes": [
+      { "label": "Generar visado", "path": "/seguridad/visado/generar" },
+      { "label": "Administrar visados", "path": "/seguridad/visados" }
+    ],
+    "keywords": ["visado", "visados", "generar visado", "administrar visado", "seguridad"]
+  },
+  {
+    "id": "seguridad-aperturas",
+    "areaKey": "seguridad",
+    "areaTitle": "Seguridad",
+    "title": "Aperturas",
+    "summary": "Permite consultar aperturas, aperturas finalizadas, aperturas rechazadas y detalle de aperturas.",
+    "primaryRoute": "/seguridad/aperturas",
+    "routes": [
+      { "label": "Aperturas", "path": "/seguridad/aperturas" },
+      { "label": "Aperturas finalizadas", "path": "/seguridad/aperturas/finalizadas" },
+      { "label": "Aperturas rechazadas", "path": "/seguridad/aperturas/rechazadas" }
+    ],
+    "keywords": ["apertura", "aperturas", "finalizadas", "rechazadas", "detalle apertura"]
+  },
+  {
+    "id": "seguridad-control-marcas",
+    "areaKey": "seguridad",
+    "areaTitle": "Seguridad",
+    "title": "Control de marcas",
+    "summary": "Permite consultar y revisar marcas de control, incluyendo historial de marcas.",
+    "primaryRoute": "/seguridad/control-marcas",
+    "routes": [
+      { "label": "Control de marcas", "path": "/seguridad/control-marcas" },
+      { "label": "Historial de marcas", "path": "/seguridad/control-marcas/historial" }
+    ],
+    "keywords": ["control de marcas", "marcas", "historial marcas", "seguridad"]
+  },
+  {
+    "id": "seguridad-documentacion",
+    "areaKey": "seguridad",
+    "areaTitle": "Seguridad",
+    "title": "Documentación",
+    "summary": "Biblioteca documental del sistema.",
+    "primaryRoute": "/documentacion",
+    "routes": [
+      { "label": "Documentación", "path": "/documentacion" }
+    ],
+    "keywords": ["documentacion", "documentación", "documentos", "biblioteca", "colecciones"]
+  },
+  {
+    "id": "recepcion-accion-descarga",
+    "areaKey": "recepcion",
+    "areaTitle": "Recepción",
+    "title": "Acción descarga",
+    "summary": "Permite registrar y consultar acciones de descarga del proceso de recepción.",
+    "primaryRoute": "/recepcion/accion-descarga",
+    "routes": [
+      { "label": "Acción descarga", "path": "/recepcion/accion-descarga" },
+      { "label": "Detalle acción descarga", "path": "/recepcion/accion-descarga/:accionId" }
+    ],
+    "keywords": ["recepcion", "recepción", "accion descarga", "acción descarga", "descarga", "ingreso", "proveedor"]
+  },
+  {
+    "id": "recepcion-metricas",
+    "areaKey": "recepcion",
+    "areaTitle": "Recepción",
+    "title": "Métricas de recepción",
+    "summary": "Permite consultar analíticas y métricas del proceso de recepción.",
+    "primaryRoute": "/recepcion/metricas",
+    "routes": [
+      { "label": "Métricas de recepción", "path": "/recepcion/metricas" }
+    ],
+    "keywords": ["metricas recepcion", "métricas recepción", "analitica recepcion", "reporte recepcion", "tiempos proveedor"]
+  },
+  {
+    "id": "mantenimiento-equipos",
+    "areaKey": "mantenimiento",
+    "areaTitle": "Mantenimiento",
+    "title": "Panel de equipos",
+    "summary": "Permite listar equipos del ámbito del usuario, filtrar por estado/familia/revisión, agregar equipos, abrir el detalle de un equipo y revisar información operativa del equipo.",
+    "primaryRoute": "/mantenimiento/equipos",
+    "routes": [
+      { "label": "Panel de equipos", "path": "/mantenimiento/equipos" },
+      { "label": "Detalle de equipo", "path": "/mantenimiento/equipos/:id" }
+    ],
+    "keywords": ["equipo", "equipos", "panel de equipos", "agregar equipo", "estado equipo", "familia", "revision", "revisión", "checklist", "codigo", "código", "qr", "falla activa", "detalle equipo"]
+  },
+  {
+    "id": "mantenimiento-ots",
+    "areaKey": "mantenimiento",
+    "areaTitle": "Mantenimiento",
+    "title": "Órdenes de trabajo de mantenimiento",
+    "summary": "Permite consultar y gestionar órdenes de trabajo, ver tablero de gestión, finalizadas, detalle de solicitud y dashboard de métricas de OTs.",
+    "primaryRoute": "/mantenimiento/ots",
+    "routes": [
+      { "label": "Órdenes de trabajo", "path": "/mantenimiento/ots" },
+      { "label": "Tablero / Gestión", "path": "/mantenimiento/OTsPage" },
+      { "label": "OTs finalizadas", "path": "/mantenimiento/ots/finalizadas" },
+      { "label": "Dashboard OTs", "path": "/mantenimiento/ots/dashboard" },
+      { "label": "Detalle de solicitud OT", "path": "/mantenimiento/ots-solicitud/:id" }
+    ],
+    "keywords": ["ot", "ots", "orden de trabajo", "ordenes de trabajo", "órdenes de trabajo", "solicitud ot", "tablero", "gestion ot", "gestión ot", "finalizadas", "dashboard ots", "subtareas", "responsable"]
+  },
+  {
+    "id": "servicios-generales-ots",
+    "areaKey": "servicios-generales",
+    "areaTitle": "Servicios Generales",
+    "title": "Órdenes de trabajo de Servicios Generales",
+    "summary": "Permite entrar al hub de OTs de Servicios Generales, crear una OT y consultar la gestión de OTs.",
+    "primaryRoute": "/servicios-generales/ordenes-trabajo",
+    "routes": [
+      { "label": "Órdenes de trabajo", "path": "/servicios-generales/ordenes-trabajo" },
+      { "label": "Crear OT", "path": "/servicios-generales/ordenes-trabajo/crear" },
+      { "label": "Gestión de OTs", "path": "/servicios-generales/ordenes-trabajo/gestion" }
+    ],
+    "keywords": ["servicios generales", "crear ot", "crear orden", "orden trabajo servicios", "gestion ots servicios", "gestión ots servicios"]
+  },
+  {
+    "id": "servicios-generales-validar-ingreso",
+    "areaKey": "servicios-generales",
+    "areaTitle": "Servicios Generales",
+    "title": "Validar ingreso",
+    "summary": "Permite validar ingresos desde Servicios Generales.",
+    "primaryRoute": "/servicios-generales/validar-ingreso",
+    "routes": [
+      { "label": "Validar ingreso", "path": "/servicios-generales/validar-ingreso" }
+    ],
+    "keywords": ["validar ingreso", "ingreso", "validacion ingreso", "validación ingreso"]
+  },
+  {
+    "id": "servicios-generales-pesaje-tarimas",
+    "areaKey": "servicios-generales",
+    "areaTitle": "Servicios Generales",
+    "title": "Pesaje de tarimas",
+    "summary": "Permite registrar y consultar pesajes de tarimas.",
+    "primaryRoute": "/servicios-generales/pesaje-tarimas",
+    "routes": [
+      { "label": "Pesaje tarimas", "path": "/servicios-generales/pesaje-tarimas" },
+      { "label": "Registrar tarimas", "path": "/servicios-generales/pesaje-tarimas/registrar" },
+      { "label": "Consultar tarimas", "path": "/servicios-generales/pesaje-tarimas/consultar" }
+    ],
+    "keywords": ["pesaje", "tarima", "tarimas", "registrar tarimas", "consultar tarimas"]
+  },
+  {
+    "id": "epa-aperturas-finalizadas",
+    "areaKey": "epa",
+    "areaTitle": "EPA",
+    "title": "Aperturas finalizadas EPA",
+    "summary": "Panel EPA para consultar aperturas finalizadas.",
+    "primaryRoute": "/epa/aperturas-finalizadas",
+    "routes": [
+      { "label": "EPA", "path": "/epa" },
+      { "label": "Aperturas finalizadas EPA", "path": "/epa/aperturas-finalizadas" }
+    ],
+    "keywords": ["epa", "aperturas epa", "aperturas finalizadas epa"]
+  },
+  {
+    "id": "mrp-tarimas",
+    "areaKey": "mrp-tarimas",
+    "areaTitle": "MRP Tarimas",
+    "title": "MRP de tarimas",
+    "summary": "Permite consultar dashboard, inventario, reparaciones y materiales de tarimas.",
+    "primaryRoute": "/mrp-tarimas",
+    "routes": [
+      { "label": "Dashboard MRP", "path": "/mrp-tarimas/dashboard" },
+      { "label": "Inventario", "path": "/mrp-tarimas/inventario" },
+      { "label": "Reparaciones", "path": "/mrp-tarimas/reparaciones" },
+      { "label": "Materiales", "path": "/mrp-tarimas/materiales" }
+    ],
+    "keywords": ["mrp", "tarimas", "inventario tarimas", "reparaciones tarimas", "materiales tarimas", "dashboard mrp"]
+  },
+  {
+    "id": "administracion-usuarios",
+    "areaKey": "administracion",
+    "areaTitle": "Administración",
+    "title": "Usuarios y permisos",
+    "summary": "Permite gestionar usuarios, roles y permisos desde Administración.",
+    "primaryRoute": "/administracion/usuarios",
+    "routes": [
+      { "label": "Administración", "path": "/administracion" },
+      { "label": "Usuarios", "path": "/administracion/usuarios" }
+    ],
+    "keywords": ["usuario", "usuarios", "permisos", "roles", "administracion", "administración"]
+  },
+  {
+    "id": "administracion-horas-extra",
+    "areaKey": "administracion",
+    "areaTitle": "Administración",
+    "title": "Horas Extra",
+    "summary": "Permite consultar Horas Extra, aprobaciones de gerencia y reporte mensual.",
+    "primaryRoute": "/horas-extra",
+    "routes": [
+      { "label": "Horas Extra", "path": "/horas-extra" },
+      { "label": "Aprobaciones gerencia", "path": "/horas-extra/gerencia" },
+      { "label": "Reporte mensual", "path": "/horas-extra/reporte" }
+    ],
+    "keywords": ["horas extra", "aprobaciones gerencia", "gerencia", "reporte mensual"]
+  },
+  {
+    "id": "dev-tools",
+    "areaKey": "dev",
+    "areaTitle": "Dev",
+    "title": "Herramientas Dev",
+    "summary": "Herramientas internas para desarrollo, actualización Supabase y configuración de módulos.",
+    "primaryRoute": "/dev",
+    "routes": [
+      { "label": "Dev", "path": "/dev" },
+      { "label": "Update AppOLO Supabase", "path": "/dev/update-supabase" },
+      { "label": "Configuración de módulos", "path": "/dev/config-modulos" },
+      { "label": "Horas Extra config", "path": "/dev/config-modulos/horas-extra" }
+    ],
+    "keywords": ["dev", "desarrollo", "supabase", "configuracion modulos", "configuración módulos"]
+  }
+]

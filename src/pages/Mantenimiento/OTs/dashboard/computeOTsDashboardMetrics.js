@@ -1,15 +1,26 @@
+import { OT_LUGARES_PROBLEMA, OT_TIPOS_PROBLEMA } from "../../../../config/otOptions";
 import { dateInRange, formatYMD, getPeriodBounds } from "./periodUtils";
 
-const DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-const DAY_LABELS_FULL = [
-  "Domingo",
-  "Lunes",
-  "Martes",
-  "Miércoles",
-  "Jueves",
-  "Viernes",
-  "Sábado",
-];
+const OTROS_TIPO_PROBLEMA = "Otros";
+const OTROS_LUGAR_PROBLEMA = "Otros";
+
+function normalizeProblemTypeKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s*\/\s*/g, "/")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const allowedProblemTypesByKey = new Map(
+  OT_TIPOS_PROBLEMA.map((tipo) => [normalizeProblemTypeKey(tipo), tipo])
+);
+
+const allowedProblemPlacesByKey = new Map(
+  OT_LUGARES_PROBLEMA.map((lugar) => [normalizeProblemTypeKey(lugar), lugar])
+);
 
 function startOfWeekMonday(d) {
   const x = new Date(d);
@@ -42,21 +53,6 @@ function filterRows(rows, start, end) {
   return rows.filter((r) => dateInRange(normalizeCreatedAtToDate(r.createdAt), start, end));
 }
 
-function countByWeekday(rows) {
-  const counts = [0, 0, 0, 0, 0, 0, 0];
-  for (const r of rows) {
-    const d = normalizeCreatedAtToDate(r.createdAt);
-    if (Number.isNaN(d.getTime())) continue;
-    counts[d.getDay()] += 1;
-  }
-  return DAY_LABELS.map((label, i) => ({
-    day: label,
-    dayFull: DAY_LABELS_FULL[i],
-    count: counts[i],
-    weekday: i,
-  }));
-}
-
 function countByCalendarDay(rows) {
   const map = new Map();
   for (const r of rows) {
@@ -76,6 +72,34 @@ function countByCalendarDay(rows) {
       })(),
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function countByRangeDate(rows, start, end) {
+  const counts = new Map();
+  for (const r of rows) {
+    const d = normalizeCreatedAtToDate(r.createdAt);
+    if (Number.isNaN(d.getTime())) continue;
+    const key = formatYMD(d);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  const out = [];
+  const cursor = new Date(start);
+  cursor.setHours(12, 0, 0, 0);
+  const endDay = new Date(end);
+  endDay.setHours(12, 0, 0, 0);
+
+  while (cursor <= endDay) {
+    const date = formatYMD(cursor);
+    out.push({
+      date,
+      label: formatShortDateLabel(cursor),
+      count: counts.get(date) ?? 0,
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return out;
 }
 
 function busiestQuietestByCalendar(rows) {
@@ -175,7 +199,7 @@ export function computeOTsDashboardMetrics({ rows, period, customFrom, customTo 
   const { start, end } = getPeriodBounds(period, customFrom, customTo);
   const filtered = filterRows(rows, start, end);
 
-  const byWeekday = countByWeekday(filtered);
+  const byRangeDate = countByRangeDate(filtered, start, end);
   const { busiest, quietest, series: byCalendarDay } = busiestQuietestByCalendar(filtered);
   const summary = stateSummary(filtered);
   const lowTraffic = lowTrafficHints(filtered);
@@ -218,20 +242,21 @@ export function computeOTsDashboardMetrics({ rows, period, customFrom, customTo 
     return [...map.values()].sort((a, b) => b.count - a.count);
   })();
 
+  const topCreatedAreas = (() => {
+    const map = new Map();
+    for (const r of filtered) {
+      const area = String(r?.createdArea || "").trim();
+      if (!area) continue;
+      map.set(area, { name: area, count: (map.get(area)?.count ?? 0) + 1 });
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count);
+  })();
+
   const topLugaresProblema = (() => {
     const map = new Map();
-    const normalize = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-    const lugarAliases = [
-      { label: "Bodegas Yoryana", match: (k) => k.includes("yoryana") || k.includes("yoyana") || k.includes("yoriana") || k.includes("joryiana") || k.includes("joryana") },
-      { label: "Bodegas externas", match: (k) => k.includes("bodega externa") || k.includes("bodegas externa") },
-      { label: "Bodegas del Coco", match: (k) => (k.includes("coco") || k.includes("el coco")) && !k.includes("yoryana") },
-    ];
     for (const r of filtered) {
-      let lugar = String(r?.lugarProblema || "").trim();
-      if (!lugar) continue;
-      const key = normalize(lugar);
-      const alias = lugarAliases.find((a) => a.match(key));
-      if (alias) lugar = alias.label;
+      const lugarRaw = String(r?.lugarProblema || "").trim();
+      const lugar = allowedProblemPlacesByKey.get(normalizeProblemTypeKey(lugarRaw)) || OTROS_LUGAR_PROBLEMA;
       map.set(lugar, { name: lugar, count: (map.get(lugar)?.count ?? 0) + 1 });
     }
     return [...map.values()].sort((a, b) => b.count - a.count);
@@ -240,8 +265,8 @@ export function computeOTsDashboardMetrics({ rows, period, customFrom, customTo 
   const topTiposProblema = (() => {
     const map = new Map();
     for (const r of filtered) {
-      const tipo = String(r?.tipoProblema || "").trim();
-      if (!tipo) continue;
+      const tipoRaw = String(r?.tipoProblema || "").trim();
+      const tipo = allowedProblemTypesByKey.get(normalizeProblemTypeKey(tipoRaw)) || OTROS_TIPO_PROBLEMA;
       map.set(tipo, { name: tipo, count: (map.get(tipo)?.count ?? 0) + 1 });
     }
     return [...map.values()].sort((a, b) => b.count - a.count);
@@ -250,7 +275,7 @@ export function computeOTsDashboardMetrics({ rows, period, customFrom, customTo 
   return {
     range: { start, end },
     summary,
-    byWeekday,
+    byRangeDate,
     busiestDay: busiest,
     quietestDay: quietest,
     byCalendarDay,
@@ -258,9 +283,9 @@ export function computeOTsDashboardMetrics({ rows, period, customFrom, customTo 
     topSolicitantes,
     topResponsables,
     topDepartamentos,
+    topCreatedAreas,
     topLugaresProblema,
     topTiposProblema,
     weeklySolicitanteLeaders,
   };
 }
-

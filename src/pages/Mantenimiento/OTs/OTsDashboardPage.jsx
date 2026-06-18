@@ -2,7 +2,6 @@ import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  BarChart3,
   LayoutGrid,
   Wrench,
 } from "lucide-react";
@@ -14,8 +13,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  LineChart,
-  Line,
 } from "recharts";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 
@@ -25,13 +22,14 @@ import { isSolicitudOtInScope } from "../../../utils/dataScope";
 import { PERIOD, formatYMD } from "./dashboard/periodUtils";
 import { useOTsDashboardMetrics } from "./dashboard/useOTsDashboardMetrics";
 import {
-  Badge,
   Brand,
   Container,
   GhostButton,
   Main,
   Shell,
+  TableScroll,
   Topbar,
+  useToast,
 } from "../../../components/ui";
 import "./OTsDashboardPage.css";
 
@@ -44,32 +42,34 @@ function defaultCustomRange() {
 
 export default function OTsDashboardPage() {
   const nav = useNavigate();
+  const toast = useToast();
   const authCtx = useContext(AuthCtx);
-  const { user, permisos } = authCtx || {};
+  const { permisos } = authCtx || {};
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
 
   useEffect(() => {
     if (authLoading) return;
     if (!permisos?.mantenimiento) {
-      alert("Este usuario no puede acceder por falta de permisos.");
+      toast.error("No tenés permisos para acceder a este módulo.");
       nav(-1);
     }
-  }, [authLoading, permisos, nav]);
+  }, [authLoading, permisos, nav, toast]);
 
   const defaults = useMemo(() => defaultCustomRange(), []);
   const [period, setPeriod] = useState(PERIOD.MONTH);
   const [customFrom, setCustomFrom] = useState(defaults.from);
   const [customTo, setCustomTo] = useState(defaults.to);
+  const [customModalOpen, setCustomModalOpen] = useState(false);
+  const [customDraftFrom, setCustomDraftFrom] = useState(defaults.from);
+  const [customDraftTo, setCustomDraftTo] = useState(defaults.to);
 
   const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     if (authLoading) return;
-    setLoading(true);
-    setErr("");
 
     const q = query(collection(db, "solicitudesOT"), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(
@@ -86,17 +86,14 @@ export default function OTsDashboardPage() {
             solicitanteNombre: data.solicitanteNombre || "",
             solicitanteFicha: data.solicitanteFicha || "",
             responsableNombre: data.responsableNombre || "",
+            createdArea: data.createdArea || "",
             departamento: data.departamento || data.departamentoBase || "",
-            lugarProblema: data.lugarProblema === "Otro"
-              ? (data.lugarProblemaOtro || "Otro")
-              : (data.lugarProblema || ""),
-            tipoProblema: data.tipoProblema === "Otro"
-              ? (data.tipoProblemaOtro || "Otro")
-              : (data.tipoProblema || ""),
+            lugarProblema: data.lugarProblema || "",
+            tipoProblema: data.tipoProblema || "",
           });
         });
         setRows(list);
-        console.log("[OTsDashboard] sample fields:", list.slice(0, 5).map(r => ({ id: r.id, departamento: r.departamento, lugarProblema: r.lugarProblema, tipoProblema: r.tipoProblema })));
+        setErr("");
         setLoading(false);
       },
       (e) => {
@@ -115,6 +112,19 @@ export default function OTsDashboardPage() {
     "es-CR"
   )}`;
 
+  const openCustomModal = () => {
+    setCustomDraftFrom(customFrom);
+    setCustomDraftTo(customTo);
+    setCustomModalOpen(true);
+  };
+
+  const applyCustomRange = () => {
+    setCustomFrom(customDraftFrom);
+    setCustomTo(customDraftTo);
+    setPeriod(PERIOD.CUSTOM);
+    setCustomModalOpen(false);
+  };
+
   return (
     <Shell lockBodyScroll={false}>
       <Topbar>
@@ -125,9 +135,6 @@ export default function OTsDashboardPage() {
           onClick={() => nav("/mantenimiento/ots")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => nav("/mantenimiento/ots")}>
             Órdenes de trabajo
           </GhostButton>
@@ -177,7 +184,7 @@ export default function OTsDashboardPage() {
             <button
               type="button"
               className={period === PERIOD.CUSTOM ? "is-active" : ""}
-              onClick={() => setPeriod(PERIOD.CUSTOM)}
+              onClick={openCustomModal}
             >
               Personalizado
             </button>
@@ -185,24 +192,13 @@ export default function OTsDashboardPage() {
         </div>
 
         {period === PERIOD.CUSTOM ? (
-          <>
-            <div className="otsDashboard__field">
-              <label>Desde</label>
-              <input
-                type="date"
-                value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
-              />
-            </div>
-            <div className="otsDashboard__field">
-              <label>Hasta</label>
-              <input
-                type="date"
-                value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
-              />
-            </div>
-          </>
+          <button
+            type="button"
+            className="otsDashboard__range-btn"
+            onClick={openCustomModal}
+          >
+            {customFrom} / {customTo}
+          </button>
         ) : null}
       </div>
 
@@ -234,14 +230,14 @@ export default function OTsDashboardPage() {
 
 
       <div className="otsDashboard__grid">
-        <div className="otsDashboard__card otsDashboard__card--half">
-          <h2 className="otsDashboard__card-title">Solicitudes por día de la semana</h2>
-          <p className="otsDashboard__card-hint">Distribución en el período seleccionado</p>
+        <div className="otsDashboard__card">
+          <h2 className="otsDashboard__card-title">Solicitudes segun rango</h2>
+          <p className="otsDashboard__card-hint">Distribución por fecha en el período seleccionado</p>
           <div className="otsDashboard__chart">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={metrics.byWeekday} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <BarChart data={metrics.byRangeDate} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                <XAxis dataKey="label" tick={{ fontSize: 12 }} interval="preserveStartEnd" />
                 <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                 <Tooltip />
                 <Bar dataKey="count" name="Solicitudes" fill="#00DDB5" radius={[6, 6, 0, 0]} />
@@ -250,20 +246,31 @@ export default function OTsDashboardPage() {
           </div>
         </div>
 
-        <div className="otsDashboard__card otsDashboard__card--half">
-          <h2 className="otsDashboard__card-title">Volumen por fecha</h2>
-          <p className="otsDashboard__card-hint">Evolución de solicitudes en el rango</p>
-          <div className="otsDashboard__chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={metrics.byCalendarDay} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="count" name="Solicitudes" stroke="#0f172a" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+        <div className="otsDashboard__card">
+          <h2 className="otsDashboard__card-title">Solicitudes por Área</h2>
+          <p className="otsDashboard__card-hint">Total de solicitudes por área del creador en el período</p>
+          {metrics.topCreatedAreas.length === 0 ? (
+            <p className="otsDashboard__muted">Sin datos de área.</p>
+          ) : (
+            <TableScroll minWidth={360} bordered={false}>
+            <table className="otsDashboard__table">
+              <thead>
+                <tr>
+                  <th>Área</th>
+                  <th>Solicitudes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.topCreatedAreas.map((row) => (
+                  <tr key={row.name}>
+                    <td>{row.name}</td>
+                    <td>{row.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </TableScroll>
+          )}
         </div>
 
         <div className="otsDashboard__card">
@@ -272,6 +279,7 @@ export default function OTsDashboardPage() {
           {metrics.topDepartamentos.length === 0 ? (
             <p className="otsDashboard__muted">Sin datos de departamento.</p>
           ) : (
+            <TableScroll minWidth={360} bordered={false}>
             <table className="otsDashboard__table">
               <thead>
                 <tr>
@@ -288,19 +296,21 @@ export default function OTsDashboardPage() {
                 ))}
               </tbody>
             </table>
+            </TableScroll>
           )}
         </div>
 
         <div className="otsDashboard__card otsDashboard__card--half">
-          <h2 className="otsDashboard__card-title">Áreas más impactadas</h2>
-          <p className="otsDashboard__card-hint">Lugar del problema con más solicitudes en el período</p>
+          <h2 className="otsDashboard__card-title">Lugares más impactados</h2>
+          <p className="otsDashboard__card-hint">Lugares permitidos; los no reconocidos se agrupan en Otros</p>
           {metrics.topLugaresProblema.length === 0 ? (
             <p className="otsDashboard__muted">Sin datos de lugar de problema.</p>
           ) : (
+            <TableScroll minWidth={360} bordered={false}>
             <table className="otsDashboard__table">
               <thead>
                 <tr>
-                  <th>Lugar / Área</th>
+                  <th>Lugar</th>
                   <th>Solicitudes</th>
                 </tr>
               </thead>
@@ -313,15 +323,17 @@ export default function OTsDashboardPage() {
                 ))}
               </tbody>
             </table>
+            </TableScroll>
           )}
         </div>
 
         <div className="otsDashboard__card otsDashboard__card--half">
           <h2 className="otsDashboard__card-title">Tipos de problemas recurrentes</h2>
-          <p className="otsDashboard__card-hint">Clasificación por tipo de problema en el período</p>
+          <p className="otsDashboard__card-hint">Tipos permitidos; los no reconocidos se agrupan en Otros</p>
           {metrics.topTiposProblema.length === 0 ? (
             <p className="otsDashboard__muted">Sin datos de tipo de problema.</p>
           ) : (
+            <TableScroll minWidth={360} bordered={false}>
             <table className="otsDashboard__table">
               <thead>
                 <tr>
@@ -338,11 +350,13 @@ export default function OTsDashboardPage() {
                 ))}
               </tbody>
             </table>
+            </TableScroll>
           )}
         </div>
 
         <div className="otsDashboard__card otsDashboard__card--third">
           <h2 className="otsDashboard__card-title">Solicitantes con más solicitudes</h2>
+          <TableScroll minWidth={360} bordered={false}>
           <table className="otsDashboard__table">
             <thead>
               <tr>
@@ -367,11 +381,13 @@ export default function OTsDashboardPage() {
               )}
             </tbody>
           </table>
+          </TableScroll>
         </div>
 
         <div className="otsDashboard__card otsDashboard__card--third">
           <h2 className="otsDashboard__card-title">Responsables con más OTs</h2>
           <p className="otsDashboard__card-hint">Conteo por nombres en `responsableNombre`</p>
+          <TableScroll minWidth={360} bordered={false}>
           <table className="otsDashboard__table">
             <thead>
               <tr>
@@ -396,8 +412,75 @@ export default function OTsDashboardPage() {
               )}
             </tbody>
           </table>
+          </TableScroll>
         </div>
       </div>
+      {customModalOpen ? (
+        <div
+          className="otsDashboard__modalOverlay"
+          onClick={() => setCustomModalOpen(false)}
+        >
+          <div
+            className="otsDashboard__modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ots-custom-range-title"
+          >
+            <div className="otsDashboard__modalHead">
+              <div>
+                <h2 id="ots-custom-range-title">Rango personalizado</h2>
+                <p>Seleccioná las fechas para filtrar el dashboard.</p>
+              </div>
+              <button
+                type="button"
+                className="otsDashboard__modalClose"
+                onClick={() => setCustomModalOpen(false)}
+                aria-label="Cerrar"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="otsDashboard__modalBody">
+              <div className="otsDashboard__field">
+                <label>Desde</label>
+                <input
+                  type="date"
+                  value={customDraftFrom}
+                  onChange={(e) => setCustomDraftFrom(e.target.value)}
+                />
+              </div>
+              <div className="otsDashboard__field">
+                <label>Hasta</label>
+                <input
+                  type="date"
+                  value={customDraftTo}
+                  onChange={(e) => setCustomDraftTo(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="otsDashboard__modalActions">
+              <button
+                type="button"
+                className="otsDashboard__modalGhost"
+                onClick={() => setCustomModalOpen(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="otsDashboard__modalPrimary"
+                onClick={applyCustomRange}
+                disabled={!customDraftFrom || !customDraftTo}
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
         </Container>
       </Main>
     </Shell>

@@ -4,7 +4,7 @@ import { AuthCtx } from "./AuthProvider";
 
 /** Rutas permitidas cuando el perfil tiene epaAdmin: true */
 const EPA_ADMIN_ALLOWED =
-  /^\/$|^\/welcome$|^\/areas$|^\/epa(\/.*)?$|^\/config-region$|^\/salud\/aperturas\/detalle\//;
+  /^\/$|^\/welcome$|^\/areas$|^\/epa(\/.*)?$|^\/config-region$|^\/(salud|seguridad)\/aperturas\/detalle\//;
 
 export default function EpaAdminRouteGuard({ children }) {
   const { profile } = useContext(AuthCtx);

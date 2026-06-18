@@ -1,7 +1,6 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Lock, Scale, Search } from "lucide-react";
-import { auth } from "../../firebase";
 import {
   Badge,
   Brand,
@@ -18,7 +17,6 @@ import usePinnedModules from "../../hooks/usePinnedModules";
 
 export default function PesajeTarimas() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const { isPinned, togglePin } = usePinnedModules("servicios-generales");
 
   const go = (path) => nav(path);
@@ -55,9 +53,6 @@ export default function PesajeTarimas() {
           onClick={() => go("/servicios-generales/pesaje-tarimas")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => go("/servicios-generales")}>
             Servicios generales
           </GhostButton>

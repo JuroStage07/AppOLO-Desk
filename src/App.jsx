@@ -1,5 +1,5 @@
 import React, { useContext } from "react";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import AuthProvider from "./auth/AuthProvider";
 import { AuthCtx } from "./auth/AuthProvider";
@@ -7,8 +7,10 @@ import RequireAuth from "./auth/RequireAuth";
 import PrivateRoute from "./auth/PrivateRoute";
 import RequireRole from "./auth/RequireRole";
 
+import { ToastProvider, ConfirmProvider, CircleMenu, AssistantModal, CommandPalette } from "./components/ui";
+
 import Login from "./pages/Login";
-import Home from "./pages/Home";
+import HomeHub from "./pages/HomeHub";
 import AreasTrabajoHubPage from "./pages/AreasTrabajoHubPage";
 import ConfigRegionPage from "./pages/ConfigRegionPage";
 
@@ -21,17 +23,17 @@ import DespachoInProgressPage from "./pages/Despacho/DespachoInProgressPage";
 import DespachoFinalizadosPage from "./pages/Despacho/DespachoFinalizadosPage";
 
 //SaludOcupacional
-import SaludOcupacional from "./pages/Salud Ocupacional/SaludOcupacional";
-import ControlMarcas from "./pages/Salud Ocupacional/ControlMarcas/ControlMarcas";
-import HistorialMarcas from "./pages/Salud Ocupacional/ControlMarcas/HistorialMarcas";
-import Visados from "./pages/Salud Ocupacional/Visados/Visados";
-import NuevoVisado from "./pages/Salud Ocupacional/Visados/NuevoVisado";
-import AdministrarVisados from "./pages/Salud Ocupacional/Visados/AdministrarVisados";
-import AdministrarAperturas from "./pages/Salud Ocupacional/Aperturas/AdministrarAperturas";
-import AperturasFinalizadas from "./pages/Salud Ocupacional/Aperturas/AperturasFinalizadas";
-import AperturaDetalle from "./pages/Salud Ocupacional/Aperturas/AperturaDetalle";
-import AperturasRechazadas from "./pages/Salud Ocupacional/Aperturas/AperturasRechazdas";
-import MetricaSaludOcupacional from "./pages/Salud Ocupacional/MetricaSaludOcupacional";
+import SSOHub from "./pages/SSO/Seguridad/S.S.OHub";
+import ControlMarcas from "./pages/SSO/Seguridad/ControlMarcas/ControlMarcas";
+import HistorialMarcas from "./pages/SSO/Seguridad/ControlMarcas/HistorialMarcas";
+import Visados from "./pages/SSO/Seguridad/Visados/Visados";
+import NuevoVisado from "./pages/SSO/Seguridad/Visados/NuevoVisado";
+import AdministrarVisados from "./pages/SSO/Seguridad/Visados/AdministrarVisados";
+import AdministrarAperturas from "./pages/SSO/Seguridad/Aperturas/AdministrarAperturas";
+import AperturasFinalizadas from "./pages/SSO/Seguridad/Aperturas/AperturasFinalizadas";
+import AperturaDetalle from "./pages/SSO/Seguridad/Aperturas/AperturaDetalle";
+import AperturasRechazadas from "./pages/SSO/Seguridad/Aperturas/AperturasRechazdas";
+import MetricaSaludOcupacional from "./pages/SSO/Seguridad/MetricaSaludOcupacional";
 
 //Mantenimiento
 import PanelEquiposMantenimiento from "./pages/Mantenimiento/Equipos/PanelEquiposMantenimiento";
@@ -50,6 +52,8 @@ import AccionDetalle from "./pages/Recepcion/AccionDescarga/AccionDetalle";
 import MetricaRecepcion from "./pages/Recepcion/MetricaRecepcion";
 
 import OvertimeApprovals from "./pages/OvertimeApprovals";
+import OvertimeManagerApprovals from "./pages/OvertimeManagerApprovals";
+import OvertimeMonthlyReport from "./pages/OvertimeMonthlyReport";
 
 import EPAHubPage from "./pages/EPA/EPAHubPage";
 import AperturasFinalizadasEPA from "./pages/EPA/AperturasFinalizadasEPA";
@@ -58,6 +62,7 @@ import UpdateSupabasePage from "./pages/Dev/UpdateSupabasePage";
 import ModulesConfigHub from "./pages/Dev/ModulesConfigHub";
 import OvertimeSettingsHub from "./pages/Dev/OvertimeSettingsHub";
 import AdministracionHub from "./pages/Administracion/AdministracionHub";
+import OvertimeUsersAdmin from "./pages/Administracion/OvertimeUsersAdmin";
 import ServiciosGenerales from "./pages/ServiciosGenerales/ServiciosGenerales";
 import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGenerales/ServiciosGeneralesOrdenesTrabajo";
 import ServiciosGeneralesOTCrear from "./pages/ServiciosGenerales/ServiciosGeneralesOTCrear";
@@ -66,6 +71,13 @@ import ValidarIngreso from "./pages/ServiciosGenerales/ValidarIngreso";
 import PesajeTarimas from "./pages/Zona Franca/PesajeTarimas";
 import RegistrarTarimas from "./pages/Zona Franca/RegistrarTarimas";
 import ConsultarTarimas from "./pages/Zona Franca/ConsultarTarimas";
+
+// MRP Tarimas
+import MRPTarimas from "./pages/MRP/MRPTarimas";
+import MRPDashboardPage from "./pages/MRP/MRPDashboardPage";
+import MRPInventarioPage from "./pages/MRP/MRPInventarioPage";
+import MRPReparacionesPage from "./pages/MRP/MRPReparacionesPage";
+import MRPMaterialesPage from "./pages/MRP/MRPMaterialesPage";
 
 import useIsMobile from "./hooks/useIsMobile";
 
@@ -96,11 +108,24 @@ function TenantScopeBadge() {
   );
 }
 
+/** Redirects legacy /salud/* paths to the renamed /seguridad/* routes. */
+function SaludLegacyRedirect() {
+  const location = useLocation();
+  const target =
+    location.pathname.replace(/^\/salud/, "/seguridad") + location.search;
+  return <Navigate to={target} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ToastProvider>
+        <ConfirmProvider>
         <TenantScopeBadge />
+        <CircleMenu />
+        <AssistantModal />
+        <CommandPalette />
         <Routes>
           {/* Públicas */}
           <Route path="/login" element={<Login />} />
@@ -120,7 +145,7 @@ export default function App() {
             path="/welcome"
             element={
               <PrivateRoute>
-                <Home />
+                <HomeHub />
               </PrivateRoute>
             }
           />
@@ -189,18 +214,18 @@ export default function App() {
             }
           />
 
-          {/* ================= Salud Ocupacional ================= */}
+          {/* ================= Seguridad (SSO) ================= */}
           <Route
-            path="/salud"
+            path="/seguridad"
             element={
               <PrivateRoute>
-                <SaludOcupacional />
+                <SSOHub />
               </PrivateRoute>
             }
           />
 
           <Route
-            path="/salud/control-marcas"
+            path="/seguridad/control-marcas"
             element={
               <PrivateRoute>
                 <ControlMarcas />
@@ -209,7 +234,7 @@ export default function App() {
           />
 
           <Route
-            path="/salud/control-marcas/historial"
+            path="/seguridad/control-marcas/historial"
             element={
               <PrivateRoute>
                 <HistorialMarcas />
@@ -218,7 +243,7 @@ export default function App() {
           />
 
           <Route
-            path="/salud/aperturas"
+            path="/seguridad/aperturas"
             element={
               <PrivateRoute>
                 <AdministrarAperturas />
@@ -227,7 +252,7 @@ export default function App() {
           />
 
           <Route
-            path="/salud/aperturas/finalizadas"
+            path="/seguridad/aperturas/finalizadas"
             element={
               <PrivateRoute>
                 <AperturasFinalizadas />
@@ -236,7 +261,7 @@ export default function App() {
           />
 
           <Route
-            path="/salud/aperturas/detalle/:id"
+            path="/seguridad/aperturas/detalle/:id"
             element={
               <PrivateRoute>
                 <AperturaDetalle />
@@ -245,7 +270,7 @@ export default function App() {
           />
 
           <Route
-            path="/salud/aperturas/rechazadas"
+            path="/seguridad/aperturas/rechazadas"
             element={
               <PrivateRoute>
                 <AperturasRechazadas />
@@ -254,7 +279,7 @@ export default function App() {
           />
 
           <Route
-            path="/salud/equipos"
+            path="/seguridad/equipos"
             element={
               <PrivateRoute>
                 <div>Revisión de equipos</div>
@@ -263,7 +288,7 @@ export default function App() {
           />
 
           <Route
-            path="/salud/visado"
+            path="/seguridad/visado"
             element={
               <PrivateRoute>
                 <Visados />
@@ -272,7 +297,7 @@ export default function App() {
           />
 
           <Route
-            path="/salud/visado/generar"
+            path="/seguridad/visado/generar"
             element={
               <PrivateRoute>
                 <NuevoVisado />
@@ -281,7 +306,7 @@ export default function App() {
           />
 
           <Route
-            path="/salud/visados"
+            path="/seguridad/visados"
             element={
               <PrivateRoute>
                 <AdministrarVisados />
@@ -290,13 +315,17 @@ export default function App() {
           />
 
           <Route
-            path="/salud/metricas"
+            path="/seguridad/metricas"
             element={
               <PrivateRoute>
                 <MetricaSaludOcupacional />
               </PrivateRoute>
             }
           />
+
+          {/* Legacy redirects: /salud/* → /seguridad/* (bookmarks, pins) */}
+          <Route path="/salud" element={<Navigate to="/seguridad" replace />} />
+          <Route path="/salud/*" element={<SaludLegacyRedirect />} />
 
           {/* ================= EPA ================= */}
           <Route
@@ -545,6 +574,48 @@ export default function App() {
             }
           />
 
+          {/* ================= MRP Tarimas ================= */}
+          <Route
+            path="/mrp-tarimas"
+            element={
+              <PrivateRoute>
+                <MRPTarimas />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/mrp-tarimas/dashboard"
+            element={
+              <PrivateRoute>
+                <MRPDashboardPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/mrp-tarimas/inventario"
+            element={
+              <PrivateRoute>
+                <MRPInventarioPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/mrp-tarimas/reparaciones"
+            element={
+              <PrivateRoute>
+                <MRPReparacionesPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/mrp-tarimas/materiales"
+            element={
+              <PrivateRoute>
+                <MRPMaterialesPage />
+              </PrivateRoute>
+            }
+          />
+
           {/* ================= Horas extra ================= */}
           <Route
             path="/horas-extra"
@@ -556,7 +627,39 @@ export default function App() {
               </PrivateRoute>
             }
           />
+          <Route
+            path="/horas-extra/gerencia"
+            element={
+              <PrivateRoute>
+                <RequireRole roles={["administrativo", "dev"]}>
+                  <OvertimeManagerApprovals />
+                </RequireRole>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/horas-extra/reporte"
+            element={
+              <PrivateRoute>
+                <RequireRole roles={["administrativo", "dev"]}>
+                  <OvertimeMonthlyReport />
+                </RequireRole>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/horas-extra/usuarios"
+            element={
+              <PrivateRoute>
+                <RequireRole roles={["administrativo", "dev"]}>
+                  <OvertimeUsersAdmin />
+                </RequireRole>
+              </PrivateRoute>
+            }
+          />
         </Routes>
+        </ConfirmProvider>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );
@@ -565,37 +668,37 @@ export default function App() {
 const scopeBadge = {
   wrap: {
     position: "fixed",
-    bottom: "max(10px, env(safe-area-inset-bottom))",
-    right: 10,
+    bottom: "max(8px, env(safe-area-inset-bottom))",
+    right: 8,
     zIndex: 20000,
     background:
-      "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.96) 100%)",
+      "linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(248,250,252,0.94) 100%)",
     color: "#0F172A",
-    border: "1px solid rgba(15,23,42,0.10)",
-    borderRadius: 14,
-    padding: "8px 10px",
+    border: "1px solid rgba(15,23,42,0.08)",
+    borderRadius: 10,
+    padding: "5px 8px",
     display: "grid",
-    gap: 2,
+    gap: 1,
     pointerEvents: "none",
-    boxShadow: "0 10px 22px rgba(15,23,42,0.13)",
+    boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
     backdropFilter: "blur(4px)",
-    maxWidth: "min(88vw, 320px)",
+    maxWidth: "min(70vw, 200px)",
   },
   kicker: {
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: 900,
     color: "#089F8A",
-    letterSpacing: 0.35,
+    letterSpacing: 0.3,
     textTransform: "uppercase",
   },
   primary: {
-    fontSize: 12.5,
+    fontSize: 10,
     fontWeight: 900,
-    lineHeight: 1.25,
+    lineHeight: 1.2,
     color: "#0F172A",
   },
   secondary: {
-    fontSize: 11.5,
+    fontSize: 9,
     fontWeight: 800,
     color: "#64748B",
   },

@@ -1,8 +1,7 @@
 import React, { useContext } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { AuthCtx } from "./AuthProvider";
-
-const ACCENT = "#089F8A";
+import { ACCENT } from "../styles/theme";
 
 export default function RequireAuth({ children }) {
   const { user, profile, loading } = useContext(AuthCtx);

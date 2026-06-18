@@ -62,7 +62,7 @@ export function listenAperturasRechazadas(cb) {
  * Une `aperturas` y `aperturasRecepcion` (mismo criterio estado finalizada, sin orderBy).
  * Cada ítem incluye `__sourceCollection` para que detalle y updates usen la colección correcta.
  */
-export function listenAperturasFinalizadasGlobal(cb, tenantId, company) {
+export function listenAperturasFinalizadasGlobal(cb, tenantId, company, onError) {
   let readyA = false;
   let readyR = false;
   let listA = [];
@@ -75,11 +75,15 @@ export function listenAperturasFinalizadasGlobal(cb, tenantId, company) {
   };
 
   const qy = query(collection(db, "aperturas"), where("estado", "==", "finalizada"));
-  const unsubA = onSnapshot(qy, (qs) => {
-    listA = mapSnap(qs);
-    readyA = true;
-    emit();
-  });
+  const unsubA = onSnapshot(
+    qy,
+    (qs) => {
+      listA = mapSnap(qs);
+      readyA = true;
+      emit();
+    },
+    (err) => onError?.(err)
+  );
 
   const unsubR = listenAperturasRecepcionFinalizadas((rows) => {
     listR = rows;

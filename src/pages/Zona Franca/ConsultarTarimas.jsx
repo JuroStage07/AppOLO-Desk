@@ -6,16 +6,16 @@ import { doc, getDoc } from "firebase/firestore";
 import {
   Brand,
   Container,
+  EmptyState,
   GhostButton,
   Main,
   Shell,
   Topbar,
 } from "../../components/ui";
+import { ACCENT, SLATE, accentAlpha } from "../../styles/theme";
 
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8,159,138,0.10)";
-const ACCENT_MID = "rgba(8,159,138,0.25)";
-const SLATE = "#64748B";
+const ACCENT_SOFT = accentAlpha(0.1);
+const ACCENT_MID = accentAlpha(0.25);
 
 export default function ConsultarTarimas() {
   const nav = useNavigate();
@@ -24,18 +24,18 @@ export default function ConsultarTarimas() {
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState("");
+  const [buscado, setBuscado] = useState(false);
 
   const buscar = async () => {
     if (!numero.trim()) { setError("Ingresá un número."); return; }
     setLoading(true);
     setError("");
     setResultado(null);
+    setBuscado(true);
     try {
       const snap = await getDoc(doc(db, "pesajes", numero.trim()));
       if (snap.exists()) {
         setResultado(snap.data());
-      } else {
-        setError("No se encontró ningún registro con ese número.");
       }
     } catch {
       setError("Ocurrió un error al consultar. Intentá de nuevo.");
@@ -106,7 +106,7 @@ export default function ConsultarTarimas() {
                   type="text"
                   placeholder="Ej. TAR-001"
                   value={numero}
-                  onChange={(e) => { setNumero(e.target.value); setError(""); setResultado(null); }}
+                  onChange={(e) => { setNumero(e.target.value); setError(""); setResultado(null); setBuscado(false); }}
                   onKeyDown={handleKeyDown}
                   style={ui.input}
                   autoComplete="off"
@@ -171,6 +171,17 @@ export default function ConsultarTarimas() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* sin resultados */}
+          {buscado && !loading && !error && !resultado && (
+            <EmptyState
+              center
+              icon={Search}
+              title="Sin resultados"
+              description="No encontramos tarimas para esa búsqueda."
+              style={{ marginTop: 16 }}
+            />
           )}
 
         </Container>

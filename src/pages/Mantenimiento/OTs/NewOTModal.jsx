@@ -14,63 +14,15 @@ import {
 } from "firebase/firestore";
 
 import { auth, db } from "../../../firebase";
-
-const ACCENT = "#089F8A";
+import { useToast } from "../../../components/ui";
+import {
+  OT_DEPARTAMENTOS as DEPARTAMENTOS,
+  OT_LUGARES_PROBLEMA as LUGARES_PROBLEMA,
+  OT_TIPOS_PROBLEMA as TIPOS_PROBLEMA,
+} from "../../../config/otOptions";
+import { ACCENT } from "../../../styles/theme";
 
 const OT_STATE_SOLICITADA = "Solicitada";
-
-const DEPARTAMENTOS = [
-  "Control",
-  "Sistema",
-  "Personal",
-  "Comercio exterior",
-  "Ingeniería",
-  "Ventas",
-  "CEDI",
-  "Transportes",
-  "Otro",
-];
-
-const LUGARES_PROBLEMA = [
-  "Piso #1",
-  "Piso #2",
-  "Piso #3",
-  "CEDI",
-  "Parqueo",
-  "Vehículo/Flota",
-  "Otro",
-];
-
-const TIPOS_PROBLEMA = [
-  "Albañeria",
-  "Pisos",
-  "Techos",
-  "Goteras",
-  "Canoas",
-  "Cielo raso",
-  "Instalación eléctrica",
-  "Cañerías",
-  "Carpintería",
-  "Fontanería",
-  "Pintura",
-  "Soldadura",
-  "Tanques sépticos",
-  "Aire acondicionado",
-  "Remodelaciones",
-  "Puertas y portones",
-  "Accesos",
-  "Racks",
-  "Equipos",
-  "Rotulaciones",
-  "Sistema de incendios",
-  "Andenes de carga",
-  "Banda transportadora",
-  "Ilimunacion",
-  "Baños",
-  "Control de plagas",
-  "Camaras / CCTV",
-  "Otro",
-];
 
 function todayISO() {
   const d = new Date();
@@ -387,7 +339,7 @@ function SearchSelectModal({
       <div style={picker.sheet} onClick={(e) => e.stopPropagation()}>
         <div style={picker.header}>
           <div style={picker.title}>{title}</div>
-          <button type="button" style={picker.close} onClick={onClose}>
+          <button type="button" style={picker.close} onClick={onClose} aria-label="Cerrar">
             <X size={18} />
           </button>
         </div>
@@ -440,11 +392,8 @@ const emptyForm = () => ({
   nombreOT: "",
   activoReferencia: "",
   departamento: "",
-  departamentoOtro: "",
   lugarProblema: "",
-  lugarProblemaOtro: "",
   tipoProblema: "",
-  tipoProblemaOtro: "",
   descripcionOT: "",
   notas: "",
 });
@@ -466,11 +415,14 @@ export function NewOTModal({
   variant = "modal",
   suppressSuccessAlert = false,
 }) {
+  const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(emptyPicker());
+  const [creatorArea, setCreatorArea] = useState("");
 
   const [form, setForm] = useState(emptyForm);
+  const [errors, setErrors] = useState({});
 
   const isActive = variant === "page" || open;
 
@@ -489,12 +441,14 @@ export function NewOTModal({
 
         if (profileSnap.exists()) {
           const data = profileSnap.data();
+          setCreatorArea(String(data?.areaTrabajo || "").trim());
           setForm((prev) => ({
             ...prev,
             solicitanteNombre: data?.displayName || "",
             solicitanteFicha: data?.numeroFicha || "",
           }));
         } else {
+          setCreatorArea("");
           setForm((prev) => ({
             ...prev,
             solicitanteNombre:
@@ -519,6 +473,8 @@ export function NewOTModal({
     if (!open) {
       setForm(emptyForm());
       setPickerOpen(emptyPicker());
+      setErrors({});
+      setCreatorArea("");
     }
   }, [open, variant]);
 
@@ -526,42 +482,82 @@ export function NewOTModal({
 
   const ui = formUi;
 
+  const invalidStyle = { borderColor: "#F6C7C7", background: "#FEF6F6" };
+  const errText = (msg) =>
+    msg ? (
+      <div
+        style={{
+          color: "#B91C1C",
+          fontWeight: 800,
+          fontSize: 12,
+          marginTop: 4,
+        }}
+      >
+        {msg}
+      </div>
+    ) : null;
+
   const setField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
-  const departamentoFinal =
-    form.departamento === "Otro"
-      ? form.departamentoOtro.trim()
-      : form.departamento;
+  const departamentoFinal = form.departamento;
+  const lugarProblemaFinal = form.lugarProblema;
+  const tipoProblemaFinal = form.tipoProblema;
 
-  const lugarProblemaFinal =
-    form.lugarProblema === "Otro"
-      ? form.lugarProblemaOtro.trim()
-      : form.lugarProblema;
+  const validate = () => {
+    const next = {};
 
-  const tipoProblemaFinal =
-    form.tipoProblema === "Otro"
-      ? form.tipoProblemaOtro.trim()
-      : form.tipoProblema;
+    if (!form.solicitanteNombre.trim()) {
+      next.solicitanteNombre = "El solicitante es obligatorio.";
+    }
+    if (!form.fecha.trim()) {
+      next.fecha = "Seleccioná una fecha.";
+    }
+    if (!form.nombreOT.trim()) {
+      next.nombreOT = "Ingresá el nombre de la OT.";
+    }
+    if (!form.activoReferencia.trim()) {
+      next.activoReferencia = "Ingresá el activo de referencia.";
+    }
 
-  const canSave =
-    !saving &&
-    !loadingProfile &&
-    form.fecha.trim() &&
-    form.nombreOT.trim() &&
-    form.activoReferencia.trim() &&
-    form.departamento.trim() &&
-    departamentoFinal &&
-    form.lugarProblema.trim() &&
-    lugarProblemaFinal &&
-    form.tipoProblema.trim() &&
-    tipoProblemaFinal &&
-    form.descripcionOT.trim();
+    if (!form.departamento.trim()) {
+      next.departamento = "Seleccioná un departamento.";
+    }
+
+    if (!form.lugarProblema.trim()) {
+      next.lugarProblema = "Seleccioná el lugar del problema.";
+    }
+
+    if (!form.tipoProblema.trim()) {
+      next.tipoProblema = "Seleccioná el tipo de problema.";
+    }
+
+    if (!form.descripcionOT.trim()) {
+      next.descripcionOT = "Ingresá la descripción.";
+    }
+
+    return next;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!canSave) return;
+    if (saving || loadingProfile) return;
+
+    const it = validate();
+    if (Object.keys(it).length > 0) {
+      setErrors(it);
+      requestAnimationFrame(() =>
+        document
+          .querySelector('[data-invalid="true"]')
+          ?.scrollIntoView({ behavior: "smooth", block: "center" })
+      );
+      toast.warning("Revisá los campos marcados.");
+      return;
+    }
+
+    setErrors({});
 
     try {
       setSaving(true);
@@ -578,18 +574,12 @@ export function NewOTModal({
 
         departamento: departamentoFinal,
         departamentoBase: form.departamento,
-        departamentoOtro:
-          form.departamento === "Otro" ? form.departamentoOtro.trim() : "",
 
         lugarProblema: lugarProblemaFinal,
         lugarProblemaBase: form.lugarProblema,
-        lugarProblemaOtro:
-          form.lugarProblema === "Otro" ? form.lugarProblemaOtro.trim() : "",
 
         tipoProblema: tipoProblemaFinal,
         tipoProblemaBase: form.tipoProblema,
-        tipoProblemaOtro:
-          form.tipoProblema === "Otro" ? form.tipoProblemaOtro.trim() : "",
 
         descripcionOT: form.descripcionOT.trim(),
         notas: form.notas.trim(),
@@ -604,6 +594,7 @@ export function NewOTModal({
           auth.currentUser?.displayName ||
           auth.currentUser?.email ||
           "Usuario",
+        createdArea: creatorArea,
       };
 
       const docRef = await addDoc(collection(db, "solicitudesOT"), payload);
@@ -631,12 +622,13 @@ export function NewOTModal({
         estadoOT: OT_STATE_SOLICITADA,
         notas: form.notas.trim(),
         responsableNombre: "",
+        createdArea: creatorArea,
       };
 
       onCreate?.(createdItem);
 
       if (!suppressSuccessAlert) {
-        alert("✅ Solicitud OT creada correctamente.");
+        toast.success("Solicitud OT creada correctamente.");
       }
 
       if (variant === "modal") {
@@ -646,7 +638,7 @@ export function NewOTModal({
       }
     } catch (err) {
       console.error(err);
-      alert("❌ Error creando la solicitud OT");
+      toast.error("No se pudo crear la solicitud OT. Intentá de nuevo.");
     } finally {
       setSaving(false);
     }
@@ -675,7 +667,7 @@ export function NewOTModal({
             </div>
           </div>
 
-          <button type="button" style={modal.close} onClick={onClose} disabled={saving}>
+          <button type="button" style={modal.close} onClick={onClose} disabled={saving} aria-label="Cerrar">
             <X size={18} />
           </button>
         </div>
@@ -700,10 +692,15 @@ export function NewOTModal({
             <div style={ui.label}>Nombre del solicitante</div>
             <input
               value={form.solicitanteNombre}
-              style={ui.input}
+              style={{
+                ...ui.input,
+                ...(errors.solicitanteNombre ? invalidStyle : null),
+              }}
+              data-invalid={errors.solicitanteNombre ? "true" : undefined}
               readOnly
               placeholder="Cargando..."
             />
+            {errText(errors.solicitanteNombre)}
           </div>
 
           <div style={ui.fieldGroup}>
@@ -724,9 +721,11 @@ export function NewOTModal({
               type="date"
               value={form.fecha}
               onChange={(e) => setField("fecha", e.target.value)}
-              style={ui.input}
+              style={{ ...ui.input, ...(errors.fecha ? invalidStyle : null) }}
+              data-invalid={errors.fecha ? "true" : undefined}
               disabled={saving}
             />
+            {errText(errors.fecha)}
           </div>
 
           <div style={ui.fieldGroup}>
@@ -734,10 +733,15 @@ export function NewOTModal({
             <input
               value={form.nombreOT}
               onChange={(e) => setField("nombreOT", e.target.value)}
-              style={ui.input}
+              style={{
+                ...ui.input,
+                ...(errors.nombreOT ? invalidStyle : null),
+              }}
+              data-invalid={errors.nombreOT ? "true" : undefined}
               placeholder="Ej: Reparación de portón principal"
               disabled={saving}
             />
+            {errText(errors.nombreOT)}
           </div>
         </div>
 
@@ -746,10 +750,15 @@ export function NewOTModal({
           <input
             value={form.activoReferencia}
             onChange={(e) => setField("activoReferencia", e.target.value)}
-            style={ui.input}
+            style={{
+              ...ui.input,
+              ...(errors.activoReferencia ? invalidStyle : null),
+            }}
+            data-invalid={errors.activoReferencia ? "true" : undefined}
             placeholder="Ej: PORTÓN-01 / VEH-12 / RACK-03"
             disabled={saving}
           />
+          {errText(errors.activoReferencia)}
         </div>
 
         <div style={isPage ? ui.twoColsPage : ui.twoCols}>
@@ -757,7 +766,11 @@ export function NewOTModal({
             <div style={ui.label}>Departamento</div>
             <button
               type="button"
-              style={ui.selectorBtn}
+              style={{
+                ...ui.selectorBtn,
+                ...(errors.departamento ? invalidStyle : null),
+              }}
+              data-invalid={errors.departamento ? "true" : undefined}
               onClick={() =>
                 setPickerOpen((prev) => ({ ...prev, departamento: true }))
               }
@@ -768,25 +781,18 @@ export function NewOTModal({
               </span>
               <ChevronRight size={16} />
             </button>
-
-            {form.departamento === "Otro" && (
-              <input
-                value={form.departamentoOtro}
-                onChange={(e) =>
-                  setField("departamentoOtro", e.target.value)
-                }
-                style={ui.input}
-                placeholder="Especifique departamento"
-                disabled={saving}
-              />
-            )}
+            {errText(errors.departamento)}
           </div>
 
           <div style={ui.fieldGroup}>
             <div style={ui.label}>Lugar del problema</div>
             <button
               type="button"
-              style={ui.selectorBtn}
+              style={{
+                ...ui.selectorBtn,
+                ...(errors.lugarProblema ? invalidStyle : null),
+              }}
+              data-invalid={errors.lugarProblema ? "true" : undefined}
               onClick={() =>
                 setPickerOpen((prev) => ({ ...prev, lugarProblema: true }))
               }
@@ -797,18 +803,7 @@ export function NewOTModal({
               </span>
               <ChevronRight size={16} />
             </button>
-
-            {form.lugarProblema === "Otro" && (
-              <input
-                value={form.lugarProblemaOtro}
-                onChange={(e) =>
-                  setField("lugarProblemaOtro", e.target.value)
-                }
-                style={ui.input}
-                placeholder="Especifique lugar"
-                disabled={saving}
-              />
-            )}
+            {errText(errors.lugarProblema)}
           </div>
         </div>
 
@@ -816,7 +811,11 @@ export function NewOTModal({
           <div style={ui.label}>Tipo de problema</div>
           <button
             type="button"
-            style={ui.selectorBtn}
+            style={{
+              ...ui.selectorBtn,
+              ...(errors.tipoProblema ? invalidStyle : null),
+            }}
+            data-invalid={errors.tipoProblema ? "true" : undefined}
             onClick={() =>
               setPickerOpen((prev) => ({ ...prev, tipoProblema: true }))
             }
@@ -827,16 +826,7 @@ export function NewOTModal({
             </span>
             <ChevronRight size={16} />
           </button>
-
-          {form.tipoProblema === "Otro" && (
-            <input
-              value={form.tipoProblemaOtro}
-              onChange={(e) => setField("tipoProblemaOtro", e.target.value)}
-              style={ui.input}
-              placeholder="Especifique tipo de problema"
-              disabled={saving}
-            />
-          )}
+          {errText(errors.tipoProblema)}
         </div>
 
         <div style={ui.fieldGroup}>
@@ -844,10 +834,15 @@ export function NewOTModal({
           <textarea
             value={form.descripcionOT}
             onChange={(e) => setField("descripcionOT", e.target.value)}
-            style={ui.textarea}
+            style={{
+              ...ui.textarea,
+              ...(errors.descripcionOT ? invalidStyle : null),
+            }}
+            data-invalid={errors.descripcionOT ? "true" : undefined}
             placeholder="Describa el problema o trabajo requerido"
             disabled={saving}
           />
+          {errText(errors.descripcionOT)}
         </div>
 
         <div style={ui.fieldGroup}>
@@ -874,7 +869,7 @@ export function NewOTModal({
           <button
             type="submit"
             style={ui.btnPrimary}
-            disabled={!canSave}
+            disabled={saving || loadingProfile}
           >
             <Plus size={16} />
             {saving ? "Guardando..." : "Crear solicitud"}
@@ -893,7 +888,6 @@ export function NewOTModal({
         value={form.departamento}
         onSelect={(value) => {
           setField("departamento", value);
-          if (value !== "Otro") setField("departamentoOtro", "");
         }}
         onClose={() =>
           setPickerOpen((prev) => ({ ...prev, departamento: false }))
@@ -907,7 +901,6 @@ export function NewOTModal({
         value={form.lugarProblema}
         onSelect={(value) => {
           setField("lugarProblema", value);
-          if (value !== "Otro") setField("lugarProblemaOtro", "");
         }}
         onClose={() =>
           setPickerOpen((prev) => ({ ...prev, lugarProblema: false }))
@@ -921,7 +914,6 @@ export function NewOTModal({
         value={form.tipoProblema}
         onSelect={(value) => {
           setField("tipoProblema", value);
-          if (value !== "Otro") setField("tipoProblemaOtro", "");
         }}
         onClose={() =>
           setPickerOpen((prev) => ({ ...prev, tipoProblema: false }))

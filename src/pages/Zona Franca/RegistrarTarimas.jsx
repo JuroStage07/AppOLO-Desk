@@ -10,18 +10,27 @@ import {
   Main,
   Shell,
   Topbar,
+  useToast,
 } from "../../components/ui";
+import { ACCENT, SLATE, accentAlpha } from "../../styles/theme";
 
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8,159,138,0.10)";
-const ACCENT_MID = "rgba(8,159,138,0.25)";
-const SLATE = "#64748B";
+const ACCENT_SOFT = accentAlpha(0.1);
+const ACCENT_MID = accentAlpha(0.25);
 const WARN = "#D97706";
 const WARN_SOFT = "rgba(217,119,6,0.12)";
 const WARN_BORDER = "rgba(217,119,6,0.35)";
 
 export default function RegistrarTarimas() {
   const nav = useNavigate();
+  const toast = useToast();
+
+  const focusPrimerError = () => {
+    requestAnimationFrame(() =>
+      document
+        .querySelector('[data-invalid="true"]')
+        ?.scrollIntoView({ behavior: "smooth", block: "center" })
+    );
+  };
 
   const [numero, setNumero] = useState("");
   const [peso, setPeso] = useState("");
@@ -53,7 +62,12 @@ export default function RegistrarTarimas() {
   const abrirModal = async () => {
     const e = {};
     if (!numero.trim()) e.numero = "Ingresá un número.";
-    if (Object.keys(e).length) { setErrores(e); return; }
+    if (Object.keys(e).length) {
+      setErrores(e);
+      focusPrimerError();
+      toast.warning("Revisá los campos marcados.");
+      return;
+    }
     setErrores({});
     setSaveError("");
 
@@ -91,7 +105,12 @@ export default function RegistrarTarimas() {
       e.peso = "Ingresá un peso válido mayor a 0.";
     }
     if (!unidad) e.unidad = "Seleccioná una unidad.";
-    if (Object.keys(e).length) { setErrores(e); return; }
+    if (Object.keys(e).length) {
+      setErrores(e);
+      focusPrimerError();
+      toast.warning("Revisá los campos marcados.");
+      return;
+    }
 
     const id = numero.trim();
     setSaveError("");
@@ -177,6 +196,7 @@ export default function RegistrarTarimas() {
                 <input
                   id="numero"
                   type="text"
+                  data-invalid={errores.numero ? "true" : undefined}
                   placeholder="Ej. TAR-001"
                   value={numero}
                   onChange={(e) => {
@@ -217,7 +237,7 @@ export default function RegistrarTarimas() {
                 <div style={ui.modalKicker}>Pesaje</div>
                 <div style={ui.modalTitle}>Registrar peso</div>
               </div>
-              <button type="button" onClick={cerrarModal} style={ui.closeBtn}>
+              <button type="button" onClick={cerrarModal} style={ui.closeBtn} aria-label="Cerrar">
                 <X size={17} strokeWidth={2.4} />
               </button>
             </div>
@@ -252,6 +272,7 @@ export default function RegistrarTarimas() {
                     type="number"
                     min="0"
                     step="0.01"
+                    data-invalid={errores.peso ? "true" : undefined}
                     placeholder="Ej. 25.5"
                     value={peso}
                     onChange={(e) => { setPeso(e.target.value); setErrores((p) => ({ ...p, peso: "" })); }}
@@ -267,8 +288,12 @@ export default function RegistrarTarimas() {
                 <div style={{ ...ui.selectWrap, ...(errores.unidad ? ui.inputError : {}) }}>
                   <select
                     id="unidad"
+                    data-invalid={errores.unidad ? "true" : undefined}
                     value={unidad}
-                    onChange={(e) => setUnidad(e.target.value)}
+                    onChange={(e) => {
+                      setUnidad(e.target.value);
+                      setErrores((p) => ({ ...p, unidad: "" }));
+                    }}
                     style={ui.select}
                   >
                     {unidadesPeso.map((u) => (

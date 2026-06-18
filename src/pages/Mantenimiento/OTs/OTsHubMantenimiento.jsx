@@ -20,21 +20,23 @@ import {
   ModuleGrid,
   Shell,
   Topbar,
+  useToast,
 } from "../../../components/ui";
 import usePinnedModules from "../../../hooks/usePinnedModules";
 
 export default function OTsHubMantenimiento() {
   const nav = useNavigate();
-  const { user, permisos, loading } = useContext(AuthCtx);
+  const toast = useToast();
+  const { permisos, loading } = useContext(AuthCtx);
   const { isPinned, togglePin } = usePinnedModules("mantenimiento");
 
   useEffect(() => {
     if (loading) return;
     if (!permisos?.mantenimiento) {
-      alert("Este usuario no puede acceder por falta de permisos.");
+      toast.error("No tenés permisos para acceder a este módulo.");
       nav(-1);
     }
-  }, [loading, permisos, nav]);
+  }, [loading, permisos, nav, toast]);
 
   const go = (path) => nav(path);
 
@@ -80,9 +82,6 @@ export default function OTsHubMantenimiento() {
           onClick={() => go("/mantenimiento")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => go("/mantenimiento")}>
             Mantenimiento
           </GhostButton>

@@ -7,7 +7,6 @@ import {
   Scale,
   ScanLine,
 } from "lucide-react";
-import { auth } from "../../firebase";
 import {
   Badge,
   Brand,
@@ -25,7 +24,6 @@ import usePinnedModules from "../../hooks/usePinnedModules";
 
 export default function ServiciosGenerales() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const { isPinned, togglePin } = usePinnedModules("servicios-generales");
 
   const go = (path) => nav(path);
@@ -70,9 +68,6 @@ export default function ServiciosGenerales() {
           onClick={() => go("/servicios-generales")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => go("/")}>
             Inicio
           </GhostButton>

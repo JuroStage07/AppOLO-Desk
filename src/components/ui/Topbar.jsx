@@ -1,21 +1,58 @@
-import React, { useState } from "react";
-import { Menu, User } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { Menu, User, Search } from "lucide-react";
 import AreasSidebar from "./AreasSidebar";
-import { ACCENT, ACCENT_SOFT, BORDER, CONTAINER_MAX, SLATE, TEXT } from "../../styles/theme";
+import Breadcrumbs from "./Breadcrumbs";
+import { isRootPath } from "./routeTrail";
+import TopbarAccount from "./TopbarAccount";
+import { openCommandPalette } from "./commandPaletteBus";
+import { openPinsFlyout } from "./pinsBus";
+import { ACCENT, ACCENT_SOFT, BORDER, CONTAINER_MAX, SLATE, SURFACE, TEXT } from "../../styles/theme";
 
-const SURFACE = "#FFFFFF";
+const IS_MAC =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || "");
+const CMD_HINT = IS_MAC ? "⌘K" : "Ctrl K";
 
 /**
  * Sticky top bar with the integrated, app-wide "Áreas de trabajo" sidebar.
  * The sidebar data lives in src/config/workAreas and is shared with the
  * Áreas hub page, so the menu is identical everywhere.
+ *
+ * Below the main row it renders a slim utility sub-bar with route-aware
+ * breadcrumbs (Inicio › Área › Sección › Detalle) on the left and the account
+ * + "Cerrar sesión" control on the right, so both are consistent on every inner
+ * page. Pass `utilityBar={false}` to opt out on a page.
  */
-export default function Topbar({ children, style, innerStyle, sticky = true }) {
+export default function Topbar({
+  children,
+  style,
+  innerStyle,
+  sticky = true,
+  utilityBar = true,
+}) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+  const showUtility = utilityBar && !isRootPath(location.pathname);
+
+  // F2 → open pins flyout (handled by AreasSidebar via pinsBus)
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === "F2" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        openPinsFlyout();
+      }
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, []);
+
+  const closeSidebar = () => {
+    setSidebarOpen(false);
+  };
 
   return (
     <>
-      <AreasSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <AreasSidebar open={sidebarOpen} onClose={closeSidebar} />
       <header style={{ ...topbar, ...(sticky ? topbarPinned : {}), ...style }}>
         <div style={{ ...topbarInner, ...innerStyle }}>
           <button
@@ -29,6 +66,27 @@ export default function Topbar({ children, style, innerStyle, sticky = true }) {
           </button>
           {children}
         </div>
+        {showUtility ? (
+          <div style={subBar}>
+            <div style={subBarInner}>
+              <Breadcrumbs />
+              <div style={subBarRight}>
+                <button
+                  type="button"
+                  onClick={openCommandPalette}
+                  style={searchTrigger}
+                  title="Buscar y navegar"
+                  aria-label="Buscar y navegar"
+                >
+                  <Search size={14} strokeWidth={2.3} />
+                  <span style={searchTriggerLabel}>Buscar</span>
+                  <span style={searchTriggerKbd}>{CMD_HINT}</span>
+                </button>
+                <TopbarAccount />
+              </div>
+            </div>
+          </div>
+        ) : null}
       </header>
     </>
   );
@@ -74,6 +132,58 @@ const topbar = {
 };
 /** Stays visible when an ancestor scrolls (custom shells, lockBodyScroll=false). */
 const topbarPinned = { position: "sticky", top: 0, zIndex: 120 };
+const subBar = {
+  width: "100%",
+  borderTop: `1px solid ${BORDER}`,
+  background: "rgba(248,250,252,0.7)",
+};
+const subBarInner = {
+  width: "100%",
+  maxWidth: CONTAINER_MAX,
+  marginLeft: "auto",
+  marginRight: "auto",
+  boxSizing: "border-box",
+  padding: "6px 18px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+};
+const subBarRight = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexShrink: 0,
+};
+const searchTrigger = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 7,
+  height: 28,
+  padding: "0 8px 0 10px",
+  borderRadius: 8,
+  border: `1px solid ${BORDER}`,
+  background: "#fff",
+  color: SLATE,
+  cursor: "pointer",
+  fontFamily: "inherit",
+  fontWeight: 700,
+  fontSize: 12,
+  flexShrink: 0,
+};
+const searchTriggerLabel = { lineHeight: 1 };
+const searchTriggerKbd = {
+  display: "inline-grid",
+  placeItems: "center",
+  padding: "1px 5px",
+  borderRadius: 5,
+  background: "#F1F5F9",
+  border: `1px solid ${BORDER}`,
+  fontSize: 10,
+  fontWeight: 800,
+  color: SLATE,
+  lineHeight: 1.4,
+};
 const topbarInner = {
   width: "100%",
   maxWidth: CONTAINER_MAX,

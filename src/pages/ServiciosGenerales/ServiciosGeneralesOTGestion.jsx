@@ -7,7 +7,6 @@ import {
   ClipboardList,
   LayoutGrid,
   ListFilter,
-  Loader2,
   ShieldAlert,
   UserCheck,
 } from "lucide-react";
@@ -17,15 +16,17 @@ import { filterSolicitudesOtByScope } from "../../utils/dataScope";
 import {
   Brand,
   Container,
+  EmptyState,
+  ErrorState,
   GhostButton,
   Main,
   Shell,
+  Skeleton,
   Topbar,
+  useToast,
 } from "../../components/ui";
+import { ACCENT, ACCENT_SOFT, SLATE } from "../../styles/theme";
 
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
-const SLATE = "#64748B";
 const OT_STATE_EN_PROCESO = "En proceso";
 const OT_STATE_SOLICITADA = "Solicitada";
 
@@ -95,6 +96,7 @@ export default function ServiciosGeneralesOTGestion() {
   const canOpenMantenimientoDetail =
     role === "dev" || permisos?.mantenimiento === true;
   const user = auth.currentUser;
+  const toast = useToast();
   const [rows, setRows] = useState([]);
   const [listLoading, setListLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -212,9 +214,6 @@ export default function ServiciosGeneralesOTGestion() {
           onClick={() => nav("/servicios-generales/ordenes-trabajo")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => nav("/servicios-generales/ordenes-trabajo")}>
             Órdenes de trabajo
           </GhostButton>
@@ -313,31 +312,28 @@ export default function ServiciosGeneralesOTGestion() {
             </p>
           </div>
 
-          {listLoading ? (
-            <div style={ui.placeholder}>
-              <Loader2
-                size={22}
-                color={ACCENT}
-                style={{ animation: "sgotgSpin 0.75s linear infinite", marginBottom: 8 }}
-              />
-              <p style={ui.placeholderText}>Cargando OTs en proceso…</p>
-            </div>
-          ) : loadError ? (
-            <div style={ui.placeholderError}>
-              <p style={ui.placeholderErrorText}>{loadError}</p>
-            </div>
+          {loadError ? (
+            <ErrorState description={loadError} />
+          ) : listLoading ? (
+            <Skeleton.Cards count={6} />
           ) : rows.length === 0 ? (
-            <div style={ui.placeholder}>
-              <p style={ui.placeholderText}>No hay OTs en estado En proceso o Solicitada en tu ámbito.</p>
-            </div>
+            <EmptyState
+              center
+              icon={ClipboardList}
+              title="Sin órdenes de trabajo"
+              description="No hay OTs en estado En proceso o Solicitada en tu ámbito."
+            />
           ) : filteredRows.length === 0 ? (
-            <div style={ui.placeholder}>
-              <p style={ui.placeholderText}>
-                {filterScope === "mine"
+            <EmptyState
+              center
+              icon={ListFilter}
+              title="Sin resultados para este filtro"
+              description={
+                filterScope === "mine"
                   ? "No tenés solicitudes en proceso o solicitadas en este listado. Probá «Todas las OT» o creá una nueva desde Órdenes de trabajo."
-                  : "No hay resultados para este filtro."}
-              </p>
-            </div>
+                  : "No hay resultados para este filtro."
+              }
+            />
           ) : (
             <ul style={ui.list}>
               {filteredRows.map((row) => {
@@ -402,7 +398,7 @@ export default function ServiciosGeneralesOTGestion() {
                         }}
                         onClick={() => {
                           if (!canOpenMantenimientoDetail) {
-                            alert(
+                            toast.error(
                               "Para abrir el detalle necesitás permisos de Mantenimiento o rol dev."
                             );
                             return;

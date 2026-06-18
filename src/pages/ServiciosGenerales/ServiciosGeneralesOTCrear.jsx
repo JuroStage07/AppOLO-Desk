@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, CircleCheck, Plus } from "lucide-react";
-import { auth } from "../../firebase";
 import { NewOTModal } from "../Mantenimiento/OTs/NewOTModal";
 import {
   Brand,
@@ -11,14 +10,10 @@ import {
   Shell,
   Topbar,
 } from "../../components/ui";
-
-const ACCENT = "#089F8A";
-const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
-const SLATE = "#64748B";
+import { ACCENT, ACCENT_SOFT, SLATE } from "../../styles/theme";
 
 export default function ServiciosGeneralesOTCrear() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const [successModal, setSuccessModal] = useState({
     open: false,
     nroSolicitud: "",
@@ -35,9 +30,6 @@ export default function ServiciosGeneralesOTCrear() {
           onClick={() => nav("/servicios-generales/ordenes-trabajo")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => nav("/servicios-generales/ordenes-trabajo")}>
             Órdenes de trabajo
           </GhostButton>

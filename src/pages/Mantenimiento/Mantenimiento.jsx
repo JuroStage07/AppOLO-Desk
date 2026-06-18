@@ -15,21 +15,23 @@ import {
   QuickCard,
   Shell,
   Topbar,
+  useToast,
 } from "../../components/ui";
 import usePinnedModules from "../../hooks/usePinnedModules";
 
 export default function Mantenimiento() {
   const nav = useNavigate();
-  const { user, permisos, loading } = useContext(AuthCtx);
+  const { permisos, loading } = useContext(AuthCtx);
   const { isPinned, togglePin } = usePinnedModules("mantenimiento");
+  const toast = useToast();
 
   useEffect(() => {
     if (loading) return;
     if (!permisos?.mantenimiento) {
-      alert("Este usuario no puede acceder por falta de permisos.");
+      toast.error("Este usuario no puede acceder por falta de permisos.");
       nav(-1);
     }
-  }, [loading, permisos, nav]);
+  }, [loading, permisos, nav, toast]);
 
   const go = (path) => nav(path);
 
@@ -67,9 +69,6 @@ export default function Mantenimiento() {
           onClick={() => go("/mantenimiento")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => go("/")}>
             Inicio
           </GhostButton>

@@ -7,6 +7,13 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Temp files
+.tmp_payload.json
+
+# Firebase/Admin credentials
+serviceAccountKey.json
+*serviceAccount*.json
+
 node_modules
 dist
 dist-ssr

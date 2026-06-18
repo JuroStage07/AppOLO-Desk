@@ -1,23 +1,24 @@
 // screens/AccionDescarga.jsx
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Truck } from "lucide-react";
+import { ArrowLeft, Inbox, Truck } from "lucide-react";
 import {
   Brand,
   Container,
+  EmptyState,
+  ErrorState,
   GhostButton,
   Main,
   Shell,
+  Spinner,
   Topbar,
 } from "../../../components/ui";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { AuthCtx } from "../../../auth/AuthProvider";
-import { auth, db } from "../../../firebase";
+import { db } from "../../../firebase";
 import { filterByUserScope } from "../../../utils/dataScope";
 import imgAccionDescarga from "../../../assets/accionDescarga.png";
-
-const ACCENT = "#089F8A";
-const SLATE = "#64748B";
+import { ACCENT, SLATE } from "../../../styles/theme";
 
 /* ===================== Helpers ===================== */
 function toDateSafe(value) {
@@ -91,7 +92,6 @@ function dateToYMD(d) {
 /* ===================== Screen ===================== */
 export default function AccionDescarga() {
   const nav = useNavigate();
-  const user = auth.currentUser;
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
@@ -99,6 +99,7 @@ export default function AccionDescarga() {
   const [hovered, setHovered] = useState(null);
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [items, setItems] = useState([]);
 
   // filtros
@@ -130,11 +131,13 @@ export default function AccionDescarga() {
           profile?.company
         );
         setItems(rows);
+        setLoadError("");
         setLoading(false);
       },
       (err) => {
-        console.log("accion_descarga onSnapshot error:", err);
+        console.error("accion_descarga onSnapshot error:", err);
         setItems([]);
+        setLoadError("No se pudieron cargar las acciones de descarga.");
         setLoading(false);
       }
     );
@@ -293,14 +296,17 @@ export default function AccionDescarga() {
   );
 
   const Empty = () => (
-    <div style={ui.emptyWrap}>
-      <div style={ui.emptyTitle}>No hay acciones</div>
-      <div style={ui.emptyText}>Probá quitando filtros o revisá más tarde.</div>
-
-      <button type="button" style={ui.emptyBtn} onClick={clearAll}>
-        <span style={ui.emptyBtnTxt}>Limpiar filtros</span>
-      </button>
-    </div>
+    <EmptyState
+      center
+      icon={Inbox}
+      title="No hay acciones"
+      description="Probá quitando filtros o revisá más tarde."
+      action={
+        <button type="button" style={ui.emptyBtn} onClick={clearAll}>
+          <span style={ui.emptyBtnTxt}>Limpiar filtros</span>
+        </button>
+      }
+    />
   );
 
   const RowCard = ({ item }) => {
@@ -379,9 +385,6 @@ export default function AccionDescarga() {
           onClick={() => nav("/recepcion")}
         />
         <Topbar.Right>
-          <Topbar.UserHint title={user?.email || ""}>
-            {user?.displayName || user?.email || "Sesión activa"}
-          </Topbar.UserHint>
           <GhostButton icon={ArrowLeft} onClick={() => nav("/recepcion")}>
             Recepción
           </GhostButton>
@@ -407,10 +410,11 @@ export default function AccionDescarga() {
             </div>
           </div>
 
-          {loading ? (
+          {loadError ? (
+            <ErrorState description={loadError} />
+          ) : loading ? (
             <div style={ui.center}>
-              <div style={ui.spinner} aria-label="Cargando" />
-              <div style={ui.loadingText}>Cargando acciones…</div>
+              <Spinner label="Cargando acciones…" />
             </div>
           ) : (
             <div style={ui.listWrap}>
