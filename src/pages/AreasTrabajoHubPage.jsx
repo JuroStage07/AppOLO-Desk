@@ -320,6 +320,7 @@ function buildAssistantOtPayload({ draft, user, profile }) {
     updatedAt: serverTimestamp(),
     createdBy: user?.uid || null,
     createdByName,
+    createdArea: cleanOtValue(profile?.areaTrabajo),
   };
 
   const tenantId = cleanOtValue(profile?.tenantId);

@@ -419,6 +419,7 @@ export function NewOTModal({
   const [saving, setSaving] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(emptyPicker());
+  const [creatorArea, setCreatorArea] = useState("");
 
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
@@ -440,12 +441,14 @@ export function NewOTModal({
 
         if (profileSnap.exists()) {
           const data = profileSnap.data();
+          setCreatorArea(String(data?.areaTrabajo || "").trim());
           setForm((prev) => ({
             ...prev,
             solicitanteNombre: data?.displayName || "",
             solicitanteFicha: data?.numeroFicha || "",
           }));
         } else {
+          setCreatorArea("");
           setForm((prev) => ({
             ...prev,
             solicitanteNombre:
@@ -471,6 +474,7 @@ export function NewOTModal({
       setForm(emptyForm());
       setPickerOpen(emptyPicker());
       setErrors({});
+      setCreatorArea("");
     }
   }, [open, variant]);
 
@@ -590,6 +594,7 @@ export function NewOTModal({
           auth.currentUser?.displayName ||
           auth.currentUser?.email ||
           "Usuario",
+        createdArea: creatorArea,
       };
 
       const docRef = await addDoc(collection(db, "solicitudesOT"), payload);
@@ -617,6 +622,7 @@ export function NewOTModal({
         estadoOT: OT_STATE_SOLICITADA,
         notas: form.notas.trim(),
         responsableNombre: "",
+        createdArea: creatorArea,
       };
 
       onCreate?.(createdItem);

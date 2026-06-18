@@ -1068,6 +1068,7 @@ match /solicitudesOT/{solicitudId} {
       'updatedAt',
       'createdBy',
       'createdByName',
+      'createdArea',
       'tenantId',
       'company',
       'subtasks'
@@ -1094,6 +1095,7 @@ match /solicitudesOT/{solicitudId} {
     && request.resource.data.updatedAt is timestamp
     && request.resource.data.createdBy == request.auth.uid
     && request.resource.data.createdByName is string
+    && (!('createdArea' in request.resource.data) || request.resource.data.createdArea is string)
     && (!('subtasks' in request.resource.data) || request.resource.data.subtasks is list)
     && request.resource.data.nombreOT.trim().size() > 0
     && request.resource.data.activoReferencia.trim().size() > 0
@@ -1107,6 +1109,7 @@ match /solicitudesOT/{solicitudId} {
     && request.resource.data.diff(resource.data).changedKeys().hasOnly([
       'OTState',
       'updatedAt',
+      'tiempoRespuesta',
       'notas',
       'responsableUid',
       'responsableNombre',
@@ -1120,6 +1123,10 @@ match /solicitudesOT/{solicitudId} {
     && (
       !request.resource.data.diff(resource.data).changedKeys().hasAny(['updatedAt']) ||
       request.resource.data.updatedAt is timestamp
+    )
+    && (
+      !request.resource.data.diff(resource.data).changedKeys().hasAny(['tiempoRespuesta']) ||
+      request.resource.data.tiempoRespuesta is string
     )
     && (
       !request.resource.data.diff(resource.data).changedKeys().hasAny(['notas']) ||
@@ -1174,9 +1181,7 @@ match /solicitudesOT/{solicitudId} {
         'status',
         'updatedAt',
         'chronoWorkAccumMs',
-        'chronoDeadAccumMs',
-        'chronoWorkStartedAt',
-        'chronoDeadStartedAt'
+        'chronoWorkStartedAt'
       ])
       && (
         !request.resource.data.diff(resource.data).changedKeys().hasAny(['title']) ||
@@ -1205,21 +1210,9 @@ match /solicitudesOT/{solicitudId} {
         )
       )
       && (
-        !request.resource.data.diff(resource.data).changedKeys().hasAny(['chronoDeadAccumMs']) ||
-        (
-          request.resource.data.chronoDeadAccumMs is number &&
-          request.resource.data.chronoDeadAccumMs >= 0
-        )
-      )
-      && (
         !request.resource.data.diff(resource.data).changedKeys().hasAny(['chronoWorkStartedAt']) ||
         !('chronoWorkStartedAt' in request.resource.data) ||
         request.resource.data.chronoWorkStartedAt is timestamp
-      )
-      && (
-        !request.resource.data.diff(resource.data).changedKeys().hasAny(['chronoDeadStartedAt']) ||
-        !('chronoDeadStartedAt' in request.resource.data) ||
-        request.resource.data.chronoDeadStartedAt is timestamp
       );
 
     allow delete: if canSolicitudesOT();

@@ -95,6 +95,17 @@
   font: inherit;
 }
 
+.otsDashboard__range-btn {
+  padding: 10px 12px;
+  border: 1px solid #e7e9f2;
+  border-radius: 14px;
+  background: #fbfcff;
+  color: #0f172a;
+  font-weight: 850;
+  cursor: pointer;
+  min-height: 40px;
+}
+
 .otsDashboard__toolbar button:focus-visible,
 .otsDashboard__toolbar input:focus-visible,
 .otsDashboard__toolbar select:focus-visible {
@@ -266,4 +277,108 @@
   font-size: 13px;
   font-weight: 700;
   color: #8c5a00;
+}
+
+.otsDashboard__modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30040;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.otsDashboard__modal {
+  width: min(460px, 100%);
+  background: #fff;
+  border: 1px solid #e7e9f2;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.26);
+  overflow: hidden;
+}
+
+.otsDashboard__modalHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e7e9f2;
+}
+
+.otsDashboard__modalHead h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.otsDashboard__modalHead p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.otsDashboard__modalClose {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e7e9f2;
+  border-radius: 10px;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.otsDashboard__modalBody {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 20px;
+}
+
+.otsDashboard__modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 20px 20px;
+}
+
+.otsDashboard__modalGhost,
+.otsDashboard__modalPrimary {
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 900;
+  cursor: pointer;
+  font: inherit;
+}
+
+.otsDashboard__modalGhost {
+  border: 1px solid #e7e9f2;
+  background: #fff;
+  color: #0f172a;
+}
+
+.otsDashboard__modalPrimary {
+  border: 1px solid #089f8a;
+  background: #089f8a;
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(8, 159, 138, 0.18);
+}
+
+.otsDashboard__modalPrimary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+@media (max-width: 560px) {
+  .otsDashboard__modalBody {
+    grid-template-columns: 1fr;
+  }
 }

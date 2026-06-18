@@ -14,7 +14,6 @@ import {
   MapPin,
   Hash,
   Plus,
-  Pencil,
   Trash2,
   CircleCheck,
   Clock3,
@@ -39,6 +38,7 @@ import { db, auth } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { OT_STATE_FINALIZADA } from "./OTsFinalizadasPage";
 import { isSolicitudOtInScope } from "../../../utils/dataScope";
+import { businessElapsedMs } from "../../../utils/workTime";
 import { Brand, Topbar, useToast, useConfirm } from "../../../components/ui";
 import { ACCENT } from "../../../styles/theme";
 
@@ -46,6 +46,7 @@ const OT_STATE_EN_PROCESO = "En proceso";
 const OT_STATE_REVISION = "En revisión";
 const BLUE = "#2563EB";
 const RED = "#FF4D73";
+const HOUR_MS = 60 * 60 * 1000;
 
 function canAccessOtDetalle(permisos, role) {
   return role === "dev" || permisos?.mantenimiento === true;
@@ -65,6 +66,40 @@ function formatDate(value) {
   } catch {
     return String(value);
   }
+}
+
+function dateValueToMillis(value) {
+  if (!value) return null;
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  if (typeof value?.toDate === "function") {
+    const d = value.toDate();
+    const ms = d?.getTime?.();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function formatTiempoRespuestaMs(ms) {
+  const totalHours = Math.max(0, Math.floor((Number(ms) || 0) / HOUR_MS));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+
+  if (days > 0) return `${days} d ${hours} hrs`;
+  return `${totalHours} ${totalHours === 1 ? "hr" : "hrs"}`;
+}
+
+function buildTiempoRespuesta(createdAt, endedAt) {
+  const startMs = dateValueToMillis(createdAt);
+  const endMs = dateValueToMillis(endedAt);
+  if (startMs == null || endMs == null) return "0 hrs";
+  return formatTiempoRespuestaMs(businessElapsedMs(startMs, endMs));
 }
 
 function chronoTsToMillis(ts) {
@@ -116,23 +151,12 @@ function isSubtaskFirestoreCompleted(data) {
 function chronoWorkElapsedMs(row, nowMs) {
   const acc = Number(row.chronoWorkAccumMs) || 0;
   const t0 = chronoTsToMillis(row.chronoWorkStartedAt);
-  if (t0 != null) return acc + (nowMs - t0);
-  return acc;
-}
-
-function chronoDeadElapsedMs(row, nowMs) {
-  const acc = Number(row.chronoDeadAccumMs) || 0;
-  const t0 = chronoTsToMillis(row.chronoDeadStartedAt);
-  if (t0 != null) return acc + (nowMs - t0);
+  if (t0 != null) return acc + businessElapsedMs(t0, nowMs);
   return acc;
 }
 
 function chronoWorkRunning(row) {
   return row.chronoWorkStartedAt != null;
-}
-
-function chronoDeadRunning(row) {
-  return row.chronoDeadStartedAt != null;
 }
 
 function subtaskCreatedAtMillis(s) {
@@ -156,20 +180,15 @@ function buildSubtasksChronoSummary(subtasks, nowMs) {
   );
 
   let totalWork = 0;
-  let totalDead = 0;
   const perId = {};
 
   for (const row of ordered) {
     const wMs = chronoWorkElapsedMs(row, nowMs);
-    const dMs = chronoDeadElapsedMs(row, nowMs);
     totalWork += wMs;
-    totalDead += dMs;
     if (row?.id) {
       perId[row.id] = {
         wMs,
-        dMs,
         workRun: chronoWorkRunning(row),
-        deadRun: chronoDeadRunning(row),
       };
     }
   }
@@ -186,7 +205,7 @@ function buildSubtasksChronoSummary(subtasks, nowMs) {
     }
   }
 
-  return { totalWork, totalDead, avgBetweenTasksMs, perId, ordered, nowMs };
+  return { totalWork, avgBetweenTasksMs, perId, ordered, nowMs };
 }
 
 function normalizeTask(docId, data) {
@@ -211,7 +230,8 @@ function normalizeTask(docId, data) {
     ficha: data?.solicitanteFicha || "—",
     note: data?.notas || "",
     createdAt: data?.createdAt || null,
-    fechaSolicitud: data?.fecha || null,
+    updatedAt: data?.updatedAt || null,
+    tiempoRespuesta: data?.tiempoRespuesta || "",
     nombreOT: data?.nombreOT || "Sin nombre OT",
     activo: data?.activoReferencia || "Activo no informado",
     departamento: data?.departamento || "Sin departamento",
@@ -229,7 +249,6 @@ function normalizeTask(docId, data) {
         class1: data?.departamento || "—",
         class2: data?.OTState || "—",
         requestNo: data?.NroSolicitud || "—",
-        scheduledDate: data?.fecha || null,
         attachmentsCount: attachments.length,
         priority:
           data?.OTState === "Solicitada" ? "Pendiente" : data?.OTState || "—",
@@ -296,13 +315,13 @@ export default function OTsDetallePage() {
   const [creatingCatalogSubtask, setCreatingCatalogSubtask] = useState(false);
   const [removingCatalogId, setRemovingCatalogId] = useState("");
   const [deletingSubtaskId, setDeletingSubtaskId] = useState("");
-  const [deadMotivoEdit, setDeadMotivoEdit] = useState(null);
-  const [deadMotivoEditSaving, setDeadMotivoEditSaving] = useState(false);
 
   const [ot, setOt] = useState(null);
   const [note, setNote] = useState("");
   const [noteSaved, setNoteSaved] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [finalizeModalOpen, setFinalizeModalOpen] = useState(false);
+  const [finalizeNote, setFinalizeNote] = useState("");
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -366,10 +385,7 @@ export default function OTsDetallePage() {
   }, [id, authLoading, canAccess, profile?.tenantId, profile?.company]);
 
   const anySubtaskChronoRunning = useMemo(
-    () =>
-      subtasks.some(
-        (s) => chronoWorkRunning(s) || chronoDeadRunning(s)
-      ),
+    () => subtasks.some((s) => chronoWorkRunning(s)),
     [subtasks]
   );
 
@@ -415,6 +431,14 @@ export default function OTsDetallePage() {
     return buildSubtasksChronoSummary(subtasks, nowMs);
   }, [subtasks, chronoTick]);
 
+  const tiempoRespuestaLabel = useMemo(() => {
+    if (!ot || ot.estado !== OT_STATE_FINALIZADA) return "";
+    if (String(ot.tiempoRespuesta || "").trim()) {
+      return String(ot.tiempoRespuesta).trim();
+    }
+    return buildTiempoRespuesta(ot.createdAt, ot.updatedAt);
+  }, [ot]);
+
   const toggleTask = (taskId) => {
     setTasks((prev) =>
       prev.map((task) =>
@@ -454,6 +478,22 @@ export default function OTsDetallePage() {
   const canAddSubtasks = ot?.estado === OT_STATE_EN_PROCESO;
   const canFinalizeOt = ot?.estado === OT_STATE_REVISION;
 
+  const openFinalizeOtModal = () => {
+    if (ot?.estado !== OT_STATE_REVISION) {
+      toast.warning(
+        "Solo podés finalizar la OT cuando está en revisión. Tiene que pasar por revisión antes de cerrarse."
+      );
+      return;
+    }
+    setFinalizeNote(String(note ?? ""));
+    setFinalizeModalOpen(true);
+  };
+
+  const closeFinalizeOtModal = () => {
+    if (finalizingOt) return;
+    setFinalizeModalOpen(false);
+  };
+
   const handleFinalizeOt = async () => {
     if (!id?.trim()) return;
     if (ot?.estado !== OT_STATE_REVISION) {
@@ -462,20 +502,17 @@ export default function OTsDetallePage() {
       );
       return;
     }
-    const ok = await confirm({
-      title: "Finalizar OT",
-      message:
-        "Quedará cerrada (Finalizada): no se podrán editar tiempos ni subtareas.",
-      confirmText: "Finalizar",
-      tone: "warning",
-    });
-    if (!ok) return;
     try {
       setFinalizingOt(true);
+      const finalizedAt = new Date();
+      const tiempoRespuesta = buildTiempoRespuesta(ot.createdAt, finalizedAt);
+      const nextNote = String(finalizeNote ?? "").replace(/\s+$/g, "");
       const ref = doc(db, "solicitudesOT", id);
       await updateDoc(ref, {
         OTState: OT_STATE_FINALIZADA,
-        updatedAt: serverTimestamp(),
+        updatedAt: finalizedAt,
+        tiempoRespuesta,
+        notas: nextNote,
       });
       const snap = await getDoc(ref);
       if (snap.exists()) {
@@ -485,8 +522,11 @@ export default function OTsDetallePage() {
         }
         const normalized = normalizeTask(snap.id, snap.data());
         setOt(normalized);
+        setNote(String(normalized?.note || ""));
+        setNoteSaved(String(normalized?.note || ""));
         setTasks(normalized?.tasks || []);
       }
+      setFinalizeModalOpen(false);
       const subtareasRef = collection(db, "solicitudesOT", id, "subtareas");
       const subtareasSnap = await getDocs(
         query(subtareasRef, orderBy("createdAt", "asc"))
@@ -735,54 +775,6 @@ export default function OTsDetallePage() {
     }
   };
 
-  const openDeadMotivoEdit = (subtask) => {
-    if (readOnlyOt || !subtask?.id) return;
-    setDeadMotivoEdit({
-      subtaskId: subtask.id,
-      text: String(subtask.chronoDeadMotivo ?? "").trim(),
-    });
-  };
-
-  const closeDeadMotivoEdit = () => {
-    if (deadMotivoEditSaving) return;
-    setDeadMotivoEdit(null);
-  };
-
-  const saveDeadMotivoEdit = async () => {
-    if (!deadMotivoEdit?.subtaskId || !id?.trim()) return;
-    const t = deadMotivoEdit.text.replace(/\s+/g, " ").trim();
-    if (t.length < 2) {
-      toast.warning("El motivo debe tener al menos 2 caracteres.");
-      return;
-    }
-    try {
-      setDeadMotivoEditSaving(true);
-      const ref = doc(
-        db,
-        "solicitudesOT",
-        id,
-        "subtareas",
-        deadMotivoEdit.subtaskId
-      );
-      await updateDoc(ref, {
-        chronoDeadMotivo: t,
-        updatedAt: serverTimestamp(),
-      });
-      setSubtasks((prev) =>
-        prev.map((s) =>
-          s.id === deadMotivoEdit.subtaskId ? { ...s, chronoDeadMotivo: t } : s
-        )
-      );
-      setDeadMotivoEdit(null);
-      toast.success("Motivo actualizado.");
-    } catch (err) {
-      console.error(err);
-      toast.error("No se pudo guardar el motivo.");
-    } finally {
-      setDeadMotivoEditSaving(false);
-    }
-  };
-
   if (authLoading || !canAccess) return null;
 
   if (loading) {
@@ -876,10 +868,6 @@ export default function OTsDetallePage() {
                     <SoftChip
                       icon={<CalendarDays size={13} />}
                       text={`Creada: ${formatDate(ot.createdAt)}`}
-                    />
-                    <SoftChip
-                      icon={<CalendarDays size={13} />}
-                      text={`Fecha solicitud: ${formatDate(ot.fechaSolicitud)}`}
                     />
                   </div>
                 </div>
@@ -1020,23 +1008,19 @@ export default function OTsDetallePage() {
                           <DetailRow label="Tipo de problema" value={task.taskType} />
                           <DetailRow label="Departamento" value={task.class1} />
                           <DetailRow label="Estado" value={task.class2} />
-                          <DetailRow
-                            label="Fecha solicitud"
-                            value={formatDate(task.scheduledDate)}
-                          />
                           {readOnlyOt && subtasks.length > 0 ? (
                             <div style={ui.chronoSummaryBlock}>
                               <div style={ui.chronoSummaryHead}>
                                 <Clock3 size={16} color={ACCENT} />
-                                <span>Tiempos (todas las subtareas)</span>
+                                <span>Tiempos</span>
                               </div>
+                              <DetailRow
+                                label="Tiempo de respuesta"
+                                value={tiempoRespuestaLabel}
+                              />
                               <DetailRow
                                 label="Total trabajo"
                                 value={formatChronoMs(chronoSummary.totalWork)}
-                              />
-                              <DetailRow
-                                label="Total tiempo muerto"
-                                value={formatChronoMs(chronoSummary.totalDead)}
                               />
                               <DetailRow
                                 label="Promedio entre subtareas"
@@ -1094,8 +1078,7 @@ export default function OTsDetallePage() {
                     {subtasks.length > 0 ? (
                       <div style={ui.subtasksChronoLegend}>
                         <Timer size={13} color="#64748B" />
-                        Trabajo y tiempo muerto por subtarea (como en gestión de
-                        OT).
+                        Tiempo de trabajo por subtarea (como en gestión de OT).
                       </div>
                     ) : null}
                   </div>
@@ -1139,12 +1122,7 @@ export default function OTsDetallePage() {
                               subtask,
                               chronoSummary.nowMs
                             ),
-                            dMs: chronoDeadElapsedMs(
-                              subtask,
-                              chronoSummary.nowMs
-                            ),
                             workRun: chronoWorkRunning(subtask),
-                            deadRun: chronoDeadRunning(subtask),
                           };
                       const stLabel = subtaskStatusLabel(subtask);
                       return (
@@ -1193,45 +1171,7 @@ export default function OTsDetallePage() {
                                   <span style={ui.subtaskChronoLive}> · en curso</span>
                                 ) : null}
                               </span>
-                              <span style={ui.subtaskChronoMetric}>
-                                T. muerto:{" "}
-                                <b
-                                  style={{
-                                    color: cm.deadRun ? "#B45309" : "#334155",
-                                  }}
-                                >
-                                  {formatChronoMs(cm.dMs)}
-                                </b>
-                                {cm.deadRun ? (
-                                  <span style={ui.subtaskChronoLiveDead}> · en curso</span>
-                                ) : null}
-                              </span>
                             </div>
-
-                            {String(subtask?.chronoDeadMotivo || "").trim() ? (
-                              <div style={ui.subtaskDeadMotivoBox}>
-                                <div style={ui.subtaskDeadMotivoRow}>
-                                  <div style={{ minWidth: 0, flex: 1 }}>
-                                    <span style={ui.subtaskDeadMotivoLabel}>
-                                      Motivo tiempo muerto:{" "}
-                                    </span>
-                                    {String(subtask.chronoDeadMotivo).trim()}
-                                  </div>
-                                  {!readOnlyOt ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => openDeadMotivoEdit(subtask)}
-                                      style={ui.subtaskDeadMotivoEditBtn}
-                                      title="Editar motivo"
-                                      disabled={!!deadMotivoEditSaving}
-                                    >
-                                      <Pencil size={13} strokeWidth={2.25} />
-                                      Editar
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </div>
-                            ) : null}
                           </div>
                         </div>
                       );
@@ -1296,9 +1236,9 @@ export default function OTsDetallePage() {
                   <CalendarDays size={16} />
                 </div>
                 <div>
-                  <div style={ui.summaryLabel}>Fecha solicitud</div>
+                  <div style={ui.summaryLabel}>Creada</div>
                   <div style={ui.summaryValue}>
-                    {formatDate(ot.fechaSolicitud)}
+                    {formatDate(ot.createdAt)}
                   </div>
                 </div>
               </div>
@@ -1320,7 +1260,7 @@ export default function OTsDetallePage() {
                     );
                     return;
                   }
-                  void handleFinalizeOt();
+                  openFinalizeOtModal();
                 }}
                 title={
                   readOnlyOt
@@ -1333,10 +1273,105 @@ export default function OTsDetallePage() {
                 <CircleCheck size={18} strokeWidth={2.25} />
                 {finalizingOt ? "Finalizando…" : "Finalizar OT"}
               </button>
+              {tiempoRespuestaLabel ? (
+                <div style={ui.tiempoRespuestaNote}>
+                  Tiempo de Respuesta: {tiempoRespuestaLabel}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
       </div>
+      {finalizeModalOpen && (
+        <div
+          style={{ ...ui.modalOverlay, zIndex: 10020 }}
+          onClick={finalizingOt ? undefined : closeFinalizeOtModal}
+        >
+          <div
+            style={{ ...ui.modalCard, width: "min(640px, 100%)" }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="finalize-ot-title"
+          >
+            <div style={ui.modalHeader}>
+              <div>
+                <div id="finalize-ot-title" style={ui.modalTitle}>
+                  Finalizar OT
+                </div>
+                <div style={ui.modalSubtitle}>
+                  Tiempo de Respuesta:{" "}
+                  {ot ? buildTiempoRespuesta(ot.createdAt, new Date()) : "0 hrs"}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                style={{
+                  ...ui.modalCloseBtn,
+                  ...(finalizingOt ? ui.modalCloseBtnDisabled : {}),
+                }}
+                onClick={closeFinalizeOtModal}
+                disabled={finalizingOt}
+                aria-label="Cerrar"
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={ui.modalBody}>
+              <div style={ui.finalizeInfoBox}>
+                <AlertTriangle size={18} />
+                <span>
+                  Quedará cerrada (Finalizada): no se podrán editar tiempos ni
+                  subtareas.
+                </span>
+              </div>
+
+              <div style={ui.fieldGroup}>
+                <label htmlFor="finalize-note" style={ui.finalizeNoteLabel}>
+                  Nota
+                </label>
+                <textarea
+                  id="finalize-note"
+                  value={finalizeNote}
+                  onChange={(e) => setFinalizeNote(e.target.value)}
+                  style={{ ...ui.noteInput, ...ui.finalizeNoteInput }}
+                  rows={6}
+                  disabled={finalizingOt}
+                  placeholder="Agregar observaciones generales..."
+                />
+                <div style={ui.finalizeNoteHint}>
+                  Opcional. Se guardará junto con el cierre de la OT.
+                </div>
+              </div>
+            </div>
+
+            <div style={ui.modalFooter}>
+              <button
+                type="button"
+                style={ui.btnGhost}
+                onClick={closeFinalizeOtModal}
+                disabled={finalizingOt}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...ui.btnPrimary,
+                  ...(finalizingOt ? ui.btnPrimaryDisabled : {}),
+                }}
+                onClick={() => void handleFinalizeOt()}
+                disabled={finalizingOt}
+              >
+                <CircleCheck size={17} strokeWidth={2.25} />
+                {finalizingOt ? "Finalizando..." : "Finalizar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showSubtaskModal && (
         <div
           style={ui.modalOverlay}
@@ -1458,106 +1493,6 @@ export default function OTsDetallePage() {
         </div>
       )}
 
-      {deadMotivoEdit ? (
-        <div
-          style={{ ...ui.modalOverlay, zIndex: 10050 }}
-          onClick={deadMotivoEditSaving ? undefined : closeDeadMotivoEdit}
-        >
-          <div
-            style={{ ...ui.modalCard, width: "min(440px, 100%)" }}
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="dead-motivo-edit-title"
-          >
-            <div style={ui.modalHeader}>
-              <div>
-                <div id="dead-motivo-edit-title" style={ui.modalTitle}>
-                  Editar motivo de tiempo muerto
-                </div>
-                <div style={ui.modalSubtitle}>
-                  El cambio se guarda en esta subtarea de la OT.
-                </div>
-              </div>
-              <button
-                type="button"
-                style={{
-                  ...ui.modalCloseBtn,
-                  ...(deadMotivoEditSaving
-                    ? { opacity: 0.5, pointerEvents: "none" }
-                    : {}),
-                }}
-                onClick={closeDeadMotivoEdit}
-                aria-label="Cerrar"
-              >
-                ×
-              </button>
-            </div>
-            <div style={ui.modalBody}>
-              <label
-                htmlFor="dead-motivo-edit-ta"
-                style={{
-                  fontSize: 12,
-                  fontWeight: 800,
-                  color: "#475569",
-                  display: "block",
-                  marginBottom: 8,
-                }}
-              >
-                Motivo
-              </label>
-              <textarea
-                id="dead-motivo-edit-ta"
-                value={deadMotivoEdit.text}
-                onChange={(e) =>
-                  setDeadMotivoEdit((prev) =>
-                    prev ? { ...prev, text: e.target.value } : prev
-                  )
-                }
-                rows={4}
-                disabled={deadMotivoEditSaving}
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  padding: "12px 14px",
-                  borderRadius: 14,
-                  border: "1px solid #D0D5DD",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  fontFamily: "inherit",
-                  resize: "vertical",
-                  minHeight: 96,
-                }}
-              />
-            </div>
-            <div
-              style={{
-                padding: "0 20px 20px",
-                display: "flex",
-                gap: 10,
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                type="button"
-                style={ui.btnGhost}
-                onClick={closeDeadMotivoEdit}
-                disabled={deadMotivoEditSaving}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                style={ui.btnPrimary}
-                onClick={() => void saveDeadMotivoEdit()}
-                disabled={deadMotivoEditSaving}
-              >
-                {deadMotivoEditSaving ? "Guardando…" : "Guardar motivo"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -2056,9 +1991,11 @@ const ui = {
     alignItems: "stretch",
   },
   bottomSummaryAction: {
-    display: "flex",
+    display: "grid",
     alignItems: "center",
     justifyContent: "flex-end",
+    justifyItems: "end",
+    gap: 8,
     flex: "1 1 220px",
     minWidth: 0,
   },
@@ -2086,6 +2023,15 @@ const ui = {
     border: "1px solid #E2E8F0",
     boxShadow: "none",
     cursor: "pointer",
+  },
+  tiempoRespuestaNote: {
+    width: "100%",
+    maxWidth: 280,
+    textAlign: "center",
+    color: "#475569",
+    fontSize: 12,
+    fontWeight: 850,
+    lineHeight: 1.35,
   },
   btnPrimaryDisabled: {
     opacity: 0.5,
@@ -2250,50 +2196,6 @@ const ui = {
     color: ACCENT,
     fontWeight: 800,
   },
-  subtaskChronoLiveDead: {
-    color: "#B45309",
-    fontWeight: 800,
-  },
-
-  subtaskDeadMotivoBox: {
-    marginTop: 10,
-    fontSize: 12,
-    fontWeight: 700,
-    color: "#92400E",
-    lineHeight: 1.45,
-    padding: "8px 10px",
-    borderRadius: 10,
-    background: "#FFFBEB",
-    border: "1px solid rgba(245, 158, 11, 0.28)",
-  },
-
-  subtaskDeadMotivoLabel: {
-    fontWeight: 800,
-    color: "#B45309",
-  },
-
-  subtaskDeadMotivoRow: {
-    display: "flex",
-    gap: 10,
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-  },
-
-  subtaskDeadMotivoEditBtn: {
-    flexShrink: 0,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "4px 8px",
-    borderRadius: 8,
-    border: "1px solid rgba(245, 158, 11, 0.4)",
-    background: "#fff",
-    color: "#B45309",
-    fontSize: 11,
-    fontWeight: 800,
-    cursor: "pointer",
-    fontFamily: "inherit",
-  },
 
   emptySubtasksBox: {
     minHeight: 220,
@@ -2415,11 +2317,41 @@ const ui = {
     fontSize: 22,
     lineHeight: 1,
   },
+  modalCloseBtnDisabled: {
+    opacity: 0.5,
+    cursor: "not-allowed",
+  },
 
   modalBody: {
     padding: 20,
     display: "grid",
     gap: 16,
+  },
+  finalizeInfoBox: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    border: "1px solid #FFE1A8",
+    background: "#FFFBEB",
+    color: "#92600A",
+    borderRadius: 14,
+    padding: "12px 14px",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.4,
+  },
+  finalizeNoteLabel: {
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  finalizeNoteInput: {
+    minHeight: 150,
+  },
+  finalizeNoteHint: {
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: 750,
   },
 
   fieldGroup: {

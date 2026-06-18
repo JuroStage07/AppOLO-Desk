@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "assistant:knowledge": "node scripts/sync-assistant-knowledge.mjs",
+    "backfill:profiles-area": "node scripts/backfill-profiles-area-trabajo.mjs",
+    "backfill:solicitudes-created-area": "node scripts/backfill-solicitudes-created-area.mjs",
+    "backfill:tiempo-respuesta": "node scripts/backfill-tiempo-respuesta.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
