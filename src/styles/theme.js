@@ -63,7 +63,7 @@ export const RADIUS_PILL = 999;
 export const CONTAINER_MAX = 1120;
 
 export const FONT_STACK =
-  "system-ui, -apple-system, Segoe UI, Roboto, Arial";
+  "Arial, sans-serif";
 
 // ─── Typographic scale ───────────────────────────────────────────────
 // Use these instead of hardcoding fontSize in page styles. Sizes are px.

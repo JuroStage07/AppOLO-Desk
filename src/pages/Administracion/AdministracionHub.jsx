@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  AlarmClock,
   ArrowLeft,
   Clock,
   FileSpreadsheet,
@@ -112,6 +113,20 @@ function OvertimeFlowModal({ open, onClose, onSelect }) {
             <div style={modalStyles.optionText}>
               <div style={modalStyles.optionTitle}>Gestión de Usuarios</div>
               <div style={modalStyles.optionDesc}>Configurar parámetros</div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            style={modalStyles.optionCard}
+            onClick={() => onSelect("marcas")}
+          >
+            <div style={{ ...modalStyles.optionIcon, background: "rgba(220,38,38,0.12)", color: "#DC2626" }}>
+              <AlarmClock size={22} strokeWidth={2.2} />
+            </div>
+            <div style={modalStyles.optionText}>
+              <div style={modalStyles.optionTitle}>Marcas del Día</div>
+              <div style={modalStyles.optionDesc}>Asistencia y tardanzas</div>
             </div>
           </button>
         </div>
@@ -232,6 +247,8 @@ export default function AdministracionHub() {
       nav("/horas-extra/reporte");
     } else if (flow === "usuarios") {
       nav("/horas-extra/usuarios");
+    } else if (flow === "marcas") {
+      nav("/horas-extra/marcas");
     } else {
       nav("/horas-extra/gerencia");
     }

@@ -63,6 +63,8 @@ import ModulesConfigHub from "./pages/Dev/ModulesConfigHub";
 import OvertimeSettingsHub from "./pages/Dev/OvertimeSettingsHub";
 import AdministracionHub from "./pages/Administracion/AdministracionHub";
 import OvertimeUsersAdmin from "./pages/Administracion/OvertimeUsersAdmin";
+import AttendanceMarks from "./pages/Administracion/AttendanceMarks";
+import UserHub from "./pages/Administracion/UserHub";
 import ServiciosGenerales from "./pages/ServiciosGenerales/ServiciosGenerales";
 import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGenerales/ServiciosGeneralesOrdenesTrabajo";
 import ServiciosGeneralesOTCrear from "./pages/ServiciosGenerales/ServiciosGeneralesOTCrear";
@@ -352,6 +354,18 @@ export default function App() {
               <PrivateRoute>
                 <RequireRole roles={["administrativo", "dev"]}>
                   <AdministracionHub />
+                </RequireRole>
+              </PrivateRoute>
+            }
+          />
+
+          {/* ================= Administración: Usuarios (solo dev) ================= */}
+          <Route
+            path="/administracion/usuarios"
+            element={
+              <PrivateRoute>
+                <RequireRole roles={["dev"]}>
+                  <UserHub />
                 </RequireRole>
               </PrivateRoute>
             }
@@ -653,6 +667,16 @@ export default function App() {
               <PrivateRoute>
                 <RequireRole roles={["administrativo", "dev"]}>
                   <OvertimeUsersAdmin />
+                </RequireRole>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/horas-extra/marcas"
+            element={
+              <PrivateRoute>
+                <RequireRole roles={["administrativo", "dev"]}>
+                  <AttendanceMarks />
                 </RequireRole>
               </PrivateRoute>
             }

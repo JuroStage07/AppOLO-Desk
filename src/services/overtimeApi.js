@@ -45,6 +45,13 @@ export function getOvertimeRecords() {
   return authedFetch("/overtime");
 }
 
+// Marcas diarias crudas (startEnroll + horario esperado) para reglas de tardanza.
+// Sin `date` la API devuelve el día actual; con `date` (YYYY-MM-DD) un día específico.
+export function getAttendanceMarks(date) {
+  const qs = date ? `?date=${encodeURIComponent(date)}` : "";
+  return authedFetch(`/attendance/marks${qs}`);
+}
+
 export function decideOvertimeRecord({ attendanceId, status, note, record }) {
   return authedFetch("/overtime/decide", {
     method: "POST",
