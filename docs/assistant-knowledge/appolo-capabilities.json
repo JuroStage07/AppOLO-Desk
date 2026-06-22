@@ -3,180 +3,345 @@
     "id": "despacho-consulta",
     "areaKey": "despacho",
     "areaTitle": "Despacho",
-    "title": "Consultar despachos",
-    "summary": "Permite consultar despachos en progreso y despachos finalizados.",
+    "title": "Consultar despachos en progreso y finalizados",
+    "summary": "Permite consultar despachos en progreso (vista en vivo con la ocupación del camión, 24 espacios por tipo de tarima) y el historial de despachos finalizados (últimos cerrados por fecha).",
     "primaryRoute": "/despacho",
     "routes": [
       { "label": "Despachos en progreso", "path": "/despacho/in-progress" },
       { "label": "Despachos finalizados", "path": "/despacho/finalizados" }
     ],
-    "keywords": ["despacho", "despachos", "carga", "dock", "docks", "en progreso", "finalizados", "salida"]
-  },
-  {
-    "id": "seguridad-visados",
-    "areaKey": "seguridad",
-    "areaTitle": "Seguridad",
-    "title": "Visados",
-    "summary": "Permite acceder al módulo de visados, generar nuevos visados y administrar visados existentes.",
-    "primaryRoute": "/seguridad/visado",
-    "routes": [
-      { "label": "Generar visado", "path": "/seguridad/visado/generar" },
-      { "label": "Administrar visados", "path": "/seguridad/visados" }
+    "permissions": "Cualquier usuario autenticado; los datos se filtran por tenantId/company del perfil. No hay acciones de escritura desde estas pantallas (solo lectura en tiempo real).",
+    "keywords": ["despacho", "despachos", "carga", "dock", "docks", "anden", "tarima", "camion", "en progreso", "finalizados", "cerrados", "salida"],
+    "userCanAskExamples": [
+      "¿Dónde veo los despachos finalizados?",
+      "¿Cómo sigo un despacho en progreso?",
+      "¿Qué significa la ocupación del camión en el despacho?",
+      "¿Cuántos espacios tiene un camión de despacho?"
     ],
-    "keywords": ["visado", "visados", "generar visado", "administrar visado", "seguridad"]
+    "assistantShouldAnswer": "Explicá que Despacho tiene dos vistas: En progreso (/despacho/in-progress) muestra la carga en vivo con los 24 espacios del camión por tipo de tarima, y Finalizados (/despacho/finalizados) lista los despachos cerrados. Aclará que son pantallas de solo lectura y que no debés dar cifras concretas en vivo.",
+    "limitations": "Solo lectura desde la UI; las transiciones de estado del despacho ocurren en otros flujos/servicios. La lista de finalizados muestra los más recientes (tope de registros). No inventar cantidades ni estados concretos."
   },
   {
     "id": "seguridad-aperturas",
     "areaKey": "seguridad",
     "areaTitle": "Seguridad",
-    "title": "Aperturas",
-    "summary": "Permite consultar aperturas, aperturas finalizadas, aperturas rechazadas y detalle de aperturas.",
+    "title": "Aperturas (gestión y consulta)",
+    "summary": "Permite consultar aperturas en proceso, finalizadas y rechazadas, abrir el detalle de una apertura y avanzar su flujo: iniciar, completar Formulario / Revisión de Seguridad (RS) / Registro Fotográfico (RF), finalizar, rechazar, reabrir o eliminar. Al finalizar una apertura se genera automáticamente una acción de descarga en Recepción.",
     "primaryRoute": "/seguridad/aperturas",
     "routes": [
       { "label": "Aperturas", "path": "/seguridad/aperturas" },
       { "label": "Aperturas finalizadas", "path": "/seguridad/aperturas/finalizadas" },
-      { "label": "Aperturas rechazadas", "path": "/seguridad/aperturas/rechazadas" }
+      { "label": "Aperturas rechazadas", "path": "/seguridad/aperturas/rechazadas" },
+      { "label": "Detalle de apertura", "path": "/seguridad/aperturas/detalle/:id" }
     ],
-    "keywords": ["apertura", "aperturas", "finalizadas", "rechazadas", "detalle apertura"]
+    "permissions": "Cualquier usuario autenticado puede leer y crear aperturas. Para iniciar/modificar/finalizar/rechazar/eliminar: el creador, la persona asignada o un rol administrativo/dev. Los usuarios con epaAdmin acceden al detalle en modo lectura.",
+    "keywords": ["apertura", "aperturas", "en proceso", "finalizadas", "rechazadas", "detalle apertura", "formulario", "revision de seguridad", "registro fotografico", "marchamo", "dua", "expediente", "finalizar apertura", "rechazar apertura"],
+    "userCanAskExamples": [
+      "¿Dónde veo las aperturas finalizadas o rechazadas?",
+      "¿Cómo finalizo una apertura?",
+      "¿Qué pasa cuando finalizo una apertura?",
+      "¿Cómo rechazo o reabro una apertura?",
+      "¿Qué es el Formulario, RS y RF de una apertura?"
+    ],
+    "assistantShouldAnswer": "Indicá la ruta del módulo (/seguridad/aperturas) y sus vistas finalizadas/rechazadas. Explicá el flujo: iniciar → completar Formulario, Revisión de Seguridad (RS) y Registro Fotográfico (RF) → finalizar (lo que genera automáticamente una acción de descarga en Recepción) o rechazar. Aclará que finalizar/rechazar requiere ser creador, asignado o admin.",
+    "limitations": "El detalle del Formulario/RS/RF vive en subrutas internas no listadas en la navegación principal. No inventar el estado de una apertura concreta. Las colecciones aperturas y aperturasRecepcion se consultan combinadas."
+  },
+  {
+    "id": "seguridad-visados",
+    "areaKey": "seguridad",
+    "areaTitle": "Seguridad",
+    "title": "Visados de personal externo",
+    "summary": "Permite generar un visado para personal externo/terceros (datos del colaborador, empresa, labores, tipo de trámite y declaración de riesgos), administrar los visados existentes (buscar, filtrar, generar PDF, descargar) y gestionar la firma. Al generar un visado se crea/actualiza el tercero en usuariosTerceros y se genera un documento pendiente de firma.",
+    "primaryRoute": "/seguridad/visado",
+    "routes": [
+      { "label": "Generar visado", "path": "/seguridad/visado/generar" },
+      { "label": "Administrar visados", "path": "/seguridad/visados" }
+    ],
+    "permissions": "Requiere permisos.saludOcupacional o rol administrativo/dev (helper canSaludOcupacional). La creación exige aceptar las normas (aceptaNormas). Eliminar un visado: solo administrativo/dev.",
+    "keywords": ["visado", "visados", "generar visado", "administrar visados", "tercero", "personal externo", "tipo de tramite", "anual", "temporal", "firma", "pdf visado", "aceptar normas"],
+    "userCanAskExamples": [
+      "¿Cómo genero un visado?",
+      "¿Qué datos necesito para generar un visado?",
+      "¿Cuál es la diferencia entre trámite anual, temporal y menor a 3 meses?",
+      "¿Dónde administro o descargo los visados?",
+      "¿Cómo se firma un visado?"
+    ],
+    "assistantShouldAnswer": "Dirigí a Seguridad › Visados › Generar visado (/seguridad/visado/generar) para crear, y Administrar visados (/seguridad/visados) para buscar/descargar. Mencioná que requiere permiso de Salud Ocupacional o ser admin, que hay que aceptar las normas, y que al generar el visado se registra al tercero y queda un documento pendiente de firma.",
+    "limitations": "El visado requiere permisos.saludOcupacional. No inventar datos de un visado concreto. El detalle de la UI de firma y la maquetación del PDF no forman parte del conocimiento."
   },
   {
     "id": "seguridad-control-marcas",
     "areaKey": "seguridad",
     "areaTitle": "Seguridad",
-    "title": "Control de marcas",
-    "summary": "Permite consultar y revisar marcas de control, incluyendo historial de marcas.",
+    "title": "Control de marcas (entrada/salida)",
+    "summary": "Permite registrar marcas de entrada/salida de terceros escaneando o digitando la cédula (el tipo entrada/salida se alterna automáticamente según la última marca del día), ver las personas activas en sitio y consultar el historial de marcas.",
     "primaryRoute": "/seguridad/control-marcas",
     "routes": [
       { "label": "Control de marcas", "path": "/seguridad/control-marcas" },
       { "label": "Historial de marcas", "path": "/seguridad/control-marcas/historial" }
     ],
-    "keywords": ["control de marcas", "marcas", "historial marcas", "seguridad"]
+    "permissions": "Cualquier usuario autenticado puede registrar y consultar marcas. La persona debe existir en usuariosTerceros y no estar bloqueada.",
+    "keywords": ["control de marcas", "marcas", "marca", "entrada", "salida", "cedula", "activos en sitio", "historial marcas", "ingreso de personas"],
+    "userCanAskExamples": [
+      "¿Cómo registro una entrada o salida en control de marcas?",
+      "¿Cómo veo quién está activo en sitio?",
+      "¿Dónde consulto el historial de marcas?",
+      "¿Qué pasa si una persona está bloqueada?"
+    ],
+    "assistantShouldAnswer": "Explicá que en Control de marcas (/seguridad/control-marcas) se registra entrada/salida por cédula (el sistema alterna el tipo automáticamente), se ven los activos en sitio y el historial está en /seguridad/control-marcas/historial. La persona debe existir como tercero y no estar bloqueada.",
+    "limitations": "Depende de que el tercero exista en usuariosTerceros. No inventar quién está en sitio ni marcas concretas."
+  },
+  {
+    "id": "seguridad-control-terceros",
+    "areaKey": "seguridad",
+    "areaTitle": "Seguridad",
+    "title": "Control de ingreso de terceros",
+    "summary": "Registra entradas y salidas de terceros por cédula validando que no estén bloqueados y que no exista ya una marca del mismo tipo en el día. Actualiza el estado del tercero (usuariosTerceros) y deja un evento en el log (controlTerceros).",
+    "primaryRoute": "/seguridad",
+    "routes": [
+      { "label": "Seguridad (hub)", "path": "/seguridad" },
+      { "label": "Control de marcas", "path": "/seguridad/control-marcas" }
+    ],
+    "permissions": "Requiere permisos.saludOcupacional o rol administrativo/dev (helper canSaludOcupacional).",
+    "keywords": ["control de terceros", "terceros", "usuariosTerceros", "ingreso tercero", "salida tercero", "bloqueado", "cedula", "entrada", "salida"],
+    "userCanAskExamples": [
+      "¿Cómo registro el ingreso de un tercero?",
+      "¿Cuál es la diferencia entre control de marcas y control de terceros?",
+      "¿Puedo registrar una salida si la persona no marcó entrada?",
+      "¿Cómo se bloquea o desbloquea a un tercero?"
+    ],
+    "assistantShouldAnswer": "Explicá que el control de terceros vive dentro del área de Seguridad y registra entradas/salidas por cédula, validando bloqueo y duplicados del día. Requiere permiso de Salud Ocupacional o ser admin. No tiene una ruta dedicada en la navegación principal; se accede desde Seguridad.",
+    "limitations": "No existe una ruta independiente (/seguridad/control-terceros) en la navegación; la funcionalidad se integra con Control de marcas y servicios de terceros. Requiere permisos.saludOcupacional."
   },
   {
     "id": "seguridad-documentacion",
     "areaKey": "seguridad",
     "areaTitle": "Seguridad",
-    "title": "Documentación",
-    "summary": "Biblioteca documental del sistema.",
+    "title": "Documentación (biblioteca de documentos)",
+    "summary": "Biblioteca documental: cualquier usuario autenticado puede consultar y descargar los documentos (PDF) y sus colecciones. La carga, edición y organización en colecciones están reservadas a administradores.",
     "primaryRoute": "/documentacion",
     "routes": [
       { "label": "Documentación", "path": "/documentacion" }
     ],
-    "keywords": ["documentacion", "documentación", "documentos", "biblioteca", "colecciones"]
+    "permissions": "Lectura: cualquier usuario autenticado (los documentos son visibles globalmente, sin filtro por tenant). Crear/editar documentos: rol administrativo/dev y coincidencia de tenant/company. Crear/editar/eliminar colecciones: solo administrativo/dev.",
+    "keywords": ["documentacion", "documentación", "documentos", "biblioteca", "colecciones", "pdf", "subir documento", "fichas"],
+    "userCanAskExamples": [
+      "¿Dónde está la biblioteca de documentos?",
+      "¿Quién puede subir documentos?",
+      "¿Cómo busco un documento por categoría?",
+      "¿Qué es una colección de documentos?"
+    ],
+    "assistantShouldAnswer": "Indicá que la Documentación (/documentacion) es una biblioteca de PDF consultable por cualquier usuario; subir o editar documentos y administrar colecciones es solo para administradores.",
+    "limitations": "Solo se aceptan PDF. La lectura no se filtra por tenant (todos ven los mismos documentos). No inventar el contenido de documentos concretos."
+  },
+  {
+    "id": "seguridad-metricas",
+    "areaKey": "seguridad",
+    "areaTitle": "Seguridad",
+    "title": "Reportes / Métricas de Seguridad",
+    "summary": "Panel de métricas de seguridad con filtros por período (hoy, semana, mes, rango). Lee agregados diarios precalculados (dashboard_salud_daily) y aperturas. Es de solo lectura.",
+    "primaryRoute": "/seguridad/metricas",
+    "routes": [
+      { "label": "Reportes Seguridad", "path": "/seguridad/metricas" }
+    ],
+    "permissions": "Usuario autenticado con perfil; datos acotados por tenantId/company.",
+    "keywords": ["metricas seguridad", "reportes seguridad", "dashboard seguridad", "salud ocupacional metricas", "cumplimiento", "aperturas metricas"],
+    "userCanAskExamples": [
+      "¿Dónde veo los reportes de Seguridad?",
+      "¿Qué métricas hay en Seguridad?",
+      "¿Puedo filtrar las métricas por semana o mes?"
+    ],
+    "assistantShouldAnswer": "Dirigí a Reportes Seguridad (/seguridad/metricas), un dashboard de solo lectura con filtros por período alimentado por agregados diarios. No des cifras concretas en vivo.",
+    "limitations": "Solo lectura; depende de agregados precalculados (dashboard_salud_daily). No inventar cifras."
   },
   {
     "id": "recepcion-accion-descarga",
     "areaKey": "recepcion",
     "areaTitle": "Recepción",
-    "title": "Acción descarga",
-    "summary": "Permite registrar y consultar acciones de descarga del proceso de recepción.",
+    "title": "Acciones de descarga",
+    "summary": "Permite consultar la lista de acciones de descarga (con búsqueda y filtros por proveedor, andén, estado y rango de fechas) y abrir el detalle de cada acción. En el detalle se puede iniciar la descarga (registrando tipo y cantidad de bultos) y finalizarla. El hub de Recepción muestra además accesos a Aperturas, Recepción EPA y Recepción COFERSA según los permisos.",
     "primaryRoute": "/recepcion/accion-descarga",
     "routes": [
-      { "label": "Acción descarga", "path": "/recepcion/accion-descarga" },
-      { "label": "Detalle acción descarga", "path": "/recepcion/accion-descarga/:accionId" }
+      { "label": "Recepción (hub)", "path": "/recepcion" },
+      { "label": "Acciones de descarga", "path": "/recepcion/accion-descarga" },
+      { "label": "Detalle de acción de descarga", "path": "/recepcion/accion-descarga/:accionId" }
     ],
-    "keywords": ["recepcion", "recepción", "accion descarga", "acción descarga", "descarga", "ingreso", "proveedor"]
+    "permissions": "Usuario autenticado; datos acotados por tenantId/company. La tarjeta de Recepción EPA requiere permisos.despachosEPA y la de Recepción COFERSA requiere permisos.canRecepcionCofersa (o rol administrativo/dev).",
+    "keywords": ["recepcion", "accion descarga", "acciones de descarga", "descarga", "proveedor", "anden", "bultos", "iniciar descarga", "finalizar descarga", "epa", "cofersa", "general"],
+    "userCanAskExamples": [
+      "¿Qué es una acción de descarga?",
+      "¿Cómo inicio o finalizo una descarga?",
+      "¿Cómo filtro las descargas por proveedor o andén?",
+      "¿Qué puede hacer Recepción?",
+      "¿Qué diferencia hay entre Recepción General, EPA y COFERSA?"
+    ],
+    "assistantShouldAnswer": "Explicá que Recepción gestiona acciones de descarga: se listan/filtran (proveedor, andén, estado, fechas) en /recepcion/accion-descarga y en el detalle se inicia (tipo + cantidad de bultos) y finaliza la descarga. Mencioná que las acciones se clasifican en General/EPA/COFERSA y que las tarjetas EPA y COFERSA dependen de los permisos despachosEPA y canRecepcionCofersa.",
+    "limitations": "La clasificación EPA/COFERSA depende del tipo de la apertura y de permisos. No inventar el estado de descargas concretas."
   },
   {
     "id": "recepcion-metricas",
     "areaKey": "recepcion",
     "areaTitle": "Recepción",
-    "title": "Métricas de recepción",
-    "summary": "Permite consultar analíticas y métricas del proceso de recepción.",
+    "title": "Reportes / Métricas de Recepción",
+    "summary": "Panel analítico de recepción con KPIs (descargas iniciadas/finalizadas, cumplimiento, tiempos promedio), gráficos por período y por operador, desglose por andén y tiempos por proveedor. Permite exportar a Excel un libro multi-hoja (incluye Tiempos_proveedor y la sección de tendencia EPA). Unifica variaciones del nombre de un mismo proveedor.",
     "primaryRoute": "/recepcion/metricas",
     "routes": [
-      { "label": "Métricas de recepción", "path": "/recepcion/metricas" }
+      { "label": "Reportes Recepción", "path": "/recepcion/metricas" }
     ],
-    "keywords": ["metricas recepcion", "métricas recepción", "analitica recepcion", "reporte recepcion", "tiempos proveedor"]
+    "permissions": "Usuario autenticado; datos acotados por tenantId/company.",
+    "keywords": ["metricas recepcion", "reportes recepcion", "analitica recepcion", "tiempos proveedor", "cumplimiento", "exportar excel", "anden", "operador", "dashboard recepcion"],
+    "userCanAskExamples": [
+      "¿Dónde veo las métricas de recepción?",
+      "¿Qué reportes hay en Recepción?",
+      "¿Puedo exportar el reporte de recepción a Excel?",
+      "¿Cómo veo los tiempos por proveedor?"
+    ],
+    "assistantShouldAnswer": "Dirigí a Reportes Recepción (/recepcion/metricas): KPIs, gráficos por período/operador, desglose por andén y tiempos por proveedor, con exportación a Excel multi-hoja. No des cifras concretas en vivo.",
+    "limitations": "Depende de agregados (dashboard_salud_daily) y acciones de descarga; la exportación a Excel puede tardar en rangos grandes. No inventar cifras."
   },
   {
     "id": "mantenimiento-equipos",
     "areaKey": "mantenimiento",
     "areaTitle": "Mantenimiento",
     "title": "Panel de equipos",
-    "summary": "Permite listar equipos del ámbito del usuario, filtrar por estado/familia/revisión, agregar equipos, abrir el detalle de un equipo y revisar información operativa del equipo.",
+    "summary": "Permite listar los equipos del ámbito del usuario y filtrarlos por estado, familia (montacargas, apilador, carretilla) y estado de revisión; abrir el detalle de un equipo; agregar y editar equipos; marcar/resolver fallas activas; y enviar por correo la etiqueta QR de un equipo (vía Cloud Function sendEquipoQrLabel).",
     "primaryRoute": "/mantenimiento/equipos",
     "routes": [
       { "label": "Panel de equipos", "path": "/mantenimiento/equipos" },
       { "label": "Detalle de equipo", "path": "/mantenimiento/equipos/:id" }
     ],
-    "keywords": ["equipo", "equipos", "panel de equipos", "agregar equipo", "estado equipo", "familia", "revision", "revisión", "checklist", "codigo", "código", "qr", "falla activa", "detalle equipo"]
+    "permissions": "Requiere permisos.mantenimiento o rol administrativo/dev (helpers canGestionEquipos / canMantenimientoOT). El checklist diario del equipo puede registrarlo cualquier usuario autenticado.",
+    "keywords": ["equipo", "equipos", "panel de equipos", "agregar equipo", "estado equipo", "familia", "montacargas", "apilador", "carretilla", "revision", "checklist", "codigo", "qr", "falla activa", "responsable", "detalle equipo"],
+    "userCanAskExamples": [
+      "¿Qué hay sobre equipos en esta app?",
+      "¿Cómo registro o agrego un equipo?",
+      "¿Cómo envío el código QR de un equipo por correo?",
+      "¿Qué equipos tienen falla activa o revisión pendiente?",
+      "¿Cómo cambio el responsable o el estado de un equipo?"
+    ],
+    "assistantShouldAnswer": "Explicá que en Mantenimiento › Equipos (/mantenimiento/equipos) se listan y filtran los equipos (por estado, familia y revisión), se agregan/editan, se gestionan fallas activas y se puede enviar la etiqueta QR por correo. Aclará que requiere permiso de mantenimiento o ser admin/dev.",
+    "limitations": "Requiere permisos.mantenimiento (o admin/dev). El envío de QR necesita un correo destino. No inventar datos de equipos concretos."
   },
   {
     "id": "mantenimiento-ots",
     "areaKey": "mantenimiento",
     "areaTitle": "Mantenimiento",
-    "title": "Órdenes de trabajo de mantenimiento",
-    "summary": "Permite consultar y gestionar órdenes de trabajo, ver tablero de gestión, finalizadas, detalle de solicitud y dashboard de métricas de OTs.",
+    "title": "Órdenes de trabajo (OTs) de Mantenimiento",
+    "summary": "Permite crear OTs, gestionarlas en un tablero por estados (Solicitada → En proceso → En revisión → Finalizada), administrar subtareas con cronómetro de trabajo, abrir el detalle de cada solicitud, consultar las finalizadas y ver el dashboard de métricas. El dashboard incluye KPIs como Solicitudes por estado, % Resueltas (finalizadas/total) y Tiempo Respuesta promedio (a partir del campo tiempoRespuesta que se calcula al finalizar la OT, excluyendo fines de semana).",
     "primaryRoute": "/mantenimiento/ots",
     "routes": [
-      { "label": "Órdenes de trabajo", "path": "/mantenimiento/ots" },
+      { "label": "Órdenes de trabajo (hub)", "path": "/mantenimiento/ots" },
       { "label": "Tablero / Gestión", "path": "/mantenimiento/OTsPage" },
       { "label": "OTs finalizadas", "path": "/mantenimiento/ots/finalizadas" },
-      { "label": "Dashboard OTs", "path": "/mantenimiento/ots/dashboard" },
+      { "label": "Dashboard de OTs", "path": "/mantenimiento/ots/dashboard" },
       { "label": "Detalle de solicitud OT", "path": "/mantenimiento/ots-solicitud/:id" }
     ],
-    "keywords": ["ot", "ots", "orden de trabajo", "ordenes de trabajo", "órdenes de trabajo", "solicitud ot", "tablero", "gestion ot", "gestión ot", "finalizadas", "dashboard ots", "subtareas", "responsable"]
+    "permissions": "Requiere permisos.mantenimiento o rol administrativo/dev (helper canMantenimientoOT) para ver/gestionar OTs y subtareas. Crear una OT exige que el creador coincida (createdBy) y estado inicial 'Solicitada'.",
+    "keywords": ["ot", "ots", "orden de trabajo", "ordenes de trabajo", "solicitud ot", "tablero", "kanban", "gestion ot", "finalizadas", "dashboard ots", "subtareas", "cronometro", "tiempo respuesta", "porcentaje resueltas", "responsable"],
+    "userCanAskExamples": [
+      "¿Qué puedo hacer en mantenimiento?",
+      "¿Cómo creo una OT?",
+      "¿Dónde está el dashboard de OTs y qué métricas muestra?",
+      "¿Qué es el Tiempo Respuesta promedio y el % Resueltas?",
+      "¿Cómo agrego subtareas o cambio el estado de una OT?"
+    ],
+    "assistantShouldAnswer": "Explicá que en Mantenimiento › Órdenes de trabajo se crean OTs y se gestionan en el tablero por estados (/mantenimiento/OTsPage), con subtareas y cronómetro; las finalizadas están en /mantenimiento/ots/finalizadas y el dashboard de métricas en /mantenimiento/ots/dashboard (KPIs como % Resueltas y Tiempo Respuesta promedio). Requiere permiso de mantenimiento o ser admin/dev. Si te piden crear una OT por chat, podés ofrecer el borrador de OT (acción create_ot_draft).",
+    "limitations": "Requiere permisos.mantenimiento (o admin/dev). El campo tiempoRespuesta se fija al finalizar la OT; el promedio del dashboard se calcula sobre las OTs que lo tienen. No inventar el estado de OTs concretas."
   },
   {
     "id": "servicios-generales-ots",
     "areaKey": "servicios-generales",
     "areaTitle": "Servicios Generales",
     "title": "Órdenes de trabajo de Servicios Generales",
-    "summary": "Permite entrar al hub de OTs de Servicios Generales, crear una OT y consultar la gestión de OTs.",
+    "summary": "Permite crear una OT desde Servicios Generales (mismo formulario y colección solicitudesOT que Mantenimiento) y consultar la gestión de OTs (en proceso y solicitadas, con filtro 'mis solicitudes' y barra de progreso de subtareas). Abrir el detalle completo de una OT requiere permiso de mantenimiento.",
     "primaryRoute": "/servicios-generales/ordenes-trabajo",
     "routes": [
-      { "label": "Órdenes de trabajo", "path": "/servicios-generales/ordenes-trabajo" },
+      { "label": "Órdenes de trabajo (hub)", "path": "/servicios-generales/ordenes-trabajo" },
       { "label": "Crear OT", "path": "/servicios-generales/ordenes-trabajo/crear" },
       { "label": "Gestión de OTs", "path": "/servicios-generales/ordenes-trabajo/gestion" }
     ],
-    "keywords": ["servicios generales", "crear ot", "crear orden", "orden trabajo servicios", "gestion ots servicios", "gestión ots servicios"]
-  },
-  {
-    "id": "servicios-generales-validar-ingreso",
-    "areaKey": "servicios-generales",
-    "areaTitle": "Servicios Generales",
-    "title": "Validar ingreso",
-    "summary": "Permite validar ingresos desde Servicios Generales.",
-    "primaryRoute": "/servicios-generales/validar-ingreso",
-    "routes": [
-      { "label": "Validar ingreso", "path": "/servicios-generales/validar-ingreso" }
+    "permissions": "Crear y consultar la gestión: cualquier usuario autenticado (la OT se crea en solicitudesOT con estado 'Solicitada'). Abrir el detalle en Mantenimiento requiere permisos.mantenimiento o rol administrativo/dev.",
+    "keywords": ["servicios generales", "crear ot", "crear orden", "orden de trabajo servicios", "gestion ots servicios", "mis solicitudes", "solicitud"],
+    "userCanAskExamples": [
+      "¿Cómo creo una OT de servicios generales?",
+      "¿Cómo veo solo mis solicitudes de OT?",
+      "¿Por qué no puedo abrir el detalle de una OT?",
+      "¿Qué campos necesito para crear una OT?"
     ],
-    "keywords": ["validar ingreso", "ingreso", "validacion ingreso", "validación ingreso"]
+    "assistantShouldAnswer": "Indicá que en Servicios Generales › Órdenes de trabajo se crea una OT en /servicios-generales/ordenes-trabajo/crear y se consultan en /servicios-generales/ordenes-trabajo/gestion (con filtro de 'mis solicitudes'). Aclará que abrir el detalle requiere permiso de mantenimiento. Si te piden crearla por chat, podés ofrecer el borrador (acción create_ot_draft).",
+    "limitations": "El detalle completo de la OT requiere permisos.mantenimiento. La OT comparte colección (solicitudesOT) con Mantenimiento."
   },
   {
     "id": "servicios-generales-pesaje-tarimas",
     "areaKey": "servicios-generales",
     "areaTitle": "Servicios Generales",
     "title": "Pesaje de tarimas",
-    "summary": "Permite registrar y consultar pesajes de tarimas.",
+    "summary": "Permite registrar el peso de una tarima por número (con unidad kg/g/lb/oz/t, validando que el número no exista ya) y consultar el peso registrado de una tarima por su número. También accesible por el atajo /pesado.",
     "primaryRoute": "/servicios-generales/pesaje-tarimas",
     "routes": [
-      { "label": "Pesaje tarimas", "path": "/servicios-generales/pesaje-tarimas" },
+      { "label": "Pesaje tarimas (hub)", "path": "/servicios-generales/pesaje-tarimas" },
       { "label": "Registrar tarimas", "path": "/servicios-generales/pesaje-tarimas/registrar" },
-      { "label": "Consultar tarimas", "path": "/servicios-generales/pesaje-tarimas/consultar" }
+      { "label": "Consultar tarimas", "path": "/servicios-generales/pesaje-tarimas/consultar" },
+      { "label": "Atajo de pesaje", "path": "/pesado" }
     ],
-    "keywords": ["pesaje", "tarima", "tarimas", "registrar tarimas", "consultar tarimas"]
+    "permissions": "Cualquier usuario autenticado puede registrar y consultar pesajes (lectura por número de tarima; el listado completo no está habilitado).",
+    "keywords": ["pesaje", "pesar", "tarima", "tarimas", "registrar tarimas", "consultar tarimas", "peso", "pesado", "zona franca"],
+    "userCanAskExamples": [
+      "¿Cómo registro el peso de una tarima?",
+      "¿Cómo consulto el peso de una tarima?",
+      "¿Qué unidades de peso puedo usar?",
+      "¿Puedo registrar dos tarimas con el mismo número?"
+    ],
+    "assistantShouldAnswer": "Explicá que en Pesaje de tarimas se registra (/servicios-generales/pesaje-tarimas/registrar) el peso por número de tarima y se consulta por número (/servicios-generales/pesaje-tarimas/consultar). También hay un atajo /pesado.",
+    "limitations": "La colección pesajes es global (sin filtro por tenant/company). Solo se consulta por número exacto, no hay listado general. No inventar pesos concretos."
+  },
+  {
+    "id": "servicios-generales-validar-ingreso",
+    "areaKey": "servicios-generales",
+    "areaTitle": "Servicios Generales",
+    "title": "Validar ingreso",
+    "summary": "Pantalla de Servicios Generales para validar ingresos.",
+    "primaryRoute": "/servicios-generales/validar-ingreso",
+    "routes": [
+      { "label": "Validar ingreso", "path": "/servicios-generales/validar-ingreso" }
+    ],
+    "permissions": "Usuario autenticado (ruta protegida estándar).",
+    "keywords": ["validar ingreso", "ingreso", "validacion ingreso", "servicios generales"],
+    "userCanAskExamples": [
+      "¿Dónde valido un ingreso?",
+      "¿Para qué sirve Validar ingreso en Servicios Generales?"
+    ],
+    "assistantShouldAnswer": "Indicá que Validar ingreso está en Servicios Generales (/servicios-generales/validar-ingreso). Si no tenés el detalle del flujo, ofrecé la ruta y sugerí confirmarlo dentro del módulo.",
+    "limitations": "El detalle del flujo de validación de ingreso no fue documentado en profundidad; orientar a la ruta y no inventar pasos concretos."
   },
   {
     "id": "epa-aperturas-finalizadas",
     "areaKey": "epa",
     "areaTitle": "EPA",
-    "title": "Aperturas finalizadas EPA",
-    "summary": "Panel EPA para consultar aperturas finalizadas.",
-    "primaryRoute": "/epa/aperturas-finalizadas",
+    "title": "Panel EPA — Aperturas finalizadas",
+    "summary": "Panel EPA para consultar las aperturas finalizadas de tipo EPA (Recepción EPA / EPA Fiscal): lista con búsqueda (nombre, marchamo, número de expediente, número de DUA), filtros por mes/año y orden, con paginación. Desde una tarjeta se abre el detalle de la apertura.",
+    "primaryRoute": "/epa",
     "routes": [
-      { "label": "EPA", "path": "/epa" },
+      { "label": "EPA (hub)", "path": "/epa" },
       { "label": "Aperturas finalizadas EPA", "path": "/epa/aperturas-finalizadas" }
     ],
-    "keywords": ["epa", "aperturas epa", "aperturas finalizadas epa"]
+    "permissions": "Usuario autenticado; datos acotados por tenantId/company. Los usuarios con epaAdmin = true solo pueden ver el área EPA (y rutas permitidas) y no el resto de módulos.",
+    "keywords": ["epa", "aperturas epa", "aperturas finalizadas epa", "epa fiscal", "marchamo", "dua", "expediente", "epaAdmin"],
+    "userCanAskExamples": [
+      "¿Qué puede consultar EPA?",
+      "¿Dónde están las aperturas finalizadas EPA?",
+      "¿Por qué solo veo el área EPA?",
+      "¿Cómo busco una apertura EPA por marchamo o DUA?"
+    ],
+    "assistantShouldAnswer": "Explicá que el panel EPA (/epa) muestra las aperturas finalizadas de tipo EPA (/epa/aperturas-finalizadas) con búsqueda por nombre/marchamo/expediente/DUA y filtros. Si el usuario tiene epaAdmin, aclará que su acceso está restringido al área EPA.",
+    "limitations": "Solo muestra aperturas finalizadas de tipo EPA (no General ni COFERSA), con tope de registros recientes. No inventar datos de aperturas concretas."
   },
   {
     "id": "mrp-tarimas",
     "areaKey": "mrp-tarimas",
     "areaTitle": "MRP Tarimas",
     "title": "MRP de tarimas",
-    "summary": "Permite consultar dashboard, inventario, reparaciones y materiales de tarimas.",
+    "summary": "Área para la gestión integral de tarimas con dashboard, inventario, reparaciones y materiales. Las rutas están implementadas con sus pantallas correspondientes.",
     "primaryRoute": "/mrp-tarimas",
     "routes": [
       { "label": "Dashboard MRP", "path": "/mrp-tarimas/dashboard" },
@@ -184,48 +349,86 @@
       { "label": "Reparaciones", "path": "/mrp-tarimas/reparaciones" },
       { "label": "Materiales", "path": "/mrp-tarimas/materiales" }
     ],
-    "keywords": ["mrp", "tarimas", "inventario tarimas", "reparaciones tarimas", "materiales tarimas", "dashboard mrp"]
+    "permissions": "Usuario autenticado (ruta protegida estándar). Existe una clave de permiso permisos.mrpTarimas administrable desde Usuarios.",
+    "keywords": ["mrp", "tarimas", "inventario tarimas", "reparaciones tarimas", "materiales tarimas", "dashboard mrp"],
+    "userCanAskExamples": [
+      "¿Dónde veo el inventario de tarimas?",
+      "¿Cómo registro una reparación de tarima?",
+      "¿Qué módulos tiene MRP Tarimas?"
+    ],
+    "assistantShouldAnswer": "Indicá las pantallas de MRP Tarimas: Dashboard (/mrp-tarimas/dashboard), Inventario (/mrp-tarimas/inventario), Reparaciones (/mrp-tarimas/reparaciones) y Materiales (/mrp-tarimas/materiales). Orientá por ruta y no afirmes acciones concretas que no estén verificadas.",
+    "limitations": "El detalle de las acciones de escritura de MRP Tarimas no fue auditado en profundidad; orientar por ruta sin inventar flujos."
   },
   {
     "id": "administracion-usuarios",
     "areaKey": "administracion",
     "areaTitle": "Administración",
-    "title": "Usuarios y permisos",
-    "summary": "Permite gestionar usuarios, roles y permisos desde Administración.",
+    "title": "Administración de usuarios, roles y permisos",
+    "summary": "Permite gestionar los perfiles de la plataforma: cambiar el rol (dev, administrativo, operativo), activar/desactivar permisos por clave, fijar la bandera epaAdmin y asignar tenantId/company. Los permisos disponibles son: mantenimiento, saludOcupacional, canRecepcionCofersa, despachosEPA, serviciosGenerales, documentacion, zoneFranca, mrpTarimas.",
     "primaryRoute": "/administracion/usuarios",
     "routes": [
-      { "label": "Administración", "path": "/administracion" },
+      { "label": "Administración (hub)", "path": "/administracion" },
       { "label": "Usuarios", "path": "/administracion/usuarios" }
     ],
-    "keywords": ["usuario", "usuarios", "permisos", "roles", "administracion", "administración"]
+    "permissions": "Solo rol administrativo o dev (área adminOnly). Escribe en profiles/{uid}.",
+    "keywords": ["usuario", "usuarios", "permisos", "roles", "rol", "administracion", "epaAdmin", "tenant", "company", "gestionar usuarios"],
+    "userCanAskExamples": [
+      "¿Cómo gestiono usuarios?",
+      "¿Cómo cambio el rol o los permisos de un usuario?",
+      "¿Qué permisos existen en la plataforma?",
+      "¿Cómo asigno el tenant o la company de un usuario?",
+      "¿Qué módulos dependen de permisos?"
+    ],
+    "assistantShouldAnswer": "Explicá que en Administración › Usuarios (/administracion/usuarios) los administradores cambian rol, permisos (las 8 claves), epaAdmin y tenant/company de cada perfil. Aclará que es solo para administrativo/dev. Si preguntan qué módulos dependen de permisos, mencioná: Mantenimiento (mantenimiento), Visados/Terceros (saludOcupacional), Recepción EPA (despachosEPA), Recepción COFERSA (canRecepcionCofersa).",
+    "limitations": "Solo administrativo/dev. Cambiar permisos no desactiva el perfil. La bandera epaAdmin se gestiona aparte del mapa de permisos."
   },
   {
     "id": "administracion-horas-extra",
     "areaKey": "administracion",
     "areaTitle": "Administración",
     "title": "Horas Extra",
-    "summary": "Permite consultar Horas Extra, aprobaciones de gerencia y reporte mensual.",
+    "summary": "Flujo de horas extra: aprobaciones de coordinador, aprobaciones de gerencia, reporte mensual, administración de usuarios/coordinadores y override de horarios, y consulta de marcas de asistencia. Los registros provienen de la API interna de asistencia (Bit2) vía Cloud Functions; las decisiones se guardan en Firestore.",
     "primaryRoute": "/horas-extra",
     "routes": [
-      { "label": "Horas Extra", "path": "/horas-extra" },
+      { "label": "Horas Extra (aprobaciones)", "path": "/horas-extra" },
       { "label": "Aprobaciones gerencia", "path": "/horas-extra/gerencia" },
-      { "label": "Reporte mensual", "path": "/horas-extra/reporte" }
+      { "label": "Reporte mensual", "path": "/horas-extra/reporte" },
+      { "label": "Usuarios / coordinadores horas extra", "path": "/horas-extra/usuarios" },
+      { "label": "Marcas de asistencia", "path": "/horas-extra/marcas" }
     ],
-    "keywords": ["horas extra", "aprobaciones gerencia", "gerencia", "reporte mensual"]
+    "permissions": "Rutas de Administración (administrativo/dev). Las decisiones y la configuración usan Cloud Functions que revalidan en el servidor; el rol dev ve todos los registros, otros se filtran por coordinador.",
+    "keywords": ["horas extra", "aprobaciones", "gerencia", "reporte mensual", "coordinador", "override horario", "marcas asistencia", "asistencia", "bit2", "MB02", "MB03", "MB17"],
+    "userCanAskExamples": [
+      "¿Cómo se aprueban las horas extra?",
+      "¿Dónde está el reporte mensual de horas extra?",
+      "¿Qué diferencia hay entre aprobación de coordinador y de gerencia?",
+      "¿Dónde configuro los coordinadores o los horarios?",
+      "¿Dónde veo las marcas de asistencia?"
+    ],
+    "assistantShouldAnswer": "Explicá el flujo de Horas Extra: aprobaciones de coordinador (/horas-extra), aprobaciones de gerencia (/horas-extra/gerencia), reporte mensual (/horas-extra/reporte), administración de coordinadores y overrides de horario (/horas-extra/usuarios) y marcas de asistencia (/horas-extra/marcas). Aclará que es de Administración (admin/dev) y que los datos vienen de la API de asistencia.",
+    "limitations": "Solo Administración (admin/dev). Depende de la API interna de asistencia (Bit2). No inventar registros ni horas concretas. La configuración de cortes y coordinadores vive en colecciones overtime*."
   },
   {
     "id": "dev-tools",
     "areaKey": "dev",
     "areaTitle": "Dev",
-    "title": "Herramientas Dev",
-    "summary": "Herramientas internas para desarrollo, actualización Supabase y configuración de módulos.",
+    "title": "Herramientas de desarrollo",
+    "summary": "Herramientas internas para desarrollo: actualización de AppOLO Supabase y configuración de módulos (incluida la configuración de Horas Extra).",
     "primaryRoute": "/dev",
     "routes": [
-      { "label": "Dev", "path": "/dev" },
+      { "label": "Dev (hub)", "path": "/dev" },
       { "label": "Update AppOLO Supabase", "path": "/dev/update-supabase" },
       { "label": "Configuración de módulos", "path": "/dev/config-modulos" },
-      { "label": "Horas Extra config", "path": "/dev/config-modulos/horas-extra" }
+      { "label": "Configuración de Horas Extra", "path": "/dev/config-modulos/horas-extra" }
     ],
-    "keywords": ["dev", "desarrollo", "supabase", "configuracion modulos", "configuración módulos"]
+    "permissions": "Solo rol dev (área devOnly).",
+    "keywords": ["dev", "desarrollo", "supabase", "configuracion modulos", "config modulos", "herramientas internas"],
+    "userCanAskExamples": [
+      "¿Qué herramientas de desarrollo existen?",
+      "¿Dónde configuro los módulos?",
+      "¿Qué es Update AppOLO Supabase?"
+    ],
+    "assistantShouldAnswer": "Indicá que el área Dev (/dev) es solo para rol dev e incluye Update AppOLO Supabase y Configuración de módulos. No sugieras estas rutas a usuarios sin rol dev.",
+    "limitations": "Solo rol dev. No sugerir a otros roles."
   }
 ]

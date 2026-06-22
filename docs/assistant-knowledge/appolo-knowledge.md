@@ -85,14 +85,30 @@ Dos ejes ortogonales en `profiles/{uid}`:
 - **`role`**:
   - `administrativo` y `dev` → acceso amplio (`isAdminRequester()` en las reglas).
   - `operativo` → accesos acotados (p. ej. checklists diarias de equipos).
-- **`permisos`**: mapa de booleanos por módulo. Claves conocidas:
-  - `permisos.mantenimiento`
-  - `permisos.saludOcupacional`
-  - `permisos.canRecepcionCofersa`
-  - `permisos.despachosEPA`
+- **`permisos`**: mapa de booleanos por módulo. Se administran desde
+  **Administración › Usuarios** (`UserHub.jsx`, `PERMISOS_KEYS`). Las 8 claves:
+  - `permisos.mantenimiento` — Equipos y OTs de Mantenimiento *(reforzada en reglas)*
+  - `permisos.saludOcupacional` — Visados y control de terceros *(reforzada en reglas)*
+  - `permisos.canRecepcionCofersa` — Recepción COFERSA *(reforzada en reglas)*
+  - `permisos.despachosEPA` — Recepción EPA *(reforzada en reglas)*
+  - `permisos.serviciosGenerales` — Servicios Generales *(administrable)*
+  - `permisos.documentacion` — Documentación *(administrable; lectura abierta)*
+  - `permisos.zoneFranca` — Zona Franca / pesaje *(administrable)*
+  - `permisos.mrpTarimas` — MRP Tarimas *(administrable)*
+
+Solo las primeras cuatro están reforzadas en `firestore.rules` (vía
+`hasPerm()`); el resto son banderas administrables que controlan visibilidad.
 
 Además, `role: "dev"` desbloquea rutas de desarrollo y `administrativo`/`dev`
 desbloquean Administración y Horas Extra.
+
+### ¿Qué módulos dependen de permisos?
+- **Mantenimiento** (equipos + OTs): `permisos.mantenimiento` o admin/dev.
+- **Visados y control de terceros** (Seguridad): `permisos.saludOcupacional` o admin/dev.
+- **Recepción EPA**: `permisos.despachosEPA` o admin/dev.
+- **Recepción COFERSA**: `permisos.canRecepcionCofersa` o admin/dev.
+- **Administración / Horas Extra**: rol `administrativo` o `dev`.
+- **Dev**: solo rol `dev`.
 
 ---
 
@@ -181,9 +197,21 @@ El menú visible se filtra según rol y `epaOnly`.
 ### 6.9 Administración *(solo `administrativo` / `dev`)*
 - **Ruta:** `/administracion` · **Tag:** Administración
 - **Descripción:** Gestión de usuarios, roles y permisos de la plataforma.
-- **Módulos:** Usuarios (`/administracion/usuarios`), Horas Extra (`/horas-extra`) → Aprobaciones gerencia (`/horas-extra/gerencia`), Reporte mensual (`/horas-extra/reporte`).
+- **Módulos:**
+  - Usuarios (`/administracion/usuarios`) — gestiona rol, los 8 permisos, la
+    bandera `epaAdmin` y `tenantId`/`company` de cada perfil.
+  - Horas Extra (`/horas-extra`) → Aprobaciones gerencia (`/horas-extra/gerencia`),
+    Reporte mensual (`/horas-extra/reporte`), Usuarios/coordinadores
+    (`/horas-extra/usuarios`), Marcas de asistencia (`/horas-extra/marcas`).
+- **Flujo de Horas Extra:** los registros provienen de la API interna de
+  asistencia (Bit2) vía Cloud Functions; coordinador aprueba/rechaza, gerencia
+  valida, y el reporte mensual agrega por empleado y tipo (MB02/MB03/MB17). Las
+  decisiones se guardan en Firestore (`overtimeApprovals`, `overtime_control`,
+  `overtime_manager_validated`); coordinadores y overrides de horario en
+  `overtimeUsers` / `overtimeConfig`.
 - **Preguntas que el bot podría responder:** cómo se aprueban horas extra, dónde
-  está el reporte mensual, cómo se gestionan usuarios y permisos.
+  está el reporte mensual, cómo se gestionan usuarios y permisos, dónde se
+  configuran coordinadores y horarios, dónde se ven las marcas de asistencia.
 
 ### 6.10 Dev *(solo `dev`)*
 - **Ruta:** `/dev` · **Tag:** Desarrollo
@@ -292,3 +320,64 @@ Hay una regla de lectura por `collectionGroup("fotos")`.
   sugerir a qué módulo o ruta ir.
 - Distingue siempre entre **documentación general** (este conocimiento) y
   **datos en vivo** (no disponibles aún).
+- **Excepción de escritura:** el asistente puede iniciar la creación de una
+  **Orden de Trabajo** (ver sección 13). n8n solo propone el borrador; la app lo
+  confirma y lo escribe en `solicitudesOT`.
+
+---
+
+## 13. Acción del asistente: crear una OT (`create_ot_draft`)
+
+El asistente puede **proponer** un borrador de Orden de Trabajo. n8n devuelve, en
+su respuesta, un objeto `action`:
+
+```json
+{
+  "answer": "Te preparé un borrador de OT. Revisá los campos y confirmá.",
+  "action": {
+    "type": "create_ot_draft",
+    "draft": {
+      "nombreOT": "Fuga en tubería del baño piso 2",
+      "activoReferencia": "Baño hombres piso 2",
+      "departamento": "Control",
+      "lugarProblema": "Piso #2",
+      "tipoProblema": "Fontanería",
+      "descripcionOT": "Hay una fuga constante bajo el lavamanos.",
+      "notas": ""
+    }
+  }
+}
+```
+
+**Quién crea qué:** n8n **NO** crea la OT; solo propone el `draft`. La app
+(`AssistantModal.jsx`) normaliza el borrador contra los catálogos oficiales,
+infiere `tipoProblema` por palabras clave, valida los obligatorios y muestra una
+tarjeta editable. Cuando el usuario presiona **Crear OT**, la **app** escribe el
+documento en `solicitudesOT` (`addDoc`).
+
+**Campos obligatorios:** `nombreOT`, `activoReferencia`, `departamento`,
+`lugarProblema`, `tipoProblema`, `descripcionOT`. Opcional: `notas`.
+
+**Catálogos oficiales (deben coincidir exactamente; se normaliza sin acentos/mayúsculas):**
+- **departamento:** CEDI · Comercio exterior · Control · Ingeniería · Personal ·
+  Sistema · Transportes · Ventas
+- **lugarProblema:** CEDI · Parqueo · Piso #1 · Piso #2 · Piso #3 · Vehículo/Flota
+- **tipoProblema:** Aire acondicionado · Albañilería · Banda transportadora ·
+  Camaras / CCTV · Carpintería · Control de plagas · Equipos · Fontanería ·
+  Iluminación · Instalación eléctrica · Pisos · Puertas y portones · Racks ·
+  Rotulaciones · Sistema de incendios · Soldadura · Techos
+
+**Validación:** si un valor de `departamento`/`lugarProblema`/`tipoProblema` no
+coincide con el catálogo, queda en blanco y el campo se marca como pendiente; la
+OT no se crea hasta que todos los obligatorios sean válidos.
+
+**La app fija automáticamente:** `OTState = "Solicitada"`,
+`NroSolicitud = "SOL-OT-<timestamp>"`, fecha de hoy, `createdAt`/`updatedAt`,
+`createdBy` (uid), `solicitanteNombre`/`solicitanteFicha`/`createdArea` desde el
+perfil, y `tenantId`/`company` si están en el perfil.
+
+**Rutas sugeridas tras crear:** Gestión de OTs (`/mantenimiento/OTsPage`) y OTs de
+Servicios Generales (`/servicios-generales/ordenes-trabajo/gestion`).
+
+> Esta es la única acción de escritura del asistente. El resto de la
+> interacción es orientación sobre funcionamiento, módulos y rutas.
