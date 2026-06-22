@@ -20,8 +20,8 @@ import {
   X,
 } from "lucide-react";
 import { addDoc, collection, collectionGroup, deleteDoc, doc, getDocs, orderBy, query } from "firebase/firestore";
-import { auth, db } from "../firebase";
-import { AuthCtx } from "../auth/AuthProvider";
+import { auth, db } from "../../../firebase";
+import { AuthCtx } from "../../../auth/AuthProvider";
 import {
   Badge,
   Brand,
@@ -35,7 +35,7 @@ import {
   Spinner,
   TableScroll,
   Topbar,
-} from "../components/ui";
+} from "../../../components/ui";
 import {
   ACCENT,
   ACCENT_SOFT,
@@ -51,9 +51,9 @@ import {
   TEXT,
   WARN_BG,
   WARN_BORDER,
-} from "../styles/theme";
-import { useOvertimeCutoff } from "../hooks/useOvertimeCutoff";
-import OvertimeCutoffBanner from "../components/OvertimeCutoffBanner";
+} from "../../../styles/theme";
+import { useOvertimeCutoff } from "../../../hooks/useOvertimeCutoff";
+import OvertimeCutoffBanner from "../../../components/OvertimeCutoffBanner";
 
 function safeText(value) {
   return String(value ?? "").trim();

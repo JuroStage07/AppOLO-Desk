@@ -1,13 +1,12 @@
-import React, { useContext } from "react";
+import React from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import AuthProvider from "./auth/AuthProvider";
-import { AuthCtx } from "./auth/AuthProvider";
 import RequireAuth from "./auth/RequireAuth";
 import PrivateRoute from "./auth/PrivateRoute";
 import RequireRole from "./auth/RequireRole";
 
-import { ToastProvider, ConfirmProvider, CircleMenu, AssistantModal, CommandPalette } from "./components/ui";
+import { ToastProvider, ConfirmProvider, CircleMenu, AssistantModal, FloatingChatButton, CommandPalette } from "./components/ui";
 
 import Login from "./pages/Login";
 import HomeHub from "./pages/HomeHub";
@@ -51,18 +50,18 @@ import AccionDescarga from "./pages/Recepcion/AccionDescarga/AccionDescarga";
 import AccionDetalle from "./pages/Recepcion/AccionDescarga/AccionDetalle";
 import MetricaRecepcion from "./pages/Recepcion/MetricaRecepcion";
 
-import OvertimeApprovals from "./pages/OvertimeApprovals";
-import OvertimeManagerApprovals from "./pages/OvertimeManagerApprovals";
-import OvertimeMonthlyReport from "./pages/OvertimeMonthlyReport";
+import OvertimeApprovals from "./pages/Administracion/Overtime/OvertimeApprovals";
+import OvertimeManagerApprovals from "./pages/Administracion/Overtime/OvertimeManagerApprovals";
+import OvertimeMonthlyReport from "./pages/Administracion/Overtime/OvertimeMonthlyReport";
 
 import EPAHubPage from "./pages/EPA/EPAHubPage";
 import AperturasFinalizadasEPA from "./pages/EPA/AperturasFinalizadasEPA";
 import DevHub from "./pages/Dev/DevHub";
 import UpdateSupabasePage from "./pages/Dev/UpdateSupabasePage";
 import ModulesConfigHub from "./pages/Dev/ModulesConfigHub";
-import OvertimeSettingsHub from "./pages/Dev/OvertimeSettingsHub";
+import OvertimeSettingsHub from "./pages/Administracion/Overtime/OvertimeSettingsHub";
 import AdministracionHub from "./pages/Administracion/AdministracionHub";
-import OvertimeUsersAdmin from "./pages/Administracion/OvertimeUsersAdmin";
+import OvertimeUsersAdmin from "./pages/Administracion/Overtime/OvertimeUsersAdmin";
 import AttendanceMarks from "./pages/Administracion/AttendanceMarks";
 import UserHub from "./pages/Administracion/UserHub";
 import ServiciosGenerales from "./pages/ServiciosGenerales/ServiciosGenerales";
@@ -81,34 +80,8 @@ import MRPInventarioPage from "./pages/MRP/MRPInventarioPage";
 import MRPReparacionesPage from "./pages/MRP/MRPReparacionesPage";
 import MRPMaterialesPage from "./pages/MRP/MRPMaterialesPage";
 
-import useIsMobile from "./hooks/useIsMobile";
 
-function TenantScopeBadge() {
-  const { user, profile, loading } = useContext(AuthCtx);
-  const location = useLocation();
-  const isMobile = useIsMobile();
 
-  if (location.pathname === "/login") return null;
-  if (!user || loading) return null;
-
-  const tenantId = String(profile?.tenantId || "").trim();
-  const company = String(profile?.company || "").trim();
-  const region =
-    String(profile?.region || "").trim() ||
-    String(profile?.regionId || "").trim() ||
-    String(profile?.regionName || "").trim();
-
-  const primary = tenantId || region || "Sin tenant";
-  const secondary = company || (tenantId && region ? region : "");
-
-  return (
-    <div style={scopeBadge.wrap} role="status" aria-live="polite">
-      <div style={scopeBadge.kicker}>Contexto actual</div>
-      <div style={scopeBadge.primary}>{primary}</div>
-      {!isMobile && !!secondary && <div style={scopeBadge.secondary}>{secondary}</div>}
-    </div>
-  );
-}
 
 /** Redirects legacy /salud/* paths to the renamed /seguridad/* routes. */
 function SaludLegacyRedirect() {
@@ -124,9 +97,9 @@ export default function App() {
       <AuthProvider>
         <ToastProvider>
         <ConfirmProvider>
-        <TenantScopeBadge />
         <CircleMenu />
         <AssistantModal />
+        <FloatingChatButton />
         <CommandPalette />
         <Routes>
           {/* Públicas */}
@@ -689,41 +662,3 @@ export default function App() {
   );
 }
 
-const scopeBadge = {
-  wrap: {
-    position: "fixed",
-    bottom: "max(8px, env(safe-area-inset-bottom))",
-    right: 8,
-    zIndex: 20000,
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(248,250,252,0.94) 100%)",
-    color: "#0F172A",
-    border: "1px solid rgba(15,23,42,0.08)",
-    borderRadius: 10,
-    padding: "5px 8px",
-    display: "grid",
-    gap: 1,
-    pointerEvents: "none",
-    boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
-    backdropFilter: "blur(4px)",
-    maxWidth: "min(70vw, 200px)",
-  },
-  kicker: {
-    fontSize: 8,
-    fontWeight: 900,
-    color: "#089F8A",
-    letterSpacing: 0.3,
-    textTransform: "uppercase",
-  },
-  primary: {
-    fontSize: 10,
-    fontWeight: 900,
-    lineHeight: 1.2,
-    color: "#0F172A",
-  },
-  secondary: {
-    fontSize: 9,
-    fontWeight: 800,
-    color: "#64748B",
-  },
-};

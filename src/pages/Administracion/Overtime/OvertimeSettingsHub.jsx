@@ -24,11 +24,11 @@ import {
   query,
   setDoc,
 } from "firebase/firestore";
-import { auth, db } from "../../firebase";
+import { auth, db } from "../../../firebase";
 import {
   getOvertimeCoordinators,
   saveCoordinatorEmails,
-} from "../../services/overtimeApi";
+} from "../../../services/overtimeApi";
 import {
   Badge,
   Brand,
@@ -48,7 +48,7 @@ import {
   Spinner,
   Topbar,
   useToast,
-} from "../../components/ui";
+} from "../../../components/ui";
 import {
   ACCENT,
   BORDER,
@@ -57,7 +57,7 @@ import {
   SLATE,
   SURFACE,
   TEXT,
-} from "../../styles/theme";
+} from "../../../styles/theme";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ROLES = ["Coordinador", "Gerente"];

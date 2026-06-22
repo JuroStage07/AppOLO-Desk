@@ -22,9 +22,9 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { auth, db } from "../firebase";
-import { AuthCtx } from "../auth/AuthProvider";
-import { getOvertimeRecords, decideOvertimeRecord } from "../services/overtimeApi";
+import { auth, db } from "../../../firebase";
+import { AuthCtx } from "../../../auth/AuthProvider";
+import { getOvertimeRecords, decideOvertimeRecord } from "../../../services/overtimeApi";
 import {
   Badge,
   Brand,
@@ -38,7 +38,7 @@ import {
   Spinner,
   StatusPill,
   Topbar,
-} from "../components/ui";
+} from "../../../components/ui";
 import {
   ACCENT,
   BORDER,
@@ -47,9 +47,9 @@ import {
   SLATE,
   SURFACE,
   TEXT,
-} from "../styles/theme";
-import { useOvertimeCutoff } from "../hooks/useOvertimeCutoff";
-import OvertimeCutoffBanner from "../components/OvertimeCutoffBanner";
+} from "../../../styles/theme";
+import { useOvertimeCutoff } from "../../../hooks/useOvertimeCutoff";
+import OvertimeCutoffBanner from "../../../components/OvertimeCutoffBanner";
 
 const STATUS_TONE = {
   approved: "ok",

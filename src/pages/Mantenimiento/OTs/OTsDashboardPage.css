@@ -121,34 +121,48 @@
 
 .otsDashboard__kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
   margin-bottom: 1.25rem;
 }
 
 .otsDashboard__kpi {
   background: #fff;
   border: 1px solid #e7e9f2;
-  border-radius: 16px;
-  padding: 14px 16px;
+  border-radius: 14px;
+  padding: 12px 12px;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
+  min-width: 0;
 }
 
 .otsDashboard__kpi-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   margin-bottom: 6px;
 }
 
 .otsDashboard__kpi-value {
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 950;
   color: #0f172a;
   letter-spacing: -0.5px;
   line-height: 1.1;
+}
+
+@media (max-width: 920px) {
+  .otsDashboard__kpis {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+
+.otsDashboard__kpi-sub {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
 }
 
 .otsDashboard__highlight {

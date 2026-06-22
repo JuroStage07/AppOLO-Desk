@@ -170,7 +170,7 @@ export default function MetricaSaludOcupacional() {
                 <Brand
                     icon={BarChart3}
                     title="Salud Ocupacional"
-                    subtitle="Panel de métricas"
+                    subtitle="Reportes Seguridad"
                     onClick={() => nav("/seguridad")}
                 />
                 <Topbar.Right>
@@ -190,9 +190,9 @@ export default function MetricaSaludOcupacional() {
                                 <span style={ui.badge}>{currentData.heroBadge}</span>
                             </div>
 
-                            <h1 style={ui.title}>Estadísticas</h1>
+                            <h1 style={ui.title}>Reportes Seguridad</h1>
                             <p style={ui.subtitle}>
-                                Panel ejecutivo con métricas preliminares de Salud Ocupacional.
+                                Panel ejecutivo con reportes preliminares de Salud Ocupacional.
                                 Esta vista deja definidos los indicadores clave y la estructura para integrar datos reales.
                             </p>
                         </div>

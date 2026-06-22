@@ -22,6 +22,47 @@ const allowedProblemPlacesByKey = new Map(
   OT_LUGARES_PROBLEMA.map((lugar) => [normalizeProblemTypeKey(lugar), lugar])
 );
 
+/**
+ * Convierte el string `tiempoRespuesta` (p. ej. "5 hrs", "2 d 3 hrs", "1 hr")
+ * a horas. Devuelve null si no hay un valor numérico reconocible.
+ */
+function parseTiempoRespuestaHours(value) {
+  const str = String(value || "").trim();
+  if (!str) return null;
+  const daysMatch = str.match(/(\d+)\s*d\b/);
+  const hoursMatch = str.match(/(\d+)\s*hr/);
+  if (!daysMatch && !hoursMatch) return null;
+  const days = daysMatch ? Number(daysMatch[1]) : 0;
+  const hours = hoursMatch ? Number(hoursMatch[1]) : 0;
+  return days * 24 + hours;
+}
+
+/** Formatea horas (entero) al mismo estilo que la app: "2 d 3 hrs" / "5 hrs". */
+function formatTiempoRespuestaHours(totalHours) {
+  const total = Math.max(0, Math.round(Number(totalHours) || 0));
+  const days = Math.floor(total / 24);
+  const hours = total % 24;
+  if (days > 0) return `${days} d ${hours} hrs`;
+  return `${total} ${total === 1 ? "hr" : "hrs"}`;
+}
+
+function avgTiempoRespuesta(rows) {
+  let sum = 0;
+  let count = 0;
+  for (const r of rows) {
+    const hrs = parseTiempoRespuestaHours(r?.tiempoRespuesta);
+    if (hrs == null) continue;
+    sum += hrs;
+    count += 1;
+  }
+  const hours = count > 0 ? sum / count : 0;
+  return {
+    count,
+    hours,
+    label: count > 0 ? formatTiempoRespuestaHours(hours) : "—",
+  };
+}
+
 function startOfWeekMonday(d) {
   const x = new Date(d);
   x.setHours(12, 0, 0, 0);
@@ -203,6 +244,7 @@ export function computeOTsDashboardMetrics({ rows, period, customFrom, customTo 
   const { busiest, quietest, series: byCalendarDay } = busiestQuietestByCalendar(filtered);
   const summary = stateSummary(filtered);
   const lowTraffic = lowTrafficHints(filtered);
+  const tiempoRespuestaPromedio = avgTiempoRespuesta(filtered);
 
   const topSolicitantes = topByField(filtered, {
     idField: "solicitanteFicha",
@@ -275,6 +317,7 @@ export function computeOTsDashboardMetrics({ rows, period, customFrom, customTo 
   return {
     range: { start, end },
     summary,
+    tiempoRespuestaPromedio,
     byRangeDate,
     busiestDay: busiest,
     quietestDay: quietest,

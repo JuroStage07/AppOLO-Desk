@@ -58,9 +58,9 @@ export default function SSOHub() {
         tag: "Prioritario",
       },
       {
-        key: "estadisticas",
-        title: "Estadísticas",
-        desc: "Métricas y visualización general del área",
+        key: "reportes",
+        title: "Reportes Seguridad",
+        desc: "Reportes y visualización general del área",
         path: "/seguridad/metricas",
         icon: BarChart3,
         tag: "Analítica",

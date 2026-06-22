@@ -90,6 +90,7 @@ export default function OTsDashboardPage() {
             departamento: data.departamento || data.departamentoBase || "",
             lugarProblema: data.lugarProblema || "",
             tipoProblema: data.tipoProblema || "",
+            tiempoRespuesta: data.tiempoRespuesta || "",
           });
         });
         setRows(list);
@@ -224,6 +225,18 @@ export default function OTsDashboardPage() {
         <div className="otsDashboard__kpi">
           <div className="otsDashboard__kpi-label">Finalizadas</div>
           <div className="otsDashboard__kpi-value">{metrics.summary.finalizada}</div>
+        </div>
+        <div className="otsDashboard__kpi">
+          <div className="otsDashboard__kpi-label">% Resueltas</div>
+          <div className="otsDashboard__kpi-value">
+            {metrics.summary.total > 0
+              ? `${Math.round((metrics.summary.finalizada / metrics.summary.total) * 100)}%`
+              : "—"}
+          </div>
+        </div>
+        <div className="otsDashboard__kpi">
+          <div className="otsDashboard__kpi-label">Tiempo Respuesta promedio</div>
+          <div className="otsDashboard__kpi-value">{metrics.tiempoRespuestaPromedio.label}</div>
         </div>
       </section>
 

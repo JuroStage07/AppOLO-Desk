@@ -9,7 +9,7 @@ import {
   User,
 } from "lucide-react";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import { db } from "../firebase";
+import { db } from "../../../firebase";
 import {
   Badge,
   Brand,
@@ -23,7 +23,7 @@ import {
   Spinner,
   TableScroll,
   Topbar,
-} from "../components/ui";
+} from "../../../components/ui";
 import {
   ACCENT,
   ACCENT_SOFT,
@@ -33,7 +33,7 @@ import {
   SURFACE,
   SURFACE_INSET,
   TEXT,
-} from "../styles/theme";
+} from "../../../styles/theme";
 
 const OT_TYPES = {
   MB02: { code: "MB02", label: "Extra ×1.5", color: "#0D9488", bg: "rgba(13,148,136,0.12)", border: "rgba(13,148,136,0.30)" },

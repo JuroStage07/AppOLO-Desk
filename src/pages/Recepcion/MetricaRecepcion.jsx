@@ -551,6 +551,25 @@ function actionProveedorLabel(row) {
   return normalizeProveedorLabel(name) || "Sin proveedor";
 }
 
+/**
+ * Clave de fusión para unificar variaciones del mismo proveedor
+ * (p. ej. "Metalco", "METALCO 2", "Metalco S.A." → "metalco"). Quita acentos,
+ * número final, sufijos societarios y normaliza espacios.
+ */
+function proveedorFusionKey(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+\d+$/g, "")          // "metalco 2" → "metalco"
+    .replace(/\s*s\.?\s*a\.?$/gi, "") // "empresa s.a." → "empresa"
+    .replace(/\s*s\.?\s*r\.?\s*l\.?$/gi, "")
+    .replace(/[.,\-_]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Acciones cerradas en el período, listas para métricas por proveedor (sin agregar). */
 function filterAccionesParaMetricaProveedor(rows = [], options = {}) {
   const allowedDayKeys = options.allowedDayKeys || [];
@@ -587,12 +606,14 @@ function aggregateProviderTimesByProveedor(rows = []) {
 
   for (const row of rows) {
     const dur = actionDurationMs(row);
-    const label = actionProveedorLabel(row);
+    const display = actionProveedorLabel(row);
+    // Unifica variaciones del mismo proveedor ("Metalco" / "METALCO 2" → un grupo).
+    const key = proveedorFusionKey(display) || display.toLowerCase();
     const unidades = Number(row?.cantidadBultos ?? row?.bultos ?? 0);
 
-    if (!map.has(label)) {
-      map.set(label, {
-        label,
+    if (!map.has(key)) {
+      map.set(key, {
+        label: display,
         finalizadas: 0,
         tiempoTotalMs: 0,
         tiempoPromedioMs: 0,
@@ -600,7 +621,9 @@ function aggregateProviderTimesByProveedor(rows = []) {
       });
     }
 
-    const agg = map.get(label);
+    const agg = map.get(key);
+    // Conserva el nombre más corto/limpio como etiqueta canónica del grupo.
+    if (display && display.length < agg.label.length) agg.label = display;
     agg.finalizadas += 1;
     agg.tiempoTotalMs += Number(dur || 0);
     agg.unidades += Number.isFinite(unidades) ? unidades : 0;
@@ -2944,7 +2967,6 @@ function TeamCombinedTable({
   productivity = [],
   times = [],
   periodLabel = "",
-  excludedUsersCount = 0,
   onOpenSettings,
   onOpenUserDetail,
   onExportExcel,
@@ -3069,12 +3091,6 @@ function TeamCombinedTable({
           <div style={ui.chartSubtitle}>
             Productividad y tiempos por operador · {periodLabel}
           </div>
-          {excludedUsersCount > 0 && (
-            <div style={ui.chartMetaRow}>
-              {excludedUsersCount} usuario{excludedUsersCount === 1 ? "" : "s"} excluido
-              {excludedUsersCount === 1 ? "" : "s"} de las métricas
-            </div>
-          )}
         </div>
         <div style={ui.cardHeaderActions}>
           <button
@@ -3130,8 +3146,8 @@ function TeamCombinedTable({
           <thead>
             <tr>
               <th style={tableStyles.th}>Usuario</th>
-              <th style={tableStyles.thRight}>Cerradas</th>
               <th style={tableStyles.thRight}>Iniciadas</th>
+              <th style={tableStyles.thRight}>Cerradas</th>
               <th style={tableStyles.thRight}>Unidades</th>
               <th style={tableStyles.thRight}>T. Promedio</th>
               <th style={tableStyles.thRight}>T. Total</th>
@@ -3142,8 +3158,8 @@ function TeamCombinedTable({
             {merged.map((row, idx) => (
               <tr key={row.label + String(idx)} style={{ background: idx % 2 === 0 ? "#FAFBFE" : "#fff" }}>
                 <td style={tableStyles.tdName}>{row.label}</td>
-                <td style={tableStyles.tdRight}>{fmtInt(row.finalizadas)}</td>
                 <td style={tableStyles.tdRight}>{fmtInt(row.iniciadas)}</td>
+                <td style={tableStyles.tdRight}>{fmtInt(row.finalizadas)}</td>
                 <td style={tableStyles.tdRight}>{fmtInt(row.bultos)}</td>
                 <td style={tableStyles.tdRight}>{row.tiempoPromedioMs > 0 ? fmtMinutesFromMs(row.tiempoPromedioMs) : "—"}</td>
                 <td style={tableStyles.tdRight}>{row.tiempoTotalMs > 0 ? fmtMinutesFromMs(row.tiempoTotalMs) : "—"}</td>
@@ -4715,7 +4731,7 @@ export default function MetricaRecepcion() {
       wsRes.getRow(2).height = 18;
 
       const hdrRow = wsRes.getRow(4);
-      hdrRow.values = ["Usuario", "Cerradas", "Iniciadas", "Unidades", "T. Promedio", "T. Total"];
+      hdrRow.values = ["Usuario", "Iniciadas", "Cerradas", "Unidades", "T. Promedio", "T. Total"];
       styleHeaderRow(hdrRow, 6);
 
       let r = 5;
@@ -4723,8 +4739,8 @@ export default function MetricaRecepcion() {
       mergedUsers.forEach((u, idx) => {
         const dataRow = wsRes.getRow(r);
         dataRow.getCell(1).value = u.label || "—";
-        dataRow.getCell(2).value = Number(u.finalizadas || 0);
-        dataRow.getCell(3).value = Number(u.iniciadas || 0);
+        dataRow.getCell(2).value = Number(u.iniciadas || 0);
+        dataRow.getCell(3).value = Number(u.finalizadas || 0);
         dataRow.getCell(4).value = Number(u.bultos || 0);
         dataRow.getCell(5).value = u.tiempoPromedioMs > 0 ? fmtMinutesFromMs(u.tiempoPromedioMs) : "—";
         dataRow.getCell(6).value = u.tiempoTotalMs > 0 ? fmtMinutesFromMs(u.tiempoTotalMs) : "—";
@@ -4739,8 +4755,8 @@ export default function MetricaRecepcion() {
       const totalRow = wsRes.getRow(r);
       totalRow.height = 22;
       totalRow.getCell(1).value = `Total (${mergedUsers.length} usuarios)`;
-      totalRow.getCell(2).value = totalCerradas;
-      totalRow.getCell(3).value = totalIniciadas;
+      totalRow.getCell(2).value = totalIniciadas;
+      totalRow.getCell(3).value = totalCerradas;
       totalRow.getCell(4).value = totalUnidades;
       totalRow.getCell(5).value = totalCerradas > 0 ? fmtMinutesFromMs(Math.round(totalMs / totalCerradas)) : "—";
       totalRow.getCell(6).value = fmtMinutesFromMs(totalMs);
@@ -6050,7 +6066,7 @@ export default function MetricaRecepcion() {
         <Brand
           icon={BarChart3}
           title="Recepción"
-          subtitle="Panel de métricas"
+          subtitle="Reportes Recepción"
           onClick={() => nav("/recepcion")}
         />
         <Topbar.Right>
@@ -6409,7 +6425,6 @@ export default function MetricaRecepcion() {
             productivity={currentData.teamProductivity}
             times={currentData.teamTimes}
             periodLabel={currentData.label}
-            excludedUsersCount={excludedAndenUsers.length}
             onOpenSettings={() => setSettingsModalOpen(true)}
             onOpenUserDetail={openUserTimeDetail}
             onExportExcel={handleExportTeamExcel}

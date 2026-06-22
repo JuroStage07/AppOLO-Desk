@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Menu, User, Search } from "lucide-react";
+import { Menu, MessageCircle, Search, User } from "lucide-react";
 import AreasSidebar from "./AreasSidebar";
 import Breadcrumbs from "./Breadcrumbs";
 import { isRootPath } from "./routeTrail";
 import TopbarAccount from "./TopbarAccount";
 import { openCommandPalette } from "./commandPaletteBus";
 import { openPinsFlyout } from "./pinsBus";
+import { openAssistantModal } from "./assistantBus";
+import { AuthCtx } from "../../auth/AuthProvider";
 import { ACCENT, ACCENT_SOFT, BORDER, CONTAINER_MAX, SLATE, SURFACE, TEXT } from "../../styles/theme";
 
 const IS_MAC =
@@ -32,7 +34,11 @@ export default function Topbar({
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
-  const showUtility = utilityBar && !isRootPath(location.pathname);
+  const { profile, user: ctxUser, loading: authLoading } = useContext(AuthCtx) || {};
+  const showUtility = utilityBar;
+
+  const tenantId = String(profile?.tenantId || "").trim();
+  const company = String(profile?.company || "").trim();
 
   // F2 → open pins flyout (handled by AreasSidebar via pinsBus)
   useEffect(() => {
@@ -71,6 +77,13 @@ export default function Topbar({
             <div style={subBarInner}>
               <Breadcrumbs />
               <div style={subBarRight}>
+                {(tenantId || company) && (
+                  <div style={tenantBadgeStyle}>
+                    {tenantId && <span style={tenantBadgePrimary}>{tenantId}</span>}
+                    {tenantId && company && <span style={tenantBadgeSep}>·</span>}
+                    {company && <span style={tenantBadgeSecondary}>{company}</span>}
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={openCommandPalette}
@@ -194,7 +207,6 @@ const topbarInner = {
   minHeight: 64,
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
   gap: 12,
   flexWrap: "wrap",
 };
@@ -204,6 +216,7 @@ const topbarRight = {
   gap: 10,
   flexWrap: "wrap",
   justifyContent: "flex-end",
+  marginLeft: "auto",
 };
 const menuBtn = {
   width: 38,
@@ -258,4 +271,32 @@ const userName = {
 const userMail = {
   fontWeight: 650, fontSize: 11, color: SLATE, lineHeight: 1.2,
   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+};
+
+/* ─── Tenant badge in sub-bar ─── */
+const tenantBadgeStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  padding: "3px 10px",
+  borderRadius: 8,
+  background: ACCENT_SOFT,
+  border: `1px solid rgba(8,159,138,0.2)`,
+  flexShrink: 0,
+};
+const tenantBadgePrimary = {
+  fontSize: 11,
+  fontWeight: 900,
+  color: TEXT,
+  lineHeight: 1.2,
+};
+const tenantBadgeSep = {
+  fontSize: 10,
+  color: SLATE,
+};
+const tenantBadgeSecondary = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: SLATE,
+  lineHeight: 1.2,
 };

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Briefcase, Building2, CalendarClock, Check, ChevronDown, ChevronRight, Clock, RefreshCw, RotateCcw, Settings, UserCheck, UserCog, UserMinus, Users, UserX } from "lucide-react";
 import { collection, deleteField, doc, getDocs, orderBy, query, updateDoc, writeBatch, serverTimestamp } from "firebase/firestore";
-import { db, auth } from "../../firebase";
+import { db, auth } from "../../../firebase";
 import {
   Badge,
   Brand,
@@ -18,7 +18,7 @@ import {
   Topbar,
   useConfirm,
   useToast,
-} from "../../components/ui";
+} from "../../../components/ui";
 import {
   ACCENT,
   ACCENT_SOFT,
@@ -40,7 +40,7 @@ import {
   FW_BOLD,
   FW_EXTRABOLD,
   RADIUS_PILL,
-} from "../../styles/theme";
+} from "../../../styles/theme";
 
 /* ─── Styles ─── */
 const styles = {

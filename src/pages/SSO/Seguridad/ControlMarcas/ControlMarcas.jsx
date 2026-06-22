@@ -418,7 +418,6 @@ export default function ControlMarcas() {
 
       <div style={ui.main}>
         <div style={ui.mainWrap}>
-          <div className="cm-main-grid" style={ui.mainGrid}>
           <div style={ui.card}>
             <div style={ui.topAccent} />
 
@@ -431,6 +430,30 @@ export default function ControlMarcas() {
                   última marca del día. Presioná Enter para registrar.
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActivosModalOpen(true);
+                  setShowActivosFilters(false);
+                  setFNombreActivo("");
+                  setFEmpresaActivo("");
+                }}
+                disabled={loading}
+                style={{
+                  ...ui.kpiInline,
+                  ...(loading ? { opacity: 0.55, cursor: "not-allowed" } : {}),
+                }}
+                title="Ver quienes tienen la última marca de entrada hoy"
+                aria-label="Ver activos en sitio"
+              >
+                <div style={ui.kpiInlineLabel}>Activos en sitio</div>
+                <div style={ui.kpiInlineValue}>{activosCount}</div>
+                <div style={ui.kpiInlineHint}>
+                  <span style={ui.kpiPillDot} />
+                  Según marcas de hoy
+                </div>
+              </button>
 
               <div style={ui.statusBox}>
                 <div
@@ -540,26 +563,7 @@ export default function ControlMarcas() {
                 </button>
               </div>
 
-              <div className="cm-info-strip" style={ui.infoStrip}>
-                <div style={ui.infoItem}>
-                  <div style={ui.infoTitle}>Cómo funciona</div>
-                  <div style={ui.infoText}>
-                    La primera marca del día es <b>entrada</b>. Después se alterna
-                    con <b>salida</b> / <b>entrada</b> según la última registrada
-                    para esa persona.
-                  </div>
-                </div>
 
-                <div className="cm-divider" style={ui.divider} />
-
-                <div style={ui.infoItem}>
-                  <div style={ui.infoTitle}>Sugerencia</div>
-                  <div style={ui.infoText}>
-                    Usá lector o escáner para la cédula y presioná{" "}
-                    <b>Enter</b> para registrar más rápido.
-                  </div>
-                </div>
-              </div>
             </form>
 
             {toast && (
@@ -588,70 +592,6 @@ export default function ControlMarcas() {
                 </div>
               </div>
             )}
-          </div>
-
-          <div style={ui.side}>
-            <div style={ui.kpiSide}>
-              <div style={ui.kpiTopAccent} />
-              <div style={ui.kpiLabel}>Activos en sitio</div>
-
-              <div style={ui.kpiPill}>
-                <span style={ui.kpiPillDot} />
-                Según marcas de hoy
-              </div>
-
-              <div style={ui.kpiValueBig}>{activosCount}</div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setActivosModalOpen(true);
-                  setShowActivosFilters(false);
-                  setFNombreActivo("");
-                  setFEmpresaActivo("");
-                }}
-                disabled={loading}
-                style={{
-                  ...ui.kpiEyeBtn,
-                  ...(loading ? ui.kpiEyeBtnDisabled : {}),
-                }}
-                title="Ver quienes tienen la última marca de entrada hoy"
-                aria-label="Ver quienes tienen la última marca de entrada hoy"
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <div style={ui.modePanel}>
-              <div style={ui.topAccent} />
-              <div style={ui.modeTitle}>Alternancia automática</div>
-              <div style={ui.modeSub}>
-                No hace falta elegir entrada o salida: el sistema asigna el tipo
-                según la última marca del mismo usuario en el día.
-              </div>
-            </div>
-          </div>
           </div>
 
           <div style={ui.listBand}>
@@ -986,7 +926,6 @@ const ui = {
 
   card: {
     width: "100%",
-    maxWidth: 820,
     background: "#fff",
     borderRadius: 20,
     border: "1px solid #E7E9F2",
@@ -1347,6 +1286,42 @@ const ui = {
     opacity: 0.55,
     cursor: "not-allowed",
     boxShadow: "none",
+  },
+
+  kpiInline: {
+    display: "grid",
+    gap: 4,
+    padding: "10px 16px",
+    borderRadius: 16,
+    border: "1px solid #E7E9F2",
+    background: "#fff",
+    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
+    cursor: "pointer",
+    textAlign: "left",
+    minWidth: 140,
+    flex: "0 0 auto",
+  },
+  kpiInlineLabel: {
+    fontWeight: 900,
+    fontSize: 11,
+    color: "#64748B",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  kpiInlineValue: {
+    fontWeight: 980,
+    fontSize: 32,
+    lineHeight: 1,
+    letterSpacing: -1,
+    color: "#0F172A",
+  },
+  kpiInlineHint: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontWeight: 800,
+    fontSize: 11,
+    color: "#64748B",
   },
 
   modePanel: {

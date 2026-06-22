@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Cog,
   Copy,
+  Home,
   Inbox,
   Info,
   LayoutDashboard,
@@ -34,7 +35,7 @@ import {
   OT_TIPOS_PROBLEMA,
 } from "../config/otOptions";
 import { getVisibleAreas } from "../config/workAreas";
-import { AreasSidebar, SidebarAreaIcon, useConfirm, useToast } from "../components/ui";
+import { AreasSidebar, SidebarAreaIcon, TopbarAccount, openCommandPalette, useConfirm, useToast } from "../components/ui";
 import {
   ACCENT,
   ACCENT_SHADOW,
@@ -1449,6 +1450,36 @@ export default function AreasTrabajoHubPage() {
             </button>
           </div>
         </div>
+
+        {/* Sub-bar: breadcrumb + tenant info */}
+        <div style={styles.headerSubBar}>
+          <div style={styles.headerSubBarInner}>
+            <span style={styles.headerSubBarHome}>
+              <Home size={13} strokeWidth={2.4} style={{ color: T.textMuted }} />
+              <span style={{ fontSize: 12, fontWeight: 750, color: T.textSecondary }}>Inicio</span>
+            </span>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+              {(profile?.tenantId || profile?.company) && (
+                <div style={styles.tenantBadge}>
+                  {profile.tenantId && <span style={styles.tenantPrimary}>{profile.tenantId}</span>}
+                  {profile.tenantId && profile.company && <span style={styles.tenantSep}>·</span>}
+                  {profile.company && <span style={styles.tenantSecondary}>{profile.company}</span>}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={openCommandPalette}
+                style={styles.searchTrigger}
+                title="Buscar y navegar"
+                aria-label="Buscar y navegar"
+              >
+                <Search size={14} strokeWidth={2.3} />
+                <span>Buscar</span>
+                <span style={styles.searchKbd}>Ctrl K</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </header>
 
       {/* ─── Main content ─── */}
@@ -1949,6 +1980,77 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 14,
+  },
+  headerSubBar: {
+    width: "100%",
+    borderTop: `1px solid ${T.borderSoft}`,
+    background: "rgba(248,250,252,0.7)",
+  },
+  headerSubBarInner: {
+    maxWidth: 1200,
+    margin: "0 auto",
+    padding: "6px 24px",
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+  },
+  headerSubBarHome: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+  },
+  tenantBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "3px 10px",
+    borderRadius: 8,
+    background: T.accentSoft,
+    border: `1px solid rgba(8,159,138,0.2)`,
+  },
+  tenantPrimary: {
+    fontSize: 11,
+    fontWeight: 900,
+    color: T.text,
+    lineHeight: 1.2,
+  },
+  tenantSep: {
+    fontSize: 10,
+    color: T.textMuted,
+  },
+  tenantSecondary: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: T.textMuted,
+    lineHeight: 1.2,
+  },
+  searchTrigger: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 7,
+    height: 28,
+    padding: "0 8px 0 10px",
+    borderRadius: 8,
+    border: `1px solid ${T.border}`,
+    background: "#fff",
+    color: T.textSecondary,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    fontWeight: 700,
+    fontSize: 12,
+    flexShrink: 0,
+  },
+  searchKbd: {
+    display: "inline-grid",
+    placeItems: "center",
+    padding: "1px 5px",
+    borderRadius: 5,
+    background: "#F1F5F9",
+    border: `1px solid ${T.border}`,
+    fontSize: 10,
+    fontWeight: 800,
+    color: T.textSecondary,
+    lineHeight: 1.4,
   },
   brand: {
     display: "flex",

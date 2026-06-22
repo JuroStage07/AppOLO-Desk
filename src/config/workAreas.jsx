@@ -100,7 +100,7 @@ const RAW_AREAS = [
         ],
       },
       { label: "Documentación", path: "/documentacion" },
-      { label: "Métricas", path: "/seguridad/metricas" },
+      { label: "Reportes Seguridad", path: "/seguridad/metricas" },
     ],
   },
   {
@@ -128,7 +128,7 @@ const RAW_AREAS = [
     icon: <ArrowRight size={18} strokeWidth={2} />,
     modules: [
       { label: "Acción descarga", path: "/recepcion/accion-descarga" },
-      { label: "Métricas", path: "/recepcion/metricas" },
+      { label: "Reportes Recepción", path: "/recepcion/metricas" },
     ],
   },
   {

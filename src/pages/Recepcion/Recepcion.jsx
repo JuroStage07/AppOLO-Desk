@@ -52,9 +52,9 @@ export default function Recepcion() {
         show: true,
       },
       {
-        key: "metricas",
-        title: "Estadísticas",
-        desc: "Panel de métricas de recepción",
+        key: "reportes",
+        title: "Reportes Recepción",
+        desc: "Panel de reportes de recepción",
         path: "/recepcion/metricas",
         tone: "accent",
         icon: BarChart3,

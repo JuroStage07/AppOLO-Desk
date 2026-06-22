@@ -48,6 +48,7 @@ export { default as CommandPalette } from "./CommandPalette";
 export { default as CircleMenu } from "./CircleMenu";
 export { default as AreasModal } from "./AreasModal";
 export { default as AssistantModal } from "./AssistantModal";
+export { default as FloatingChatButton } from "./FloatingChatButton";
 export { openCommandPalette } from "./commandPaletteBus";
 export { openAssistantModal } from "./assistantBus";
 
