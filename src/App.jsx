@@ -11,6 +11,7 @@ import { ToastProvider, ConfirmProvider, CircleMenu, AssistantModal, FloatingCha
 import Login from "./pages/Login";
 import HomeHub from "./pages/HomeHub";
 import AreasTrabajoHubPage from "./pages/AreasTrabajoHubPage";
+import ReportHubPage from "./pages/ReportHubPage";
 import ConfigRegionPage from "./pages/ConfigRegionPage";
 
 //Documentacion
@@ -149,6 +150,16 @@ export default function App() {
             element={
               <PrivateRoute>
                 <PesajeTarimas />
+              </PrivateRoute>
+            }
+          />
+
+          {/* ================= Reportes (hub) ================= */}
+          <Route
+            path="/reportes"
+            element={
+              <PrivateRoute>
+                <ReportHubPage />
               </PrivateRoute>
             }
           />

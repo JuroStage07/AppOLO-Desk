@@ -181,7 +181,7 @@ export default function CircleMenu() {
         break;
       case "reportes":
         close();
-        nav("/areas");
+        nav("/reportes");
         break;
       default:
         break;
