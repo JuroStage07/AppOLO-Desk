@@ -22,39 +22,54 @@ import {
 import { AuthCtx } from "../auth/AuthProvider";
 import { auth } from "../firebase";
 import { getVisibleAreas } from "../config/workAreas";
+import { canAccessByRoleOrPermission } from "../config/permissions";
 import { isEpaRestrictedUser } from "../config/epaOnlyUids";
 import { ACCENT, BORDER, MUTED, SLATE, SURFACE, TEXT } from "../styles/theme";
 
 /**
  * Centro de reportes: agrupa las pantallas de reportes/métricas del sistema por
  * área de trabajo. Se llega desde el botón "Reportes" del menú circular
- * (Ctrl/⌘ + K). Cada reporte apunta a una ruta real; el control de acceso fino
- * lo resuelve la pantalla destino. Solo se listan reportes de áreas visibles.
+ * (Ctrl/⌘ + K). Cada reporte apunta a una ruta real.
+ *
+ * Control de acceso por reporte:
+ * - adminOnly: true → solo roles "administrativo" / "dev" (sin permiso extra).
+ * - requiredPerm: string → operativos necesitan ese permiso en profile.permisos.
+ *   Admins/dev siempre tienen acceso implícito (blanket access).
  */
 const REPORTS = [
-  { areaKey: "seguridad", title: "Reportes Seguridad", hint: "Cumplimiento y métricas", path: "/seguridad/metricas", icon: ShieldCheck },
-  { areaKey: "recepcion", title: "Reportes Recepción", hint: "Descargas y tiempos", path: "/recepcion/metricas", icon: FileSpreadsheet },
-  { areaKey: "mantenimiento", title: "Dashboard de OTs", hint: "Órdenes de trabajo", path: "/mantenimiento/ots/dashboard", icon: Wrench },
-  { areaKey: "administracion", title: "Reporte de Horas Extra", hint: "Resumen mensual", path: "/horas-extra/reporte", icon: ClipboardList },
-  { areaKey: "mrp-tarimas", title: "Dashboard MRP Tarimas", hint: "Inventario y reparaciones", path: "/mrp-tarimas/dashboard", icon: Boxes },
+  { areaKey: "seguridad", title: "Reportes Seguridad", hint: "Cumplimiento y métricas", path: "/seguridad/metricas", icon: ShieldCheck, requiredPerm: "saludOcupacional" },
+  { areaKey: "recepcion", title: "Reportes Recepción", hint: "Descargas y tiempos", path: "/recepcion/metricas", icon: FileSpreadsheet, requiredPerm: "recepcionReportes" },
+  { areaKey: "mantenimiento", title: "Dashboard de OTs", hint: "Órdenes de trabajo", path: "/mantenimiento/ots/dashboard", icon: Wrench, requiredPerm: "mantenimiento" },
+  { areaKey: "administracion", title: "Reporte de Horas Extra", hint: "Resumen mensual", path: "/horas-extra/reporte", icon: ClipboardList, requiredPerm: "horasExtra" },
+  { areaKey: "mrp-tarimas", title: "Dashboard MRP Tarimas", hint: "Inventario y reparaciones", path: "/mrp-tarimas/dashboard", icon: Boxes, requiredPerm: "mrpTarimas" },
 ];
+
+/** Determina si el usuario puede ver un reporte específico */
+function canAccessReport(report, { role, permisos }) {
+  return canAccessByRoleOrPermission(
+    { role, permisos },
+    { anyPerms: report.requiredPerm ? [report.requiredPerm] : [] }
+  );
+}
 
 export default function ReportHubPage() {
   const nav = useNavigate();
-  const { profile, epaAdmin, role, user: ctxUser } = useContext(AuthCtx) || {};
+  const { profile, permisos, epaAdmin, role, user: ctxUser } = useContext(AuthCtx) || {};
   const user = ctxUser ?? auth.currentUser;
 
   const groups = useMemo(() => {
     const epaOnly = isEpaRestrictedUser({ epaAdmin, profile, user });
-    return getVisibleAreas({ epaOnly, role })
+    return getVisibleAreas({ epaOnly, role, permisos, profile })
       .map((area) => ({
         key: area.key,
         title: area.title,
         accent: area.theme?.accent || ACCENT,
-        reports: REPORTS.filter((r) => r.areaKey === area.key),
+        reports: REPORTS
+          .filter((r) => r.areaKey === area.key)
+          .filter((r) => canAccessReport(r, { role, permisos })),
       }))
       .filter((g) => g.reports.length > 0);
-  }, [profile, epaAdmin, role, user]);
+  }, [profile, permisos, epaAdmin, role, user]);
 
   return (
     <Shell>

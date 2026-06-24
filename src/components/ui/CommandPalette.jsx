@@ -31,7 +31,7 @@ function normalize(s) {
 
 export default function CommandPalette() {
   const nav = useNavigate();
-  const { profile, epaAdmin, role, user: ctxUser } = useContext(AuthCtx) || {};
+  const { profile, permisos, epaAdmin, role, user: ctxUser } = useContext(AuthCtx) || {};
   const user = ctxUser ?? auth.currentUser;
 
   const [open, setOpen] = useState(false);
@@ -43,7 +43,7 @@ export default function CommandPalette() {
   const items = useMemo(() => {
     if (!user) return [];
     const epaOnly = isEpaRestrictedUser({ epaAdmin, profile, user });
-    const areas = getVisibleAreas({ epaOnly, role });
+    const areas = getVisibleAreas({ epaOnly, role, permisos, profile });
     const rows = [];
     for (const a of areas) {
       if (a.blocked) continue;
@@ -69,7 +69,7 @@ export default function CommandPalette() {
       }
     }
     return rows;
-  }, [user, profile, epaAdmin, role]);
+  }, [user, profile, permisos, epaAdmin, role]);
 
   const filtered = useMemo(() => {
     const q = normalize(query.trim());

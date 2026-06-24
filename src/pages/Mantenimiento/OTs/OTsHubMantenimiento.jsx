@@ -9,6 +9,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { AuthCtx } from "../../../auth/AuthProvider";
+import { canAccessByRoleOrPermission } from "../../../config/permissions";
 import {
   Badge,
   Brand,
@@ -27,16 +28,20 @@ import usePinnedModules from "../../../hooks/usePinnedModules";
 export default function OTsHubMantenimiento() {
   const nav = useNavigate();
   const toast = useToast();
-  const { permisos, loading } = useContext(AuthCtx);
+  const { permisos, loading, role, profile } = useContext(AuthCtx);
   const { isPinned, togglePin } = usePinnedModules("mantenimiento");
+  const canAccess = canAccessByRoleOrPermission(
+    { role, permisos, profile },
+    { anyPerms: ["mantenimiento"] }
+  );
 
   useEffect(() => {
     if (loading) return;
-    if (!permisos?.mantenimiento) {
+    if (!canAccess) {
       toast.error("No tenés permisos para acceder a este módulo.");
       nav(-1);
     }
-  }, [loading, permisos, nav, toast]);
+  }, [loading, canAccess, nav, toast]);
 
   const go = (path) => nav(path);
 
@@ -70,7 +75,7 @@ export default function OTsHubMantenimiento() {
     []
   );
 
-  if (!permisos?.mantenimiento) return null;
+  if (!canAccess) return null;
 
   return (
     <Shell>

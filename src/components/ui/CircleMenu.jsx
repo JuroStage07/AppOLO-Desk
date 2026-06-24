@@ -102,7 +102,7 @@ function ActionNode({ action, x, y, hovered, badge }) {
 
 export default function CircleMenu() {
   const nav = useNavigate();
-  const { profile, epaAdmin, role, user: ctxUser } = useContext(AuthCtx) || {};
+  const { profile, permisos, epaAdmin, role, user: ctxUser } = useContext(AuthCtx) || {};
   const user = ctxUser ?? auth.currentUser;
 
   const [open, setOpen] = useState(false);
@@ -115,8 +115,8 @@ export default function CircleMenu() {
   const areas = useMemo(() => {
     if (!user) return [];
     const epaOnly = isEpaRestrictedUser({ epaAdmin, profile, user });
-    return getVisibleAreas({ epaOnly, role }).filter((a) => !a.blocked);
-  }, [user, profile, epaAdmin, role]);
+    return getVisibleAreas({ epaOnly, role, permisos, profile }).filter((a) => !a.blocked);
+  }, [user, profile, permisos, epaAdmin, role]);
 
   useEffect(() => {
     const openMenu = () => { if (!searchOpen) setOpen(true); };

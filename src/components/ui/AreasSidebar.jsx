@@ -36,7 +36,7 @@ const T = {
 export default function AreasSidebar({ open, onClose, openPins = false }) {
   const nav = useNavigate();
   const toast = useToast();
-  const { profile, epaAdmin, role, user: ctxUser } = useContext(AuthCtx);
+  const { profile, permisos, epaAdmin, role, user: ctxUser } = useContext(AuthCtx);
   const user = ctxUser ?? auth.currentUser;
   const [expandedArea, setExpandedArea] = useState(null);
   const [expandedModules, setExpandedModules] = useState(() => new Set());
@@ -84,8 +84,8 @@ export default function AreasSidebar({ open, onClose, openPins = false }) {
 
   const epaOnly = isEpaRestrictedUser({ epaAdmin, profile, user });
   const areas = useMemo(
-    () => getVisibleAreas({ epaOnly, role }),
-    [epaOnly, role]
+    () => getVisibleAreas({ epaOnly, role, permisos, profile }),
+    [epaOnly, role, permisos, profile]
   );
 
   const goTo = (path) => {

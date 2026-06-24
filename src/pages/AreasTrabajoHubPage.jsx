@@ -1095,7 +1095,10 @@ export default function AreasTrabajoHubPage() {
 
   const epaOnly = isEpaRestrictedUser({ epaAdmin, profile, user });
 
-  const areas = useMemo(() => getVisibleAreas({ epaOnly, role }), [epaOnly, role]);
+  const areas = useMemo(
+    () => getVisibleAreas({ epaOnly, role, permisos, profile }),
+    [epaOnly, role, permisos, profile]
+  );
 
   const term = query.trim().toLowerCase();
 

@@ -11,6 +11,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { AuthCtx } from "../../auth/AuthProvider";
+import { canAccessByRoleOrPermission } from "../../config/permissions";
 import { auth, db } from "../../firebase";
 import { filterSolicitudesOtByScope } from "../../utils/dataScope";
 import {
@@ -93,8 +94,10 @@ export default function ServiciosGeneralesOTGestion() {
   const permisos = authCtx?.permisos || {};
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
-  const canOpenMantenimientoDetail =
-    role === "dev" || permisos?.mantenimiento === true;
+  const canOpenMantenimientoDetail = canAccessByRoleOrPermission(
+    { role, permisos, profile },
+    { anyPerms: ["mantenimiento"] }
+  );
   const user = auth.currentUser;
   const toast = useToast();
   const [rows, setRows] = useState([]);

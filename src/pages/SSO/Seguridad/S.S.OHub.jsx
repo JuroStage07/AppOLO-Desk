@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useContext, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -24,10 +24,13 @@ import {
   Topbar,
 } from "../../../components/ui";
 import usePinnedModules from "../../../hooks/usePinnedModules";
+import { AuthCtx } from "../../../auth/AuthProvider";
+import { canAccessByRoleOrPermission } from "../../../config/permissions";
 
 export default function SSOHub() {
   const nav = useNavigate();
   const { isPinned, togglePin } = usePinnedModules("salud");
+  const { role, permisos, profile } = useContext(AuthCtx) || {};
 
   const go = (path) => nav(path);
 
@@ -38,6 +41,7 @@ export default function SSOHub() {
         title: "Aperturas",
         desc: "Gestión de aperturas y seguimiento",
         path: "/seguridad/aperturas",
+        anyPerms: ["saludOcupacional"],
         icon: ClipboardList,
         tag: "Operación",
       },
@@ -46,6 +50,7 @@ export default function SSOHub() {
         title: "Ingreso de terceros",
         desc: "Control de marcas: entrada y salida automática por cédula",
         path: "/seguridad/control-marcas",
+        anyPerms: ["saludOcupacional"],
         icon: ScanLine,
         tag: "Prioritario",
       },
@@ -54,6 +59,7 @@ export default function SSOHub() {
         title: "Visados",
         desc: "Generar y registrar visados",
         path: "/seguridad/visado",
+        anyPerms: ["saludOcupacional"],
         icon: Stamp,
         tag: "Prioritario",
       },
@@ -62,6 +68,7 @@ export default function SSOHub() {
         title: "Reportes Seguridad",
         desc: "Reportes y visualización general del área",
         path: "/seguridad/metricas",
+        anyPerms: ["saludOcupacional"],
         icon: BarChart3,
         tag: "Analítica",
       },
@@ -70,11 +77,22 @@ export default function SSOHub() {
         title: "Documentación",
         desc: "Normas, políticas y documentos internos",
         path: "/documentacion",
+        anyPerms: ["documentacion", "saludOcupacional"],
         icon: BookOpen,
         tag: "Biblioteca",
       },
     ],
     []
+  );
+  const visibleModules = useMemo(
+    () =>
+      modules.filter((module) =>
+        canAccessByRoleOrPermission(
+          { role, permisos, profile },
+          { anyPerms: module.anyPerms || [] }
+        )
+      ),
+    [modules, role, permisos, profile]
   );
 
   return (
@@ -104,7 +122,7 @@ export default function SSOHub() {
           />
 
           <ModuleGrid>
-            {modules.map((m) => (
+            {visibleModules.map((m) => (
               <ModuleCard
                 key={m.key}
                 title={m.title}

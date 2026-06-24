@@ -62,20 +62,15 @@ import {
   SURFACE_INSET,
   TEXT,
 } from "../../styles/theme";
+import {
+  PERMISSION_GROUPS,
+  PERMISSION_OPTIONS,
+  ROLE_OPTIONS,
+  normalizePermissionMap,
+} from "../../config/permissions";
 
 /* ─── Constants ─── */
-const ROLES = ["dev", "administrativo", "operativo"];
-
-const PERMISOS_KEYS = [
-  "mantenimiento",
-  "saludOcupacional",
-  "canRecepcionCofersa",
-  "despachosEPA",
-  "serviciosGenerales",
-  "documentacion",
-  "zoneFranca",
-  "mrpTarimas",
-];
+const ROLE_LABELS = Object.fromEntries(ROLE_OPTIONS.map((role) => [role.key, role.label]));
 
 /* ─── Styles ─── */
 const s = {
@@ -277,9 +272,9 @@ const s = {
   },
   permisoItem: {
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 8,
-    padding: "6px 10px",
+    padding: "8px 10px",
     borderRadius: RADIUS_LG,
     border: `1px solid ${BORDER}`,
     background: SURFACE,
@@ -288,6 +283,7 @@ const s = {
     fontWeight: FW_EXTRABOLD,
     color: TEXT,
     userSelect: "none",
+    textAlign: "left",
   },
   permisoItemActive: {
     background: OK_BG,
@@ -303,6 +299,7 @@ const s = {
     placeItems: "center",
     flexShrink: 0,
     transition: "all 0.15s",
+    marginTop: 1,
   },
   checkboxActive: {
     background: ACCENT,
@@ -371,6 +368,35 @@ const s = {
     fontSize: FS_XS,
     fontWeight: FW_EXTRABOLD,
   },
+  permisoGroup: {
+    display: "grid",
+    gap: 8,
+    marginTop: 12,
+  },
+  permisoGroupTitle: {
+    fontSize: FS_XS,
+    fontWeight: FW_EXTRABOLD,
+    color: SLATE,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  permisoText: {
+    display: "grid",
+    gap: 2,
+    minWidth: 0,
+  },
+  permisoName: {
+    fontSize: FS_XS,
+    fontWeight: FW_EXTRABOLD,
+    color: TEXT,
+    lineHeight: 1.2,
+  },
+  permisoDesc: {
+    fontSize: 11,
+    fontWeight: FW_BOLD,
+    color: SLATE,
+    lineHeight: 1.3,
+  },
 };
 
 /* ─── Helpers ─── */
@@ -385,6 +411,10 @@ function roleBadgeStyle(role) {
     default:
       return { background: SURFACE_INSET, color: SLATE };
   }
+}
+
+function roleLabel(role) {
+  return ROLE_LABELS[role] || role || "sin rol";
 }
 
 /* ─── Page ─── */
@@ -476,7 +506,7 @@ export default function UserHub() {
         tenantId: user.tenantId || "",
         company: user.company || "",
         epaAdmin: user.epaAdmin === true,
-        permisos: { ...user.permisos },
+        permisos: normalizePermissionMap(user.permisos || {}),
       },
     }));
   };
@@ -519,7 +549,7 @@ export default function UserHub() {
         tenantId: data.tenantId || "",
         company: data.company || "",
         epaAdmin: data.epaAdmin === true,
-        permisos: data.permisos || {},
+        permisos: normalizePermissionMap(data.permisos || {}),
       };
       await updateDoc(doc(db, "profiles", uid), patch);
       // Update local state
@@ -649,9 +679,9 @@ export default function UserHub() {
                 style={s.selectFilter}
               >
                 <option value="">Todos los roles</option>
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
+                {ROLE_OPTIONS.map((r) => (
+                  <option key={r.key} value={r.key}>
+                    {r.label}
                   </option>
                 ))}
               </select>
@@ -738,7 +768,7 @@ export default function UserHub() {
                             </td>
                             <td style={s.td}>
                               <span style={{ ...s.roleBadge, ...roleBadgeStyle(u.role) }}>
-                                {u.role || "sin rol"}
+                                {roleLabel(u.role)}
                               </span>
                             </td>
                             <td style={s.td}>{u.tenantId || "—"}</td>
@@ -813,10 +843,8 @@ export default function UserHub() {
 
 /* ─── Read-only detail (when not editing) ─── */
 function ReadOnlyDetail({ user, onEdit }) {
-  const permisos = user.permisos || {};
-  const activePermisos = Object.entries(permisos)
-    .filter(([, v]) => v === true)
-    .map(([k]) => k);
+  const permisos = normalizePermissionMap(user.permisos || {});
+  const activePermisos = PERMISSION_OPTIONS.filter((perm) => permisos[perm.key]);
 
   return (
     <div style={{ paddingTop: 14 }}>
@@ -830,7 +858,7 @@ function ReadOnlyDetail({ user, onEdit }) {
         <div style={s.fieldGroup}>
           <span style={s.fieldLabel}>Role</span>
           <span style={{ fontSize: FS_SM, color: TEXT, fontWeight: FW_BOLD }}>
-            {user.role || "—"}
+            {roleLabel(user.role)}
           </span>
         </div>
         <div style={s.fieldGroup}>
@@ -861,9 +889,9 @@ function ReadOnlyDetail({ user, onEdit }) {
           </div>
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-            {activePermisos.map((k) => (
+            {activePermisos.map((perm) => (
               <span
-                key={k}
+                key={perm.key}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -876,7 +904,7 @@ function ReadOnlyDetail({ user, onEdit }) {
                   fontWeight: FW_EXTRABOLD,
                 }}
               >
-                {k}
+                {perm.label}
               </span>
             ))}
           </div>
@@ -916,9 +944,9 @@ function EditForm({
             style={s.fieldSelect}
           >
             <option value="">— Sin rol —</option>
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r}
+            {ROLE_OPTIONS.map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.label}
               </option>
             ))}
           </select>
@@ -981,32 +1009,45 @@ function EditForm({
       {/* Permisos */}
       <div style={{ marginTop: 16 }}>
         <span style={s.fieldLabel}>Permisos</span>
-        <div style={s.permisosGrid}>
-          {PERMISOS_KEYS.map((key) => {
-            const active = !!data.permisos?.[key];
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => onTogglePermiso(uid, key)}
-                style={{
-                  ...s.permisoItem,
-                  ...(active ? s.permisoItemActive : {}),
-                }}
-              >
-                <div
-                  style={{
-                    ...s.checkbox,
-                    ...(active ? s.checkboxActive : {}),
-                  }}
-                >
-                  {active && <Check size={10} strokeWidth={3} color="#fff" />}
-                </div>
-                {key}
-              </button>
-            );
-          })}
-        </div>
+        {PERMISSION_GROUPS.map((group) => {
+          const groupOptions = PERMISSION_OPTIONS.filter((perm) => perm.group === group);
+          if (groupOptions.length === 0) return null;
+
+          return (
+            <div key={group} style={s.permisoGroup}>
+              <span style={s.permisoGroupTitle}>{group}</span>
+              <div style={s.permisosGrid}>
+                {groupOptions.map((perm) => {
+                  const active = !!data.permisos?.[perm.key];
+                  return (
+                    <button
+                      key={perm.key}
+                      type="button"
+                      onClick={() => onTogglePermiso(uid, perm.key)}
+                      style={{
+                        ...s.permisoItem,
+                        ...(active ? s.permisoItemActive : {}),
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...s.checkbox,
+                          ...(active ? s.checkboxActive : {}),
+                        }}
+                      >
+                        {active && <Check size={10} strokeWidth={3} color="#fff" />}
+                      </div>
+                      <span style={s.permisoText}>
+                        <span style={s.permisoName}>{perm.label}</span>
+                        <span style={s.permisoDesc}>{perm.description}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Actions */}

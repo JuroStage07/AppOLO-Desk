@@ -19,6 +19,7 @@ import imgRecepcion from "../assets/recepcion.png";
 import imgServiciosGenerales from "../assets/serviciosGenerales.png";
 import imgEpa from "../assets/epa.png";
 import imgDev from "../assets/dev.png";
+import { canAccessWorkItem } from "./permissions";
 
 /**
  * Single source of truth for the application "Áreas de trabajo".
@@ -60,6 +61,7 @@ const RAW_AREAS = [
     theme: AREA_THEMES.despacho,
     tag: "Operación",
     icon: <Zap size={18} strokeWidth={2} />,
+    requiredPerm: "despacho",
     blocked: false,
     blockedDesc: "Acceso al módulo deshabilitado temporalmente.",
     modules: [
@@ -75,32 +77,36 @@ const RAW_AREAS = [
     theme: AREA_THEMES.seguridad,
     tag: "Seguridad",
     icon: <Shield size={18} strokeWidth={2} />,
+    anyPerms: ["saludOcupacional", "documentacion"],
     modules: [
       {
         label: "Control de marcas",
         path: "/seguridad/control-marcas",
+        requiredPerm: "saludOcupacional",
         features: [
-          { label: "Historial", path: "/seguridad/control-marcas/historial" },
+          { label: "Historial", path: "/seguridad/control-marcas/historial", requiredPerm: "saludOcupacional" },
         ],
       },
       {
         label: "Aperturas",
         path: "/seguridad/aperturas",
+        requiredPerm: "saludOcupacional",
         features: [
-          { label: "Finalizadas", path: "/seguridad/aperturas/finalizadas" },
-          { label: "Rechazadas", path: "/seguridad/aperturas/rechazadas" },
+          { label: "Finalizadas", path: "/seguridad/aperturas/finalizadas", requiredPerm: "saludOcupacional" },
+          { label: "Rechazadas", path: "/seguridad/aperturas/rechazadas", requiredPerm: "saludOcupacional" },
         ],
       },
       {
         label: "Visados",
         path: "/seguridad/visado",
+        requiredPerm: "saludOcupacional",
         features: [
-          { label: "Generar visado", path: "/seguridad/visado/generar" },
-          { label: "Administrar visados", path: "/seguridad/visados" },
+          { label: "Generar visado", path: "/seguridad/visado/generar", requiredPerm: "saludOcupacional" },
+          { label: "Administrar visados", path: "/seguridad/visados", requiredPerm: "saludOcupacional" },
         ],
       },
-      { label: "Documentación", path: "/documentacion" },
-      { label: "Reportes Seguridad", path: "/seguridad/metricas" },
+      { label: "Documentación", path: "/documentacion", anyPerms: ["documentacion", "saludOcupacional"] },
+      { label: "Reportes Seguridad", path: "/seguridad/metricas", requiredPerm: "saludOcupacional" },
     ],
   },
   {
@@ -126,9 +132,10 @@ const RAW_AREAS = [
     theme: AREA_THEMES.recepcion,
     tag: "Inbound",
     icon: <ArrowRight size={18} strokeWidth={2} />,
+    anyPerms: ["recepcion", "recepcionReportes", "canRecepcionCofersa", "despachosEPA"],
     modules: [
-      { label: "Acción descarga", path: "/recepcion/accion-descarga" },
-      { label: "Reportes Recepción", path: "/recepcion/metricas" },
+      { label: "Acción descarga", path: "/recepcion/accion-descarga", anyPerms: ["recepcion", "canRecepcionCofersa", "despachosEPA"] },
+      { label: "Reportes Recepción", path: "/recepcion/metricas", anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"] },
     ],
   },
   {
@@ -140,6 +147,7 @@ const RAW_AREAS = [
     theme: AREA_THEMES.mantenimiento,
     tag: "Mantenimiento",
     icon: <Clock size={18} strokeWidth={2} />,
+    requiredPerm: "mantenimiento",
     modules: [
       { label: "Equipos", path: "/mantenimiento/equipos" },
       {
@@ -162,22 +170,25 @@ const RAW_AREAS = [
     theme: AREA_THEMES["servicios-generales"],
     tag: "Servicios",
     icon: <Sparkles size={18} strokeWidth={2} />,
+    anyPerms: ["serviciosGenerales", "pesajeTarimas"],
     modules: [
       {
         label: "Órdenes de trabajo",
         path: "/servicios-generales/ordenes-trabajo",
+        requiredPerm: "serviciosGenerales",
         features: [
-          { label: "Crear OT", path: "/servicios-generales/ordenes-trabajo/crear" },
-          { label: "Gestión de OTs", path: "/servicios-generales/ordenes-trabajo/gestion" },
+          { label: "Crear OT", path: "/servicios-generales/ordenes-trabajo/crear", requiredPerm: "serviciosGenerales" },
+          { label: "Gestión de OTs", path: "/servicios-generales/ordenes-trabajo/gestion", requiredPerm: "serviciosGenerales" },
         ],
       },
-      { label: "Validar ingreso", path: "/servicios-generales/validar-ingreso" },
+      { label: "Validar ingreso", path: "/servicios-generales/validar-ingreso", requiredPerm: "serviciosGenerales" },
       {
         label: "Pesaje tarimas",
         path: "/servicios-generales/pesaje-tarimas",
+        requiredPerm: "pesajeTarimas",
         features: [
-          { label: "Registrar tarimas", path: "/servicios-generales/pesaje-tarimas/registrar" },
-          { label: "Consultar tarimas", path: "/servicios-generales/pesaje-tarimas/consultar" },
+          { label: "Registrar tarimas", path: "/servicios-generales/pesaje-tarimas/registrar", requiredPerm: "pesajeTarimas" },
+          { label: "Consultar tarimas", path: "/servicios-generales/pesaje-tarimas/consultar", requiredPerm: "pesajeTarimas" },
         ],
       },
     ],
@@ -191,6 +202,7 @@ const RAW_AREAS = [
     theme: AREA_THEMES.epa,
     tag: "EPA",
     icon: <LayoutDashboard size={18} strokeWidth={2} />,
+    anyPerms: ["epa", "despachosEPA"],
     modules: [
       { label: "Aperturas finalizadas", path: "/epa/aperturas-finalizadas" },
     ],
@@ -203,6 +215,7 @@ const RAW_AREAS = [
     theme: AREA_THEMES["mrp-tarimas"],
     tag: "MRP",
     icon: <ClipboardList size={18} strokeWidth={2} />,
+    requiredPerm: "mrpTarimas",
     modules: [
       { label: "Dashboard", path: "/mrp-tarimas/dashboard" },
       { label: "Inventario", path: "/mrp-tarimas/inventario" },
@@ -220,13 +233,15 @@ const RAW_AREAS = [
     icon: <ShieldCheck size={18} strokeWidth={2} />,
     adminOnly: true,
     modules: [
-      { label: "Usuarios", path: "/administracion/usuarios" },
+      { label: "Usuarios", path: "/administracion/usuarios", roles: ["dev"], allowedRoles: ["administrativo", "dev"], anyPerms: ["gestionUsuarios"], adminOverride: false },
       {
         label: "Horas Extra",
         path: "/horas-extra",
+        allowedRoles: ["administrativo", "dev"],
+        requiredPerm: "horasExtra",
         features: [
-          { label: "Aprobaciones gerencia", path: "/horas-extra/gerencia" },
-          { label: "Reporte mensual", path: "/horas-extra/reporte" },
+          { label: "Aprobaciones gerencia", path: "/horas-extra/gerencia", requiredPerm: "horasExtra" },
+          { label: "Reporte mensual", path: "/horas-extra/reporte", requiredPerm: "horasExtra" },
         ],
       },
     ],
@@ -271,19 +286,72 @@ export const WORK_AREAS = RAW_AREAS.map((area) => ({
   subModules: flattenModules(area.modules),
 }));
 
+function hasAccessGate(item = {}) {
+  return Boolean(
+    item.devOnly ||
+      item.adminOnly ||
+      item.requiredPerm ||
+      item.anyPerms ||
+      item.allPerms ||
+      item.roles ||
+      item.allowedRoles
+  );
+}
+
+function inheritAccessGate(item = {}, parentGate = null) {
+  if (!parentGate || hasAccessGate(item)) return item;
+
+  return {
+    ...item,
+    devOnly: parentGate.devOnly,
+    adminOnly: parentGate.adminOnly,
+    roles: parentGate.roles,
+    allowedRoles: parentGate.allowedRoles,
+    requiredPerm: parentGate.requiredPerm,
+    anyPerms: parentGate.anyPerms,
+    allPerms: parentGate.allPerms,
+    adminOverride: parentGate.adminOverride,
+  };
+}
+
+function filterModulesForAccess(modules = [], context = {}, parentGate = null) {
+  return modules
+    .map((module) => {
+      const accessModule = inheritAccessGate(module, parentGate);
+      const features = filterModulesForAccess(module.features || [], context, accessModule);
+      const allowed = canAccessWorkItem(accessModule, context);
+
+      if (!allowed && features.length === 0) return null;
+      return { ...module, features };
+    })
+    .filter(Boolean);
+}
+
+function filterAreaForAccess(area, context) {
+  const modules = filterModulesForAccess(area.modules || [], context, area);
+  const allowed = canAccessWorkItem(area, context);
+
+  if (!allowed && modules.length === 0) return null;
+
+  return {
+    ...area,
+    modules,
+    subModules: flattenModules(modules),
+  };
+}
+
 /**
  * Filter the areas a given user is allowed to see.
  *  - epaOnly users only see the EPA area.
  *  - devOnly areas require role "dev".
- *  - adminOnly areas require role "admin" or "dev".
+ *  - adminOnly areas require role "administrativo" or "dev".
+ *  - requiredPerm / anyPerms gate operational users by profile.permisos.
  */
-export function getVisibleAreas({ epaOnly = false, role = null } = {}) {
+export function getVisibleAreas({ epaOnly = false, role = null, permisos = {}, profile = null } = {}) {
   if (epaOnly) {
     return WORK_AREAS.filter((a) => a.key === "epa");
   }
-  return WORK_AREAS.filter((a) => {
-    if (a.devOnly && role !== "dev") return false;
-    if (a.adminOnly && role !== "administrativo" && role !== "dev") return false;
-    return true;
-  });
+
+  const context = { role, permisos, profile };
+  return WORK_AREAS.map((area) => filterAreaForAccess(area, context)).filter(Boolean);
 }

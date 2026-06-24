@@ -1,5 +1,5 @@
 // screens/Recepcion.jsx
-import React, { useMemo } from "react";
+import React, { useContext, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
@@ -23,11 +23,14 @@ import {
   Topbar,
 } from "../../components/ui";
 import usePinnedModules from "../../hooks/usePinnedModules";
+import { AuthCtx } from "../../auth/AuthProvider";
+import { canAccessByRoleOrPermission } from "../../config/permissions";
 
 export default function Recepcion() {
   const nav = useNavigate();
   const location = useLocation();
   const { isPinned, togglePin } = usePinnedModules("recepcion");
+  const { role, permisos, profile } = useContext(AuthCtx) || {};
 
   const go = (path) => nav(path);
 
@@ -46,6 +49,7 @@ export default function Recepcion() {
         title: "Acciones de descarga",
         desc: "Registro y seguimiento de descargas",
         path: "/recepcion/accion-descarga",
+        anyPerms: ["recepcion", "canRecepcionCofersa", "despachosEPA"],
         tone: "accent",
         icon: Truck,
         tag: "Operativo",
@@ -56,6 +60,7 @@ export default function Recepcion() {
         title: "Reportes Recepción",
         desc: "Panel de reportes de recepción",
         path: "/recepcion/metricas",
+        anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"],
         tone: "accent",
         icon: BarChart3,
         tag: "Dashboard",
@@ -66,6 +71,7 @@ export default function Recepcion() {
         title: "Aperturas",
         desc: "Gestión y seguimiento de aperturas de recepción",
         path: "/seguridad/aperturas",
+        anyPerms: ["saludOcupacional"],
         tone: "accent",
         icon: ClipboardList,
         tag: "Operativo",
@@ -96,6 +102,12 @@ export default function Recepcion() {
   );
 
   const visibleModules = modules.filter((m) => m.show);
+  const allowedModules = visibleModules.filter((module) =>
+    canAccessByRoleOrPermission(
+      { role, permisos, profile },
+      { anyPerms: module.anyPerms || [] }
+    )
+  );
 
   return (
     <Shell>
@@ -124,7 +136,7 @@ export default function Recepcion() {
           />
 
           <ModuleGrid>
-            {visibleModules.map((m) => (
+            {allowedModules.map((m) => (
               <ModuleCard
                 key={m.key}
                 title={m.title}

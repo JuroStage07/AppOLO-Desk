@@ -18,6 +18,7 @@ import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 
 import { db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
+import { canAccessByRoleOrPermission } from "../../../config/permissions";
 import { isSolicitudOtInScope } from "../../../utils/dataScope";
 import { PERIOD, formatYMD } from "./dashboard/periodUtils";
 import { useOTsDashboardMetrics } from "./dashboard/useOTsDashboardMetrics";
@@ -44,17 +45,21 @@ export default function OTsDashboardPage() {
   const nav = useNavigate();
   const toast = useToast();
   const authCtx = useContext(AuthCtx);
-  const { permisos } = authCtx || {};
+  const { permisos, role } = authCtx || {};
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
+  const canAccess = canAccessByRoleOrPermission(
+    { role, permisos, profile },
+    { anyPerms: ["mantenimiento"] }
+  );
 
   useEffect(() => {
     if (authLoading) return;
-    if (!permisos?.mantenimiento) {
+    if (!canAccess) {
       toast.error("No tenés permisos para acceder a este módulo.");
       nav(-1);
     }
-  }, [authLoading, permisos, nav, toast]);
+  }, [authLoading, canAccess, nav, toast]);
 
   const defaults = useMemo(() => defaultCustomRange(), []);
   const [period, setPeriod] = useState(PERIOD.MONTH);

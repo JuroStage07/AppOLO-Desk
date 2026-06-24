@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useContext, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlarmClock,
@@ -26,6 +26,8 @@ import {
   Topbar,
 } from "../../components/ui";
 import usePinnedModules from "../../hooks/usePinnedModules";
+import { AuthCtx } from "../../auth/AuthProvider";
+import { canAccessByRoleOrPermission } from "../../config/permissions";
 import {
   ACCENT,
   BORDER,
@@ -236,6 +238,7 @@ export default function AdministracionHub() {
   const nav = useNavigate();
   const { isPinned, togglePin } = usePinnedModules("administracion");
   const [showOTModal, setShowOTModal] = useState(false);
+  const { role, permisos, profile } = useContext(AuthCtx) || {};
 
   const go = (path) => nav(path);
 
@@ -263,6 +266,10 @@ export default function AdministracionHub() {
         path: "/administracion/usuarios",
         icon: Users,
         tag: "Prioritario",
+        roles: ["dev"],
+        allowedRoles: ["administrativo", "dev"],
+        anyPerms: ["gestionUsuarios"],
+        adminOverride: false,
       },
       {
         key: "horas-extra",
@@ -271,9 +278,22 @@ export default function AdministracionHub() {
         path: null, // handled by modal
         icon: Clock,
         tag: "Aprobaciones",
+        allowedRoles: ["administrativo", "dev"],
+        anyPerms: ["horasExtra"],
       },
     ],
     []
+  );
+  const visibleModules = modules.filter((module) =>
+    canAccessByRoleOrPermission(
+      { role, permisos, profile },
+      {
+        roles: module.roles || [],
+        allowedRoles: module.allowedRoles || [],
+        anyPerms: module.anyPerms || [],
+        adminOverride: module.adminOverride !== false,
+      }
+    )
   );
 
   return (
@@ -303,7 +323,7 @@ export default function AdministracionHub() {
           />
 
           <ModuleGrid>
-            {modules.map((m) => (
+            {visibleModules.map((m) => (
               <ModuleCard
                 key={m.key}
                 title={m.title}

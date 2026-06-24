@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useContext, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -21,10 +21,13 @@ import {
   Topbar,
 } from "../../components/ui";
 import usePinnedModules from "../../hooks/usePinnedModules";
+import { AuthCtx } from "../../auth/AuthProvider";
+import { canAccessByRoleOrPermission } from "../../config/permissions";
 
 export default function ServiciosGenerales() {
   const nav = useNavigate();
   const { isPinned, togglePin } = usePinnedModules("servicios-generales");
+  const { role, permisos, profile } = useContext(AuthCtx) || {};
 
   const go = (path) => nav(path);
 
@@ -35,6 +38,7 @@ export default function ServiciosGenerales() {
         title: "Órdenes de trabajo",
         desc: "Solicitudes, seguimiento y cierre de OT en Servicios generales.",
         path: "/servicios-generales/ordenes-trabajo",
+        anyPerms: ["serviciosGenerales"],
         icon: ClipboardList,
         tag: "Trabajo",
       },
@@ -43,6 +47,7 @@ export default function ServiciosGenerales() {
         title: "Pesaje Tarimas",
         desc: "Registrá y consultá el pesaje de tarimas, incluyendo control de entradas y salidas.",
         path: "/servicios-generales/pesaje-tarimas",
+        anyPerms: ["pesajeTarimas"],
         icon: Scale,
         tag: "Pesaje",
       },
@@ -51,11 +56,18 @@ export default function ServiciosGenerales() {
         title: "Validar ingreso",
         desc: "Escaneá el QR o ingresá la cédula para validar el ingreso de colaboradores terceros.",
         path: "/servicios-generales/validar-ingreso",
+        anyPerms: ["serviciosGenerales"],
         icon: ScanLine,
         tag: "Control",
       },
     ],
     []
+  );
+  const visibleModules = modules.filter((module) =>
+    canAccessByRoleOrPermission(
+      { role, permisos, profile },
+      { anyPerms: module.anyPerms || [] }
+    )
   );
 
   return (
@@ -85,7 +97,7 @@ export default function ServiciosGenerales() {
           />
 
           <ModuleGrid>
-            {modules.map((m) => (
+            {visibleModules.map((m) => (
               <ModuleCard
                 key={m.key}
                 title={m.title}

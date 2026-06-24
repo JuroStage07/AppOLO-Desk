@@ -23,6 +23,7 @@ import {
 
 import { db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
+import { canAccessByRoleOrPermission } from "../../../config/permissions";
 import { filterSolicitudesOtByScope } from "../../../utils/dataScope";
 import {
   Brand,
@@ -52,7 +53,11 @@ function formatDate(val) {
 export default function OTsFinalizadasPage() {
   const nav = useNavigate();
   const toast = useToast();
-  const { permisos, loading, profile } = useContext(AuthCtx);
+  const { permisos, loading, profile, role } = useContext(AuthCtx);
+  const canAccess = canAccessByRoleOrPermission(
+    { role, permisos, profile },
+    { anyPerms: ["mantenimiento"] }
+  );
 
   const [items, setItems] = useState([]);
   const [loadError, setLoadError] = useState("");
@@ -69,15 +74,15 @@ export default function OTsFinalizadasPage() {
 
   useEffect(() => {
     if (loading) return;
-    if (!permisos?.mantenimiento) {
+    if (!canAccess) {
       toast.error("No tenés permisos para acceder a este módulo.");
       nav(-1);
     }
-  }, [loading, permisos, nav, toast]);
+  }, [loading, canAccess, nav, toast]);
 
   const fetchPage = async ({ reset } = { reset: false }) => {
     if (pageLoading) return;
-    if (!permisos?.mantenimiento) return;
+    if (!canAccess) return;
     if (!profile?.tenantId || !profile?.company) return;
     if (!hasMore && !reset) return;
 
@@ -135,11 +140,11 @@ export default function OTsFinalizadasPage() {
   };
 
   useEffect(() => {
-    if (loading || !permisos?.mantenimiento) return;
+    if (loading || !canAccess) return;
     // reset + primera página cuando cambia el scope/permisos
     fetchPage({ reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, permisos?.mantenimiento, profile?.tenantId, profile?.company]);
+  }, [loading, canAccess, profile?.tenantId, profile?.company]);
 
   const departamentosOptions = useMemo(() => {
     const set = new Set();
@@ -190,7 +195,7 @@ export default function OTsFinalizadasPage() {
     });
   }, [items, qText, departamento, desde, hasta]);
 
-  if (!permisos?.mantenimiento) return null;
+  if (!canAccess) return null;
 
   return (
     <Shell lockBodyScroll={false}>

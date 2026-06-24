@@ -36,6 +36,7 @@ import {
 
 import { db, auth } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
+import { canAccessByRoleOrPermission } from "../../../config/permissions";
 import { OT_STATE_FINALIZADA } from "./OTsFinalizadasPage";
 import { isSolicitudOtInScope } from "../../../utils/dataScope";
 import { businessElapsedMs } from "../../../utils/workTime";
@@ -48,8 +49,11 @@ const BLUE = "#2563EB";
 const RED = "#FF4D73";
 const HOUR_MS = 60 * 60 * 1000;
 
-function canAccessOtDetalle(permisos, role) {
-  return role === "dev" || permisos?.mantenimiento === true;
+function canAccessOtDetalle({ permisos, role, profile }) {
+  return canAccessByRoleOrPermission(
+    { role, permisos, profile },
+    { anyPerms: ["mantenimiento"] }
+  );
 }
 
 function formatDate(value) {
@@ -302,7 +306,7 @@ export default function OTsDetallePage() {
   const role = authCtx?.role || "";
   const authLoading = !!authCtx?.loading;
   const profile = authCtx?.profile || {};
-  const canAccess = canAccessOtDetalle(permisos, role);
+  const canAccess = canAccessOtDetalle({ permisos, role, profile });
 
   //subtareas
   const [detailView, setDetailView] = useState("tarea");

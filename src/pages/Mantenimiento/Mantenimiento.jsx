@@ -3,6 +3,7 @@ import React, { useContext, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ClipboardList, Lock, Settings, Wrench } from "lucide-react";
 import { AuthCtx } from "../../auth/AuthProvider";
+import { canAccessByRoleOrPermission } from "../../config/permissions";
 import {
   Badge,
   Brand,
@@ -21,17 +22,21 @@ import usePinnedModules from "../../hooks/usePinnedModules";
 
 export default function Mantenimiento() {
   const nav = useNavigate();
-  const { permisos, loading } = useContext(AuthCtx);
+  const { permisos, loading, role, profile } = useContext(AuthCtx);
   const { isPinned, togglePin } = usePinnedModules("mantenimiento");
   const toast = useToast();
+  const canAccess = canAccessByRoleOrPermission(
+    { role, permisos, profile },
+    { anyPerms: ["mantenimiento"] }
+  );
 
   useEffect(() => {
     if (loading) return;
-    if (!permisos?.mantenimiento) {
+    if (!canAccess) {
       toast.error("Este usuario no puede acceder por falta de permisos.");
       nav(-1);
     }
-  }, [loading, permisos, nav, toast]);
+  }, [loading, canAccess, nav, toast]);
 
   const go = (path) => nav(path);
 
@@ -57,7 +62,7 @@ export default function Mantenimiento() {
     []
   );
 
-  if (!permisos?.mantenimiento) return null;
+  if (!canAccess) return null;
 
   return (
     <Shell>

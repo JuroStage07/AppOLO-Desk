@@ -348,9 +348,7 @@ export default function App() {
             path="/administracion/usuarios"
             element={
               <PrivateRoute>
-                <RequireRole roles={["dev"]}>
-                  <UserHub />
-                </RequireRole>
+                <UserHub />
               </PrivateRoute>
             }
           />
