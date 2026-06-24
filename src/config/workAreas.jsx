@@ -216,7 +216,13 @@ const RAW_AREAS = [
     tag: "MRP",
     icon: <ClipboardList size={18} strokeWidth={2} />,
     requiredPerm: "mrpTarimas",
-    modules: [],
+    modules: [
+      { label: "Resumen", path: "/mrp-tarimas/dashboard", requiredPerm: "mrpTarimas" },
+      { label: "Inventario", path: "/mrp-tarimas/inventario", requiredPerm: "mrpTarimas" },
+      { label: "Historial", path: "/mrp-tarimas/movimientos", requiredPerm: "mrpTarimas" },
+      { label: "Descartes", path: "/mrp-tarimas/descartes", requiredPerm: "mrpTarimas" },
+      { label: "Catálogos", path: "/mrp-tarimas/catalogos", requiredPerm: "mrpTarimas" },
+    ],
   },
   {
     key: "administracion",
