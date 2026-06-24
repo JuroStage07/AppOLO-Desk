@@ -210,18 +210,13 @@ const RAW_AREAS = [
   {
     key: "mrp-tarimas",
     title: "MRP Tarimas",
-    desc: "Gestión integral de tarimas: inventario, reparaciones, materiales y costos.",
+    desc: "Gestión de tarimas.",
     path: "/mrp-tarimas",
     theme: AREA_THEMES["mrp-tarimas"],
     tag: "MRP",
     icon: <ClipboardList size={18} strokeWidth={2} />,
     requiredPerm: "mrpTarimas",
-    modules: [
-      { label: "Dashboard", path: "/mrp-tarimas/dashboard" },
-      { label: "Inventario", path: "/mrp-tarimas/inventario" },
-      { label: "Reparaciones", path: "/mrp-tarimas/reparaciones" },
-      { label: "Materiales", path: "/mrp-tarimas/materiales" },
-    ],
+    modules: [],
   },
   {
     key: "administracion",

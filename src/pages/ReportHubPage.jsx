@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
-  Boxes,
   ClipboardList,
   FileSpreadsheet,
   ShieldCheck,
@@ -41,7 +40,7 @@ const REPORTS = [
   { areaKey: "recepcion", title: "Reportes Recepción", hint: "Descargas y tiempos", path: "/recepcion/metricas", icon: FileSpreadsheet, requiredPerm: "recepcionReportes" },
   { areaKey: "mantenimiento", title: "Dashboard de OTs", hint: "Órdenes de trabajo", path: "/mantenimiento/ots/dashboard", icon: Wrench, requiredPerm: "mantenimiento" },
   { areaKey: "administracion", title: "Reporte de Horas Extra", hint: "Resumen mensual", path: "/horas-extra/reporte", icon: ClipboardList, requiredPerm: "horasExtra" },
-  { areaKey: "mrp-tarimas", title: "Dashboard MRP Tarimas", hint: "Inventario y reparaciones", path: "/mrp-tarimas/dashboard", icon: Boxes, requiredPerm: "mrpTarimas" },
+
 ];
 
 /** Determina si el usuario puede ver un reporte específico */

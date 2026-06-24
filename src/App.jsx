@@ -75,11 +75,7 @@ import RegistrarTarimas from "./pages/Zona Franca/RegistrarTarimas";
 import ConsultarTarimas from "./pages/Zona Franca/ConsultarTarimas";
 
 // MRP Tarimas
-import MRPTarimas from "./pages/MRP/MRPTarimas";
-import MRPDashboardPage from "./pages/MRP/MRPDashboardPage";
-import MRPInventarioPage from "./pages/MRP/MRPInventarioPage";
-import MRPReparacionesPage from "./pages/MRP/MRPReparacionesPage";
-import MRPMaterialesPage from "./pages/MRP/MRPMaterialesPage";
+import MRPTarimasPage from "./pages/MRP/MRPTarimasPage";
 
 
 
@@ -575,39 +571,7 @@ export default function App() {
             path="/mrp-tarimas"
             element={
               <PrivateRoute>
-                <MRPTarimas />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/mrp-tarimas/dashboard"
-            element={
-              <PrivateRoute>
-                <MRPDashboardPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/mrp-tarimas/inventario"
-            element={
-              <PrivateRoute>
-                <MRPInventarioPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/mrp-tarimas/reparaciones"
-            element={
-              <PrivateRoute>
-                <MRPReparacionesPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/mrp-tarimas/materiales"
-            element={
-              <PrivateRoute>
-                <MRPMaterialesPage />
+                <MRPTarimasPage />
               </PrivateRoute>
             }
           />
