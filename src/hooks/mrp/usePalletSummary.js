@@ -1,36 +1,28 @@
-// MRP Tarimas — hook de resúmenes/agregados de inventario.
+// MRP Tarimas — hook de resúmenes/agregados de inventario por artículo.
 //
-// REGLA: `merma` es ubicación operativa y SÍ cuenta en el total global por marca.
-//        `descartes` NO es ubicación operativa: se reporta aparte y nunca se
-//        suma al inventario.
+// REGLA: `merma` es ubicación operativa y SÍ cuenta en el total global.
+//        `descartes` NO es ubicación: se reporta aparte y nunca se suma.
 //
-// Devuelve, todo derivado de una sola lectura de inventario + descartes:
-//   - byBrand:    [{ brand_id, brand_name, total }]   (global por marca, todas las ubicaciones)
+// Devuelve, derivado de una lectura de inventario + descartes:
+//   - byArticulo: [{ articulo_id, codigo, nombre, total }]
 //   - byLocation: [{ location, total }]
-//   - byType:     [{ pallet_type, total }]
-//   - totalMerma, totalPend, totalGlobal  (números)
-//   - totalDiscards  (número — registro administrativo, NO inventario)
+//   - totalMerma, totalPend, totalGlobal, totalDiscards (números)
 import { useMemo } from "react";
 import { listPalletInventory, listPalletDiscards } from "../../services/mrp";
 import useAsyncData from "./useAsyncData";
 
 export default function usePalletSummary(filters = {}) {
-  const { warehouseId = null, brandId = null, palletType = null } = filters;
+  const { warehouseId = null, articuloId = null } = filters;
 
   const { data, loading, error, refetch } = useAsyncData(
     async () => {
       const [inventory, discards] = await Promise.all([
-        listPalletInventory({
-          warehouseId,
-          brandId,
-          palletType,
-          onlyWithStock: true,
-        }),
-        listPalletDiscards({ warehouseId, brandId, palletType, limit: 10000 }),
+        listPalletInventory({ warehouseId, articuloId, onlyWithStock: true }),
+        listPalletDiscards({ warehouseId, articuloId, limit: 10000 }),
       ]);
       return { inventory, discards };
     },
-    [warehouseId, brandId, palletType],
+    [warehouseId, articuloId],
     { channels: ["inventory", "discards"] }
   );
 
@@ -38,28 +30,26 @@ export default function usePalletSummary(filters = {}) {
     const rows = data?.inventory || [];
     const discards = data?.discards || [];
 
-    const brandMap = new Map();
+    const articuloMap = new Map();
     const locationMap = new Map();
-    const typeMap = new Map();
     let totalMerma = 0;
     let totalPend = 0;
     let totalGlobal = 0;
 
     for (const r of rows) {
       const qty = Number(r.quantity) || 0;
-      totalGlobal += qty; // incluye merma (operativa); descartes no está aquí
+      totalGlobal += qty;
 
-      const b = brandMap.get(r.brand_id) || {
-        brand_id: r.brand_id,
-        brand_name: r.brand?.name || "",
+      const a = articuloMap.get(r.articulo_id) || {
+        articulo_id: r.articulo_id,
+        codigo: r.articulo?.codigo || "",
+        nombre: r.articulo?.nombre || "",
         total: 0,
       };
-      b.total += qty;
-      brandMap.set(r.brand_id, b);
+      a.total += qty;
+      articuloMap.set(r.articulo_id, a);
 
       locationMap.set(r.location, (locationMap.get(r.location) || 0) + qty);
-      typeMap.set(r.pallet_type, (typeMap.get(r.pallet_type) || 0) + qty);
-
       if (r.location === "merma") totalMerma += qty;
       if (r.location === "pend") totalPend += qty;
     }
@@ -70,15 +60,11 @@ export default function usePalletSummary(filters = {}) {
     );
 
     return {
-      byBrand: Array.from(brandMap.values()).sort((a, b) =>
-        a.brand_name.localeCompare(b.brand_name)
+      byArticulo: Array.from(articuloMap.values()).sort((a, b) =>
+        a.codigo.localeCompare(b.codigo)
       ),
       byLocation: Array.from(locationMap, ([location, total]) => ({
         location,
-        total,
-      })),
-      byType: Array.from(typeMap, ([pallet_type, total]) => ({
-        pallet_type,
         total,
       })),
       totalMerma,

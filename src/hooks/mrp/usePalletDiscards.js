@@ -1,7 +1,7 @@
 // MRP Tarimas — hook de descartes (ajustes negativos).
 //
 // Filtros soportados (todos opcionales):
-//   brandId, palletType, warehouseId, userId, reason, dateFrom, dateTo, limit.
+//   articuloId, warehouseId, userId, userEmail, reason, dateFrom, dateTo, limit.
 import { listPalletDiscards } from "../../services/mrp";
 import useAsyncData from "./useAsyncData";
 

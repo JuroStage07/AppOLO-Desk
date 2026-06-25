@@ -1,7 +1,7 @@
 // MRP Tarimas — hook de historial de movimientos con filtros.
 //
 // Filtros soportados (todos opcionales):
-//   movementCode, taskId, userId, brandId, palletType, movementType,
+//   movementCode, taskId, userId, userEmail, articuloId, movementType,
 //   originLocation, destinationLocation, warehouseId, reason, dateFrom, dateTo, limit.
 // Para ver solo descartes: movementType = 'ajuste_negativo'.
 import { listPalletMovements } from "../../services/mrp";

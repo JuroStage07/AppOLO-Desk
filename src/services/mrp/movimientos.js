@@ -1,33 +1,25 @@
-// MRP Tarimas — servicios de movimientos: ajustes, traslados, historial y descartes.
+// MRP Tarimas — servicios de movimientos por ARTÍCULO: ajustes, traslados,
+// historial y descartes.
 //
-// La lógica transaccional (mutar stock + escribir historial de forma atómica,
-// validar stock suficiente, impedir inventario negativo) vive en funciones RPC
-// de Postgres (`mrp_positive_adjustment`, `mrp_negative_adjustment`,
-// `mrp_transfer`) — ver supabase/mrp_pallets.sql. Aquí hacemos validación rápida
-// de UX y delegamos la atomicidad a la base de datos.
+// La lógica transaccional (mutar stock + historial atómicos, validar stock,
+// impedir inventario negativo, mantener el total del artículo) vive en RPCs de
+// Postgres (mrp_articulo_ajuste_positivo / _negativo / mrp_articulo_transfer).
 //
-// REGLA: el ajuste negativo se registra en `pallet_discards` (registro
-// administrativo) y descuenta stock de la ubicación origen (por defecto `pend`).
-// NUNCA envía tarimas a `merma` ni crea stock operativo.
+// REGLA: el ajuste negativo se registra en `pallet_descartes_articulo` y
+// descuenta de la ubicación origen (default `pend`). NUNCA toca `merma` como
+// destino ni crea stock operativo.
 
 import { supabase } from "../../supabase";
-import {
-  isValidPalletType,
-  isValidLocation,
-  requiresStore,
-  INTAKE_LOCATION,
-} from "./constants";
 import { getMrpScope } from "./scope";
+import { isValidLocation, INTAKE_LOCATION } from "./constants";
 
-function assertCommon({ quantity, brandId, palletType, warehouseId, reason }, { needReason }) {
+function assertCommon({ quantity, articuloId, warehouseId, reason }, { needReason }) {
   const qty = Number(quantity);
   if (!Number.isFinite(qty) || qty <= 0)
     throw new Error("La cantidad debe ser mayor a 0.");
   if (!Number.isInteger(qty))
     throw new Error("La cantidad debe ser un número entero.");
-  if (!brandId) throw new Error("Debe seleccionar una marca.");
-  if (!isValidPalletType(palletType))
-    throw new Error("Tipo de tarima inválido.");
+  if (!articuloId) throw new Error("Debe seleccionar un artículo.");
   if (!warehouseId) throw new Error("Debe seleccionar un almacén.");
   if (needReason && !String(reason || "").trim())
     throw new Error("El motivo es obligatorio.");
@@ -36,31 +28,26 @@ function assertCommon({ quantity, brandId, palletType, warehouseId, reason }, { 
 
 /* -------------------------------------------------------- ajuste positivo */
 
-/**
- * Ajuste positivo: ingresa tarimas nuevas a la ubicación `pend` del almacén.
- * Suma al inventario global por marca y registra el movimiento.
- */
 export async function createPositivePalletAdjustment({
   warehouseId,
-  brandId,
-  palletType,
+  articuloId,
   quantity,
   reason,
   userId,
   userEmail,
 }) {
   const qty = assertCommon(
-    { quantity, brandId, palletType, warehouseId, reason },
+    { quantity, articuloId, warehouseId, reason },
     { needReason: true }
   );
   if (!userId) throw new Error("Usuario no identificado.");
 
-  const { data, error } = await supabase.rpc("mrp_positive_adjustment", {
-    p_tenant_id: getMrpScope().tenantId,
-    p_company: getMrpScope().company,
+  const { tenantId, company } = getMrpScope();
+  const { data, error } = await supabase.rpc("mrp_articulo_ajuste_positivo", {
+    p_tenant_id: tenantId,
+    p_company: company,
     p_warehouse_id: warehouseId,
-    p_brand_id: brandId,
-    p_pallet_type: palletType,
+    p_articulo_id: articuloId,
     p_quantity: qty,
     p_reason: String(reason).trim(),
     p_user_id: userId,
@@ -72,22 +59,9 @@ export async function createPositivePalletAdjustment({
 
 /* -------------------------------------------------------- ajuste negativo */
 
-/**
- * Ajuste negativo (descarte): registra en `pallet_discards`, crea movimiento
- * `ajuste_negativo` y descuenta del inventario en `originLocation`.
- *
- * Lógica de origen (acordada):
- *   - Por defecto descuenta de `pend` del almacén seleccionado.
- *   - Si no hay suficiente en `pend`, el llamador puede pasar `originLocation`
- *     para descartar desde otra ubicación operativa.
- *   - La RPC impide inventario negativo (lanza error si no hay stock suficiente).
- *
- * NUNCA toca `merma` como destino ni crea stock operativo.
- */
 export async function createNegativePalletAdjustment({
   warehouseId,
-  brandId,
-  palletType,
+  articuloId,
   quantity,
   reason,
   originLocation = INTAKE_LOCATION,
@@ -95,21 +69,21 @@ export async function createNegativePalletAdjustment({
   userEmail,
 }) {
   const qty = assertCommon(
-    { quantity, brandId, palletType, warehouseId, reason },
+    { quantity, articuloId, warehouseId, reason },
     { needReason: true }
   );
   if (!isValidLocation(originLocation))
     throw new Error("Ubicación origen inválida.");
-  if (requiresStore(originLocation))
+  if (originLocation === "tienda")
     throw new Error("El descarte no puede tener origen en una tienda.");
   if (!userId) throw new Error("Usuario no identificado.");
 
-  const { data, error } = await supabase.rpc("mrp_negative_adjustment", {
-    p_tenant_id: getMrpScope().tenantId,
-    p_company: getMrpScope().company,
+  const { tenantId, company } = getMrpScope();
+  const { data, error } = await supabase.rpc("mrp_articulo_ajuste_negativo", {
+    p_tenant_id: tenantId,
+    p_company: company,
     p_warehouse_id: warehouseId,
-    p_brand_id: brandId,
-    p_pallet_type: palletType,
+    p_articulo_id: articuloId,
     p_quantity: qty,
     p_reason: String(reason).trim(),
     p_origin_location: originLocation,
@@ -122,52 +96,36 @@ export async function createNegativePalletAdjustment({
 
 /* --------------------------------------------------------------- traslado */
 
-/**
- * Traslado de tarimas entre ubicaciones del mismo almacén.
- * Valida stock suficiente en origen, descuenta de origen y suma a destino,
- * de forma atómica. Genera task_id y movement_code.
- */
 export async function transferPallets({
   warehouseId,
   originLocation,
   destinationLocation,
-  originStoreId = null,
-  destinationStoreId = null,
-  brandId,
-  palletType,
+  articuloId,
   quantity,
   reason,
   userId,
   userEmail,
 }) {
   const qty = assertCommon(
-    { quantity, brandId, palletType, warehouseId, reason },
+    { quantity, articuloId, warehouseId, reason },
     { needReason: false }
   );
   if (!isValidLocation(originLocation))
     throw new Error("Ubicación origen inválida.");
   if (!isValidLocation(destinationLocation))
     throw new Error("Ubicación destino inválida.");
-  if (originLocation === destinationLocation && originStoreId === destinationStoreId)
+  if (originLocation === destinationLocation)
     throw new Error("El origen y el destino no pueden ser iguales.");
-  if (requiresStore(originLocation) && !originStoreId)
-    throw new Error("Debe seleccionar la tienda origen.");
-  if (requiresStore(destinationLocation) && !destinationStoreId)
-    throw new Error("Debe seleccionar la tienda destino.");
   if (!userId) throw new Error("Usuario no identificado.");
 
-  const { data, error } = await supabase.rpc("mrp_transfer", {
-    p_tenant_id: getMrpScope().tenantId,
-    p_company: getMrpScope().company,
+  const { tenantId, company } = getMrpScope();
+  const { data, error } = await supabase.rpc("mrp_articulo_transfer", {
+    p_tenant_id: tenantId,
+    p_company: company,
     p_warehouse_id: warehouseId,
     p_origin_location: originLocation,
     p_destination_location: destinationLocation,
-    p_origin_store_id: requiresStore(originLocation) ? originStoreId : null,
-    p_destination_store_id: requiresStore(destinationLocation)
-      ? destinationStoreId
-      : null,
-    p_brand_id: brandId,
-    p_pallet_type: palletType,
+    p_articulo_id: articuloId,
     p_quantity: qty,
     p_reason: reason ? String(reason).trim() : null,
     p_user_id: userId,
@@ -179,34 +137,26 @@ export async function transferPallets({
 
 /* ----------------------------------------------------- historial / descartes */
 
-/**
- * Historial de movimientos con filtros opcionales.
- * Filtros: movementCode, taskId, userId, brandId, palletType,
- *          movementType, originLocation, destinationLocation,
- *          dateFrom, dateTo (ISO), reason (texto), warehouseId.
- */
 export async function listPalletMovements(filters = {}) {
+  const { tenantId, company } = getMrpScope();
   let q = supabase
-    .from("pallet_movements")
+    .from("pallet_movimientos_articulo")
     .select(
       `id, movement_code, task_id, warehouse_id, movement_type,
-       origin_location, destination_location, origin_store_id, destination_store_id,
-       brand_id, pallet_type, quantity, reason, user_id, user_email, metadata, created_at,
-       brand:pallet_brands(name),
-       warehouse:pallet_warehouses(name),
-       origin_store:pallet_stores!pallet_movements_origin_store_id_fkey(store_number, name),
-       destination_store:pallet_stores!pallet_movements_destination_store_id_fkey(store_number, name)`
+       origin_location, destination_location,
+       articulo_id, quantity, reason, user_id, user_email, metadata, created_at,
+       articulo:pallet_articulos(codigo, nombre),
+       warehouse:pallet_warehouses(name)`
     )
-    .eq("tenant_id", getMrpScope().tenantId)
-    .eq("company", getMrpScope().company);
+    .eq("tenant_id", tenantId)
+    .eq("company", company);
 
   const {
     movementCode,
     taskId,
     userId,
     userEmail,
-    brandId,
-    palletType,
+    articuloId,
     movementType,
     originLocation,
     destinationLocation,
@@ -221,8 +171,7 @@ export async function listPalletMovements(filters = {}) {
   if (taskId) q = q.eq("task_id", taskId);
   if (userId) q = q.eq("user_id", userId);
   if (userEmail) q = q.ilike("user_email", `%${userEmail}%`);
-  if (brandId) q = q.eq("brand_id", brandId);
-  if (palletType) q = q.eq("pallet_type", palletType);
+  if (articuloId) q = q.eq("articulo_id", articuloId);
   if (movementType) q = q.eq("movement_type", movementType);
   if (originLocation) q = q.eq("origin_location", originLocation);
   if (destinationLocation) q = q.eq("destination_location", destinationLocation);
@@ -238,26 +187,22 @@ export async function listPalletMovements(filters = {}) {
   return data || [];
 }
 
-/**
- * Lista los descartes (ajustes negativos) con filtros opcionales.
- * Filtros: brandId, palletType, warehouseId, dateFrom, dateTo, userId, reason.
- */
 export async function listPalletDiscards(filters = {}) {
+  const { tenantId, company } = getMrpScope();
   let q = supabase
-    .from("pallet_discards")
+    .from("pallet_descartes_articulo")
     .select(
-      `id, movement_id, warehouse_id, brand_id, pallet_type, quantity, reason,
+      `id, movement_id, warehouse_id, articulo_id, quantity, reason,
        user_id, user_email, created_at,
-       brand:pallet_brands(name),
+       articulo:pallet_articulos(codigo, nombre),
        warehouse:pallet_warehouses(name),
-       movement:pallet_movements(movement_code, origin_location)`
+       movement:pallet_movimientos_articulo(movement_code, origin_location)`
     )
-    .eq("tenant_id", getMrpScope().tenantId)
-    .eq("company", getMrpScope().company);
+    .eq("tenant_id", tenantId)
+    .eq("company", company);
 
   const {
-    brandId,
-    palletType,
+    articuloId,
     warehouseId,
     userId,
     userEmail,
@@ -267,8 +212,7 @@ export async function listPalletDiscards(filters = {}) {
     limit = 500,
   } = filters;
 
-  if (brandId) q = q.eq("brand_id", brandId);
-  if (palletType) q = q.eq("pallet_type", palletType);
+  if (articuloId) q = q.eq("articulo_id", articuloId);
   if (warehouseId) q = q.eq("warehouse_id", warehouseId);
   if (userId) q = q.eq("user_id", userId);
   if (userEmail) q = q.ilike("user_email", `%${userEmail}%`);

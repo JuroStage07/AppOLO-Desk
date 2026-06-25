@@ -1,9 +1,8 @@
 // MRP Tarimas — barrel de hooks. Las pantallas (Fase 3) importan desde aquí.
 export { default as usePalletInventory } from "./usePalletInventory";
 export { default as usePalletSummary } from "./usePalletSummary";
-export { default as usePalletBrands } from "./usePalletBrands";
-export { default as usePalletStores } from "./usePalletStores";
 export { default as usePalletWarehouses } from "./usePalletWarehouses";
+export { default as usePalletArticulos } from "./usePalletArticulos";
 export { default as usePalletAdjustments } from "./usePalletAdjustments";
 export { default as usePalletTransfers } from "./usePalletTransfers";
 export { default as usePalletMovements } from "./usePalletMovements";

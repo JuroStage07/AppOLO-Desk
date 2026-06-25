@@ -11,10 +11,7 @@
 export const MRP_TENANT_ID = "CR";
 export const MRP_COMPANY = "OLO";
 
-// Tipos de tarima.
-export const PALLET_TYPES = Object.freeze(["sencilla", "doble"]);
-
-// Ubicaciones OPERATIVAS válidas del inventario (todas cuentan en el global por marca).
+// Ubicaciones OPERATIVAS válidas del inventario (todas cuentan en el global).
 export const PALLET_LOCATIONS = Object.freeze([
   "tienda",
   "almacen",
@@ -34,12 +31,10 @@ export const PALLET_MOVEMENT_TYPES = Object.freeze([
 // Ubicación donde ingresan las tarimas en un ajuste positivo.
 export const INTAKE_LOCATION = "pend";
 
-// Etiquetas legibles (UI) — mantener en español como el resto del sistema.
-export const PALLET_TYPE_LABELS = Object.freeze({
-  sencilla: "Sencilla",
-  doble: "Doble",
-});
+// Motivos disponibles para ajustes y traslados.
+export const PALLET_REASONS = Object.freeze(["Ingreso", "Devolución"]);
 
+// Etiquetas legibles (UI) — mantener en español como el resto del sistema.
 export const PALLET_LOCATION_LABELS = Object.freeze({
   tienda: "Tienda",
   almacen: "Almacén",
@@ -56,7 +51,5 @@ export const PALLET_MOVEMENT_TYPE_LABELS = Object.freeze({
 });
 
 // Helpers de validación de dominio.
-export const isValidPalletType = (t) => PALLET_TYPES.includes(t);
 export const isValidLocation = (l) => PALLET_LOCATIONS.includes(l);
 export const isValidMovementType = (m) => PALLET_MOVEMENT_TYPES.includes(m);
-export const requiresStore = (location) => location === "tienda";

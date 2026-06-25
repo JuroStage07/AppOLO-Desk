@@ -1,9 +1,8 @@
-// MRP Tarimas — modal de traslado de tarimas entre ubicaciones.
+// MRP Tarimas — modal de traslado de ARTÍCULOS entre ubicaciones.
 //
 // Opera sobre el almacén de trabajo seleccionado (useMrpWorkspace).
-// Valida origen/destino, stock suficiente (en la RPC) y tienda obligatoria
-// cuando la ubicación es `tienda`. Crea task_id + movimiento.
-import React, { useEffect, useState } from "react";
+// Valida origen/destino, stock suficiente (en la RPC). Crea task_id + movimiento.
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Sheet,
   Field,
@@ -12,26 +11,22 @@ import {
 } from "../../../components/ui";
 import {
   usePalletTransfers,
-  usePalletBrands,
-  usePalletStores,
+  usePalletArticulos,
+  usePalletInventory,
   useMrpWorkspace,
 } from "../../../hooks/mrp";
 import {
-  PALLET_TYPES,
-  PALLET_TYPE_LABELS,
   PALLET_LOCATIONS,
   PALLET_LOCATION_LABELS,
+  PALLET_REASONS,
 } from "../../../services/mrp";
 
 function initialForm(prefillArg) {
   const prefill = prefillArg || {};
   return {
     originLocation: prefill.originLocation || "",
-    originStoreId: prefill.originStoreId || "",
     destinationLocation: prefill.destinationLocation || "",
-    destinationStoreId: prefill.destinationStoreId || "",
-    brandId: prefill.brandId || "",
-    palletType: prefill.palletType || "",
+    articuloId: prefill.articuloId || "",
     quantity: "",
     reason: "",
   };
@@ -40,11 +35,23 @@ function initialForm(prefillArg) {
 export default function TrasladoModal({ open, onClose, prefill }) {
   const { warehouse, warehouseId } = useMrpWorkspace();
   const { transfer, loading } = usePalletTransfers();
-  const { brands } = usePalletBrands({ warehouseId });
-  const { stores } = usePalletStores({ warehouseId });
+  const { articulos } = usePalletArticulos({ warehouseId });
 
   const [form, setForm] = useState(initialForm(prefill));
   const [errors, setErrors] = useState({});
+
+  // Inventario del artículo seleccionado (para mostrar el disponible por ubicación).
+  const { inventory } = usePalletInventory({
+    warehouseId,
+    articuloId: form.articuloId || null,
+    onlyWithStock: false,
+  });
+
+  const originAvailable = useMemo(() => {
+    if (!form.articuloId || !form.originLocation) return null;
+    const row = inventory.find((r) => r.location === form.originLocation);
+    return row ? Number(row.quantity) || 0 : 0;
+  }, [inventory, form.articuloId, form.originLocation]);
 
   useEffect(() => {
     if (open) {
@@ -55,29 +62,23 @@ export default function TrasladoModal({ open, onClose, prefill }) {
   }, [open]);
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
-  const originIsStore = form.originLocation === "tienda";
-  const destIsStore = form.destinationLocation === "tienda";
 
   const validate = () => {
     const e = {};
     if (!warehouseId) e.originLocation = "Selecciona un almacén de trabajo primero.";
     if (!form.originLocation) e.originLocation = "Seleccione el origen.";
     if (!form.destinationLocation) e.destinationLocation = "Seleccione el destino.";
-    if (originIsStore && !form.originStoreId)
-      e.originStoreId = "Seleccione la tienda origen.";
-    if (destIsStore && !form.destinationStoreId)
-      e.destinationStoreId = "Seleccione la tienda destino.";
     if (
       form.originLocation &&
-      form.originLocation === form.destinationLocation &&
-      (form.originStoreId || "") === (form.destinationStoreId || "")
+      form.originLocation === form.destinationLocation
     )
       e.destinationLocation = "El origen y el destino no pueden ser iguales.";
-    if (!form.brandId) e.brandId = "Seleccione una marca.";
-    if (!form.palletType) e.palletType = "Seleccione el tipo.";
+    if (!form.articuloId) e.articuloId = "Seleccione un artículo.";
     const qty = Number(form.quantity);
     if (!Number.isFinite(qty) || qty <= 0) e.quantity = "Debe ser mayor a 0.";
     else if (!Number.isInteger(qty)) e.quantity = "Debe ser un número entero.";
+    else if (originAvailable !== null && qty > originAvailable)
+      e.quantity = `Solo hay ${originAvailable} disponible(s) en el origen.`;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -89,10 +90,7 @@ export default function TrasladoModal({ open, onClose, prefill }) {
         warehouseId,
         originLocation: form.originLocation,
         destinationLocation: form.destinationLocation,
-        originStoreId: originIsStore ? form.originStoreId : null,
-        destinationStoreId: destIsStore ? form.destinationStoreId : null,
-        brandId: form.brandId,
-        palletType: form.palletType,
+        articuloId: form.articuloId,
         quantity: Number(form.quantity),
         reason: form.reason.trim() || null,
       });
@@ -113,28 +111,42 @@ export default function TrasladoModal({ open, onClose, prefill }) {
     </>
   );
 
-  const storeOptions = (
-    <>
-      <option value="">— Seleccionar tienda —</option>
-      {stores.map((s) => (
-        <option key={s.id} value={s.id}>
-          {s.store_number} · {s.name}
-        </option>
-      ))}
-    </>
-  );
-
   return (
-    <Sheet open={open} onClose={onClose} title="Traslado de tarimas" maxWidth={620}>
+    <Sheet open={open} onClose={onClose} title="Traslado de artículos" maxWidth={620}>
       <Sheet.Body>
         <Sheet.Hint>
           Almacén de trabajo: <b>{warehouse?.name || "— sin seleccionar —"}</b>
         </Sheet.Hint>
 
+        <Field label="Artículo" required error={errors.articuloId}>
+          <Field.Select
+            value={form.articuloId}
+            disabled={!warehouseId}
+            onChange={(e) => set("articuloId", e.target.value)}
+          >
+            <option value="">— Seleccionar —</option>
+            {articulos.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.codigo} · {a.nombre}
+              </option>
+            ))}
+          </Field.Select>
+        </Field>
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Ubicación origen" required error={errors.originLocation}>
+          <Field
+            label="Ubicación origen"
+            required
+            error={errors.originLocation}
+            hint={
+              originAvailable !== null
+                ? `Disponible: ${originAvailable}`
+                : undefined
+            }
+          >
             <Field.Select
               value={form.originLocation}
+              disabled={!form.articuloId}
               onChange={(e) => set("originLocation", e.target.value)}
             >
               {locationOptions}
@@ -143,60 +155,10 @@ export default function TrasladoModal({ open, onClose, prefill }) {
           <Field label="Ubicación destino" required error={errors.destinationLocation}>
             <Field.Select
               value={form.destinationLocation}
+              disabled={!form.articuloId}
               onChange={(e) => set("destinationLocation", e.target.value)}
             >
               {locationOptions}
-            </Field.Select>
-          </Field>
-
-          {originIsStore && (
-            <Field label="Tienda origen" required error={errors.originStoreId}>
-              <Field.Select
-                value={form.originStoreId}
-                onChange={(e) => set("originStoreId", e.target.value)}
-              >
-                {storeOptions}
-              </Field.Select>
-            </Field>
-          )}
-          {destIsStore && (
-            <Field label="Tienda destino" required error={errors.destinationStoreId}>
-              <Field.Select
-                value={form.destinationStoreId}
-                onChange={(e) => set("destinationStoreId", e.target.value)}
-              >
-                {storeOptions}
-              </Field.Select>
-            </Field>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Marca" required error={errors.brandId}>
-            <Field.Select
-              value={form.brandId}
-              disabled={!warehouseId}
-              onChange={(e) => set("brandId", e.target.value)}
-            >
-              <option value="">— Seleccionar —</option>
-              {brands.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </Field.Select>
-          </Field>
-          <Field label="Tipo de tarima" required error={errors.palletType}>
-            <Field.Select
-              value={form.palletType}
-              onChange={(e) => set("palletType", e.target.value)}
-            >
-              <option value="">— Seleccionar —</option>
-              {PALLET_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {PALLET_TYPE_LABELS[t]}
-                </option>
-              ))}
             </Field.Select>
           </Field>
         </div>
@@ -206,18 +168,27 @@ export default function TrasladoModal({ open, onClose, prefill }) {
             type="number"
             min={1}
             step={1}
+            max={originAvailable ?? undefined}
             value={form.quantity}
+            disabled={!form.articuloId}
             onChange={(e) => set("quantity", e.target.value)}
             placeholder="0"
           />
         </Field>
 
         <Field label="Motivo (opcional)">
-          <Field.Input
+          <Field.Select
             value={form.reason}
+            disabled={!form.articuloId}
             onChange={(e) => set("reason", e.target.value)}
-            placeholder="Ej: reubicación a patio"
-          />
+          >
+            <option value="">— Sin motivo —</option>
+            {PALLET_REASONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </Field.Select>
         </Field>
       </Sheet.Body>
 

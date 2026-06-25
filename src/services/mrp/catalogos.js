@@ -24,105 +24,6 @@ function mapDuplicate(error, friendly) {
   return error;
 }
 
-/* ------------------------------------------------------------------ marcas */
-
-export async function listPalletBrands({
-  includeInactive = false,
-  warehouseId = null,
-} = {}) {
-  let q = scope(
-    supabase
-      .from("pallet_brands")
-      .select("*, warehouse:pallet_warehouses(id, name, code)")
-  ).order("name", { ascending: true });
-  if (!includeInactive) q = q.eq("active", true);
-  if (warehouseId) q = q.eq("warehouse_id", warehouseId);
-  const { data, error } = await q;
-  if (error) throw error;
-  return data || [];
-}
-
-export async function createPalletBrand({ name, warehouseId }) {
-  const clean = String(name || "").trim();
-  if (!clean) throw new Error("El nombre de la marca es obligatorio.");
-  if (!warehouseId) throw new Error("Debe seleccionar un almacén.");
-  const { data, error } = await supabase
-    .from("pallet_brands")
-    .insert({
-      ...scopeFields(),
-      warehouse_id: warehouseId,
-      name: clean,
-      active: true,
-    })
-    .select()
-    .single();
-  if (error)
-    throw mapDuplicate(error, "Ya existe una marca con ese nombre en el almacén.");
-  return data;
-}
-
-export async function setPalletBrandActive(id, active) {
-  const { data, error } = await supabase
-    .from("pallet_brands")
-    .update({ active: !!active })
-    .eq("id", id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
-}
-
-/* ----------------------------------------------------------------- tiendas */
-
-export async function listPalletStores({
-  includeInactive = false,
-  warehouseId = null,
-} = {}) {
-  let q = scope(
-    supabase
-      .from("pallet_stores")
-      .select("*, warehouse:pallet_warehouses(id, name, code)")
-  ).order("store_number", { ascending: true });
-  if (!includeInactive) q = q.eq("active", true);
-  if (warehouseId) q = q.eq("warehouse_id", warehouseId);
-  const { data, error } = await q;
-  if (error) throw error;
-  return data || [];
-}
-
-export async function createPalletStore({ storeNumber, name, warehouseId }) {
-  const num = String(storeNumber ?? "").trim();
-  const clean = String(name || "").trim();
-  if (!num) throw new Error("El número de tienda es obligatorio.");
-  if (!clean) throw new Error("El nombre de la tienda es obligatorio.");
-  if (!warehouseId) throw new Error("Debe seleccionar un almacén.");
-  const { data, error } = await supabase
-    .from("pallet_stores")
-    .insert({
-      ...scopeFields(),
-      warehouse_id: warehouseId,
-      store_number: num,
-      name: clean,
-      active: true,
-    })
-    .select()
-    .single();
-  if (error)
-    throw mapDuplicate(error, "Ya existe una tienda con ese número en el almacén.");
-  return data;
-}
-
-export async function setPalletStoreActive(id, active) {
-  const { data, error } = await supabase
-    .from("pallet_stores")
-    .update({ active: !!active })
-    .eq("id", id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
-}
-
 /* --------------------------------------------------------------- almacenes */
 
 export async function listPalletWarehouses({ includeInactive = false } = {}) {
@@ -156,6 +57,67 @@ export async function createPalletWarehouse({ name, code }) {
 export async function setPalletWarehouseActive(id, active) {
   const { data, error } = await supabase
     .from("pallet_warehouses")
+    .update({ active: !!active })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/* --------------------------------------------------------------- artículos */
+
+export async function listPalletArticulos({
+  includeInactive = false,
+  warehouseId = null,
+} = {}) {
+  let q = scope(supabase.from("pallet_articulos").select("*")).order("codigo", {
+    ascending: true,
+  });
+  if (!includeInactive) q = q.eq("active", true);
+  if (warehouseId) q = q.eq("warehouse_id", warehouseId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+// Previsualiza el próximo código (A####) sin crear nada. La RPC sigue siendo
+// la autoridad al guardar; esto es solo para mostrarlo en el formulario.
+export async function getNextArticuloCode() {
+  const { data, error } = await scope(
+    supabase.from("pallet_articulos").select("codigo")
+  );
+  if (error) throw error;
+  let max = -1;
+  for (const r of data || []) {
+    const m = /^A(\d+)$/.exec(r.codigo || "");
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n > max) max = n;
+    }
+  }
+  return "A" + String(max + 1).padStart(4, "0");
+}
+
+// El código (A####) se genera en la RPC; aquí solo se manda nombre + almacén.
+export async function createPalletArticulo({ nombre, warehouseId }) {
+  const clean = String(nombre || "").trim();
+  if (!clean) throw new Error("El nombre del artículo es obligatorio.");
+  if (!warehouseId) throw new Error("Debe seleccionar un almacén.");
+  const { tenantId, company } = getMrpScope();
+  const { data, error } = await supabase.rpc("mrp_create_articulo", {
+    p_tenant_id: tenantId,
+    p_company: company,
+    p_warehouse_id: warehouseId,
+    p_nombre: clean,
+  });
+  if (error) throw error;
+  return data; // fila completa del artículo (incluye codigo)
+}
+
+export async function setPalletArticuloActive(id, active) {
+  const { data, error } = await supabase
+    .from("pallet_articulos")
     .update({ active: !!active })
     .eq("id", id)
     .select()

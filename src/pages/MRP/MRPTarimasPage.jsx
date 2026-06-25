@@ -1,77 +1,59 @@
-// MRP Tarimas — hub del módulo: contexto de trabajo (tenant/company + almacén)
-// y grilla de submódulos. Todo el módulo opera sobre el almacén seleccionado.
-import React, { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+// MRP Tarimas — Layout del módulo: contexto de trabajo + barra lateral de
+// módulos; el módulo activo se renderiza en la misma página vía <Outlet/>.
+import React from "react";
+import { NavLink, Outlet } from "react-router-dom";
 import {
   LayoutDashboard,
   Package,
   History,
   Trash2,
   Settings2,
-  Warehouse,
 } from "lucide-react";
 import {
   Shell,
   Topbar,
   Main,
   Container,
-  Hero,
-  Badge,
   Card,
   Field,
-  ModuleGrid,
-  ModuleCard,
-  SectionTitle,
   Spinner,
 } from "../../components/ui";
-import usePinnedModules from "../../hooks/usePinnedModules";
 import { useMrpWorkspace, usePalletWarehouses } from "../../hooks/mrp";
+import useIsMobile from "../../hooks/useIsMobile";
+import { NoWarehouse } from "./components/WorkspaceBar";
+import { ACCENT, ACCENT_SOFT, BORDER, SLATE, TEXT } from "../../styles/theme";
 
-const MODULES = [
-  {
-    title: "Resumen",
-    desc: "Totales por marca, ubicación y tipo. Incluye merma, pend y descartes.",
-    icon: LayoutDashboard,
-    path: "/mrp-tarimas/dashboard",
-    tag: "KPIs",
-  },
-  {
-    title: "Inventario",
-    desc: "Tarimas por ubicación, marca y tipo. Ajusta y traslada.",
-    icon: Package,
-    path: "/mrp-tarimas/inventario",
-    tag: "Inventario",
-  },
-  {
-    title: "Historial",
-    desc: "Todos los movimientos: ajustes y traslados, con filtros.",
-    icon: History,
-    path: "/mrp-tarimas/movimientos",
-    tag: "Movimientos",
-  },
-  {
-    title: "Descartes",
-    desc: "Registro administrativo de ajustes negativos. No es inventario.",
-    icon: Trash2,
-    path: "/mrp-tarimas/descartes",
-    tag: "Administrativo",
-  },
-  {
-    title: "Catálogos",
-    desc: "Marcas, tiendas y almacenes del módulo.",
-    icon: Settings2,
-    path: "/mrp-tarimas/catalogos",
-    tag: "Configuración",
-  },
+const NAV = [
+  { label: "Resumen", to: "/mrp-tarimas/dashboard", icon: LayoutDashboard },
+  { label: "Inventario", to: "/mrp-tarimas/inventario", icon: Package },
+  { label: "Historial", to: "/mrp-tarimas/movimientos", icon: History },
+  { label: "Descartes", to: "/mrp-tarimas/descartes", icon: Trash2 },
+  { label: "Catálogos", to: "/mrp-tarimas/catalogos", icon: Settings2 },
 ];
 
-export default function MRPTarimasPage() {
-  const nav = useNavigate();
-  const { isPinned, togglePin } = usePinnedModules("mrp-tarimas");
-  const { tenantId, company, warehouseId, selectWarehouse } = useMrpWorkspace();
-  const { warehouses, loading } = usePalletWarehouses();
+const linkBase = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: `1px solid transparent`,
+  color: TEXT,
+  fontWeight: 800,
+  fontSize: 14,
+  textDecoration: "none",
+  cursor: "pointer",
+};
+const linkActive = {
+  background: ACCENT_SOFT,
+  border: `1px solid ${ACCENT}`,
+  color: ACCENT,
+};
 
-  const modules = useMemo(() => MODULES, []);
+export default function MRPTarimasPage() {
+  const isMobile = useIsMobile();
+  const { warehouseId, selectWarehouse } = useMrpWorkspace();
+  const { warehouses, loading } = usePalletWarehouses();
 
   const onPick = (id) => {
     const wh = warehouses.find((w) => w.id === id) || null;
@@ -80,74 +62,111 @@ export default function MRPTarimasPage() {
     );
   };
 
+  const nav = (
+    <nav
+      style={{
+        display: isMobile ? "flex" : "grid",
+        gap: 6,
+        overflowX: isMobile ? "auto" : "visible",
+      }}
+    >
+      {NAV.map((item) => {
+        const Icon = item.icon;
+        return (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            style={({ isActive }) => ({
+              ...linkBase,
+              whiteSpace: "nowrap",
+              ...(isActive ? linkActive : {}),
+            })}
+          >
+            <Icon size={16} strokeWidth={2.2} />
+            {item.label}
+          </NavLink>
+        );
+      })}
+    </nav>
+  );
+
+  const warehousePicker = (
+    <div style={{ display: "grid", gap: 4 }}>
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 800,
+          color: SLATE,
+          textTransform: "uppercase",
+          letterSpacing: 0.4,
+        }}
+      >
+        Almacén de trabajo
+      </span>
+      {loading ? (
+        <Spinner inline />
+      ) : (
+        <Field.Select
+          value={warehouseId || ""}
+          onChange={(e) => onPick(e.target.value)}
+          style={{
+            padding: "8px 10px",
+            fontWeight: 900,
+            borderColor: ACCENT,
+            background: ACCENT_SOFT,
+          }}
+        >
+          <option value="">— Seleccionar —</option>
+          {warehouses.map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.name}
+              {w.code ? ` (${w.code})` : ""}
+            </option>
+          ))}
+        </Field.Select>
+      )}
+      {!loading && warehouses.length === 0 && (
+        <span style={{ fontSize: 11, fontWeight: 700, color: SLATE }}>
+          Crea un almacén en Catálogos › Almacenes.
+        </span>
+      )}
+    </div>
+  );
+
   return (
     <Shell>
       <Topbar />
       <Main>
         <Container>
-          <Hero
-            kicker="MRP Tarimas"
-            title="Gestión de tarimas"
-            subtitle="Selecciona el almacén de trabajo. Todo el módulo opera sobre ese almacén."
-            badge={<Badge tone="accent">MRP</Badge>}
-          />
-
-          {/* Contexto de trabajo */}
-          <Card>
-            <div style={{ display: "grid", gap: 12 }}>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <Badge tone="neutral">Tenant: {tenantId}</Badge>
-                <Badge tone="neutral">Compañía: {company}</Badge>
+          {/* Sidebar (almacén + módulos) + contenido del módulo activo */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "220px 1fr",
+              gap: 16,
+              alignItems: "start",
+            }}
+          >
+            {isMobile ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                {warehousePicker}
+                {nav}
               </div>
-              {loading ? (
-                <Spinner label="Cargando almacenes…" inline />
-              ) : (
-                <Field
-                  label="Almacén de trabajo"
-                  hint={
-                    !warehouseId
-                      ? "Selecciona un almacén para habilitar el módulo."
-                      : undefined
-                  }
-                >
-                  <Field.Select
-                    value={warehouseId || ""}
-                    onChange={(e) => onPick(e.target.value)}
-                  >
-                    <option value="">— Seleccionar almacén —</option>
-                    {warehouses.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name}
-                        {w.code ? ` (${w.code})` : ""}
-                      </option>
-                    ))}
-                  </Field.Select>
-                </Field>
-              )}
-              {!loading && warehouses.length === 0 && (
-                <Badge tone="dark" icon={Warehouse}>
-                  No hay almacenes. Crea uno en Catálogos › Almacenes.
-                </Badge>
-              )}
-            </div>
-          </Card>
+            ) : (
+              <Card
+                padding={10}
+                style={{ position: "sticky", top: 84, display: "grid", gap: 12 }}
+              >
+                {warehousePicker}
+                <div style={{ height: 1, background: BORDER }} />
+                {nav}
+              </Card>
+            )}
 
-          <SectionTitle title="Módulos" />
-          <ModuleGrid>
-            {modules.map((m) => (
-              <ModuleCard
-                key={m.path}
-                title={m.title}
-                desc={m.desc}
-                icon={m.icon}
-                tag={m.tag}
-                tone="accent"
-                onClick={() => nav(m.path)}
-                pinned={isPinned(m.path)}
-                onTogglePin={() => togglePin(m.title, m.path)}
-              />
-            ))}
-          </ModuleGrid>
+            <div style={{ minWidth: 0, display: "grid", gap: 16 }}>
+              {warehouseId ? <Outlet /> : <NoWarehouse />}
+            </div>
+          </div>
         </Container>
       </Main>
     </Shell>

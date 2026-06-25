@@ -571,7 +571,7 @@ export default function App() {
             }
           />
 
-          {/* ================= MRP Tarimas ================= */}
+          {/* ================= MRP Tarimas (layout + módulos anidados) ===== */}
           <Route
             path="/mrp-tarimas"
             element={
@@ -579,47 +579,14 @@ export default function App() {
                 <MRPTarimasPage />
               </PrivateRoute>
             }
-          />
-          <Route
-            path="/mrp-tarimas/dashboard"
-            element={
-              <PrivateRoute>
-                <MRPDashboardPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/mrp-tarimas/inventario"
-            element={
-              <PrivateRoute>
-                <MRPInventarioPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/mrp-tarimas/movimientos"
-            element={
-              <PrivateRoute>
-                <MRPHistorialPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/mrp-tarimas/descartes"
-            element={
-              <PrivateRoute>
-                <MRPDescartesPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/mrp-tarimas/catalogos"
-            element={
-              <PrivateRoute>
-                <MRPCatalogosPage />
-              </PrivateRoute>
-            }
-          />
+          >
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<MRPDashboardPage />} />
+            <Route path="inventario" element={<MRPInventarioPage />} />
+            <Route path="movimientos" element={<MRPHistorialPage />} />
+            <Route path="descartes" element={<MRPDescartesPage />} />
+            <Route path="catalogos" element={<MRPCatalogosPage />} />
+          </Route>
 
           {/* ================= Horas extra ================= */}
           <Route

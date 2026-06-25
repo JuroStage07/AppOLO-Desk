@@ -23,14 +23,13 @@ export default function usePalletAdjustments() {
   const [error, setError] = useState(null);
 
   const createPositive = useCallback(
-    async ({ warehouseId, brandId, palletType, quantity, reason }) => {
+    async ({ warehouseId, articuloId, quantity, reason }) => {
       setLoading(true);
       setError(null);
       try {
         const res = await createPositivePalletAdjustment({
           warehouseId,
-          brandId,
-          palletType,
+          articuloId,
           quantity,
           reason,
           userId,
@@ -54,8 +53,7 @@ export default function usePalletAdjustments() {
   const createNegative = useCallback(
     async ({
       warehouseId,
-      brandId,
-      palletType,
+      articuloId,
       quantity,
       reason,
       originLocation, // opcional; default 'pend' en el servicio
@@ -65,8 +63,7 @@ export default function usePalletAdjustments() {
       try {
         const res = await createNegativePalletAdjustment({
           warehouseId,
-          brandId,
-          palletType,
+          articuloId,
           quantity,
           reason,
           originLocation,

@@ -1,19 +1,7 @@
-// MRP Tarimas — Resumen / Dashboard.
-//
-// Muestra totales globales por marca (incluye merma), por ubicación y por tipo,
-// más tarjetas de merma, pend y descartes. Recordatorio visible: descartes NO es
-// una ubicación operativa.
+// MRP Tarimas — Panel Resumen (se renderiza dentro del layout MRP).
 import React, { useState } from "react";
 import { Boxes, Inbox, Recycle, Trash2 } from "lucide-react";
 import {
-  Shell,
-  Topbar,
-  Main,
-  Container,
-  Hero,
-  Badge,
-  Chip,
-  ChipsRow,
   KpiCard,
   KpiGrid,
   SectionTitle,
@@ -25,165 +13,180 @@ import {
 } from "../../components/ui";
 import {
   usePalletSummary,
-  usePalletBrands,
+  usePalletArticulos,
   useMrpWorkspace,
 } from "../../hooks/mrp";
-import { PALLET_TYPE_LABELS, PALLET_LOCATION_LABELS } from "../../services/mrp";
+import { PALLET_LOCATION_LABELS } from "../../services/mrp";
+import { ACCENT } from "../../styles/theme";
 import { th, td } from "./components/mrpFormat";
-import { TypeBadge } from "./components/mrpUi";
-import WorkspaceBar, { NoWarehouse } from "./components/WorkspaceBar";
+import ArticuloSearchSelect from "./components/ArticuloSearchSelect";
+import UbicacionDetalleModal from "./components/UbicacionDetalleModal";
+
+const KPI_STYLE = { minHeight: 84, padding: 12, gap: 4, borderRadius: 16 };
 
 export default function MRPDashboardPage() {
   const { warehouseId } = useMrpWorkspace();
-  const [brandId, setBrandId] = useState("");
-  const { brands } = usePalletBrands({ warehouseId });
+  const [articuloId, setArticuloId] = useState("");
+  const [ubic, setUbic] = useState(null); // { location, label }
+  const { articulos } = usePalletArticulos({ warehouseId });
   const { summary, loading, error, refetch } = usePalletSummary({
     warehouseId,
-    brandId: brandId || null,
+    articuloId: articuloId || null,
   });
 
   return (
-    <Shell>
-      <Topbar />
-      <Main>
-        <Container>
-          <Hero
-            kicker="MRP Tarimas"
-            title="Resumen de tarimas"
-            subtitle="Totales globales por marca, ubicación y tipo."
-            badge={<Badge tone="accent">KPIs</Badge>}
+    <>
+      <SectionTitle
+        title="Resumen de artículos"
+        action={
+          articulos.length > 0 ? (
+            <ArticuloSearchSelect
+              articulos={articulos}
+              value={articuloId}
+              onChange={setArticuloId}
+              size="md"
+              maxWidth={520}
+            />
+          ) : undefined
+        }
+      />
+
+      {loading ? (
+        <Spinner label="Cargando resumen…" />
+      ) : error ? (
+        <ErrorState description={error.message} onRetry={refetch} />
+      ) : (
+        <>
+          <KpiGrid min={150}>
+            <KpiCard
+              label="Total global"
+              value={summary.totalGlobal}
+              icon={Boxes}
+              accent
+              style={KPI_STYLE}
+            />
+            <KpiCard
+              label="En pendiente"
+              value={summary.totalPend}
+              icon={Inbox}
+              style={KPI_STYLE}
+            />
+            <KpiCard
+              label="En merma"
+              value={summary.totalMerma}
+              icon={Recycle}
+              style={KPI_STYLE}
+            />
+            <KpiCard
+              label="Descartes"
+              value={summary.totalDiscards}
+              icon={Trash2}
+              style={KPI_STYLE}
+            />
+          </KpiGrid>
+
+          {/* Global por artículo */}
+          <SectionTitle
+            title="Global por artículo"
+            hint="Suma de todas las ubicaciones operativas, incluida merma."
           />
-
-          <WorkspaceBar />
-
-          {warehouseId && brands.length > 0 && (
-            <ChipsRow>
-              <Chip active={!brandId} onClick={() => setBrandId("")}>
-                Todas las marcas
-              </Chip>
-              {brands.map((b) => (
-                <Chip
-                  key={b.id}
-                  active={brandId === b.id}
-                  onClick={() => setBrandId(b.id)}
-                >
-                  {b.name}
-                </Chip>
-              ))}
-            </ChipsRow>
+          {summary.byArticulo.length === 0 ? (
+            <EmptyState
+              icon={Boxes}
+              title="Sin inventario"
+              description="Aún no hay artículos con stock."
+            />
+          ) : (
+            <Card padding={0}>
+              <TableScroll minWidth={420}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th style={th}>Código</th>
+                      <th style={th}>Artículo</th>
+                      <th style={{ ...th, textAlign: "right" }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.byArticulo.map((a) => (
+                      <tr key={a.articulo_id}>
+                        <td
+                          style={{
+                            ...td,
+                            fontFamily: "monospace",
+                            fontWeight: 950,
+                          }}
+                        >
+                          {a.codigo}
+                        </td>
+                        <td style={td}>{a.nombre}</td>
+                        <td style={{ ...td, textAlign: "right", fontWeight: 950 }}>
+                          {a.total}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableScroll>
+            </Card>
           )}
 
-          {!warehouseId ? (
-            <NoWarehouse />
-          ) : loading ? (
-            <Spinner label="Cargando resumen…" />
-          ) : error ? (
-            <ErrorState description={error.message} onRetry={refetch} />
+          {/* Por ubicación */}
+          <SectionTitle title="Por ubicación" />
+          {summary.byLocation.length === 0 ? (
+            <EmptyState title="Sin datos" description="No hay stock por ubicación." />
           ) : (
-            <>
-              <KpiGrid>
-                <KpiCard
-                  label="Total global"
-                  value={summary.totalGlobal}
-                  hint="Todas las ubicaciones (incluye merma)"
-                  icon={Boxes}
-                  accent
-                />
-                <KpiCard
-                  label="En pendiente"
-                  value={summary.totalPend}
-                  hint="Ubicación pend"
-                  icon={Inbox}
-                />
-                <KpiCard
-                  label="En merma"
-                  value={summary.totalMerma}
-                  hint="Ubicación operativa (cuenta en el global)"
-                  icon={Recycle}
-                />
-                <KpiCard
-                  label="Descartes"
-                  value={summary.totalDiscards}
-                  hint="Registro administrativo — NO es inventario"
-                  icon={Trash2}
-                />
-              </KpiGrid>
-
-              {/* Global por marca */}
-              <SectionTitle
-                title="Global por marca"
-                hint="Suma de todas las ubicaciones operativas, incluida merma."
-              />
-              {summary.byBrand.length === 0 ? (
-                <EmptyState
-                  icon={Boxes}
-                  title="Sin inventario"
-                  description="Aún no hay tarimas registradas."
-                />
-              ) : (
-                <Card padding={0}>
-                  <TableScroll minWidth={360}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr>
-                          <th style={th}>Marca</th>
-                          <th style={{ ...th, textAlign: "right" }}>Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {summary.byBrand.map((b) => (
-                          <tr key={b.brand_id}>
-                            <td style={td}>{b.brand_name}</td>
+            <Card padding={0}>
+              <TableScroll minWidth={360}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th style={th}>Ubicación</th>
+                      <th style={{ ...th, textAlign: "right" }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.byLocation
+                      .slice()
+                      .sort((a, b) => b.total - a.total)
+                      .map((l) => {
+                        const label =
+                          PALLET_LOCATION_LABELS[l.location] || l.location;
+                        return (
+                          <tr
+                            key={l.location}
+                            onClick={() =>
+                              setUbic({ location: l.location, label })
+                            }
+                            style={{ cursor: "pointer" }}
+                            title="Ver detalle por artículo"
+                          >
+                            <td style={{ ...td, color: ACCENT, fontWeight: 900 }}>
+                              {label}
+                            </td>
                             <td style={{ ...td, textAlign: "right", fontWeight: 950 }}>
-                              {b.total}
+                              {l.total}
                             </td>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </TableScroll>
-                </Card>
-              )}
-
-              {/* Por ubicación */}
-              <SectionTitle title="Por ubicación" />
-              {summary.byLocation.length === 0 ? (
-                <EmptyState title="Sin datos" description="No hay stock por ubicación." />
-              ) : (
-                <KpiGrid min={160}>
-                  {summary.byLocation
-                    .slice()
-                    .sort((a, b) => b.total - a.total)
-                    .map((l) => (
-                      <KpiCard
-                        key={l.location}
-                        label={PALLET_LOCATION_LABELS[l.location] || l.location}
-                        value={l.total}
-                      />
-                    ))}
-                </KpiGrid>
-              )}
-
-              {/* Por tipo */}
-              <SectionTitle title="Por tipo de tarima" />
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                {summary.byType.length === 0 ? (
-                  <EmptyState title="Sin datos" description="No hay stock por tipo." />
-                ) : (
-                  summary.byType.map((t) => (
-                    <Card key={t.pallet_type}>
-                      <div style={{ display: "grid", gap: 6, minWidth: 120 }}>
-                        <TypeBadge value={t.pallet_type} />
-                        <div style={{ fontSize: 26, fontWeight: 950 }}>{t.total}</div>
-                      </div>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </TableScroll>
+            </Card>
           )}
-        </Container>
-      </Main>
-    </Shell>
+        </>
+      )}
+
+      {ubic && (
+        <UbicacionDetalleModal
+          open
+          location={ubic.location}
+          locationLabel={ubic.label}
+          articuloId={articuloId || null}
+          onClose={() => setUbic(null)}
+        />
+      )}
+    </>
   );
 }

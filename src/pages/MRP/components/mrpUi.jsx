@@ -3,15 +3,9 @@
 import React from "react";
 import { Badge } from "../../../components/ui";
 import {
-  PALLET_TYPE_LABELS,
   PALLET_LOCATION_LABELS,
   PALLET_MOVEMENT_TYPE_LABELS,
 } from "../../../services/mrp";
-
-export function TypeBadge({ value }) {
-  if (!value) return <>—</>;
-  return <Badge tone="neutral">{PALLET_TYPE_LABELS[value] || value}</Badge>;
-}
 
 export function LocationBadge({ value }) {
   if (!value) return <>—</>;
