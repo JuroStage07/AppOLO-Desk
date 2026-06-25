@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Check, Copy, Send, Trash2, X } from "lucide-react";
@@ -11,6 +11,16 @@ import {
 } from "../../config/otOptions";
 import { OPEN_ASSISTANT_EVENT } from "./assistantBus";
 import { useToast } from "./Toast";
+import useMrpWorkspace from "../../hooks/mrp/useMrpWorkspace";
+import usePalletArticulos from "../../hooks/mrp/usePalletArticulos";
+import usePalletInventory from "../../hooks/mrp/usePalletInventory";
+import usePalletTransfers from "../../hooks/mrp/usePalletTransfers";
+import {
+  PALLET_LOCATIONS,
+  PALLET_LOCATION_LABELS,
+  PALLET_REASONS,
+} from "../../services/mrp/constants";
+import ArticuloSearchSelect from "../../pages/MRP/components/ArticuloSearchSelect";
 import {
   ACCENT,
   ACCENT_SHADOW,
@@ -357,6 +367,399 @@ function OtDraftCard({ action, creating, onCreate, onCompleteByChat, onDraftFiel
   );
 }
 
+/* ─── MRP transfer draft helpers ─── */
+const MRP_LOCATION_TEXT_MAP = {
+  pendiente: "pend",
+  pendientes: "pend",
+  pend: "pend",
+  almacen: "almacen",
+  patio: "patio",
+  reparacion: "reparacion",
+  merma: "merma",
+  tienda: "tienda",
+};
+const MRP_FIELD_LABELS = {
+  articuloId: "Artículo",
+  quantity: "Cantidad",
+  originLocation: "Origen",
+  destinationLocation: "Destino",
+  reason: "Motivo",
+};
+
+function mrpLocationLabel(code) {
+  return PALLET_LOCATION_LABELS[code] || code || "—";
+}
+
+function resolveMrpLocation(value) {
+  const clean = cleanOtValue(value);
+  if (!clean) return "";
+  if (PALLET_LOCATIONS.includes(clean)) return clean;
+  const normalized = normalizeOtText(clean);
+  if (PALLET_LOCATIONS.includes(normalized)) return normalized;
+  return MRP_LOCATION_TEXT_MAP[normalized] || "";
+}
+
+function findArticuloByCodigo(articulos, codigo) {
+  const clean = cleanOtValue(codigo).toLowerCase();
+  if (!clean || !Array.isArray(articulos)) return null;
+  return articulos.find((a) => cleanOtValue(a?.codigo).toLowerCase() === clean) || null;
+}
+
+function getMrpTransferMissingFields(draft) {
+  const missing = [];
+  if (!cleanOtValue(draft?.articuloId)) missing.push("articuloId");
+  const qty = Number(draft?.quantity);
+  if (!Number.isInteger(qty) || qty <= 0) missing.push("quantity");
+  if (!cleanOtValue(draft?.originLocation)) missing.push("originLocation");
+  if (!cleanOtValue(draft?.destinationLocation)) missing.push("destinationLocation");
+  return missing;
+}
+
+function buildMrpTransferStatus(draft) {
+  const missing = getMrpTransferMissingFields(draft);
+  const sameLoc =
+    draft?.originLocation && draft?.originLocation === draft?.destinationLocation;
+  return {
+    missing,
+    status: missing.length === 0 && !sameLoc ? "ready" : "missing_fields",
+  };
+}
+
+function normalizeMrpTransferAction(action, articulos = []) {
+  if (!action || action.type !== "mrp_transfer_draft") return action || null;
+  if (action.status === "cancelled" || action.status === "created") return action;
+
+  const draft = {
+    ...(action.draft && typeof action.draft === "object" ? action.draft : {}),
+  };
+
+  draft.originLocation = resolveMrpLocation(draft.originLocation);
+  draft.destinationLocation = resolveMrpLocation(draft.destinationLocation);
+
+  if (!cleanOtValue(draft.articuloId) && cleanOtValue(draft.articuloCodigo)) {
+    const found = findArticuloByCodigo(articulos, draft.articuloCodigo);
+    if (found) {
+      draft.articuloId = found.id;
+      draft.articuloCodigo = found.codigo;
+    }
+  }
+
+  const { missing, status } = buildMrpTransferStatus(draft);
+  return { ...action, status, draft, missingFields: missing };
+}
+
+function patchMrpTransferAction(action, patch, articulos = []) {
+  if (!action || action.type !== "mrp_transfer_draft") return action;
+  const draft = {
+    ...(action.draft && typeof action.draft === "object" ? action.draft : {}),
+    ...patch,
+  };
+
+  if (patch && Object.prototype.hasOwnProperty.call(patch, "originLocation"))
+    draft.originLocation = resolveMrpLocation(draft.originLocation);
+  if (patch && Object.prototype.hasOwnProperty.call(patch, "destinationLocation"))
+    draft.destinationLocation = resolveMrpLocation(draft.destinationLocation);
+
+  if (
+    !cleanOtValue(draft.articuloId) &&
+    cleanOtValue(draft.articuloCodigo) &&
+    Array.isArray(articulos) &&
+    articulos.length
+  ) {
+    const found = findArticuloByCodigo(articulos, draft.articuloCodigo);
+    if (found) {
+      draft.articuloId = found.id;
+      draft.articuloCodigo = found.codigo;
+    }
+  }
+
+  const { missing, status } = buildMrpTransferStatus(draft);
+  return { ...action, status, draft, missingFields: missing };
+}
+
+function MrpTransferCard({ action, onPatch, onCreated, onNavigate }) {
+  const { warehouse, warehouseId } = useMrpWorkspace();
+  const { articulos } = usePalletArticulos({ warehouseId });
+  const { transfer } = usePalletTransfers();
+
+  const draft = action?.draft && typeof action.draft === "object" ? action.draft : {};
+  const articuloId = cleanOtValue(draft.articuloId);
+  const originLocation = cleanOtValue(draft.originLocation);
+  const destinationLocation = cleanOtValue(draft.destinationLocation);
+  const reason = cleanOtValue(draft.reason);
+  const quantity = Number(draft.quantity);
+
+  const { inventory } = usePalletInventory({
+    warehouseId: warehouseId || null,
+    articuloId: articuloId || null,
+    onlyWithStock: false,
+  });
+
+  const [submitting, setSubmitting] = useState(false);
+
+  const isCancelled = action?.status === "cancelled";
+  const isCreated = action?.status === "created";
+  const editable = !isCancelled && !isCreated;
+
+  // Preselección por código cuando el bot manda articuloCodigo.
+  useEffect(() => {
+    if (!editable || articuloId) return;
+    const code = cleanOtValue(draft.articuloCodigo);
+    if (!code || !articulos.length) return;
+    const found = findArticuloByCodigo(articulos, code);
+    if (found) onPatch?.({ articuloId: found.id, articuloCodigo: found.codigo });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editable, articuloId, draft.articuloCodigo, articulos]);
+
+  const available = useMemo(() => {
+    if (!warehouseId || !articuloId || !originLocation) return null;
+    return inventory
+      .filter((r) => r.location === originLocation)
+      .reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+  }, [inventory, warehouseId, articuloId, originLocation]);
+
+  const quantityValid = Number.isInteger(quantity) && quantity > 0;
+  const sameLoc = Boolean(
+    originLocation && destinationLocation && originLocation === destinationLocation
+  );
+  const overStock = available != null && quantityValid && quantity > available;
+  const missing = getMrpTransferMissingFields(draft);
+
+  const baseStatus = isCancelled
+    ? "cancelled"
+    : isCreated
+    ? "created"
+    : missing.length === 0 && !sameLoc
+    ? "ready"
+    : "missing_fields";
+
+  const canConfirm =
+    editable &&
+    !submitting &&
+    !!warehouseId &&
+    !!articuloId &&
+    quantityValid &&
+    !!originLocation &&
+    !!destinationLocation &&
+    !sameLoc &&
+    !overStock;
+
+  const onPickArticulo = (id) => {
+    const found = articulos.find((a) => a.id === id);
+    onPatch?.({ articuloId: id, articuloCodigo: found ? found.codigo : "" });
+  };
+
+  const doConfirm = async () => {
+    if (!canConfirm) return;
+    setSubmitting(true);
+    try {
+      const res = await transfer({
+        warehouseId,
+        originLocation,
+        destinationLocation,
+        articuloId,
+        quantity: Number(quantity),
+        reason: reason || null,
+      });
+      onCreated?.({
+        movement_code: res?.movement_code || null,
+        movement_id: res?.movement_id || null,
+        task_id: res?.task_id || null,
+        quantity: Number(quantity),
+        originLabel: mrpLocationLabel(originLocation),
+        destinationLabel: mrpLocationLabel(destinationLocation),
+      });
+    } catch {
+      /* el hook usePalletTransfers ya muestra el toast de error */
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const statusText =
+    baseStatus === "cancelled"
+      ? "Cancelado"
+      : baseStatus === "created"
+      ? "Traslado registrado"
+      : baseStatus === "ready"
+      ? "Listo para trasladar"
+      : "Faltan datos";
+
+  return (
+    <div style={S.otCard}>
+      <div style={S.otCardHead}>
+        <span style={S.otCardTitle}>Borrador de traslado MRP</span>
+        <span
+          style={{
+            ...S.otStatus,
+            ...(isCancelled || isCreated
+              ? S.otStatusDone
+              : baseStatus === "ready"
+              ? S.otStatusReady
+              : S.otStatusMissing),
+          }}
+        >
+          {statusText}
+        </span>
+      </div>
+
+      {warehouseId ? (
+        <div style={S.mrpInfoRow}>
+          Almacén de trabajo: <b>{warehouse?.name || warehouse?.code || "—"}</b>
+        </div>
+      ) : (
+        <div style={S.mrpWarn}>
+          <span>
+            Seleccioná un almacén de trabajo en MRP Tarimas para poder registrar el
+            traslado.
+          </span>
+          <button
+            type="button"
+            onClick={() => onNavigate?.("/mrp-tarimas")}
+            style={S.otBtnSecondary}
+          >
+            Ir a MRP Tarimas
+          </button>
+        </div>
+      )}
+
+      <div style={S.otSelectPanel}>
+        <div style={S.otSelectPanelTitle}>Datos del traslado</div>
+
+        <label style={S.otSelectField}>
+          <span style={S.otFieldLabel}>{MRP_FIELD_LABELS.articuloId}</span>
+          {editable ? (
+            <ArticuloSearchSelect
+              articulos={articulos}
+              value={articuloId}
+              onChange={onPickArticulo}
+              allLabel="Seleccionar artículo"
+              maxWidth={9999}
+              size="md"
+            />
+          ) : (
+            <span style={S.otFieldValue}>
+              {(() => {
+                const a = articulos.find((x) => x.id === articuloId);
+                return a
+                  ? `${a.codigo} · ${a.nombre}`
+                  : cleanOtValue(draft.articuloCodigo) || "—";
+              })()}
+            </span>
+          )}
+        </label>
+
+        <label style={S.otSelectField}>
+          <span style={S.otFieldLabel}>{MRP_FIELD_LABELS.quantity}</span>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={Number.isFinite(quantity) && quantity > 0 ? quantity : draft.quantity ?? ""}
+            onChange={(e) => onPatch?.({ quantity: e.target.value })}
+            disabled={!editable}
+            style={{
+              ...S.mrpNumberInput,
+              ...(missing.includes("quantity") ? S.otSelectMissing : {}),
+            }}
+          />
+        </label>
+
+        <label style={S.otSelectField}>
+          <span style={S.otFieldLabel}>{MRP_FIELD_LABELS.originLocation}</span>
+          <select
+            value={originLocation}
+            onChange={(e) => onPatch?.({ originLocation: e.target.value })}
+            disabled={!editable}
+            style={{
+              ...S.otSelect,
+              ...(missing.includes("originLocation") ? S.otSelectMissing : {}),
+            }}
+          >
+            <option value="">Seleccionar ubicación</option>
+            {PALLET_LOCATIONS.map((loc) => (
+              <option key={loc} value={loc}>
+                {PALLET_LOCATION_LABELS[loc] || loc}
+              </option>
+            ))}
+          </select>
+          {originLocation && available != null && (
+            <span style={S.mrpInfoRow}>
+              Disponible en {mrpLocationLabel(originLocation)}: <b>{available}</b>
+            </span>
+          )}
+        </label>
+
+        <label style={S.otSelectField}>
+          <span style={S.otFieldLabel}>{MRP_FIELD_LABELS.destinationLocation}</span>
+          <select
+            value={destinationLocation}
+            onChange={(e) => onPatch?.({ destinationLocation: e.target.value })}
+            disabled={!editable}
+            style={{
+              ...S.otSelect,
+              ...(missing.includes("destinationLocation") ? S.otSelectMissing : {}),
+            }}
+          >
+            <option value="">Seleccionar ubicación</option>
+            {PALLET_LOCATIONS.map((loc) => (
+              <option key={loc} value={loc}>
+                {PALLET_LOCATION_LABELS[loc] || loc}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label style={S.otSelectField}>
+          <span style={S.otFieldLabel}>{MRP_FIELD_LABELS.reason} (opcional)</span>
+          <select
+            value={reason}
+            onChange={(e) => onPatch?.({ reason: e.target.value })}
+            disabled={!editable}
+            style={S.otSelect}
+          >
+            <option value="">Sin motivo</option>
+            {PALLET_REASONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {sameLoc && (
+        <span style={S.otInvalidHint}>
+          El origen y el destino no pueden ser iguales.
+        </span>
+      )}
+      {overStock && (
+        <span style={S.otInvalidHint}>
+          La cantidad ({quantity}) supera el disponible ({available}) en{" "}
+          {mrpLocationLabel(originLocation)}.
+        </span>
+      )}
+
+      {editable && (
+        <div style={S.otActions}>
+          <button
+            type="button"
+            onClick={doConfirm}
+            disabled={!canConfirm}
+            style={{
+              ...S.otBtnPrimary,
+              opacity: canConfirm ? 1 : 0.55,
+              cursor: canConfirm ? "pointer" : "not-allowed",
+            }}
+          >
+            {submitting ? "Registrando..." : "Confirmar traslado"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Global assistant chatbot modal. Self-contained: manages its own messages,
  * typing state, and n8n webhook integration. Opens via the assistantBus event
@@ -501,7 +904,14 @@ export default function AssistantModal() {
             : "Recibí tu mensaje, pero no obtuve una respuesta válida.";
         const sources = Array.isArray(data.sources) ? data.sources : [];
         const suggestedActions = Array.isArray(data.suggestedActions) ? data.suggestedActions : [];
-        const action = normalizeOtDraftAction(data.action && typeof data.action === "object" && !Array.isArray(data.action) ? data.action : null);
+        const rawAction =
+          data.action && typeof data.action === "object" && !Array.isArray(data.action)
+            ? data.action
+            : null;
+        const action =
+          rawAction?.type === "mrp_transfer_draft"
+            ? normalizeMrpTransferAction(rawAction)
+            : normalizeOtDraftAction(rawAction);
         setTyping(false);
         setMessages((prev) => [...prev, { role: "assistant", text: answer, sources, suggestedActions, action }]);
       })
@@ -525,6 +935,50 @@ export default function AssistantModal() {
         };
       })
     );
+  };
+
+  const updateMrpDraft = (messageIndex, patch) => {
+    setMessages((prev) =>
+      prev.map((message, index) => {
+        if (index !== messageIndex || message?.action?.type !== "mrp_transfer_draft")
+          return message;
+        return { ...message, action: patchMrpTransferAction(message.action, patch) };
+      })
+    );
+  };
+
+  const markMrpTransferCreated = (messageIndex, info) => {
+    setMessages((prev) => {
+      const next = prev.map((message, index) => {
+        if (index !== messageIndex || message?.action?.type !== "mrp_transfer_draft")
+          return message;
+        return {
+          ...message,
+          action: {
+            ...message.action,
+            status: "created",
+            movement_code: info.movement_code,
+            movement_id: info.movement_id,
+            task_id: info.task_id,
+          },
+        };
+      });
+      return [
+        ...next,
+        {
+          role: "assistant",
+          text: `Traslado MRP registrado correctamente.\n1. Movimiento: ${
+            info.movement_code || "—"
+          }\n2. Cantidad: ${info.quantity}\n3. Origen: ${info.originLabel}\n4. Destino: ${
+            info.destinationLabel
+          }`,
+          suggestedActions: [
+            { label: "Historial MRP", path: "/mrp-tarimas/movimientos" },
+            { label: "Inventario MRP", path: "/mrp-tarimas/inventario" },
+          ],
+        },
+      ];
+    });
   };
 
   const createOtFromDraft = async (messageIndex, action) => {
@@ -688,6 +1142,14 @@ export default function AssistantModal() {
                       onCreate={(nextAction) => createOtFromDraft(i, nextAction)}
                       onCompleteByChat={() => taRef.current?.focus()}
                       onDraftFieldChange={(field, value) => updateOtDraft(i, field, value)}
+                    />
+                  )}
+                  {!isUser && m.action && m.action.type === "mrp_transfer_draft" && (
+                    <MrpTransferCard
+                      action={m.action}
+                      onPatch={(patch) => updateMrpDraft(i, patch)}
+                      onCreated={(info) => markMrpTransferCreated(i, info)}
+                      onNavigate={(path) => { close(); nav(path); }}
                     />
                   )}
                   {sources.length > 0 && (
@@ -892,6 +1354,32 @@ const S = {
     background: "rgba(245,158,11,0.06)",
   },
   otInvalidHint: { fontSize: 11, fontWeight: 700, color: "#B45309", lineHeight: 1.35 },
+  mrpInfoRow: { fontSize: 12, fontWeight: 700, color: T.textSecondary, lineHeight: 1.35 },
+  mrpWarn: {
+    display: "grid",
+    gap: 8,
+    padding: "10px 12px",
+    borderRadius: 12,
+    background: "rgba(245,158,11,0.10)",
+    border: "1px solid rgba(245,158,11,0.28)",
+    color: "#B45309",
+    fontSize: 12.5,
+    fontWeight: 700,
+    lineHeight: 1.4,
+  },
+  mrpNumberInput: {
+    width: "100%",
+    minHeight: 38,
+    borderRadius: 10,
+    border: `1px solid ${T.border}`,
+    background: "#fff",
+    color: T.text,
+    fontSize: 13,
+    fontWeight: 700,
+    padding: "0 10px",
+    outline: "none",
+    fontFamily: "inherit",
+  },
   otPending: { display: "grid", gap: 7, borderTop: `1px solid ${T.borderSoft}`, paddingTop: 10 },
   otPendingLabel: { fontSize: 11, fontWeight: 850, color: T.textMuted, textTransform: "uppercase", letterSpacing: 0.35 },
   otPendingChips: { display: "flex", flexWrap: "wrap", gap: 6 },
