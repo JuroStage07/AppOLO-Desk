@@ -60,7 +60,7 @@ export const RADIUS_XL = 18;
 export const RADIUS_2XL = 22;
 export const RADIUS_PILL = 999;
 
-export const CONTAINER_MAX = 1120;
+export const CONTAINER_MAX = 1440;
 
 export const FONT_STACK =
   "Arial, sans-serif";

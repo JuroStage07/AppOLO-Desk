@@ -216,8 +216,7 @@ const ui = {
     background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
   },
   topbarInner: {
-    maxWidth: 1120,
-    margin: "0 auto",
+    width: "100%",
     padding: "12px 18px",
     minHeight: 64,
     display: "flex",
@@ -276,7 +275,7 @@ const ui = {
     padding: "18px 16px 28px",
     WebkitOverflowScrolling: "touch",
   },
-  container: { width: "100%", maxWidth: 1120, margin: "0 auto", display: "grid", gap: 16 },
+  container: { width: "100%", display: "grid", gap: 16 },
   hero: {
     background: "#fff",
     border: "1px solid #E7E9F2",

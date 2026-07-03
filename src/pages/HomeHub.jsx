@@ -198,12 +198,12 @@ const s = {
   },
   headerInner: {
     position: "relative",
-    maxWidth: 1200,
-    margin: "0 auto",
+    width: "100%",
     padding: "12px 24px",
     display: "flex",
     alignItems: "center",
     gap: 14,
+    boxSizing: "border-box",
   },
   brand: {
     position: "absolute",

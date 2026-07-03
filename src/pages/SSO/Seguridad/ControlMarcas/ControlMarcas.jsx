@@ -900,7 +900,6 @@ const ui = {
 
   mainWrap: {
     width: "100%",
-    maxWidth: 1200,
     display: "flex",
     flexDirection: "column",
     gap: 16,

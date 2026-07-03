@@ -1,8 +1,7 @@
 import React from "react";
-import { CONTAINER_MAX } from "../../styles/theme";
 
 /**
- * Scrollable page body. Wrap content with <Container/> for the centered max-width column.
+ * Scrollable page body. Wrap content with <Container/> for the full-width column.
  *
  *   <Main>
  *     <Container>
@@ -16,9 +15,9 @@ export function Main({ children, style, padding = "18px 16px 28px", center = fal
   );
 }
 
-export function Container({ children, style, gap = 16, max = CONTAINER_MAX }) {
+export function Container({ children, style, gap = 16 }) {
   return (
-    <div style={{ ...container, gap, maxWidth: max, ...style }}>{children}</div>
+    <div style={{ ...container, gap, ...style }}>{children}</div>
   );
 }
 

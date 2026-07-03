@@ -8734,9 +8734,6 @@ const ui = {
 
   topbarInner: {
     width: "100%",
-    maxWidth: 1120,
-    marginLeft: "auto",
-    marginRight: "auto",
     boxSizing: "border-box",
     padding: "12px 18px",
     minHeight: 64,
@@ -8808,9 +8805,6 @@ const ui = {
 
   container: {
     width: "100%",
-    maxWidth: 1120,
-    marginLeft: "auto",
-    marginRight: "auto",
     boxSizing: "border-box",
     display: "grid",
     gap: 22,

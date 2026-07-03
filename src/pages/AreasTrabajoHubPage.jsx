@@ -1977,12 +1977,12 @@ const styles = {
     zIndex: 100,
   },
   headerInner: {
-    maxWidth: 1200,
-    margin: "0 auto",
+    width: "100%",
     padding: "12px 24px",
     display: "flex",
     alignItems: "center",
     gap: 14,
+    boxSizing: "border-box",
   },
   headerSubBar: {
     width: "100%",
@@ -1990,12 +1990,12 @@ const styles = {
     background: "rgba(248,250,252,0.7)",
   },
   headerSubBarInner: {
-    maxWidth: 1200,
-    margin: "0 auto",
+    width: "100%",
     padding: "6px 24px",
     display: "flex",
     alignItems: "center",
     gap: 12,
+    boxSizing: "border-box",
   },
   headerSubBarHome: {
     display: "inline-flex",
@@ -2146,7 +2146,7 @@ const styles = {
     display: "flex",
     flexDirection: "column",
   },
-  container: { maxWidth: 1200, margin: "0 auto", display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 0, width: "100%" },
+  container: { width: "100%", display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 0 },
 
   /* Hero (card) */
   hero: {

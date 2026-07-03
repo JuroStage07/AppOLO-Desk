@@ -9,7 +9,7 @@ import { openCommandPalette } from "./commandPaletteBus";
 import { openPinsFlyout } from "./pinsBus";
 import { openAssistantModal } from "./assistantBus";
 import { AuthCtx } from "../../auth/AuthProvider";
-import { ACCENT, ACCENT_SOFT, BORDER, CONTAINER_MAX, SLATE, SURFACE, TEXT } from "../../styles/theme";
+import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE, TEXT } from "../../styles/theme";
 
 const IS_MAC =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || "");
@@ -152,9 +152,6 @@ const subBar = {
 };
 const subBarInner = {
   width: "100%",
-  maxWidth: CONTAINER_MAX,
-  marginLeft: "auto",
-  marginRight: "auto",
   boxSizing: "border-box",
   padding: "6px 18px",
   display: "flex",
@@ -199,9 +196,6 @@ const searchTriggerKbd = {
 };
 const topbarInner = {
   width: "100%",
-  maxWidth: CONTAINER_MAX,
-  marginLeft: "auto",
-  marginRight: "auto",
   boxSizing: "border-box",
   padding: "12px 18px",
   minHeight: 64,
