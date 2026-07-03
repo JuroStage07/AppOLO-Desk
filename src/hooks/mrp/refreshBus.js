@@ -5,7 +5,8 @@
 // pasar callbacks de refresco por props entre pantallas (mismo espíritu que el
 // store compartido de usePinnedModules).
 //
-// Canales: "inventory" | "movements" | "discards" | "brands" | "stores" | "warehouses".
+// Canales: "inventory" | "movements" | "discards" | "brands" | "stores" |
+//          "warehouses" | "articulos" | "insumos" | "boms".
 
 const buses = Object.create(null);
 
