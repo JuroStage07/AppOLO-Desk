@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { Menu, MessageCircle, Search, User } from "lucide-react";
 import AreasSidebar from "./AreasSidebar";
 import Breadcrumbs from "./Breadcrumbs";
+import BodegaSwitcher from "./BodegaSwitcher";
 import { isRootPath } from "./routeTrail";
 import TopbarAccount from "./TopbarAccount";
 import { openCommandPalette } from "./commandPaletteBus";
@@ -84,6 +85,7 @@ export default function Topbar({
                     {company && <span style={tenantBadgeSecondary}>{company}</span>}
                   </div>
                 )}
+                <BodegaSwitcher />
                 <button
                   type="button"
                   onClick={openCommandPalette}

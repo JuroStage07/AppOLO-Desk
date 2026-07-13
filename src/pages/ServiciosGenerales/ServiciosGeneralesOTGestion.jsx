@@ -142,7 +142,8 @@ export default function ServiciosGeneralesOTGestion() {
               ...d.data(),
             })),
             profile?.tenantId,
-            profile?.company
+            profile?.company,
+            profile?.bodegaId
           );
           
           data.sort((a, b) => {

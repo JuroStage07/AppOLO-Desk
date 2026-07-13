@@ -6,7 +6,6 @@ import {
   onSnapshot,
   query,
   where,
-  orderBy,
   doc,
 } from "firebase/firestore";
 
@@ -40,29 +39,40 @@ function mergeFinalizadasLists(rowsA, rowsR) {
 // ----------------------------------------------------
 // LISTENERS (lo que necesita el dashboard)
 
-export function listenAperturasEnProceso(cb) {
+// Nota: las reglas (sameTenantScopeData) exigen filtrar la query por tenantId+company.
+// No usamos orderBy junto a esos filtros para no requerir un índice compuesto: ordenamos
+// en memoria. La bodega se filtra en cliente (filterByUserScope), no en la query.
+const byCreatedAtDesc = (a, b) => {
+  const am = a?.createdAt?.toMillis?.() ?? 0;
+  const bm = b?.createdAt?.toMillis?.() ?? 0;
+  return bm - am;
+};
+
+export function listenAperturasEnProceso(cb, tenantId, company) {
   const qy = query(
     collection(db, "aperturas"),
     where("estado", "==", "en_proceso"),
-    orderBy("createdAt", "desc")
+    where("tenantId", "==", tenantId),
+    where("company", "==", company)
   );
-  return onSnapshot(qy, (qs) => cb(mapSnap(qs)));
+  return onSnapshot(qy, (qs) => cb(mapSnap(qs).sort(byCreatedAtDesc)));
 }
 
-export function listenAperturasRechazadas(cb) {
+export function listenAperturasRechazadas(cb, tenantId, company) {
   const qy = query(
     collection(db, "aperturas"),
     where("estado", "==", "rechazada"),
-    orderBy("createdAt", "desc")
+    where("tenantId", "==", tenantId),
+    where("company", "==", company)
   );
-  return onSnapshot(qy, (qs) => cb(mapSnap(qs)));
+  return onSnapshot(qy, (qs) => cb(mapSnap(qs).sort(byCreatedAtDesc)));
 }
 
 /**
  * Une `aperturas` y `aperturasRecepcion` (mismo criterio estado finalizada, sin orderBy).
  * Cada ítem incluye `__sourceCollection` para que detalle y updates usen la colección correcta.
  */
-export function listenAperturasFinalizadasGlobal(cb, tenantId, company, onError) {
+export function listenAperturasFinalizadasGlobal(cb, tenantId, company, onError, bodegaId) {
   let readyA = false;
   let readyR = false;
   let listA = [];
@@ -71,10 +81,15 @@ export function listenAperturasFinalizadasGlobal(cb, tenantId, company, onError)
   const emit = () => {
     if (!readyA || !readyR) return;
     const merged = mergeFinalizadasLists(listA, listR);
-    cb(filterByUserScope(merged, tenantId, company));
+    cb(filterByUserScope(merged, tenantId, company, bodegaId));
   };
 
-  const qy = query(collection(db, "aperturas"), where("estado", "==", "finalizada"));
+  const qy = query(
+    collection(db, "aperturas"),
+    where("estado", "==", "finalizada"),
+    where("tenantId", "==", tenantId),
+    where("company", "==", company)
+  );
   const unsubA = onSnapshot(
     qy,
     (qs) => {
@@ -85,11 +100,16 @@ export function listenAperturasFinalizadasGlobal(cb, tenantId, company, onError)
     (err) => onError?.(err)
   );
 
-  const unsubR = listenAperturasRecepcionFinalizadas((rows) => {
-    listR = rows;
-    readyR = true;
-    emit();
-  });
+  const unsubR = listenAperturasRecepcionFinalizadas(
+    (rows) => {
+      listR = rows;
+      readyR = true;
+      emit();
+    },
+    tenantId,
+    company,
+    onError
+  );
 
   return () => {
     unsubA?.();

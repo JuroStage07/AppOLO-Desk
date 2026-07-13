@@ -570,8 +570,13 @@ export default function AdministrarVisados() {
       const fromDate = startOfDay(from);
       const toDate = endOfDay(to);
 
+      // Reglas (sameTenantScopeData): filtrar por tenantId+company en la query.
+      // La bodega se aplica en memoria (filterByUserScope). Índice compuesto:
+      // visados (tenantId, company, createdAt) — ver firestore.indexes.json.
       const qBase = query(
         collection(db, "visados"),
+        where("tenantId", "==", String(profile?.tenantId || "")),
+        where("company", "==", String(profile?.company || "")),
         where("createdAt", ">=", fromDate),
         where("createdAt", "<=", toDate),
         orderBy("createdAt", "desc"),
@@ -582,7 +587,8 @@ export default function AdministrarVisados() {
       const docs = filterByUserScope(
         snap.docs.map((d) => ({ id: d.id, ...d.data() })),
         profile?.tenantId,
-        profile?.company
+        profile?.company,
+        profile?.bodegaId
       );
 
       const tRaw = String(qText || "").trim().toLowerCase();

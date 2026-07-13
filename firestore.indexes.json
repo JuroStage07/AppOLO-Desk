@@ -1,0 +1,33 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "accion_descarga",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "company", "order": "ASCENDING" },
+        { "fieldPath": "creadoAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "visados",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "company", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "aperturas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "company", "order": "ASCENDING" },
+        { "fieldPath": "tiempoRechazada", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

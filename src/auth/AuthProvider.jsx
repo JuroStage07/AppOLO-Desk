@@ -64,6 +64,11 @@ export default function AuthProvider({ children }) {
       profile,                 // ✅ tu doc profiles/{uid}
       permisos: profile?.permisos || {},  // ✅ map permisos
       role: profile?.role || null,
+      // Tercera identidad (bodega activa), igual que en AppOLO. Viene de profiles/{uid}.
+      tenantId: profile?.tenantId || null,
+      company: profile?.company || null,
+      bodegaId: profile?.bodegaId || null,
+      bodegaNombre: profile?.bodegaNombre || null,
       epaAdmin:
         profile?.epaAdmin === true ||
         String(profile?.epaAdmin || "").toLowerCase() === "true",

@@ -109,7 +109,7 @@ export default function HistorialMarcas() {
       const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
       setMarcasDia(
-        filterByUserScope(rows, profile?.tenantId, profile?.company)
+        filterByUserScope(rows, profile?.tenantId, profile?.company, profile?.bodegaId)
       );
     } catch (err) {
       console.error("Error cargando historial de marcas:", err);
@@ -122,7 +122,7 @@ export default function HistorialMarcas() {
   useEffect(() => {
     if (authLoading) return;
     cargarMarcas(dia);
-  }, [authLoading, dia, profile?.tenantId, profile?.company]);
+  }, [authLoading, dia, profile?.tenantId, profile?.company, profile?.bodegaId]);
 
   useEffect(() => {
     const style = document.createElement("style");

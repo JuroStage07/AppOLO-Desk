@@ -10,6 +10,7 @@ import {
   Topbar,
 } from "../../components/ui";
 import { ACCENT, SLATE } from "../../styles/theme";
+import { filterByUserScope } from "../../utils/dataScope";
 
 /** Estados considerados cerrados (ajustá según lo que escriba el backend al cerrar). */
 const ESTADOS_FINALIZADOS = ["finalizado", "cerrado", "completado"];
@@ -76,7 +77,9 @@ export default function DespachoFinalizadosPage() {
         const profile = profileSnap.exists() ? profileSnap.data() || {} : {};
         const tenantId = String(profile?.tenantId || "").trim();
         const company = String(profile?.company || "").trim();
-        setTenantScope({ tenantId, company });
+        const bodegaId = String(profile?.bodegaId || "").trim();
+        const bodegaNombre = String(profile?.bodegaNombre || "").trim();
+        setTenantScope({ tenantId, company, bodegaId, bodegaNombre });
 
         if (!tenantId || !company) {
           setError("El perfil no tiene tenantId o company.");
@@ -97,10 +100,15 @@ export default function DespachoFinalizadosPage() {
           q,
           (snap) => {
             setRows(
-              snap.docs.map((d) => ({
-                id: d.id,
-                ...d.data(),
-              }))
+              filterByUserScope(
+                snap.docs.map((d) => ({
+                  id: d.id,
+                  ...d.data(),
+                })),
+                tenantId,
+                company,
+                bodegaId
+              )
             );
             setLoading(false);
           },

@@ -25,6 +25,7 @@ import {
     Topbar,
 } from "../../components/ui";
 import { ACCENT, SLATE } from "../../styles/theme";
+import { filterByUserScope } from "../../utils/dataScope";
 
 const CAPACITY = 24;
 
@@ -293,8 +294,10 @@ export default function DespachoInProgressPage() {
 
                 const tenantId = String(profile?.tenantId || "").trim();
                 const company = String(profile?.company || "").trim();
+                const bodegaId = String(profile?.bodegaId || "").trim();
+                const bodegaNombre = String(profile?.bodegaNombre || "").trim();
 
-                setTenantScope({ tenantId, company });
+                setTenantScope({ tenantId, company, bodegaId, bodegaNombre });
 
                 if (!tenantId || !company) {
                     setError("El perfil no tiene tenantId o company.");
@@ -313,12 +316,17 @@ export default function DespachoInProgressPage() {
                 unsubDespachos = onSnapshot(
                     q,
                     (snap) => {
-                        const baseRows = snap.docs.map((d) => ({
-                            id: d.id,
-                            ...d.data(),
-                            fotos: [],
-                            layoutSlots: [],
-                        }));
+                        const baseRows = filterByUserScope(
+                            snap.docs.map((d) => ({
+                                id: d.id,
+                                ...d.data(),
+                                fotos: [],
+                                layoutSlots: [],
+                            })),
+                            tenantId,
+                            company,
+                            bodegaId
+                        );
 
                         setDespachos((prev) => {
                             const prevMap = new Map(prev.map((x) => [x.id, x]));

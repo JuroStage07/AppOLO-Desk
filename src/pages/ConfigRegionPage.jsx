@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { ACCENT } from "../styles/theme";
+import { getBodegasForScope, getBodegaById } from "../config/bodegas";
 
 function persistSession(profile) {
   localStorage.setItem("appolo_profile", JSON.stringify(profile));
@@ -14,6 +15,7 @@ export default function ConfigRegionPage() {
   const nav = useNavigate();
   const [tenantId, setTenantId] = useState("");
   const [company, setCompany] = useState("OLO");
+  const [bodegaId, setBodegaId] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -21,10 +23,30 @@ export default function ConfigRegionPage() {
     const raw = localStorage.getItem("appolo_profile");
     const profile = raw ? JSON.parse(raw) : null;
 
-    if (profile?.tenantId) {
+    // Ya configurado por completo (país + bodega) → al home.
+    if (profile?.tenantId && profile?.bodegaId) {
       nav("/", { replace: true });
+      return;
     }
+
+    // Prefill de lo que ya tenga (p. ej. tenant fijado pero falta bodega).
+    if (profile?.tenantId) setTenantId(profile.tenantId);
+    if (profile?.company) setCompany(profile.company);
+    if (profile?.bodegaId) setBodegaId(profile.bodegaId);
   }, [nav]);
+
+  // Bodegas disponibles para el país/compañía seleccionados.
+  const bodegaOptions = useMemo(
+    () => (tenantId ? getBodegasForScope(tenantId, company) : []),
+    [tenantId, company]
+  );
+
+  // Si cambia el país y la bodega elegida ya no pertenece al scope, la limpiamos.
+  useEffect(() => {
+    if (!bodegaId) return;
+    const stillValid = bodegaOptions.some((b) => b.id === bodegaId);
+    if (!stillValid) setBodegaId("");
+  }, [bodegaOptions, bodegaId]);
 
   const handleSave = async () => {
     setErr("");
@@ -39,6 +61,17 @@ export default function ConfigRegionPage() {
       return;
     }
 
+    if (!bodegaId) {
+      setErr("Debes seleccionar una bodega.");
+      return;
+    }
+
+    const bodega = getBodegaById(bodegaId);
+    if (!bodega) {
+      setErr("Bodega inválida.");
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -48,6 +81,8 @@ export default function ConfigRegionPage() {
       await updateDoc(ref, {
         tenantId,
         company,
+        bodegaId: bodega.id,
+        bodegaNombre: bodega.label,
       });
 
       const currentRaw = localStorage.getItem("appolo_profile");
@@ -57,10 +92,15 @@ export default function ConfigRegionPage() {
         ...currentProfile,
         tenantId,
         company,
+        bodegaId: bodega.id,
+        bodegaNombre: bodega.label,
       };
 
       persistSession(updatedProfile);
-      nav("/", { replace: true });
+
+      // Recarga completa para que AuthProvider vuelva a leer el perfil (con bodega)
+      // desde Firestore; el scope se usa tanto en escrituras como en filtros en memoria.
+      window.location.assign("/");
     } catch (e) {
       console.error(e);
       setErr(e?.message || "No se pudo guardar la configuración.");
@@ -146,15 +186,41 @@ export default function ConfigRegionPage() {
           </button>
         </div>
 
+        <div style={styles.block}>
+          <div style={styles.label}>Bodega</div>
+
+          {!tenantId ? (
+            <div style={styles.hint}>Selecciona primero un país.</div>
+          ) : bodegaOptions.length === 0 ? (
+            <div style={styles.hint}>No hay bodegas configuradas para este país.</div>
+          ) : (
+            bodegaOptions.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                disabled={loading}
+                onClick={() => setBodegaId(b.id)}
+                style={{
+                  ...styles.option,
+                  ...(bodegaId === b.id ? styles.optionActive : {}),
+                  ...(loading ? styles.disabled : {}),
+                }}
+              >
+                {b.label}
+              </button>
+            ))
+          )}
+        </div>
+
         {err ? <div style={styles.errBox}>{err}</div> : null}
 
         <button
           type="button"
           onClick={handleSave}
-          disabled={!tenantId || loading}
+          disabled={!tenantId || !bodegaId || loading}
           style={{
             ...styles.saveBtn,
-            ...((!tenantId || loading) ? styles.disabled : {}),
+            ...((!tenantId || !bodegaId || loading) ? styles.disabled : {}),
           }}
         >
           {loading ? "Guardando..." : "Guardar y continuar"}
@@ -219,6 +285,12 @@ const styles = {
     fontSize: 12,
     fontWeight: 900,
     color: "#394055",
+  },
+  hint: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#8a90a2",
+    padding: "4px 2px",
   },
   option: {
     borderRadius: 14,

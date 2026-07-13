@@ -7,13 +7,16 @@ const mapSnap = (qs) => qs.docs.map((d) => ({ id: d.id, ...d.data() }));
 
 /**
  * Finalizadas en `aperturasRecepcion`. Sin orderBy para no excluir docs sin `createdAt`.
+ * Las reglas (sameTenantScopeData) exigen filtrar por tenantId+company en la query.
  */
-export function listenAperturasRecepcionFinalizadas(cb) {
+export function listenAperturasRecepcionFinalizadas(cb, tenantId, company, onError) {
   const qy = query(
     collection(db, "aperturasRecepcion"),
-    where("estado", "==", "finalizada")
+    where("estado", "==", "finalizada"),
+    where("tenantId", "==", tenantId),
+    where("company", "==", company)
   );
-  return onSnapshot(qy, (qs) => cb(mapSnap(qs)));
+  return onSnapshot(qy, (qs) => cb(mapSnap(qs)), (err) => onError?.(err));
 }
 
 export function listenAperturaRecepcion(apId, cb) {

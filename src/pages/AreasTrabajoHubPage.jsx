@@ -35,7 +35,7 @@ import {
   OT_TIPOS_PROBLEMA,
 } from "../config/otOptions";
 import { getVisibleAreas } from "../config/workAreas";
-import { AreasSidebar, SidebarAreaIcon, TopbarAccount, openCommandPalette, useConfirm, useToast } from "../components/ui";
+import { AreasSidebar, SidebarAreaIcon, TopbarAccount, BodegaSwitcher, openCommandPalette, useConfirm, useToast } from "../components/ui";
 import {
   ACCENT,
   ACCENT_SHADOW,
@@ -329,6 +329,13 @@ function buildAssistantOtPayload({ draft, user, profile }) {
   if (tenantId && company) {
     payload.tenantId = tenantId;
     payload.company = company;
+  }
+
+  const bodegaId = cleanOtValue(profile?.bodegaId);
+  const bodegaNombre = cleanOtValue(profile?.bodegaNombre);
+  if (bodegaId) {
+    payload.bodegaId = bodegaId;
+    payload.bodegaNombre = bodegaNombre;
   }
 
   return payload;
@@ -1313,6 +1320,8 @@ export default function AreasTrabajoHubPage() {
       userId: user?.uid || null,
       tenantId: profile?.tenantId || null,
       company: profile?.company || null,
+      bodegaId: profile?.bodegaId || null,
+      bodegaNombre: profile?.bodegaNombre || null,
       role: role || null,
       permisos: permisos || {},
       epaAdmin: !!epaAdmin,
@@ -1469,6 +1478,7 @@ export default function AreasTrabajoHubPage() {
                   {profile.company && <span style={styles.tenantSecondary}>{profile.company}</span>}
                 </div>
               )}
+              <BodegaSwitcher />
               <button
                 type="button"
                 onClick={openCommandPalette}

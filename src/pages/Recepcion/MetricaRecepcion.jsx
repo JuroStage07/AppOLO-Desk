@@ -4777,6 +4777,8 @@ export default function MetricaRecepcion() {
       const allowed = new Set(dayKeys);
       const q = query(
         collection(db, "accion_descarga"),
+        where("tenantId", "==", tenantScope.tenantId),
+        where("company", "==", tenantScope.company),
         orderBy("creadoAt", "desc"),
         limit(3000)
       );
@@ -4784,7 +4786,8 @@ export default function MetricaRecepcion() {
       const rows = filterByUserScope(
         snap.docs.map((d) => ({ id: d.id, ...d.data() })),
         tenantScope.tenantId,
-        tenantScope.company
+        tenantScope.company,
+        tenantScope.bodegaId
       );
 
       // === One sheet per user ===
@@ -4998,6 +5001,8 @@ export default function MetricaRecepcion() {
 
       const q = query(
         collection(db, "accion_descarga"),
+        where("tenantId", "==", tenantScope.tenantId),
+        where("company", "==", tenantScope.company),
         orderBy("creadoAt", "desc"),
         limit(2500)
       );
@@ -5005,7 +5010,8 @@ export default function MetricaRecepcion() {
       const rows = filterByUserScope(
         snap.docs.map((d) => ({ id: d.id, ...d.data() })),
         tenantScope.tenantId,
-        tenantScope.company
+        tenantScope.company,
+        tenantScope.bodegaId
       );
 
       const detected = rows.map((row) => {
@@ -5066,6 +5072,8 @@ export default function MetricaRecepcion() {
 
       const q = query(
         collection(db, "accion_descarga"),
+        where("tenantId", "==", tenantScope.tenantId),
+        where("company", "==", tenantScope.company),
         orderBy("creadoAt", "desc"),
         limit(1500)
       );
@@ -5073,7 +5081,8 @@ export default function MetricaRecepcion() {
       const rows = filterByUserScope(
         snap.docs.map((d) => ({ id: d.id, ...d.data() })),
         tenantScope.tenantId,
-        tenantScope.company
+        tenantScope.company,
+        tenantScope.bodegaId
       );
 
       const filtered = rows.filter((row) => {
@@ -5173,6 +5182,8 @@ export default function MetricaRecepcion() {
 
       const q = query(
         collection(db, "accion_descarga"),
+        where("tenantId", "==", tenantScope.tenantId),
+        where("company", "==", tenantScope.company),
         orderBy("creadoAt", "desc"),
         limit(2500)
       );
@@ -5180,7 +5191,8 @@ export default function MetricaRecepcion() {
       const rows = filterByUserScope(
         snap.docs.map((d) => ({ id: d.id, ...d.data() })),
         tenantScope.tenantId,
-        tenantScope.company
+        tenantScope.company,
+        tenantScope.bodegaId
       );
 
       const items = rows
@@ -5316,6 +5328,8 @@ export default function MetricaRecepcion() {
 
       const q = query(
         collection(db, "accion_descarga"),
+        where("tenantId", "==", tenantScope.tenantId),
+        where("company", "==", tenantScope.company),
         orderBy("creadoAt", "desc"),
         limit(3000)
       );
@@ -5323,7 +5337,8 @@ export default function MetricaRecepcion() {
       const rows = filterByUserScope(
         snap.docs.map((d) => ({ id: d.id, ...d.data() })),
         tenantScope.tenantId,
-        tenantScope.company
+        tenantScope.company,
+        tenantScope.bodegaId
       );
 
       // Filter by date range and completed actions
@@ -5438,6 +5453,8 @@ export default function MetricaRecepcion() {
 
       const q = query(
         collection(db, "accion_descarga"),
+        where("tenantId", "==", tenantScope.tenantId),
+        where("company", "==", tenantScope.company),
         orderBy("creadoAt", "desc"),
         limit(3000)
       );
@@ -5445,7 +5462,8 @@ export default function MetricaRecepcion() {
       const rows = filterByUserScope(
         snap.docs.map((d) => ({ id: d.id, ...d.data() })),
         tenantScope.tenantId,
-        tenantScope.company
+        tenantScope.company,
+        tenantScope.bodegaId
       );
 
       // Filter by date range, completed actions, and EPA tipo
@@ -5646,7 +5664,9 @@ export default function MetricaRecepcion() {
 
         const tenantId = String(profile?.tenantId || "").trim();
         const company = String(profile?.company || "").trim();
-        setTenantScope({ tenantId, company });
+        const bodegaId = String(profile?.bodegaId || "").trim();
+        const bodegaNombre = String(profile?.bodegaNombre || "").trim();
+        setTenantScope({ tenantId, company, bodegaId, bodegaNombre });
 
         if (!tenantId || !company) {
           if (!mounted) return;
@@ -5660,21 +5680,31 @@ export default function MetricaRecepcion() {
         const isContextRecompute =
           activeContext === "EPA" || activeContext === "COFERSA";
 
+        // Cuando hay bodega activa recomputamos TODO el panel (incluida la vista
+        // General) desde acciones crudas filtradas por bodega: los agregados
+        // diarios del servidor (dashboard_salud_daily) están a nivel tenant+company
+        // y NO tienen dimensión de bodega, por lo que no se pueden cortar por bodega.
+        const hasActiveBodega = !!bodegaId;
+        const recomputeFromAcciones = isContextRecompute || hasActiveBodega;
+
         // Acciones crudas: siempre se cargan para "Tiempos por proveedor"; en las
-        // vistas EPA/COFERSA son además la base para recomputar todo el panel
-        // (los agregados diarios del servidor no se pueden cortar por tipo).
+        // vistas EPA/COFERSA y con bodega activa son además la base para recomputar
+        // todo el panel (los agregados no se pueden cortar por tipo ni por bodega).
         let accRows = [];
         try {
           const aq = query(
             collection(db, "accion_descarga"),
+            where("tenantId", "==", tenantId),
+            where("company", "==", company),
             orderBy("creadoAt", "desc"),
-            limit(isContextRecompute ? 4000 : 2500)
+            limit(recomputeFromAcciones ? 4000 : 2500)
           );
           const accSnap = await getDocs(aq);
           accRows = filterByUserScope(
             accSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
             tenantId,
-            company
+            company,
+            bodegaId
           );
         } catch (accErr) {
           console.error("loadDashboard accion_descarga:", accErr);
@@ -5689,8 +5719,9 @@ export default function MetricaRecepcion() {
         let dataPresent;
         let coverageWithDataSize = 0;
 
-        if (isContextRecompute) {
-          // EPA / COFERSA: panel recomputado desde acciones crudas filtradas por tipo.
+        if (recomputeFromAcciones) {
+          // EPA / COFERSA o bodega activa: panel recomputado desde acciones crudas
+          // (filtradas por tipo si aplica y por bodega vía filterByUserScope arriba).
           const syntheticDocs = buildSyntheticDailyDocsFromAcciones(
             contextRows,
             dayKeys
@@ -5905,9 +5936,11 @@ export default function MetricaRecepcion() {
     });
 
     try {
-      const { tenantId, company } = tenantScope;
+      const { tenantId, company, bodegaId } = tenantScope;
       const aq = query(
         collection(db, "accion_descarga"),
+        where("tenantId", "==", tenantId),
+        where("company", "==", company),
         orderBy("creadoAt", "desc"),
         limit(5000)
       );
@@ -5915,7 +5948,8 @@ export default function MetricaRecepcion() {
       const rows = filterByUserScope(
         snap.docs.map((d) => ({ id: d.id, ...d.data() })),
         tenantId,
-        company
+        company,
+        bodegaId
       );
 
       const pending = rows.filter((r) => !String(r?.tipo ?? "").trim());
@@ -6017,6 +6051,8 @@ export default function MetricaRecepcion() {
         const allowed = new Set(dayKeys);
         const q = query(
           collection(db, "accion_descarga"),
+          where("tenantId", "==", tenantScope.tenantId),
+          where("company", "==", tenantScope.company),
           orderBy("creadoAt", "desc"),
           limit(1500)
         );
@@ -6025,7 +6061,8 @@ export default function MetricaRecepcion() {
         const rows = filterByUserScope(
           snap.docs.map((d) => ({ id: d.id, ...d.data() })),
           tenantScope.tenantId,
-          tenantScope.company
+          tenantScope.company,
+          tenantScope.bodegaId
         );
         const filtered = rows.filter((it) => {
           const dt = toDateSafe(it?.creadoAt);

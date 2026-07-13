@@ -21,6 +21,7 @@ import {
   OT_TIPOS_PROBLEMA as TIPOS_PROBLEMA,
 } from "../../../config/otOptions";
 import { ACCENT } from "../../../styles/theme";
+import { buildScopeFields } from "../../../utils/dataScope";
 
 const OT_STATE_SOLICITADA = "Solicitada";
 
@@ -420,6 +421,7 @@ export function NewOTModal({
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(emptyPicker());
   const [creatorArea, setCreatorArea] = useState("");
+  const [profileData, setProfileData] = useState(null);
 
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
@@ -441,6 +443,7 @@ export function NewOTModal({
 
         if (profileSnap.exists()) {
           const data = profileSnap.data();
+          setProfileData(data);
           setCreatorArea(String(data?.areaTrabajo || "").trim());
           setForm((prev) => ({
             ...prev,
@@ -475,6 +478,7 @@ export function NewOTModal({
       setPickerOpen(emptyPicker());
       setErrors({});
       setCreatorArea("");
+      setProfileData(null);
     }
   }, [open, variant]);
 
@@ -595,6 +599,8 @@ export function NewOTModal({
           auth.currentUser?.email ||
           "Usuario",
         createdArea: creatorArea,
+
+        ...buildScopeFields(profileData),
       };
 
       const docRef = await addDoc(collection(db, "solicitudesOT"), payload);

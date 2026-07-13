@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { auth, db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
-import { filterEquiposByScope } from "../../../utils/dataScope";
+import { buildScopeFields, filterEquiposByScope } from "../../../utils/dataScope";
 import { Brand, GhostButton, Topbar } from "../../../components/ui";
 import { ACCENT, ACCENT_SOFT } from "../../../styles/theme";
 
@@ -90,7 +90,12 @@ export default function PanelEquiposMantenimiento() {
         const unsub = onSnapshot(
             qRef,
             (snap) => {
-                const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                const rows = filterEquiposByScope(
+                    snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+                    tenantId,
+                    company,
+                    profile?.bodegaId
+                );
                 setEquipos(rows);
                 setLoading(false);
                 setLoadError("");
@@ -105,7 +110,7 @@ export default function PanelEquiposMantenimiento() {
         );
 
         return () => unsub();
-    }, [authLoading, profile?.tenantId, profile?.company]);
+    }, [authLoading, profile?.tenantId, profile?.company, profile?.bodegaId]);
 
     const familias = useMemo(() => {
         const set = new Set();
@@ -230,6 +235,7 @@ export default function PanelEquiposMantenimiento() {
             tenantId,
             uid,
             updatedAt: serverTimestamp(),
+            ...buildScopeFields(profile),
         };
 
         if (!payload.codigo || !payload.equipo || !payload.familia) {

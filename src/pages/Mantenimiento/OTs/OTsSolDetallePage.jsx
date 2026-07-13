@@ -355,7 +355,7 @@ export default function OTsDetallePage() {
           setOt(null);
           return;
         }
-        if (!isSolicitudOtInScope(snap.data(), profile?.tenantId, profile?.company)) {
+        if (!isSolicitudOtInScope(snap.data(), profile?.tenantId, profile?.company, profile?.bodegaId)) {
           setError("No tenés acceso a esta OT.");
           setOt(null);
           return;
@@ -386,7 +386,7 @@ export default function OTsDetallePage() {
     };
 
     if (id) loadOT();
-  }, [id, authLoading, canAccess, profile?.tenantId, profile?.company]);
+  }, [id, authLoading, canAccess, profile?.tenantId, profile?.company, profile?.bodegaId]);
 
   const anySubtaskChronoRunning = useMemo(
     () => subtasks.some((s) => chronoWorkRunning(s)),
@@ -520,7 +520,7 @@ export default function OTsDetallePage() {
       });
       const snap = await getDoc(ref);
       if (snap.exists()) {
-        if (!isSolicitudOtInScope(snap.data(), profile?.tenantId, profile?.company)) {
+        if (!isSolicitudOtInScope(snap.data(), profile?.tenantId, profile?.company, profile?.bodegaId)) {
           toast.error("No tenés acceso a esta OT.");
           return;
         }

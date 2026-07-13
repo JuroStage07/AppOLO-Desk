@@ -147,13 +147,22 @@ export default function NuevoVisado() {
 
       const tenantId = String(profile?.tenantId || "").trim();
       const company = String(profile?.company || "").trim();
+      const bodegaId = String(profile?.bodegaId || "").trim();
+      const bodegaNombre = String(profile?.bodegaNombre || "").trim();
       if (!tenantId || !company) throw new Error("Falta tenantId/company en el profile.");
 
-      const q = query(collection(db, "usuariosTerceros"), where("cedula", "==", cedula));
+      // Reglas (sameTenantScopeData): filtrar por tenantId+company en la query.
+      // La bodega se aplica en memoria con isInUserScope (no excluye legacy sin bodega).
+      const q = query(
+        collection(db, "usuariosTerceros"),
+        where("cedula", "==", cedula),
+        where("tenantId", "==", tenantId),
+        where("company", "==", company)
+      );
       const snap = await getDocs(q);
       const existingScoped = snap.docs
         .map((d) => ({ id: d.id, ...d.data(), __ref: d.ref }))
-        .find((row) => isInUserScope(row, tenantId, company));
+        .find((row) => isInUserScope(row, tenantId, company, bodegaId));
 
       if (!existingScoped) {
         step = "usuariosTerceros:create";
@@ -164,6 +173,8 @@ export default function NuevoVisado() {
           motivo,
           tenantId,
           company,
+          bodegaId,
+          bodegaNombre,
           entrada: false,
           usuarioBloqueado: false,
           createdAt: serverTimestamp(),
@@ -177,6 +188,8 @@ export default function NuevoVisado() {
           motivo,
           tenantId,
           company,
+          bodegaId,
+          bodegaNombre,
           updatedAt: serverTimestamp(),
         });
       }
@@ -185,6 +198,8 @@ export default function NuevoVisado() {
       const visadoRef = await addDoc(collection(db, "visados"), {
         tenantId,
         company,
+        bodegaId,
+        bodegaNombre,
         cedula,
         nombre,
         nombreLower: nombre.toLowerCase(),
@@ -229,6 +244,8 @@ export default function NuevoVisado() {
       await addDoc(collection(db, "visadosPorFirmar"), {
         tenantId,
         company,
+        bodegaId,
+        bodegaNombre,
         visadoUID: visadoRef.id,
         solicitudNum,
 

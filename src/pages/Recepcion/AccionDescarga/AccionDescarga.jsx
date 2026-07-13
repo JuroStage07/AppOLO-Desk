@@ -13,7 +13,7 @@ import {
   Spinner,
   Topbar,
 } from "../../../components/ui";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { db } from "../../../firebase";
 import { filterByUserScope } from "../../../utils/dataScope";
@@ -121,14 +121,23 @@ export default function AccionDescarga() {
   // realtime
   useEffect(() => {
     if (authLoading) return;
-    const q = query(collection(db, "accion_descarga"), orderBy("creadoAt", "desc"));
+    // Reglas (sameTenantScopeData): la query debe filtrar por tenantId+company.
+    // La bodega se aplica en memoria (filterByUserScope). Índice compuesto:
+    // accion_descarga (tenantId, company, creadoAt DESC) — ver firestore.indexes.json.
+    const q = query(
+      collection(db, "accion_descarga"),
+      where("tenantId", "==", String(profile?.tenantId || "")),
+      where("company", "==", String(profile?.company || "")),
+      orderBy("creadoAt", "desc")
+    );
     const unsub = onSnapshot(
       q,
       (snap) => {
         const rows = filterByUserScope(
           snap.docs.map((d) => ({ id: d.id, ...d.data() })),
           profile?.tenantId,
-          profile?.company
+          profile?.company,
+          profile?.bodegaId
         );
         setItems(rows);
         setLoadError("");
@@ -142,7 +151,7 @@ export default function AccionDescarga() {
       }
     );
     return () => unsub();
-  }, [authLoading, profile?.tenantId, profile?.company]);
+  }, [authLoading, profile?.tenantId, profile?.company, profile?.bodegaId]);
 
   // Debounce buscador
   useEffect(() => {

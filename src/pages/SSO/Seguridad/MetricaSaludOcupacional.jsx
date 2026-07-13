@@ -11,6 +11,7 @@ import {
 } from "../../../components/ui";
 import { ACCENT } from "../../../styles/theme";
 import { auth, db } from "../../../firebase";
+import { filterByUserScope } from "../../../utils/dataScope";
 import {
     collection,
     doc,
@@ -113,6 +114,7 @@ export default function MetricaSaludOcupacional() {
 
                 const tenantId = profile?.tenantId;
                 const company = profile?.company;
+                const bodegaId = profile?.bodegaId;
 
                 if (!tenantId || !company) {
                     setLoadError("El perfil no tiene tenantId o company.");
@@ -131,8 +133,13 @@ export default function MetricaSaludOcupacional() {
                 );
 
                 const snap = await getDocs(q);
-                const allDocs = snap.docs.map((doc) => doc.data());
-                const filteredDocs = allDocs.filter((doc) => dayKeys.includes(doc.dayKey));
+                const scopedDocs = filterByUserScope(
+                    snap.docs.map((doc) => doc.data()),
+                    tenantId,
+                    company,
+                    bodegaId
+                );
+                const filteredDocs = scopedDocs.filter((doc) => dayKeys.includes(doc.dayKey));
 
                 if (filteredDocs.length === 0) {
                     setLoadError("No hay datos para el período seleccionado.");

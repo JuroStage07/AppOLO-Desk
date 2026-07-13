@@ -255,10 +255,11 @@ export default function AperturasFinalizadas() {
         );
         // Salir del estado de carga para que se muestre el error.
         setAperturasFinalizadas((prev) => (prev === undefined ? [] : prev));
-      }
+      },
+      profile?.bodegaId
     );
     return () => unsub?.();
-  }, [authLoading, profile?.tenantId, profile?.company, reloadKey]);
+  }, [authLoading, profile?.tenantId, profile?.company, profile?.bodegaId, reloadKey]);
 
   useEffect(() => {
     setVisibleCount(10);

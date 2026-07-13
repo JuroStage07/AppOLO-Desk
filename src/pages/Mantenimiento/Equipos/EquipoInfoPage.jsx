@@ -326,7 +326,7 @@ export default function EquipoInfoPage() {
     const tRow = normalizeScopeValue(row?.tenantId);
     const cRow = normalizeScopeValue(row?.company);
     if (!tRow && !cRow) return true;
-    return isInUserScope(row, profile?.tenantId, profile?.company);
+    return isInUserScope(row, profile?.tenantId, profile?.company, profile?.bodegaId);
   };
 
   const rowTieneFallasRegistradas = (row) => {

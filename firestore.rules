@@ -8,7 +8,7 @@ service cloud.firestore {
     }
 
     // =========================
-    // Helpers de perfil / scope (tenantId + company)
+    // Helpers de perfil / scope (tenantId + company + bodega)
     // =========================
     function userExists(uid) {
       return exists(/databases/$(database)/documents/profiles/$(uid));
@@ -83,6 +83,62 @@ service cloud.firestore {
         && requesterProfile().company == data.company;
     }
 
+    function validBodegaData(data) {
+      return (!('bodegaId' in data) || data.bodegaId == null || data.bodegaId is string)
+        && (!('bodegaNombre' in data) || data.bodegaNombre == null || data.bodegaNombre is string);
+    }
+
+    function validProfileBodegaData(data) {
+      return validBodegaData(data)
+        && (!('bodegaIds' in data) || data.bodegaIds is list);
+    }
+
+    // ── FASE 1: scope tenantId + company + bodegaId (soft — bodegaId opcional) ──
+    // Acepta documentos que ya tienen bodegaId Y coincide con el perfil,
+    // O documentos sin bodegaId aún (legacy, hasta completar backfill).
+    // Usar en allow read/list donde queremos scope completo pero sin romper docs
+    // legados que aún no pasaron por el backfill.
+    //
+    // ⚠️  FASE 2 (post-backfill confirmado): reemplazar por sameTenantFullScopeData()
+    //     que exige bodegaId siempre. Ver comentario en la función de abajo.
+    function sameTenantScopeData(data) {
+      return authed()
+        && userExists(request.auth.uid)
+        && data.tenantId is string
+        && data.company is string
+        && requesterProfile().tenantId == data.tenantId
+        && requesterProfile().company == data.company
+        && (
+          // legacy: sin bodegaId → pasa mientras no termine el backfill
+          !('bodegaId' in data)
+          || data.bodegaId == null
+          || data.bodegaId == ""
+          // doc con bodegaId → debe coincidir con el del perfil
+          || (
+            requesterProfile().bodegaId is string
+            && requesterProfile().bodegaId == data.bodegaId
+          )
+        );
+    }
+
+    // ── FASE 2 (habilitar después de confirmar backfill completo) ──────────────
+    // Exige bodegaId presente y coincidente en ambos lados.
+    // Descomentar y reemplazar sameTenantScopeData() por esta función cuando:
+    //   1. El backfill haya corrido en producción (npm run backfill:apply).
+    //   2. Se hayan añadido los índices compuestos listados al final de este archivo.
+    //   3. Se haya verificado en Firestore Console que ningún doc tenga bodegaId vacío.
+    //
+    // function sameTenantFullScopeData(data) {
+    //   return authed()
+    //     && userExists(request.auth.uid)
+    //     && data.tenantId is string
+    //     && data.company is string
+    //     && data.bodegaId is string
+    //     && requesterProfile().tenantId == data.tenantId
+    //     && requesterProfile().company == data.company
+    //     && requesterProfile().bodegaId == data.bodegaId;
+    // }
+
     // ✅ Admin/Dev o permiso mantenimiento
     function canGestionEquipos() {
       return authed() && (
@@ -134,7 +190,7 @@ function solicitudOtCreateTenantCompanyOk() {
           )
         );
     }
-    
+
     function canUploadDocumentacionAdmin() {
       return isAdminRequester();
     }
@@ -264,7 +320,7 @@ function solicitudOtCreateTenantCompanyOk() {
 
       allow delete: if canMantenimientoOT();
     }
-    
+
     // =========================
 // Permisos Recepcion Cofersa
 // =========================
@@ -283,14 +339,14 @@ function canRecepcionEPA() {
 match /tareas_apertura/{tareaId} {
   function canRecepcion() {
     return authed() && (
-      isAdminRequester() || 
-      canRecepcionCofersa() || 
+      isAdminRequester() ||
+      canRecepcionCofersa() ||
       canRecepcionEPA()
     );
   }
-  
-  allow get, list: if canRecepcion() && sameTenantCompanyData(resource.data);
-  
+
+  allow get, list: if canRecepcion() && sameTenantScopeData(resource.data);
+
   allow create: if canRecepcion()
     && request.resource.data.keys().hasOnly([
       'reserva',
@@ -300,6 +356,8 @@ match /tareas_apertura/{tareaId} {
       'estado',
       'tenantId',
       'company',
+      'bodegaId',
+      'bodegaNombre',
       'creadoPor',
       'creadoPorNombre',
       'createdAt',
@@ -314,6 +372,7 @@ match /tareas_apertura/{tareaId} {
     && request.resource.data.estado == 'pendiente'
     && request.resource.data.tenantId is string
     && request.resource.data.company is string
+    && validBodegaData(request.resource.data)
     && sameTenantCompanyData(request.resource.data)
     && request.resource.data.creadoPor == request.auth.uid
     && request.resource.data.creadoPorNombre is string
@@ -322,7 +381,7 @@ match /tareas_apertura/{tareaId} {
     && (!('reservaId' in request.resource.data) || request.resource.data.reservaId == null || request.resource.data.reservaId is string)
     && (!('test' in request.resource.data) || request.resource.data.test is bool)
     && (!('autoCreated' in request.resource.data) || request.resource.data.autoCreated is bool);
-  
+
   allow update: if canRecepcion()
     && sameTenantCompanyData(resource.data)
     && sameTenantCompanyData(request.resource.data)
@@ -332,15 +391,15 @@ match /tareas_apertura/{tareaId} {
       'completedAt',
       'updatedAt'
     ])
-    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['estado']) 
+    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['estado'])
       || request.resource.data.estado in ['pendiente', 'completada'])
-    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['aperturaId']) 
+    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['aperturaId'])
       || request.resource.data.aperturaId is string)
-    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['completedAt']) 
+    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['completedAt'])
       || request.resource.data.completedAt is timestamp)
-    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['updatedAt']) 
+    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['updatedAt'])
       || request.resource.data.updatedAt is timestamp);
-  
+
   allow delete: if isAdminRequester() && sameTenantCompanyData(resource.data);
 }
 
@@ -349,7 +408,7 @@ match /tareas_apertura/{tareaId} {
 match /{path=**}/fotos/{fotoId} {
   allow read: if authed();
 }
-    
+
     match /{path=**}/subtareas/{subtareaId} {
       allow read: if canMantenimientoOT();
     }
@@ -392,11 +451,11 @@ match /{path=**}/fotos/{fotoId} {
         );
       }
 
-      allow get, list: if canTouch();
+      allow get, list: if canTouch() && sameTenantScopeData(resource.data);
 
       allow create: if authed()
         && request.resource.data.keys().hasOnly([
-          'aperturaId','reservaId','tenantId','company',
+          'aperturaId','reservaId','tenantId','company','bodegaId','bodegaNombre',
           'creadoPorUid','creadoPorNombre','creadoAt',
           'proveedorNombre','idAnden','nombreAccion',
           'tipo','traslado',
@@ -410,6 +469,8 @@ match /{path=**}/fotos/{fotoId} {
         && (!('reservaId' in request.resource.data) || request.resource.data.reservaId == null || request.resource.data.reservaId is string)
         && request.resource.data.tenantId is string
         && request.resource.data.company is string
+        && validBodegaData(request.resource.data)
+        && sameTenantCompanyData(request.resource.data)
         && request.resource.data.creadoPorUid is string
         && request.resource.data.creadoPorUid == request.auth.uid
         && request.resource.data.creadoPorNombre is string
@@ -530,6 +591,83 @@ match /{path=**}/fotos/{fotoId} {
       allow delete: if isAdminRequester();
     }
 
+    // =========================
+    // ✅ Acciones de Recepción
+    // Colección: accion_recepcion/{accionId}
+    // =========================
+    match /accion_recepcion/{accionId} {
+
+      function canTouchRecepcionAccion() {
+        return authed() && (
+          isAdminRequester() ||
+          canRecepcionEPA() ||
+          canRecepcionCofersa()
+        );
+      }
+
+      allow get, list: if canTouchRecepcionAccion() && sameTenantScopeData(resource.data);
+
+      allow create: if canTouchRecepcionAccion()
+        && request.resource.data.keys().hasOnly([
+          'accionDescargaId','aperturaId','reservaId','tenantId','company','bodegaId','bodegaNombre',
+          'creadoPorUid','creadoPorNombre','creadoAt',
+          'proveedorNombre','idAnden','nombreAccion','tipo',
+          'startedAt','completedAt','starter','starterUid',
+          'totalTimeMs','totalTimeTxt'
+        ])
+        && request.resource.data.tenantId is string
+        && request.resource.data.company is string
+        && validBodegaData(request.resource.data)
+        && sameTenantCompanyData(request.resource.data)
+        && request.resource.data.creadoAt is timestamp
+        && (!('accionDescargaId' in request.resource.data) || request.resource.data.accionDescargaId == null || request.resource.data.accionDescargaId is string)
+        && (!('aperturaId' in request.resource.data) || request.resource.data.aperturaId == null || request.resource.data.aperturaId is string)
+        && (!('reservaId' in request.resource.data) || request.resource.data.reservaId == null || request.resource.data.reservaId is string)
+        && (!('creadoPorUid' in request.resource.data) || request.resource.data.creadoPorUid == null || request.resource.data.creadoPorUid is string)
+        && (!('creadoPorNombre' in request.resource.data) || request.resource.data.creadoPorNombre is string)
+        && (!('proveedorNombre' in request.resource.data) || request.resource.data.proveedorNombre == null || request.resource.data.proveedorNombre is string)
+        && (!('idAnden' in request.resource.data) || request.resource.data.idAnden == null || request.resource.data.idAnden is string || request.resource.data.idAnden is int || request.resource.data.idAnden is float)
+        && (!('nombreAccion' in request.resource.data) || request.resource.data.nombreAccion == null || request.resource.data.nombreAccion is string)
+        && (!('tipo' in request.resource.data) || request.resource.data.tipo == null || request.resource.data.tipo is string)
+        && (!('startedAt' in request.resource.data) || request.resource.data.startedAt == null)
+        && (!('completedAt' in request.resource.data) || request.resource.data.completedAt == null)
+        && (!('starter' in request.resource.data) || request.resource.data.starter == null || request.resource.data.starter is string)
+        && (!('starterUid' in request.resource.data) || request.resource.data.starterUid == null || request.resource.data.starterUid is string)
+        && (!('totalTimeMs' in request.resource.data) || request.resource.data.totalTimeMs == null)
+        && (!('totalTimeTxt' in request.resource.data) || request.resource.data.totalTimeTxt == null);
+
+      allow update: if canTouchRecepcionAccion()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'startedAt','completedAt','starter','starterUid','totalTimeMs','totalTimeTxt'
+        ])
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['startedAt']) ||
+          (resource.data.startedAt == null && request.resource.data.startedAt is timestamp)
+        )
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['completedAt']) ||
+          (resource.data.completedAt == null && resource.data.startedAt != null && request.resource.data.completedAt is timestamp)
+        )
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['starter']) ||
+          request.resource.data.starter is string
+        )
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['starterUid']) ||
+          request.resource.data.starterUid == request.auth.uid
+        )
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['totalTimeMs']) ||
+          (request.resource.data.totalTimeMs is number && request.resource.data.totalTimeMs >= 0)
+        )
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['totalTimeTxt']) ||
+          request.resource.data.totalTimeTxt is string
+        );
+
+      allow delete: if isAdminRequester();
+    }
+
 // =========================
     // PESAJE TARIMAS
     // =========================
@@ -571,7 +709,11 @@ match /{path=**}/fotos/{fotoId} {
           'fechaRegistro',
           'registradoPorUid',
           'registradoPorEmail',
-          'registradoPorNombre'
+          'registradoPorNombre',
+          'tenantId',
+          'company',
+          'bodegaId',
+          'bodegaNombre'
         ])
         && request.resource.data.numero is string
         && request.resource.data.numero.size() > 0
@@ -584,7 +726,10 @@ match /{path=**}/fotos/{fotoId} {
         && request.resource.data.registradoPorUid is string
         && request.resource.data.registradoPorUid == request.auth.uid
         && validRegistradoEmail()
-        && validRegistradoNombre();
+        && validRegistradoNombre()
+        && (!('tenantId' in request.resource.data) || request.resource.data.tenantId is string)
+        && (!('company' in request.resource.data) || request.resource.data.company is string)
+        && validBodegaData(request.resource.data);
 
       allow delete: if false;
     }
@@ -667,6 +812,8 @@ match /{path=**}/fotos/{fotoId} {
             'company',
             'motivo',
             'tenantId',
+            'bodegaId',
+            'bodegaNombre',
             'tipo',
             'createdAt',
             'fecha',
@@ -683,12 +830,13 @@ match /{path=**}/fotos/{fotoId} {
           && request.resource.data.tipo in ['entrada', 'salida']
           && request.resource.data.createdAt is timestamp
           && request.resource.data.fecha is string
-          && request.resource.data.horaTexto is string;
+          && request.resource.data.horaTexto is string
+          && validBodegaData(request.resource.data);
 
         allow update, delete: if false;
       }
     }
-    
+
     // =========================
     // ✅ Dashboard Salud / Recepción (agregado diario)
     // =========================
@@ -825,7 +973,10 @@ allow list: if isAdminDev() || canMantenimientoOT();
         'desiredRole',
         'lastSeenAt',
         'tenantId',
-        'company'
+        'company',
+        'bodegaId',
+        'bodegaNombre',
+        'bodegaIds'
       ])
       && request.resource.data.uid is string
       && request.resource.data.email is string
@@ -841,6 +992,7 @@ allow list: if isAdminDev() || canMantenimientoOT();
       && (!('desiredRole' in request.resource.data) || request.resource.data.desiredRole in ['operativo','administrativo','dev'])
       && (!('tenantId' in request.resource.data) || request.resource.data.tenantId == null || request.resource.data.tenantId in ['CR', 'VNZ'])
       && (!('company' in request.resource.data) || request.resource.data.company == null || request.resource.data.company == 'OLO')
+      && validProfileBodegaData(request.resource.data)
       && request.resource.data.createdAt is timestamp
       && request.resource.data.updatedAt is timestamp
     )
@@ -859,6 +1011,9 @@ allow list: if isAdminDev() || canMantenimientoOT();
         'device',
         'tenantId',
         'company',
+        'bodegaId',
+        'bodegaNombre',
+        'bodegaIds',
         'updatedAt'
       ])
       && request.resource.data.uid == resource.data.uid
@@ -888,6 +1043,7 @@ allow list: if isAdminDev() || canMantenimientoOT();
         request.resource.data.company == null ||
         request.resource.data.company == 'OLO'
       )
+      && validProfileBodegaData(request.resource.data)
       && (
         !request.resource.data.diff(resource.data).changedKeys().hasAny(['updatedAt']) ||
         request.resource.data.updatedAt is timestamp
@@ -921,7 +1077,7 @@ allow list: if isAdminDev() || canMantenimientoOT();
       && request.resource.data.token == token;
 
     allow delete: if isSelfLocal();
-	 }
+     }
  }
 
 // =========================
@@ -987,6 +1143,8 @@ allow create: if authed()
           'checklistD_lastAt',
           'codigo',
           'company',
+          'bodegaId',
+          'bodegaNombre',
           'equipo',
           'estado',
           'fallaActiva',
@@ -1001,6 +1159,7 @@ allow create: if authed()
           'updatedAt'
         ])
         && sameTenantCompanyData(request.resource.data)
+        && validBodegaData(request.resource.data)
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.checklistD is bool
@@ -1036,6 +1195,8 @@ allow create: if authed()
           'estado',
           'marca',
           'propiedad',
+          'bodegaId',
+          'bodegaNombre',
           'checklistD',
           'checklistD_hasFallas',
           'checklistD_fallas',
@@ -1045,6 +1206,7 @@ allow create: if authed()
           'updatedAt'
         ])
         && (!('estado' in request.resource.data) || request.resource.data.estado in ['Activo','Inactivo','Mantenimiento'])
+        && validBodegaData(request.resource.data)
         && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp);
 
       // Solo checklist diaria / falla (batch en EquiposFormScreen tras completar formulario)
@@ -1082,6 +1244,10 @@ allow create: if authed()
           'responsable',
           'familia',
           'marca',
+          'tenantId',
+          'company',
+          'bodegaId',
+          'bodegaNombre',
           'turno',
           'respuestas',
           'hasFallas',
@@ -1099,6 +1265,8 @@ allow create: if authed()
         && request.resource.data.responsable is string
         && request.resource.data.familia is string
         && request.resource.data.marca is string
+        && sameTenantCompanyData(request.resource.data)
+        && validBodegaData(request.resource.data)
         && request.resource.data.respuestas is map
         && request.resource.data.hasFallas is bool
         && request.resource.data.fallas is list
@@ -1149,6 +1317,8 @@ match /solicitudesOT/{solicitudId} {
       'createdArea',
       'tenantId',
       'company',
+      'bodegaId',
+      'bodegaNombre',
       'subtasks'
     ])
     && request.resource.data.solicitanteNombre is string
@@ -1175,6 +1345,7 @@ match /solicitudesOT/{solicitudId} {
     && request.resource.data.createdByName is string
     && (!('createdArea' in request.resource.data) || request.resource.data.createdArea is string)
     && (!('subtasks' in request.resource.data) || request.resource.data.subtasks is list)
+    && validBodegaData(request.resource.data)
     && request.resource.data.nombreOT.trim().size() > 0
     && request.resource.data.activoReferencia.trim().size() > 0
     && request.resource.data.departamento.trim().size() > 0
@@ -1313,16 +1484,17 @@ match /usuariosTerceros/{terceroId} {
     ]);
   }
 
-  allow get, list: if canSaludOcupacional();
+  allow get, list: if canSaludOcupacional() && sameTenantScopeData(resource.data);
 
   allow create: if canSaludOcupacional()
     && request.resource.data.keys().hasOnly([
       'cedula','nombre','empresa','motivo',
-      'tenantId','company',
+      'tenantId','company','bodegaId','bodegaNombre',
       'entrada',
       'usuarioBloqueado',
       'fotoPerfil','fotoURL','fotoPath','fotoUpdatedAt',
       'createdAt','updatedAt',
+      'creadoPorUid',
       'entradaAt','salidaAt'
     ])
     && request.resource.data.cedula is string
@@ -1331,6 +1503,8 @@ match /usuariosTerceros/{terceroId} {
     && request.resource.data.motivo is string
     && request.resource.data.tenantId is string
     && request.resource.data.company is string
+    && sameTenantCompanyData(request.resource.data)
+    && validBodegaData(request.resource.data)
     && request.resource.data.entrada is bool
     && request.resource.data.usuarioBloqueado is bool
     && request.resource.data.createdAt is timestamp
@@ -1341,14 +1515,17 @@ match /usuariosTerceros/{terceroId} {
     && (!('fotoURL' in request.resource.data) || request.resource.data.fotoURL is string)
     && (!('fotoPath' in request.resource.data) || request.resource.data.fotoPath is string)
     && (!('fotoUpdatedAt' in request.resource.data) || request.resource.data.fotoUpdatedAt is timestamp)
+    && (!('creadoPorUid' in request.resource.data) || request.resource.data.creadoPorUid == request.auth.uid)
     && request.resource.data.cedula.trim().size() > 0
     && request.resource.data.nombre.trim().size() > 0
     && request.resource.data.empresa.trim().size() > 0;
 
   allow update: if canSaludOcupacional()
+    && sameTenantCompanyData(resource.data)
+    && sameTenantCompanyData(request.resource.data)
     && request.resource.data.diff(resource.data).changedKeys().hasOnly([
       'nombre','cedula','empresa','motivo',
-      'tenantId','company',
+      'tenantId','company','bodegaId','bodegaNombre',
       'entrada','entradaAt','salidaAt',
       'usuarioBloqueado',
       'fotoPerfil','fotoURL','fotoPath','fotoUpdatedAt',
@@ -1396,6 +1573,7 @@ match /usuariosTerceros/{terceroId} {
       !request.resource.data.diff(resource.data).changedKeys().hasAny(['company']) ||
       request.resource.data.company is string
     )
+    && validBodegaData(request.resource.data)
     && (
       !request.resource.data.diff(resource.data).changedKeys().hasAny(['usuarioBloqueado']) ||
       !('usuarioBloqueado' in request.resource.data) ||
@@ -1427,6 +1605,7 @@ match /usuariosTerceros/{terceroId} {
         && request.resource.data.motivo is string
         && request.resource.data.tenantId is string
         && request.resource.data.company is string
+        && validBodegaData(request.resource.data)
         && request.resource.data.nombre.trim().size() > 0
         && request.resource.data.cedula.trim().size() > 0
         && request.resource.data.empresa.trim().size() > 0
@@ -1470,7 +1649,7 @@ match /controlTerceros/{eventId} {
     return authed() && (isAdminRequester() || hasPerm('saludOcupacional'));
   }
 
-  allow get, list: if canSaludOcupacional();
+  allow get, list: if canSaludOcupacional() && sameTenantScopeData(resource.data);
 
   allow create: if canSaludOcupacional()
     && request.resource.data.keys().hasOnly([
@@ -1484,7 +1663,11 @@ match /controlTerceros/{eventId} {
       'terceroEmpresa',
       'terceroMotivo',
       'tenantId',
-      'company'
+      'company',
+      'bodegaId',
+      'bodegaNombre',
+      'autoCierre',
+      'origen'
     ])
     && request.resource.data.terceroId is string
     && request.resource.data.tipo is string
@@ -1497,7 +1680,10 @@ match /controlTerceros/{eventId} {
     && (!('terceroEmpresa' in request.resource.data) || request.resource.data.terceroEmpresa is string)
     && (!('terceroMotivo' in request.resource.data) || request.resource.data.terceroMotivo is string)
     && (!('tenantId' in request.resource.data) || request.resource.data.tenantId is string)
-    && (!('company' in request.resource.data) || request.resource.data.company is string);
+    && (!('company' in request.resource.data) || request.resource.data.company is string)
+    && validBodegaData(request.resource.data)
+    && (!('autoCierre' in request.resource.data) || request.resource.data.autoCierre is bool)
+    && (!('origen' in request.resource.data) || request.resource.data.origen is string);
 
   allow update, delete: if false;
 }
@@ -1542,7 +1728,11 @@ match /controlTerceros/{eventId} {
           'fechaRegistro',
           'registradoPorUid',
           'registradoPorEmail',
-          'registradoPorNombre'
+          'registradoPorNombre',
+          'tenantId',
+          'company',
+          'bodegaId',
+          'bodegaNombre'
         ])
         && request.resource.data.numero is string
         && request.resource.data.numero.size() > 0
@@ -1555,11 +1745,14 @@ match /controlTerceros/{eventId} {
         && request.resource.data.registradoPorUid is string
         && request.resource.data.registradoPorUid == request.auth.uid
         && validRegistradoEmail()
-        && validRegistradoNombre();
+        && validRegistradoNombre()
+        && (!('tenantId' in request.resource.data) || request.resource.data.tenantId is string)
+        && (!('company' in request.resource.data) || request.resource.data.company is string)
+        && validBodegaData(request.resource.data);
 
       allow delete: if false;
     }
-    
+
         // =========================
     // Control de marcas (ControlMarcas.jsx)
     // controlMarcas/{YYYY-MM-DD} + subcolección marcas
@@ -1598,6 +1791,8 @@ match /controlTerceros/{eventId} {
             'company',
             'motivo',
             'tenantId',
+            'bodegaId',
+            'bodegaNombre',
             'tipo',
             'createdAt',
             'fecha',
@@ -1614,12 +1809,13 @@ match /controlTerceros/{eventId} {
           && request.resource.data.tipo in ['entrada', 'salida']
           && request.resource.data.createdAt is timestamp
           && request.resource.data.fecha is string
-          && request.resource.data.horaTexto is string;
+          && request.resource.data.horaTexto is string
+          && validBodegaData(request.resource.data);
 
         allow update, delete: if false;
       }
     }
-    
+
     // =========================
     // ✅ VISADOS
     // =========================
@@ -1629,24 +1825,26 @@ match /controlTerceros/{eventId} {
         return authed() && (isAdminRequester() || hasPerm('saludOcupacional'));
       }
 
-      allow get, list: if canSaludOcupacional();
+      allow get, list: if canSaludOcupacional() && sameTenantScopeData(resource.data);
 
       allow create: if canSaludOcupacional()
-		    && request.resource.data.keys().hasOnly([
-		      'tenantId','company',
-		      'cedula','nombre','nombreLower',
-		      'empresa','empresaLower',
-		      'motivo','fechaISO',
-		      'numeroPatronal','telefonoEmpresa','supervisor','telefonoSupervisor',
-		      'tipoTramite','tipoTramiteDetalle',
-		      'familiares','familiarNombre','familiarParentesco','familiarPuesto','familiarUnidadVenta',
-		      'capAltura','capConfinados','capElectricos','capSoldadura',
-		      'empresaAportaCert','aceptaNormas',
-		      'createdAt','updatedAt',
-		      'creadoPor'
-		    ])
-		    && request.resource.data.tenantId is string
-		    && request.resource.data.company is string
+            && request.resource.data.keys().hasOnly([
+              'tenantId','company','bodegaId','bodegaNombre',
+              'cedula','nombre','nombreLower',
+              'empresa','empresaLower',
+              'motivo','fechaISO',
+              'numeroPatronal','telefonoEmpresa','supervisor','telefonoSupervisor',
+              'tipoTramite','tipoTramiteDetalle',
+              'familiares','familiarNombre','familiarParentesco','familiarPuesto','familiarUnidadVenta',
+              'capAltura','capConfinados','capElectricos','capSoldadura',
+              'empresaAportaCert','aceptaNormas',
+              'createdAt','updatedAt',
+              'creadoPor'
+            ])
+            && request.resource.data.tenantId is string
+            && request.resource.data.company is string
+        && sameTenantCompanyData(request.resource.data)
+        && validBodegaData(request.resource.data)
         && request.resource.data.cedula is string
         && request.resource.data.nombre is string
         && request.resource.data.empresa is string
@@ -1701,36 +1899,38 @@ match /controlTerceros/{eventId} {
         return authed() && (isAdminRequester() || hasPerm('saludOcupacional'));
       }
 
-      allow get, list: if canSaludOcupacional();
+      allow get, list: if canSaludOcupacional() && sameTenantScopeData(resource.data);
 
      allow create: if canSaludOcupacional()
-		    && request.resource.data.keys().hasOnly([
-		      'tenantId','company',
-		      'visadoUID',
-		      'solicitudNum',
-		      'createdAt',
-		      'updatedAt',
-		      'createdBy',
-		      'terceroNombre',
-		      'terceroCedula',
-		      'terceroEmpresa',
-		      'status',
-		      'firmaColaborador',
-		      'firmaRepresentante'
-		    ])
-		    && request.resource.data.tenantId is string
-		    && request.resource.data.company is string
-		    && request.resource.data.visadoUID is string
-		    && request.resource.data.solicitudNum is string
-		    && request.resource.data.createdAt is timestamp
-		    && request.resource.data.updatedAt is timestamp
-		    && request.resource.data.createdBy is string
-		    && request.resource.data.terceroNombre is string
-		    && request.resource.data.terceroCedula is string
-		    && request.resource.data.terceroEmpresa is string
-		    && request.resource.data.status == "PENDIENTE"
-		    && request.resource.data.firmaColaborador is map
-		    && request.resource.data.firmaRepresentante is map;
+            && request.resource.data.keys().hasOnly([
+              'tenantId','company','bodegaId','bodegaNombre',
+              'visadoUID',
+              'solicitudNum',
+              'createdAt',
+              'updatedAt',
+              'createdBy',
+              'terceroNombre',
+              'terceroCedula',
+              'terceroEmpresa',
+              'status',
+              'firmaColaborador',
+              'firmaRepresentante'
+            ])
+            && request.resource.data.tenantId is string
+            && request.resource.data.company is string
+        && sameTenantCompanyData(request.resource.data)
+        && validBodegaData(request.resource.data)
+            && request.resource.data.visadoUID is string
+            && request.resource.data.solicitudNum is string
+            && request.resource.data.createdAt is timestamp
+            && request.resource.data.updatedAt is timestamp
+            && request.resource.data.createdBy is string
+            && request.resource.data.terceroNombre is string
+            && request.resource.data.terceroCedula is string
+            && request.resource.data.terceroEmpresa is string
+            && request.resource.data.status == "PENDIENTE"
+            && request.resource.data.firmaColaborador is map
+            && request.resource.data.firmaRepresentante is map;
 
       allow update: if canSaludOcupacional()
         && request.resource.data.diff(resource.data).changedKeys().hasOnly([
@@ -1794,7 +1994,16 @@ match /controlTerceros/{eventId} {
           );
       }
 
-      allow read, list: if authed();
+      // get por ID: authed() basta — listenAperturaGlobal busca en ambas colecciones
+      // (una de las dos devolverá !exists()), no podemos exigir scope en resource.data nulo.
+      // El scope real se controla en el allow list y en la lógica del cliente (tenantFilter).
+      allow get: if authed();
+
+      // list: Fase 1 — scope soft (tenantId+company obligatorio, bodegaId opcional legacy).
+      // Fase 2: reemplazar sameTenantScopeData por sameTenantFullScopeData cuando
+      //         el backfill esté completo y todos los docs tengan bodegaId.
+      allow list: if authed() && sameTenantScopeData(resource.data);
+
       allow create: if authed();
 
       allow update: if
@@ -1942,7 +2151,7 @@ match /controlTerceros/{eventId} {
 
       allow delete: if isAdminRequester();
     }
-    
+
     // =========================
     // AperturasRecepcion
     // =========================
@@ -1980,7 +2189,13 @@ match /controlTerceros/{eventId} {
           );
       }
 
-      allow read, list: if authed();
+      // get por ID: authed() basta — mismo patrón que aperturas (listenAperturaGlobal
+      // hace get en ambas colecciones; la que no contiene el doc devuelve !exists()).
+      allow get: if authed();
+
+      // list: Fase 1 — scope soft.
+      allow list: if authed() && sameTenantScopeData(resource.data);
+
       allow create: if authed();
 
       allow update: if
@@ -2008,7 +2223,7 @@ match /controlTerceros/{eventId} {
     // ✅ Recepcion Cofersa
     // =========================
     match /recepcionCofersa_lotes/{loteId} {
-      allow get, list: if canRecepcionCofersa();
+      allow get, list: if canRecepcionCofersa() && sameTenantScopeData(resource.data);
 
       allow create: if canRecepcionCofersa()
         && request.resource.data.creadoPor == request.auth.uid;

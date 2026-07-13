@@ -567,11 +567,11 @@ export default function AperturaDetalle() {
 
   useEffect(() => {
     if (!apertura) return;
-    if (!isInUserScope(apertura, profile?.tenantId, profile?.company)) {
+    if (!isInUserScope(apertura, profile?.tenantId, profile?.company, profile?.bodegaId)) {
       toast.error("No tenés acceso a esta apertura.");
       nav(-1);
     }
-  }, [apertura, nav, profile?.tenantId, profile?.company]);
+  }, [apertura, nav, profile?.tenantId, profile?.company, profile?.bodegaId]);
 
   const isLoading = apertura === undefined;
 
@@ -679,6 +679,12 @@ export default function AperturaDetalle() {
         company:
           String(apertura?.company || "").trim() ||
           String(profile?.company || "").trim(),
+        bodegaId:
+          String(apertura?.bodegaId || "").trim() ||
+          String(profile?.bodegaId || "").trim(),
+        bodegaNombre:
+          String(apertura?.bodegaNombre || "").trim() ||
+          String(profile?.bodegaNombre || "").trim(),
         proveedorNombre: proveedorNombre || null,
         idAnden: anden || null,
         nombreAccion,

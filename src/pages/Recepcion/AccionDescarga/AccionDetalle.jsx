@@ -258,7 +258,7 @@ export default function AccionDetalle() {
           setErr("No existe la acción.");
         } else {
           const data = snap.data();
-          if (!isInUserScope(data, profile?.tenantId, profile?.company)) {
+          if (!isInUserScope(data, profile?.tenantId, profile?.company, profile?.bodegaId)) {
             setAccion(null);
             setErr("No tenés acceso a esta acción.");
           } else {
@@ -276,7 +276,7 @@ export default function AccionDetalle() {
     );
 
     return () => unsub && unsub();
-  }, [authLoading, ref, profile?.tenantId, profile?.company]);
+  }, [authLoading, ref, profile?.tenantId, profile?.company, profile?.bodegaId]);
 
   // Resuelve el tipo de la apertura: 1) el campo copiado en la acción;
   // 2) respaldo leyendo la apertura por aperturaId (aperturas → aperturasRecepcion).
@@ -323,7 +323,7 @@ export default function AccionDetalle() {
         setErr("No existe la acción.");
       } else {
         const data = snap.data();
-        if (!isInUserScope(data, profile?.tenantId, profile?.company)) {
+        if (!isInUserScope(data, profile?.tenantId, profile?.company, profile?.bodegaId)) {
           setAccion(null);
           setErr("No tenés acceso a esta acción.");
         } else {
@@ -337,7 +337,7 @@ export default function AccionDetalle() {
     } finally {
       setLoading(false);
     }
-  }, [ref, profile?.tenantId, profile?.company]);
+  }, [ref, profile?.tenantId, profile?.company, profile?.bodegaId]);
 
   const estadoChip = useMemo(() => {
     const estado = accion?.estado;

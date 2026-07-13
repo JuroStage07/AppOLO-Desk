@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, AlertTriangle, Loader2, Save, Scale, X, Hash, ChevronDown, CheckCircle2 } from "lucide-react";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../../firebase";
+import { AuthCtx } from "../../auth/AuthProvider";
+import { buildScopeFields } from "../../utils/dataScope";
 import {
   Brand,
   Container,
@@ -23,6 +25,8 @@ const WARN_BORDER = "rgba(217,119,6,0.35)";
 export default function RegistrarTarimas() {
   const nav = useNavigate();
   const toast = useToast();
+  const authCtx = useContext(AuthCtx);
+  const profile = authCtx?.profile || {};
 
   const focusPrimerError = () => {
     requestAnimationFrame(() =>
@@ -133,6 +137,7 @@ export default function RegistrarTarimas() {
           registradoPorUid: user.uid,
           registradoPorEmail: user.email || "",
           registradoPorNombre: user.displayName || "",
+          ...buildScopeFields(profile),
         },
         { merge: true }
       );

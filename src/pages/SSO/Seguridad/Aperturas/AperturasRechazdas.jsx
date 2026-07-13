@@ -68,10 +68,15 @@ const formatDateTime = (value) => {
 
 /* ===================== Data listener ===================== */
 // ✅ Listener listo (no dependés de otro service)
-function listenAperturasRechazadas(setItems, tenantId, company) {
+function listenAperturasRechazadas(setItems, tenantId, company, bodegaId) {
+  // Reglas (sameTenantScopeData): la query debe filtrar por tenantId+company.
+  // La bodega se aplica en memoria (filterByUserScope). Requiere índice compuesto
+  // (estado, tenantId, company, tiempoRechazada) — ver firestore.indexes.json.
   const qy = query(
     collection(db, "aperturas"),
     where("estado", "==", "rechazada"),
+    where("tenantId", "==", tenantId),
+    where("company", "==", company),
     orderBy("tiempoRechazada", "desc"),
     limit(400)
   );
@@ -82,7 +87,8 @@ function listenAperturasRechazadas(setItems, tenantId, company) {
       const out = filterByUserScope(
         snap.docs.map((d) => ({ id: d.id, ...d.data() })),
         tenantId,
-        company
+        company,
+        bodegaId
       );
       setItems(out);
     },
@@ -116,10 +122,11 @@ export default function AperturasRechazadas() {
     const unsub = listenAperturasRechazadas(
       setItems,
       profile?.tenantId,
-      profile?.company
+      profile?.company,
+      profile?.bodegaId
     );
     return () => unsub?.();
-  }, [authLoading, profile?.tenantId, profile?.company]);
+  }, [authLoading, profile?.tenantId, profile?.company, profile?.bodegaId]);
 
   const filtered = useMemo(() => {
     if (motivoFiltro === "Todos") return items;

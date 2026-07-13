@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, CheckCircle, Database, Loader2, RefreshCw, XCircle } from "lucide-react";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { supabase } from "../../supabase";
 import { AuthCtx } from "../../auth/AuthProvider";
@@ -60,8 +60,15 @@ export default function UpdateSupabasePage() {
     try {
       addLog("Leyendo acciones de descarga desde Firestore…");
 
-      // 1. Fetch all accion_descarga from Firestore
-      const q = query(collection(db, "accion_descarga"), orderBy("creadoAt", "desc"));
+      // 1. Fetch accion_descarga from Firestore (scoped al tenant/company del dev).
+      // Reglas (sameTenantScopeData) exigen filtrar por tenantId+company. Índice compuesto:
+      // accion_descarga (tenantId, company, creadoAt DESC) — ver firestore.indexes.json.
+      const q = query(
+        collection(db, "accion_descarga"),
+        where("tenantId", "==", String(profile?.tenantId || "")),
+        where("company", "==", String(profile?.company || "")),
+        orderBy("creadoAt", "desc")
+      );
       const snap = await getDocs(q);
       const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 

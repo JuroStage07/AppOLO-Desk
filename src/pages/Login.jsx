@@ -98,7 +98,7 @@ export default function Login() {
 
     persistSession(profile);
 
-    if (!profile.tenantId) {
+    if (!profile.tenantId || !profile.bodegaId) {
       nav("/config-region", { replace: true });
       return;
     }

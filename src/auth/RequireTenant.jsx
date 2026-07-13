@@ -9,8 +9,10 @@ export default function RequireTenant({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  // fkujo
-  if (!profile.tenantId) {
+  // Falta país o bodega → a configurar. La bodega es obligatoria: las reglas de
+  // Firestore (sameTenantScopeData) exigen que el perfil tenga bodegaId para leer
+  // documentos con bodega asignada.
+  if (!profile.tenantId || !profile.bodegaId) {
     return <Navigate to="/config-region" replace />;
   }
 

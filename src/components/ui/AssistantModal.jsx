@@ -262,6 +262,13 @@ function buildAssistantOtPayload({ draft, user, profile }) {
     payload.company = company;
   }
 
+  const bodegaId = cleanOtValue(profile?.bodegaId);
+  const bodegaNombre = cleanOtValue(profile?.bodegaNombre);
+  if (bodegaId) {
+    payload.bodegaId = bodegaId;
+    payload.bodegaNombre = bodegaNombre;
+  }
+
   return payload;
 }
 
@@ -873,6 +880,8 @@ export default function AssistantModal() {
       userId: user?.uid || null,
       tenantId: profile?.tenantId || null,
       company: profile?.company || null,
+      bodegaId: profile?.bodegaId || null,
+      bodegaNombre: profile?.bodegaNombre || null,
       role: role || null,
       permisos: permisos || {},
       epaAdmin: !!epaAdmin,

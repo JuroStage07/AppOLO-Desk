@@ -83,7 +83,7 @@ export default function OTsDashboardPage() {
         const list = [];
         snap.forEach((d) => {
           const data = d.data();
-          if (!isSolicitudOtInScope(data, profile?.tenantId, profile?.company)) return;
+          if (!isSolicitudOtInScope(data, profile?.tenantId, profile?.company, profile?.bodegaId)) return;
           list.push({
             id: d.id,
             createdAt: data.createdAt || null,
@@ -110,7 +110,7 @@ export default function OTsDashboardPage() {
     );
 
     return () => unsub();
-  }, [authLoading, profile?.tenantId, profile?.company]);
+  }, [authLoading, profile?.tenantId, profile?.company, profile?.bodegaId]);
 
   const metrics = useOTsDashboardMetrics(rows, period, customFrom, customTo);
 

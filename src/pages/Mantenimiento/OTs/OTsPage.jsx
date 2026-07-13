@@ -2468,7 +2468,7 @@ export default function OTsPage() {
 
     for (const d of snap.docs) {
       const data = d.data();
-      if (!isSolicitudOtInScope(data, profile?.tenantId, profile?.company)) continue;
+      if (!isSolicitudOtInScope(data, profile?.tenantId, profile?.company, profile?.bodegaId)) continue;
       const state = data.OTState || OT_STATE_SOLICITADA;
       const rawSub = subtaskCountById[d.id];
       const subStats = normalizeSubtaskStats(rawSub);
@@ -2505,7 +2505,7 @@ export default function OTsPage() {
       })
     );
     setLoadingPendientes(false);
-  }, [profile?.tenantId, profile?.company]);
+  }, [profile?.tenantId, profile?.company, profile?.bodegaId]);
 
   /** Total y completadas por solicitud (lectura subcolección; sirve para barra y chip). */
   const syncSubtaskCountsFromServer = useCallback(async () => {
@@ -2520,7 +2520,7 @@ export default function OTsPage() {
     await Promise.all(
       snap.docs.map(async (d) => {
         const data = d.data();
-        if (!isSolicitudOtInScope(data, profile?.tenantId, profile?.company)) {
+        if (!isSolicitudOtInScope(data, profile?.tenantId, profile?.company, profile?.bodegaId)) {
           return;
         }
         try {
@@ -2548,7 +2548,7 @@ export default function OTsPage() {
     );
     subtaskCountsRef.current = counts;
     applyBoardFromRefs();
-  }, [applyBoardFromRefs, profile?.tenantId, profile?.company]);
+  }, [applyBoardFromRefs, profile?.tenantId, profile?.company, profile?.bodegaId]);
 
   const refetchSolicitudesOnce = useCallback(async () => {
     try {

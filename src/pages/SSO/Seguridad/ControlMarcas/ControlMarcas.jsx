@@ -17,7 +17,7 @@ import {
 import { ArrowLeft, ScanLine, Users } from "lucide-react";
 import { auth, db } from "../../../../firebase";
 import { AuthCtx } from "../../../../auth/AuthProvider";
-import { filterByUserScope } from "../../../../utils/dataScope";
+import { filterByUserScope, isInUserScope } from "../../../../utils/dataScope";
 import {
   Brand,
   EmptyState,
@@ -63,8 +63,8 @@ function marcaCreatedMs(m) {
   return ts.toMillis();
 }
 
-function buildActivosEnSitioDesdeMarcasDelDia(marcasRows, tenantId, company) {
-  const scoped = filterByUserScope(marcasRows, tenantId, company);
+function buildActivosEnSitioDesdeMarcasDelDia(marcasRows, tenantId, company, bodegaId) {
+  const scoped = filterByUserScope(marcasRows, tenantId, company, bodegaId);
   const sorted = [...scoped].sort((a, b) => marcaCreatedMs(b) - marcaCreatedMs(a));
   const ultimaPorUsuario = new Map();
   for (const m of sorted) {
@@ -160,7 +160,8 @@ export default function ControlMarcas() {
           buildActivosEnSitioDesdeMarcasDelDia(
             marcasRows,
             profile?.tenantId,
-            profile?.company
+            profile?.company,
+            profile?.bodegaId
           )
         );
         setLoadError("");
@@ -172,7 +173,7 @@ export default function ControlMarcas() {
     );
 
     return () => unsub();
-  }, [authLoading, profile?.tenantId, profile?.company, diaKeyActivos]);
+  }, [authLoading, profile?.tenantId, profile?.company, profile?.bodegaId, diaKeyActivos]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -219,11 +220,19 @@ export default function ControlMarcas() {
   };
 
   const buscarUsuarioPorCedula = async (numeroCedula) => {
+    const tenantId = String(profile?.tenantId || "").trim();
+    const company = String(profile?.company || "").trim();
+    const bodegaId = String(profile?.bodegaId || "").trim();
+
     const usuariosRef = collection(db, "usuariosTerceros");
+    // Reglas (sameTenantScopeData): la query debe filtrar por tenantId+company.
+    // La bodega no se filtra en servidor (excluiría legacy sin bodega); se aplica en
+    // memoria con isInUserScope para respetar el aislamiento por bodega.
     const qUsuario = query(
       usuariosRef,
       where("cedula", "==", numeroCedula),
-      limit(1)
+      where("tenantId", "==", tenantId),
+      where("company", "==", company)
     );
 
     let snap;
@@ -236,11 +245,11 @@ export default function ControlMarcas() {
 
     if (snap.empty) return null;
 
-    const docSnap = snap.docs[0];
-    return {
-      id: docSnap.id,
-      ...docSnap.data(),
-    };
+    const scoped = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .find((row) => isInUserScope(row, tenantId, company, bodegaId));
+
+    return scoped || null;
   };
 
   const obtenerSiguienteTipoMarca = async (hoyId, usuarioDocId) => {
@@ -323,6 +332,8 @@ export default function ControlMarcas() {
         company: String(usuario.company ?? ""),
         motivo: String(usuario.motivo ?? ""),
         tenantId: String(usuario.tenantId ?? ""),
+        bodegaId: String(profile?.bodegaId ?? usuario.bodegaId ?? "").trim(),
+        bodegaNombre: String(profile?.bodegaNombre ?? usuario.bodegaNombre ?? "").trim(),
         tipo,
         createdAt: serverTimestamp(),
         fecha: hoyId,

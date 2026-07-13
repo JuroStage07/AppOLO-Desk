@@ -1042,18 +1042,34 @@ async function buildWorkbook(data, ctx, ExcelJS) {
       accionesPorProveedor.get(proveedorNombre).push(accion);
     }
     
+    // Nombres de hoja ya usados (Excel exige unicidad, sin distinguir may/min).
+    const usedSheetNames = new Set();
+    // Genera un nombre de hoja seguro (≤ 31 chars, sin caracteres inválidos) y
+    // único: si dos proveedores colisionan al recortar a 31 chars, añade un
+    // sufijo numérico (_2, _3, …) recortando la base para que siga cabiendo.
+    const makeUniqueSheetName = (raw) => {
+      const base = (String(raw).replace(/[:\\/?*[\]]/g, "_").slice(0, 28) + "_PR");
+      let name = base;
+      let n = 2;
+      while (usedSheetNames.has(name.toLowerCase())) {
+        const suffix = `_${n}`;
+        name = base.slice(0, 31 - suffix.length) + suffix;
+        n += 1;
+      }
+      usedSheetNames.add(name.toLowerCase());
+      return name;
+    };
+
     // Crear una hoja por cada proveedor
     for (const providerData of providerTimes) {
       const proveedorNombre = String(providerData.label || "Sin proveedor").trim();
       const acciones = accionesPorProveedor.get(proveedorNombre) || [];
-      
+
       if (acciones.length === 0) continue;
-      
-      // Nombre seguro para la hoja (máximo 31 caracteres, sin caracteres especiales)
-      const safeSheetName = proveedorNombre
-        .replace(/[:\\\/\?\*\[\]]/g, "_")
-        .slice(0, 28) + "_PR";
-      
+
+      // Nombre seguro y único para la hoja (máximo 31 caracteres).
+      const safeSheetName = makeUniqueSheetName(proveedorNombre);
+
       addDataSheet(safeSheetName, "FF0EA5E9", (ws) => {
         ws.columns = [
           { width: 28 },

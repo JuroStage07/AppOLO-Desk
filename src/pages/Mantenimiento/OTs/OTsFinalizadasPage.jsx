@@ -114,7 +114,8 @@ export default function OTsFinalizadasPage() {
       const rows = filterSolicitudesOtByScope(
         snap.docs.map((d) => ({ id: d.id, ...d.data() })),
         profile?.tenantId,
-        profile?.company
+        profile?.company,
+        profile?.bodegaId
       );
 
       setItems((prev) => {

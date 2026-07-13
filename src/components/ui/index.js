@@ -43,6 +43,7 @@ export { default as Spinner } from "./Spinner";
 export { default as ToastProvider, useToast } from "./Toast";
 export { default as ConfirmProvider, useConfirm } from "./ConfirmDialog";
 export { default as Breadcrumbs } from "./Breadcrumbs";
+export { default as BodegaSwitcher } from "./BodegaSwitcher";
 export { default as TopbarAccount } from "./TopbarAccount";
 export { default as CommandPalette } from "./CommandPalette";
 export { default as CircleMenu } from "./CircleMenu";

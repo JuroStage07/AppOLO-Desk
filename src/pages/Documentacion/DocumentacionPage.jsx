@@ -15,6 +15,7 @@ import {
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { ArrowLeft, BookOpen } from "lucide-react";
 import { auth, db, storage } from "../../firebase";
+import { buildScopeFields } from "../../utils/dataScope";
 import {
     Brand,
     GhostButton,
@@ -170,6 +171,8 @@ export default function DocumentacionPage() {
             const currentUser = auth.currentUser;
             if (!currentUser?.uid) throw new Error("No hay usuario autenticado.");
 
+            const currentProfile = profile ?? (await loadProfile());
+
             await addDoc(collection(db, "colecciones"), {
                 name,
                 nameLower: name.toLowerCase(),
@@ -177,6 +180,7 @@ export default function DocumentacionPage() {
                 documentIds: [],
                 createdBy: currentUser.uid,
                 createdAt: serverTimestamp(),
+                ...buildScopeFields(currentProfile),
             });
             setColeccionForm({ name: "", description: "" });
             setShowNewColeccionForm(false);
@@ -398,6 +402,8 @@ export default function DocumentacionPage() {
             const payload = {
                 tenantId,
                 company,
+                bodegaId: currentProfile?.bodegaId || "",
+                bodegaNombre: currentProfile?.bodegaNombre || "",
                 title: cleanTitle,
                 titleLower: cleanTitle.toLowerCase(),
                 category: cleanCategory,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDocs, limit, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { ArrowLeft, UserCheck, AlertCircle, CheckCircle2, User, ScanLine, ShieldX } from "lucide-react";
 import { db } from "../../firebase";
 import { AuthCtx } from "../../auth/AuthProvider";
@@ -73,18 +73,22 @@ export default function ValidarIngreso() {
 
   /* ── firestore ── */
   const findUsuarioByCedula = async (val) => {
+    const tenantId = String(profile?.tenantId || "").trim();
+    const company = String(profile?.company || "").trim();
+    const bodegaId = String(profile?.bodegaId || "").trim();
+    // Reglas (sameTenantScopeData): filtrar por tenantId+company en la query.
+    // La bodega se resuelve en memoria (isInUserScope) para no excluir legacy sin bodega.
     const q = query(
       collection(db, "usuariosTerceros"),
       where("cedula", "==", String(val).trim()),
-      limit(1)
+      where("tenantId", "==", tenantId),
+      where("company", "==", company)
     );
     const snap = await getDocs(q);
     if (snap.empty) return null;
-    const tenantId = String(profile?.tenantId || "").trim();
-    const company = String(profile?.company || "").trim();
     const row = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
-      .find((it) => isInUserScope(it, tenantId, company));
+      .find((it) => isInUserScope(it, tenantId, company, bodegaId));
     return row || null;
   };
 
