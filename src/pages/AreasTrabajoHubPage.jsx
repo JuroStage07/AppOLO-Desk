@@ -92,7 +92,7 @@ const DASHED_ARC_RADIUS = 51; // dashed arc just before (inward of) the grey arc
  * the work areas (Encarta-style lateral categories + dynamic central panel).
  */
 const MENU_ACTIONS = [
-  { key: "areas", title: "Áreas", icon: <LayoutGrid />, angle: 225, accent: "#2563EB", soft: "rgba(37,99,235,0.12)" },
+  { key: "areas", title: "Áreas", icon: <LayoutGrid />, angle: 225, accent: "#00C3AE", soft: "rgba(0,195,174,0.12)" },
   { key: "pins", title: "Mis Pin", icon: <Pin />, angle: 315, accent: ACCENT, soft: accentAlpha(0.12) },
   { key: "reportes", title: "Reportes", icon: <BarChart3 />, angle: 135, accent: "#7C3AED", soft: "rgba(124,58,237,0.12)" },
   { key: "configuracion", title: "Configuración", icon: <Cog />, angle: 45, accent: "#EA580C", soft: "rgba(234,88,12,0.12)" },
@@ -1605,7 +1605,7 @@ export default function AreasTrabajoHubPage() {
             <section style={styles.areasSection} onClick={(e) => e.stopPropagation()}>
               <div style={styles.areasPanelHead}>
                 <div style={styles.areasPanelHeadTitle}>
-                  <span style={{ ...styles.areasPanelHeadIcon, background: `rgba(37,99,235,0.12)`, color: "#2563EB" }}>
+                  <span style={{ ...styles.areasPanelHeadIcon, background: `rgba(0,195,174,0.12)`, color: "#00C3AE" }}>
                     <LayoutGrid size={18} strokeWidth={2.2} />
                   </span>
                   <div>

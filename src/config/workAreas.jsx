@@ -31,17 +31,20 @@ import { canAccessWorkItem } from "./permissions";
  * Keeping the data here guarantees the hub and the sidebar never drift apart.
  */
 
+// Color de marca único para todas las áreas (sin color propio por área).
+const BRAND_THEME = { accent: "#00C3AE", soft: "rgba(0, 195, 174, 0.12)" };
+
 export const AREA_THEMES = {
-  despacho: { accent: "#16A34A", soft: "rgba(22, 163, 74, 0.12)" },
-  seguridad: { accent: "#2563EB", soft: "rgba(37, 99, 235, 0.12)" },
-  "salud-ocupacional": { accent: "#0D9488", soft: "rgba(13, 148, 136, 0.12)" },
-  recepcion: { accent: "#65A30D", soft: "rgba(101, 163, 13, 0.12)" },
-  mantenimiento: { accent: "#7C3AED", soft: "rgba(124, 58, 237, 0.12)" },
-  "servicios-generales": { accent: "#EA580C", soft: "rgba(234, 88, 12, 0.12)" },
-  epa: { accent: "#6D28D9", soft: "rgba(109, 40, 217, 0.12)" },
-  administracion: { accent: "#0891B2", soft: "rgba(8, 145, 178, 0.12)" },
-  dev: { accent: "#475569", soft: "rgba(71, 85, 105, 0.12)" },
-  "mrp-tarimas": { accent: "#B45309", soft: "rgba(180, 83, 9, 0.12)" },
+  despacho: BRAND_THEME,
+  seguridad: BRAND_THEME,
+  "salud-ocupacional": BRAND_THEME,
+  recepcion: BRAND_THEME,
+  mantenimiento: BRAND_THEME,
+  "servicios-generales": BRAND_THEME,
+  epa: BRAND_THEME,
+  administracion: BRAND_THEME,
+  dev: BRAND_THEME,
+  "mrp-tarimas": BRAND_THEME,
 };
 
 /**
