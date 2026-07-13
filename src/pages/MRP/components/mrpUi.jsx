@@ -14,13 +14,24 @@ export function LocationBadge({ value }) {
   return <Badge tone={tone}>{PALLET_LOCATION_LABELS[value] || value}</Badge>;
 }
 
-export function MovementBadge({ value }) {
+export function MovementBadge({ value, metadata }) {
   if (!value) return <>—</>;
+  const crossWh = value === "traslado" && metadata?.cross_warehouse;
   const tone =
     value === "ajuste_positivo"
       ? "accent"
       : value === "ajuste_negativo"
       ? "dark"
       : "neutral";
-  return <Badge tone={tone}>{PALLET_MOVEMENT_TYPE_LABELS[value] || value}</Badge>;
+  let label = PALLET_MOVEMENT_TYPE_LABELS[value] || value;
+  if (crossWh) {
+    const dir =
+      metadata.direction === "out"
+        ? " · salida"
+        : metadata.direction === "in"
+        ? " · entrada"
+        : "";
+    label = `Traslado de almacén${dir}`;
+  }
+  return <Badge tone={tone}>{label}</Badge>;
 }

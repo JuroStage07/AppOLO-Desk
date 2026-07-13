@@ -1,5 +1,8 @@
 // MRP Tarimas — Layout del módulo: contexto de trabajo + barra lateral de
 // módulos; el módulo activo se renderiza en la misma página vía <Outlet/>.
+//
+// El almacén NO se elige a mano: se resuelve de la BODEGA activa (BodegaSwitcher
+// en el Topbar) según el vínculo configurado en /dev/config-modulos/mrp-tarimas.
 import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
@@ -8,6 +11,7 @@ import {
   History,
   Trash2,
   Settings2,
+  Warehouse,
 } from "lucide-react";
 import {
   Shell,
@@ -15,10 +19,9 @@ import {
   Main,
   Container,
   Card,
-  Field,
   Spinner,
 } from "../../components/ui";
-import { useMrpWorkspace, usePalletWarehouses } from "../../hooks/mrp";
+import { useMrpWorkspace } from "../../hooks/mrp";
 import useIsMobile from "../../hooks/useIsMobile";
 import { NoWarehouse } from "./components/WorkspaceBar";
 import { ACCENT, ACCENT_SOFT, BORDER, SLATE, TEXT } from "../../styles/theme";
@@ -52,15 +55,8 @@ const linkActive = {
 
 export default function MRPTarimasPage() {
   const isMobile = useIsMobile();
-  const { warehouseId, selectWarehouse } = useMrpWorkspace();
-  const { warehouses, loading } = usePalletWarehouses();
-
-  const onPick = (id) => {
-    const wh = warehouses.find((w) => w.id === id) || null;
-    selectWarehouse(
-      wh ? { id: wh.id, name: wh.name, code: wh.code || null } : null
-    );
-  };
+  const { warehouse, warehouseId, warehouseLoading, bodegaNombre } =
+    useMrpWorkspace();
 
   const nav = (
     <nav
@@ -90,8 +86,9 @@ export default function MRPTarimasPage() {
     </nav>
   );
 
-  const warehousePicker = (
-    <div style={{ display: "grid", gap: 4 }}>
+  // Bloque informativo (solo lectura): bodega activa + almacén ligado.
+  const workspaceInfo = (
+    <div style={{ display: "grid", gap: 6 }}>
       <span
         style={{
           fontSize: 11,
@@ -103,34 +100,56 @@ export default function MRPTarimasPage() {
       >
         Almacén de trabajo
       </span>
-      {loading ? (
-        <Spinner inline />
-      ) : (
-        <Field.Select
-          value={warehouseId || ""}
-          onChange={(e) => onPick(e.target.value)}
-          style={{
-            padding: "8px 10px",
-            fontWeight: 900,
-            borderColor: ACCENT,
-            background: ACCENT_SOFT,
-          }}
-        >
-          <option value="">— Seleccionar —</option>
-          {warehouses.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.name}
-              {w.code ? ` (${w.code})` : ""}
-            </option>
-          ))}
-        </Field.Select>
-      )}
-      {!loading && warehouses.length === 0 && (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "9px 11px",
+          borderRadius: 12,
+          border: `1px solid ${ACCENT}`,
+          background: ACCENT_SOFT,
+        }}
+      >
+        <Warehouse size={16} strokeWidth={2.3} style={{ color: ACCENT, flexShrink: 0 }} />
+        <div style={{ display: "grid", minWidth: 0 }}>
+          <span
+            style={{
+              fontSize: 13.5,
+              fontWeight: 900,
+              color: TEXT,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {warehouseLoading
+              ? "Resolviendo…"
+              : warehouse?.name || "— sin ligar —"}
+          </span>
+          {warehouse?.code ? (
+            <span style={{ fontSize: 11, fontWeight: 700, color: SLATE }}>
+              {warehouse.code}
+            </span>
+          ) : null}
+        </div>
+      </div>
+      {bodegaNombre ? (
         <span style={{ fontSize: 11, fontWeight: 700, color: SLATE }}>
-          Crea un almacén en Catálogos › Almacenes.
+          Bodega: {bodegaNombre}
         </span>
-      )}
+      ) : null}
     </div>
+  );
+
+  const content = warehouseLoading ? (
+    <Card>
+      <Spinner label="Resolviendo almacén de la bodega…" />
+    </Card>
+  ) : warehouseId ? (
+    <Outlet />
+  ) : (
+    <NoWarehouse />
   );
 
   return (
@@ -138,7 +157,7 @@ export default function MRPTarimasPage() {
       <Topbar />
       <Main>
         <Container>
-          {/* Sidebar (almacén + módulos) + contenido del módulo activo */}
+          {/* Sidebar (info de almacén + módulos) + contenido del módulo activo */}
           <div
             style={{
               display: "grid",
@@ -149,7 +168,7 @@ export default function MRPTarimasPage() {
           >
             {isMobile ? (
               <div style={{ display: "grid", gap: 10 }}>
-                {warehousePicker}
+                {workspaceInfo}
                 {nav}
               </div>
             ) : (
@@ -157,15 +176,13 @@ export default function MRPTarimasPage() {
                 padding={10}
                 style={{ position: "sticky", top: 84, display: "grid", gap: 12 }}
               >
-                {warehousePicker}
+                {workspaceInfo}
                 <div style={{ height: 1, background: BORDER }} />
                 {nav}
               </Card>
             )}
 
-            <div style={{ minWidth: 0, display: "grid", gap: 16 }}>
-              {warehouseId ? <Outlet /> : <NoWarehouse />}
-            </div>
+            <div style={{ minWidth: 0, display: "grid", gap: 16 }}>{content}</div>
           </div>
         </Container>
       </Main>

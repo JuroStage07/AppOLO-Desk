@@ -61,6 +61,7 @@ import DevHub from "./pages/Dev/DevHub";
 import UpdateSupabasePage from "./pages/Dev/UpdateSupabasePage";
 import ModulesConfigHub from "./pages/Dev/ModulesConfigHub";
 import OvertimeSettingsHub from "./pages/Administracion/Overtime/OvertimeSettingsHub";
+import ConfigMRPTarimas from "./pages/MRP/ConfigMRPTarimas";
 import AdministracionHub from "./pages/Administracion/AdministracionHub";
 import OvertimeUsersAdmin from "./pages/Administracion/Overtime/OvertimeUsersAdmin";
 import AttendanceMarks from "./pages/Administracion/AttendanceMarks";
@@ -384,6 +385,14 @@ export default function App() {
             element={
               <PrivateRoute>
                 <OvertimeSettingsHub />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/dev/config-modulos/mrp-tarimas"
+            element={
+              <PrivateRoute>
+                <ConfigMRPTarimas />
               </PrivateRoute>
             }
           />

@@ -236,7 +236,7 @@ export default function MRPHistorialPage() {
                           <tr key={m.id}>
                             <td style={td}>{fmtDate(m.created_at)}</td>
                             <td style={td}>
-                              <MovementBadge value={m.movement_type} />
+                              <MovementBadge value={m.movement_type} metadata={m.metadata} />
                             </td>
                             <td style={{ ...td, fontFamily: "monospace" }}>
                               {m.movement_code}

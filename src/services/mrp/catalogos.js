@@ -65,6 +65,96 @@ export async function setPalletWarehouseActive(id, active) {
   return data;
 }
 
+/* ------------------------------------------- vínculo bodega ↔ almacén (MRP) */
+
+// Lista almacenes de TODOS los tenants (sin filtro de scope) para configurar los
+// vínculos bodega→almacén. La RLS de Supabase debe permitir company='OLO'
+// (ver supabase/mrp_pallets_bodega_link.sql).
+export async function listAllPalletWarehouses({ includeInactive = false } = {}) {
+  let q = supabase
+    .from("pallet_warehouses")
+    .select("id, tenant_id, company, name, code, active, bodega_id")
+    .order("tenant_id", { ascending: true })
+    .order("name", { ascending: true });
+  if (!includeInactive) q = q.eq("active", true);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+// Resuelve el almacén ligado a una bodega (para el workspace del MRP).
+export async function getWarehouseByBodega(bodegaId) {
+  const clean = String(bodegaId || "").trim();
+  if (!clean) return null;
+  const { data, error } = await supabase
+    .from("pallet_warehouses")
+    .select("id, tenant_id, company, name, code, active, bodega_id")
+    .eq("bodega_id", clean)
+    .eq("active", true)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+// Liga una bodega a un almacén (relación 1:1). Libera la bodega de cualquier otro
+// almacén que la tuviera antes para respetar el índice único de bodega_id.
+export async function setWarehouseBodega(warehouseId, bodegaId) {
+  if (!warehouseId) throw new Error("Debe indicar el almacén.");
+  const clean = String(bodegaId || "").trim();
+  if (!clean) throw new Error("Debe indicar la bodega.");
+
+  const { error: freeErr } = await supabase
+    .from("pallet_warehouses")
+    .update({ bodega_id: null })
+    .eq("bodega_id", clean)
+    .neq("id", warehouseId);
+  if (freeErr) throw freeErr;
+
+  const { data, error } = await supabase
+    .from("pallet_warehouses")
+    .update({ bodega_id: clean })
+    .eq("id", warehouseId)
+    .select("id, tenant_id, company, name, code, active, bodega_id")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Busca un artículo activo por NOMBRE (case-insensitive, con trim) dentro de un
+// almacén. Se usa para avisar antes de auto-crearlo en un traslado entre almacenes
+// (misma lógica de emparejamiento que la RPC mrp_articulo_warehouse_transfer).
+export async function findArticuloByNombre(warehouseId, nombre) {
+  const clean = String(nombre || "").trim();
+  if (!warehouseId || !clean) return null;
+  const { tenantId, company } = getMrpScope();
+  const { data, error } = await supabase
+    .from("pallet_articulos")
+    .select("id, codigo, nombre")
+    .eq("tenant_id", tenantId)
+    .eq("company", company)
+    .eq("warehouse_id", warehouseId)
+    .eq("active", true)
+    .ilike("nombre", `%${clean}%`);
+  if (error) throw error;
+  const target = clean.toLowerCase();
+  return (
+    (data || []).find(
+      (a) => String(a.nombre || "").trim().toLowerCase() === target
+    ) || null
+  );
+}
+
+// Desliga una bodega (deja sin almacén al que la tuviera).
+export async function unlinkBodega(bodegaId) {
+  const clean = String(bodegaId || "").trim();
+  if (!clean) return;
+  const { error } = await supabase
+    .from("pallet_warehouses")
+    .update({ bodega_id: null })
+    .eq("bodega_id", clean);
+  if (error) throw error;
+}
+
 /* --------------------------------------------------------------- artículos */
 
 export async function listPalletArticulos({

@@ -1,5 +1,7 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { BORDER, TEXT } from "../../styles/theme";
+import useIsMobile from "../../hooks/useIsMobile";
 
 /**
  * Bottom-sheet modal. Composable header / body / footer.
@@ -29,6 +31,8 @@ export default function Sheet({
   maxWidth = 720,
   children,
 }) {
+  const isMobile = useIsMobile(560);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
@@ -40,7 +44,10 @@ export default function Sheet({
 
   if (!open) return null;
 
-  return (
+  // Portal a document.body: garantiza que `position: fixed` sea relativo al
+  // viewport (y no a un ancestro con transform/overflow) y que el modal se
+  // acote a la pantalla con header/footer fijos y body con scroll.
+  return createPortal(
     <div style={{ ...root, ...(placement === "center" ? rootCenter : rootBottom) }}>
       <button
         type="button"
@@ -54,6 +61,7 @@ export default function Sheet({
         style={{
           ...sheetBase,
           ...(placement === "center" ? sheetCenter : sheetBottom),
+          ...(isMobile ? sheetMobile : null),
           maxWidth,
         }}
       >
@@ -67,7 +75,8 @@ export default function Sheet({
         ) : null}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -84,7 +93,10 @@ Sheet.Body = Body;
 Sheet.Actions = Actions;
 Sheet.Hint = Hint;
 
-const root = { position: "fixed", inset: 0, zIndex: 50 };
+// Debe quedar por encima del Topbar (zIndex 120) y de los sidebars/flyouts
+// (~1000), pero por debajo de ConfirmDialog (30050) y CommandPalette (30040)
+// para que esos diálogos puedan superponerse a un Sheet abierto.
+const root = { position: "fixed", inset: 0, zIndex: 30000 };
 const rootBottom = { display: "grid", placeItems: "end center" };
 const rootCenter = { display: "grid", placeItems: "center" };
 
@@ -104,6 +116,11 @@ const sheetBase = {
   padding: 16,
   margin: 12,
   boxSizing: "border-box",
+  // Nunca exceder el viewport: header/footer fijos y body con scroll.
+  display: "flex",
+  flexDirection: "column",
+  maxHeight: "calc(100vh - 24px)",
+  overflow: "hidden",
 };
 
 const sheetBottom = {
@@ -117,11 +134,24 @@ const sheetCenter = {
   boxShadow: "0 24px 60px rgba(15,23,42,0.28)",
 };
 
+// En pantallas chicas el modal ocupa el ancho completo, con menos margen y
+// padding para aprovechar el espacio disponible.
+const sheetMobile = {
+  margin: 0,
+  padding: 14,
+  maxWidth: "100%",
+  maxHeight: "100dvh",
+  borderRadius: 0,
+  borderTopLeftRadius: 18,
+  borderTopRightRadius: 18,
+};
+
 const header = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   paddingBottom: 10,
+  flexShrink: 0,
 };
 const titleStyle = { fontSize: 16, fontWeight: 980, color: TEXT };
 const closeBtn = {
@@ -135,6 +165,21 @@ const closeBtn = {
   fontFamily: "inherit",
 };
 
-const body = { display: "grid", gap: 12 };
-const actions = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 };
+const body = {
+  display: "grid",
+  gap: 12,
+  // Ocupa el espacio disponible y hace scroll cuando el contenido excede el alto.
+  flex: "1 1 auto",
+  minHeight: 0,
+  overflowY: "auto",
+  // Aire para el scrollbar y para que no se corten sombras/bordes de inputs.
+  paddingRight: 2,
+};
+const actions = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 10,
+  marginTop: 12,
+  flexShrink: 0,
+};
 const hint = { marginTop: 10, color: "#64748B", fontWeight: 850, fontSize: 12 };

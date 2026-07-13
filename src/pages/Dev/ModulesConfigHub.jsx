@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Clock, Lock, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Boxes, Clock, Lock, SlidersHorizontal } from "lucide-react";
 import {
   Badge,
   Brand,
@@ -31,6 +31,14 @@ export default function ModulesConfigHub() {
         path: "/dev/config-modulos/horas-extra",
         icon: Clock,
         tag: "Horas Extra",
+      },
+      {
+        key: "config-mrp-tarimas",
+        title: "Configuración MRP Tarimas",
+        desc: "Parámetros y reglas del módulo de tarimas del MRP",
+        path: "/dev/config-modulos/mrp-tarimas",
+        icon: Boxes,
+        tag: "MRP Tarimas",
       },
     ],
     []

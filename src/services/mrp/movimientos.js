@@ -135,6 +135,56 @@ export async function transferPallets({
   return data; // { movement_id, movement_code, task_id }
 }
 
+/* --------------------------------------------- traslado ENTRE ALMACENES */
+
+// Traslada una cantidad de un artículo del almacén de trabajo (origen) a otro
+// almacén del mismo tenant/company. El artículo destino se resuelve por nombre y
+// se auto-crea si no existe (código nuevo). Registra un evento en cada almacén.
+export async function transferPalletsBetweenWarehouses({
+  originWarehouseId,
+  destWarehouseId,
+  articuloId,
+  originLocation,
+  destinationLocation = INTAKE_LOCATION,
+  quantity,
+  reason,
+  userId,
+  userEmail,
+}) {
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0)
+    throw new Error("La cantidad debe ser mayor a 0.");
+  if (!Number.isInteger(qty))
+    throw new Error("La cantidad debe ser un número entero.");
+  if (!articuloId) throw new Error("Debe seleccionar un artículo.");
+  if (!originWarehouseId) throw new Error("Debe indicar el almacén de origen.");
+  if (!destWarehouseId) throw new Error("Debe seleccionar el almacén de destino.");
+  if (originWarehouseId === destWarehouseId)
+    throw new Error("El almacén de origen y destino no pueden ser iguales.");
+  if (!isValidLocation(originLocation) || originLocation === "tienda")
+    throw new Error("Ubicación origen inválida.");
+  if (!isValidLocation(destinationLocation) || destinationLocation === "tienda")
+    throw new Error("Ubicación destino inválida.");
+  if (!userId) throw new Error("Usuario no identificado.");
+
+  const { tenantId, company } = getMrpScope();
+  const { data, error } = await supabase.rpc("mrp_articulo_warehouse_transfer", {
+    p_tenant_id: tenantId,
+    p_company: company,
+    p_origin_warehouse_id: originWarehouseId,
+    p_dest_warehouse_id: destWarehouseId,
+    p_articulo_id: articuloId,
+    p_origin_location: originLocation,
+    p_dest_location: destinationLocation,
+    p_quantity: qty,
+    p_reason: reason ? String(reason).trim() : null,
+    p_user_id: userId,
+    p_user_email: userEmail || null,
+  });
+  if (error) throw error;
+  return data; // { task_id, out_movement_code, in_movement_code, dest_articulo_id, dest_created }
+}
+
 /* ----------------------------------------------------- historial / descartes */
 
 export async function listPalletMovements(filters = {}) {
