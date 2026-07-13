@@ -155,6 +155,52 @@ export async function unlinkBodega(bodegaId) {
   if (error) throw error;
 }
 
+/* ----------------------------------------------------------------- motivos */
+
+// Motivos por tipo de movimiento. Se usan en los modales de Ajuste/Traslado y se
+// administran en /dev/config-modulos/mrp-tarimas/motivos.
+export async function listMotivos({ tipo, includeInactive = false } = {}) {
+  let q = scope(supabase.from("pallet_motivos").select("*"));
+  if (tipo) q = q.eq("tipo", tipo);
+  if (!includeInactive) q = q.eq("active", true);
+  q = q
+    .order("sort_order", { ascending: true })
+    .order("label", { ascending: true });
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createMotivo({ tipo, label }) {
+  const cleanTipo = String(tipo || "").trim();
+  const cleanLabel = String(label || "").trim();
+  if (!cleanTipo) throw new Error("Tipo de motivo inválido.");
+  if (!cleanLabel) throw new Error("El motivo no puede estar vacío.");
+  const { data, error } = await supabase
+    .from("pallet_motivos")
+    .insert({ ...scopeFields(), tipo: cleanTipo, label: cleanLabel, active: true })
+    .select()
+    .single();
+  if (error) throw mapDuplicate(error, "Ya existe ese motivo para este tipo.");
+  return data;
+}
+
+export async function setMotivoActive(id, active) {
+  const { data, error } = await supabase
+    .from("pallet_motivos")
+    .update({ active: !!active })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteMotivo(id) {
+  const { error } = await supabase.from("pallet_motivos").delete().eq("id", id);
+  if (error) throw error;
+}
+
 /* --------------------------------------------------------------- artículos */
 
 export async function listPalletArticulos({

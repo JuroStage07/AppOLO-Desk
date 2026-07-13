@@ -14,6 +14,7 @@ import {
   usePalletAdjustments,
   usePalletArticulos,
   usePalletInventory,
+  usePalletMotivos,
   useMrpWorkspace,
 } from "../../../hooks/mrp";
 import { PALLET_LOCATION_LABELS, PALLET_REASONS } from "../../../services/mrp";
@@ -46,6 +47,12 @@ export default function AjusteModal({
   const [errors, setErrors] = useState({});
 
   const isNeg = form.sign === "negativo";
+
+  // Motivos del catálogo según el tipo de ajuste (fallback a los por defecto).
+  const { motivos } = usePalletMotivos({
+    tipo: isNeg ? "ajuste_negativo" : "ajuste_positivo",
+  });
+  const reasonOptions = motivos.length ? motivos.map((m) => m.label) : PALLET_REASONS;
 
   // Inventario del artículo (para mostrar el disponible en el descarte).
   const { inventory } = usePalletInventory({
@@ -220,7 +227,7 @@ export default function AjusteModal({
             onChange={(e) => set("reason", e.target.value)}
           >
             <option value="">— Seleccionar —</option>
-            {PALLET_REASONS.map((r) => (
+            {reasonOptions.map((r) => (
               <option key={r} value={r}>
                 {r}
               </option>

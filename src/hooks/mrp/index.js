@@ -2,6 +2,7 @@
 export { default as usePalletInventory } from "./usePalletInventory";
 export { default as usePalletSummary } from "./usePalletSummary";
 export { default as usePalletWarehouses } from "./usePalletWarehouses";
+export { default as usePalletMotivos } from "./usePalletMotivos";
 export { default as usePalletArticulos } from "./usePalletArticulos";
 export { default as useMrpInsumos } from "./useMrpInsumos";
 export { default as useMrpBoms } from "./useMrpBoms";

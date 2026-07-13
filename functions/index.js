@@ -219,6 +219,72 @@ function canGestionEquiposFromProfile(p = {}) {
   return p?.permisos?.mantenimiento === true;
 }
 
+function canConsumeTarimasFromProfile(p = {}) {
+  const role = safe(p.role);
+  if (role === "administrativo" || role === "dev") return true;
+  return p?.permisos?.mrpTarimas === true;
+}
+
+function canCrossBodegaFromProfile(p = {}) {
+  const role = safe(p.role);
+  return role === "administrativo" || role === "dev";
+}
+
+function getSupabaseConfigOrThrow() {
+  const url = safe(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL).replace(/\/+$/, "");
+  const key = safe(
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.VITE_SUPABASE_ANON_KEY
+  );
+
+  if (!url || !key) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Faltan SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en Functions."
+    );
+  }
+
+  return { url, key };
+}
+
+async function callSupabaseRpc(functionName, payload) {
+  const { url, key } = getSupabaseConfigOrThrow();
+  const res = await fetch(`${url}/rest/v1/rpc/${functionName}`, {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const raw = await res.text();
+  let body = null;
+  if (raw) {
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      body = { message: raw };
+    }
+  }
+
+  if (!res.ok) {
+    const msg =
+      body?.message ||
+      body?.hint ||
+      body?.details ||
+      `Supabase RPC ${functionName} fallo con HTTP ${res.status}.`;
+    const err = new Error(msg);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+
+  return body;
+}
+
 function buildQrEmailHtml({ equipoNombre, codigo }) {
   const title = safe(equipoNombre) || "Equipo";
   const code = safe(codigo) || "—";
@@ -350,6 +416,124 @@ exports.sendEquipoQrLabel = onCall({ region: "us-central1" }, async (req) => {
 
   return { ok: true };
 });
+
+/**
+ * Callable: consumeTarimasFromExternalApp
+ * data: {
+ *   externalEventId: string,
+ *   bodegaId: string,
+ *   articuloCodigo: string,
+ *   cantidad: number,
+ *   reason?: string
+ * }
+ *
+ * Mueve tarimas desde la ubicacion "almacen" hacia "tienda" en el MRP.
+ * La idempotencia vive en Supabase por externalEventId.
+ */
+exports.consumeTarimasFromExternalApp = onCall(
+  { region: "us-central1" },
+  async (req) => {
+    const caller = req.auth;
+    if (!caller) {
+      throw new HttpsError("unauthenticated", "Debes estar autenticado.");
+    }
+
+    const {
+      externalEventId,
+      bodegaId,
+      articuloCodigo,
+      cantidad,
+      quantity,
+      reason,
+    } = req.data || {};
+
+    const cleanExternalEventId = safe(externalEventId);
+    const cleanBodegaId = safe(bodegaId);
+    const cleanArticuloCodigo = safe(articuloCodigo).toUpperCase();
+    const qty = Number(cantidad ?? quantity);
+
+    if (!cleanExternalEventId) {
+      throw new HttpsError("invalid-argument", "Falta externalEventId.");
+    }
+    if (!cleanBodegaId) {
+      throw new HttpsError("invalid-argument", "Falta bodegaId.");
+    }
+    if (!cleanArticuloCodigo) {
+      throw new HttpsError("invalid-argument", "Falta articuloCodigo.");
+    }
+    if (!Number.isInteger(qty) || qty <= 0) {
+      throw new HttpsError(
+        "invalid-argument",
+        "cantidad debe ser un entero mayor a 0."
+      );
+    }
+
+    const db = getFirestore();
+    const me = await getProfileOrThrow(db, caller.uid);
+    if (!canConsumeTarimasFromProfile(me)) {
+      throw new HttpsError("permission-denied", "No tienes permisos de MRP Tarimas.");
+    }
+
+    const tenantId = safe(me.tenantId);
+    const company = safe(me.company);
+    if (!tenantId || !company) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Tu perfil no tiene tenantId/company."
+      );
+    }
+
+    const profileBodegaId = safe(me.bodegaId);
+    if (!canCrossBodegaFromProfile(me) && profileBodegaId !== cleanBodegaId) {
+      throw new HttpsError(
+        "permission-denied",
+        "No puedes consumir tarimas fuera de tu bodega activa."
+      );
+    }
+
+    const callerEmail = safe(caller.token?.email || me.email);
+    const cleanReason =
+      safe(reason) || `Consumo app externa: ${cleanExternalEventId}`;
+
+    try {
+      const result = await callSupabaseRpc("mrp_consume_tarimas_external", {
+        p_tenant_id: tenantId,
+        p_company: company,
+        p_external_event_id: cleanExternalEventId,
+        p_bodega_id: cleanBodegaId,
+        p_articulo_codigo: cleanArticuloCodigo,
+        p_quantity: qty,
+        p_reason: cleanReason,
+        p_user_id: caller.uid,
+        p_user_email: callerEmail || null,
+      });
+
+      return {
+        ok: true,
+        idempotent: result?.idempotent === true,
+        result,
+      };
+    } catch (error) {
+      console.error("consumeTarimasFromExternalApp error:", {
+        message: error?.message,
+        status: error?.status || null,
+        body: error?.body || null,
+        externalEventId: cleanExternalEventId,
+        bodegaId: cleanBodegaId,
+        articuloCodigo: cleanArticuloCodigo,
+      });
+
+      const msg = error?.message || "No se pudo consumir tarimas.";
+      const code =
+        /stock insuficiente/i.test(msg) ||
+        /no existe/i.test(msg) ||
+        /ya fue procesado/i.test(msg)
+          ? "failed-precondition"
+          : "internal";
+      throw new HttpsError(code, msg);
+    }
+  }
+);
 
 
 exports.testSqlConnection = onCall(async () => {

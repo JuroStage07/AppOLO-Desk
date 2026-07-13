@@ -20,6 +20,7 @@ import {
   usePalletArticulos,
   usePalletInventory,
   usePalletWarehouses,
+  usePalletMotivos,
   useMrpWorkspace,
 } from "../../../hooks/mrp";
 import useIsMobile from "../../../hooks/useIsMobile";
@@ -56,6 +57,12 @@ export default function TrasladoModal({ open, onClose, prefill }) {
   const [errors, setErrors] = useState({});
 
   const isWh = mode === "almacenes";
+
+  // Motivos del catálogo según el tipo de traslado (fallback a los por defecto).
+  const { motivos } = usePalletMotivos({
+    tipo: isWh ? "traslado_almacen" : "traslado",
+  });
+  const reasonOptions = motivos.length ? motivos.map((m) => m.label) : PALLET_REASONS;
 
   // Otros almacenes del mismo tenant (destinos posibles).
   const destWarehouses = useMemo(
@@ -300,7 +307,7 @@ export default function TrasladoModal({ open, onClose, prefill }) {
             onChange={(e) => set("reason", e.target.value)}
           >
             <option value="">— Sin motivo —</option>
-            {PALLET_REASONS.map((r) => (
+            {reasonOptions.map((r) => (
               <option key={r} value={r}>
                 {r}
               </option>

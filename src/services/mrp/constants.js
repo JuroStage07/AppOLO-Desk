@@ -31,8 +31,24 @@ export const PALLET_MOVEMENT_TYPES = Object.freeze([
 // Ubicación donde ingresan las tarimas en un ajuste positivo.
 export const INTAKE_LOCATION = "pend";
 
-// Motivos disponibles para ajustes y traslados.
+// Motivos por defecto (fallback cuando el catálogo `pallet_motivos` está vacío).
 export const PALLET_REASONS = Object.freeze(["Ingreso", "Devolución"]);
+
+// Tipos de catálogo de motivos (por tipo de movimiento). `traslado_almacen` es
+// el traslado entre almacenes (movement_type real = 'traslado' + metadata).
+export const MOTIVO_TIPOS = Object.freeze([
+  "ajuste_positivo",
+  "ajuste_negativo",
+  "traslado",
+  "traslado_almacen",
+]);
+
+export const MOTIVO_TIPO_LABELS = Object.freeze({
+  ajuste_positivo: "Ajustes positivos",
+  ajuste_negativo: "Ajustes negativos",
+  traslado: "Traslados",
+  traslado_almacen: "Traslados de almacén",
+});
 
 // Etiquetas legibles (UI) — mantener en español como el resto del sistema.
 export const PALLET_LOCATION_LABELS = Object.freeze({
