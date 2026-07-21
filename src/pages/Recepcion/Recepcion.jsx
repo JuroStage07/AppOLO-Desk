@@ -4,8 +4,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   BarChart3,
-  ClipboardList,
   Package,
+  PackageCheck,
   PackageOpen,
   Truck,
 } from "lucide-react";
@@ -57,7 +57,7 @@ export default function Recepcion() {
       },
       {
         key: "reportes",
-        title: "Reportes Recepción",
+        title: "Reportes de Descarga",
         desc: "Panel de reportes de recepción",
         path: "/recepcion/metricas",
         anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"],
@@ -67,14 +67,14 @@ export default function Recepcion() {
         show: true,
       },
       {
-        key: "aperturas",
-        title: "Aperturas",
-        desc: "Gestión y seguimiento de aperturas de recepción",
-        path: "/seguridad/aperturas",
-        anyPerms: ["saludOcupacional"],
+        key: "metricas-recepcion",
+        title: "Reportes de Recepción",
+        desc: "Acciones de recepción generadas al finalizar descargas",
+        path: "/recepcion/metricas-recepcion",
+        anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"],
         tone: "accent",
-        icon: ClipboardList,
-        tag: "Operativo",
+        icon: PackageCheck,
+        tag: "Dashboard",
         show: true,
       },
       {

@@ -49,7 +49,8 @@ import OTsSolDetallePage from "./pages/Mantenimiento/OTs/OTsSolDetallePage";
 import Recepcion from "./pages/Recepcion/Recepcion";
 import AccionDescarga from "./pages/Recepcion/AccionDescarga/AccionDescarga";
 import AccionDetalle from "./pages/Recepcion/AccionDescarga/AccionDetalle";
-import MetricaRecepcion from "./pages/Recepcion/MetricaRecepcion";
+import MetricasDescarga from "./pages/Recepcion/MetricasDescarga";
+import MetricasRecepcion from "./pages/Recepcion/MetricasRecepcion";
 
 import OvertimeApprovals from "./pages/Administracion/Overtime/OvertimeApprovals";
 import OvertimeManagerApprovals from "./pages/Administracion/Overtime/OvertimeManagerApprovals";
@@ -520,7 +521,16 @@ export default function App() {
             path="/recepcion/metricas"
             element={
               <PrivateRoute>
-                <MetricaRecepcion />
+                <MetricasDescarga />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/recepcion/metricas-recepcion"
+            element={
+              <PrivateRoute>
+                <MetricasRecepcion />
               </PrivateRoute>
             }
           />

@@ -138,7 +138,8 @@ const RAW_AREAS = [
     anyPerms: ["recepcion", "recepcionReportes", "canRecepcionCofersa", "despachosEPA"],
     modules: [
       { label: "Acción descarga", path: "/recepcion/accion-descarga", anyPerms: ["recepcion", "canRecepcionCofersa", "despachosEPA"] },
-      { label: "Reportes Recepción", path: "/recepcion/metricas", anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"] },
+      { label: "Reportes de Descarga", path: "/recepcion/metricas", anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"] },
+      { label: "Reportes de Recepción", path: "/recepcion/metricas-recepcion", anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"] },
     ],
   },
   {

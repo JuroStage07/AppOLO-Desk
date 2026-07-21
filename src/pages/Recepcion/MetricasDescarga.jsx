@@ -223,16 +223,6 @@ function parseYMD(s) {
   return isNaN(dt.getTime()) ? null : dt;
 }
 
-function formatSelectedDateLabel(value) {
-  const d = parseYMD(value);
-  if (!d) return "Fecha seleccionada";
-  return d.toLocaleDateString("es-CR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-}
-
 function defaultRangeDates() {
   const hasta = new Date();
   const desde = new Date(hasta);
@@ -280,13 +270,8 @@ function startOfWeekMonday(date = new Date()) {
   return d;
 }
 
-function buildDayKeysForFilter(filterKey, selectedDate = "", range = null) {
+function buildDayKeysForFilter(filterKey, range = null) {
   const now = new Date();
-
-  if (filterKey === "fecha") {
-    const parsed = parseYMD(selectedDate);
-    return parsed ? [ymd(parsed)] : [];
-  }
 
   if (filterKey === "hoy") {
     return [ymd(now)];
@@ -1207,7 +1192,6 @@ function buildDashboardFromDailyDocs(
     semana: "Semana actual",
     mes: "Mes actual",
     rango: formatRangeLabel(customRange),
-    fecha: formatSelectedDateLabel(selectedDate),
   };
 
   const heroBadgeMap = {
@@ -1215,7 +1199,6 @@ function buildDashboardFromDailyDocs(
     semana: "Semanal",
     mes: "Mensual",
     rango: "Personalizado",
-    fecha: "Fecha específica",
   };
 
   const accionesFinalizadas = sum(metricDocs, (d) => d.accionesFinalizadas);
@@ -1590,8 +1573,6 @@ function buildMetricaRecepcionExportRows({
 function FilterTabs({
   active,
   onChange,
-  selectedDate,
-  onChangeDate,
   onExport,
   onExportExcel,
   exportDisabled,
@@ -1601,7 +1582,6 @@ function FilterTabs({
     { key: "semana", label: "Semana", hint: "Vista semanal" },
     { key: "mes", label: "Mes", hint: "Vista mensual" },
     { key: "rango", label: "Rango personalizado", hint: "Desde / hasta" },
-    { key: "fecha", label: "Por fecha", hint: "Seleccionar día" },
   ];
 
   return (
@@ -1635,16 +1615,6 @@ function FilterTabs({
       </div>
 
       <div style={ui.filtersActions}>
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => {
-            onChangeDate(e.target.value);
-            onChange("fecha");
-          }}
-          style={ui.dateInput}
-          aria-label="Seleccionar fecha"
-        />
         <button
           type="button"
           style={{
@@ -4243,13 +4213,13 @@ const shareStyles = {
   empty: { padding: "10px 2px", fontSize: 13, fontWeight: 620, color: SLATE },
 };
 
-export default function MetricaRecepcion() {
+export default function MetricasDescarga() {
   const nav = useNavigate();
   const toast = useToast();
   const user = auth.currentUser;
   const isMobile = useIsMobile();
   const [activeFilter, setActiveFilter] = useState("hoy");
-  const [selectedDate, setSelectedDate] = useState(ymd(new Date()));
+  const [selectedDate] = useState(ymd(new Date()));
   const [customRange, setCustomRange] = useState(() => defaultRangeDates());
   const [customRangeDraft, setCustomRangeDraft] = useState(() => defaultRangeDates());
   const [customRangeModalOpen, setCustomRangeModalOpen] = useState(false);
@@ -5877,11 +5847,9 @@ export default function MetricaRecepcion() {
 
         if (!dataPresent) {
           const msg =
-            activeFilter === "fecha"
-              ? `No hay operaciones registradas para la fecha ${formatSelectedDateLabel(selectedDate)}.`
-              : activeFilter === "hoy"
-                ? "Aún no se registran operaciones hoy."
-                : "Todavía no hay operaciones registradas para este período.";
+            activeFilter === "hoy"
+              ? "Aún no se registran operaciones hoy."
+              : "Todavía no hay operaciones registradas para este período.";
 
           built.notes = [msg];
 
@@ -6103,7 +6071,7 @@ export default function MetricaRecepcion() {
         <Brand
           icon={BarChart3}
           title="Recepción"
-          subtitle="Reportes Recepción"
+          subtitle="Reportes de Descarga"
           onClick={() => nav("/recepcion")}
         />
         <Topbar.Right>
@@ -6196,8 +6164,6 @@ export default function MetricaRecepcion() {
               <FilterTabs
                 active={activeFilter}
                 onChange={handleFilterChange}
-                selectedDate={selectedDate}
-                onChangeDate={setSelectedDate}
                 onExport={handleExportReport}
                 onExportExcel={handleExportExcel}
                 exportDisabled={loadingData || !!loadError || !dashboardData}
