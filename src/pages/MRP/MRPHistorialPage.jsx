@@ -1,71 +1,245 @@
-// MRP Tarimas — Historial de movimientos de artículos (con filtros).
-import React, { useMemo, useState } from "react";
-import { History, SlidersHorizontal } from "lucide-react";
+// MRP Tarimas — Historial de movimientos de artículos.
+// Filtros por columna estilo Excel (dropdown con buscador), columnas
+// reordenables por arrastre y paginación de 5 en 5.
+import React, { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, GripVertical, History } from "lucide-react";
 import {
   Badge,
   Card,
-  Field,
   GhostButton,
-  Chip,
-  ChipsRow,
   TableScroll,
   Spinner,
   ErrorState,
   EmptyState,
   SectionTitle,
 } from "../../components/ui";
+import { usePalletMovements, useMrpWorkspace } from "../../hooks/mrp";
 import {
-  usePalletMovements,
-  usePalletArticulos,
-  useMrpWorkspace,
-} from "../../hooks/mrp";
-import {
-  PALLET_LOCATIONS,
   PALLET_LOCATION_LABELS,
-  PALLET_MOVEMENT_TYPES,
   PALLET_MOVEMENT_TYPE_LABELS,
 } from "../../services/mrp";
-import { th, td, filtersRow, fmtDate } from "./components/mrpFormat";
+import { th, td, fmtDate } from "./components/mrpFormat";
 import { LocationBadge, MovementBadge } from "./components/mrpUi";
+import ColumnFilter from "./components/ColumnFilter";
+import { ACCENT, ACCENT_SOFT, SLATE } from "../../styles/theme";
 
-const EMPTY = {
-  movementCode: "",
-  taskId: "",
-  movementType: "",
-  articuloId: "",
-  originLocation: "",
-  destinationLocation: "",
-  userEmail: "",
-  reason: "",
-  dateFrom: "",
-  dateTo: "",
+const grip = {
+  display: "inline-grid",
+  placeItems: "center",
+  color: SLATE,
+  cursor: "grab",
+  flexShrink: 0,
+};
+const thDropTarget = {
+  boxShadow: `inset 2px 0 0 ${ACCENT}`,
+  background: ACCENT_SOFT,
 };
 
+const PAGE_SIZE = 5;
+
+// Etiqueta del movimiento (coherente con MovementBadge, incl. traslado de almacén).
+const movementLabel = (m) => {
+  if (m.movement_type === "traslado" && m.metadata?.cross_warehouse) {
+    const dir =
+      m.metadata.direction === "out"
+        ? " · salida"
+        : m.metadata.direction === "in"
+        ? " · entrada"
+        : "";
+    return `Traslado de almacén${dir}`;
+  }
+  return PALLET_MOVEMENT_TYPE_LABELS[m.movement_type] || m.movement_type || "—";
+};
+const locLabel = (l) => (l ? PALLET_LOCATION_LABELS[l] || l : "—");
+
+// Definición de columnas: value (clave del filtro) + label (texto visible) + render.
+const COLS = [
+  {
+    key: "fecha",
+    title: "Fecha",
+    get: (m) => ({ value: fmtDate(m.created_at), label: fmtDate(m.created_at) }),
+    render: (m) => fmtDate(m.created_at),
+  },
+  {
+    key: "movimiento",
+    title: "Movimiento",
+    get: (m) => {
+      const l = movementLabel(m);
+      return { value: l, label: l };
+    },
+    render: (m) => <MovementBadge value={m.movement_type} metadata={m.metadata} />,
+  },
+  {
+    key: "movcode",
+    title: "ID movimiento",
+    get: (m) => ({ value: m.movement_code || "—", label: m.movement_code || "—" }),
+    render: (m) => (
+      <span style={{ fontFamily: "monospace" }}>{m.movement_code}</span>
+    ),
+  },
+  {
+    key: "task",
+    title: "ID tarea",
+    get: (m) => ({
+      value: m.task_id || "—",
+      label: m.task_id ? m.task_id.slice(0, 8) : "—",
+    }),
+    render: (m) => (
+      <span style={{ fontFamily: "monospace" }}>
+        {m.task_id ? m.task_id.slice(0, 8) : "—"}
+      </span>
+    ),
+  },
+  {
+    key: "articulo",
+    title: "Artículo",
+    get: (m) => {
+      const v = `${m.articulo?.codigo || ""} · ${m.articulo?.nombre || ""}`;
+      return { value: v, label: v };
+    },
+    render: (m) => (
+      <>
+        <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
+          {m.articulo?.codigo}
+        </span>{" "}
+        · {m.articulo?.nombre}
+      </>
+    ),
+  },
+  {
+    key: "cantidad",
+    title: "Cantidad",
+    align: "right",
+    get: (m) => ({ value: String(m.quantity), label: String(m.quantity) }),
+    render: (m) => m.quantity,
+  },
+  {
+    key: "origen",
+    title: "Origen",
+    get: (m) => ({
+      value: m.origin_location || "∅",
+      label: locLabel(m.origin_location),
+    }),
+    render: (m) => <LocationBadge value={m.origin_location} />,
+  },
+  {
+    key: "destino",
+    title: "Destino",
+    get: (m) => ({
+      value: m.destination_location || "∅",
+      label: locLabel(m.destination_location),
+    }),
+    render: (m) => <LocationBadge value={m.destination_location} />,
+  },
+  {
+    key: "motivo",
+    title: "Motivo",
+    get: (m) => ({ value: m.reason || "—", label: m.reason || "—" }),
+    render: (m) => m.reason || "—",
+  },
+  {
+    key: "usuario",
+    title: "Usuario",
+    get: (m) => {
+      const v = m.user_email || m.user_id || "—";
+      return { value: v, label: v };
+    },
+    render: (m) => m.user_email || m.user_id || "—",
+  },
+];
+
+const ALL_KEYS = COLS.map((c) => c.key);
+const ORDER_KEY = "appolo_mrp_hist_cols";
+
+function loadColOrder() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ORDER_KEY) || "null");
+    if (Array.isArray(saved)) {
+      const valid = saved.filter((k) => ALL_KEYS.includes(k));
+      const missing = ALL_KEYS.filter((k) => !valid.includes(k));
+      return [...valid, ...missing];
+    }
+  } catch {
+    /* orden por defecto */
+  }
+  return ALL_KEYS;
+}
+
 export default function MRPHistorialPage() {
-  const [raw, setRaw] = useState(EMPTY);
-  const [showFilters, setShowFilters] = useState(false);
-  const set = (k, v) => setRaw((f) => ({ ...f, [k]: v }));
+  const [colFilters, setColFilters] = useState({}); // { [colKey]: string[] | undefined }
+  const [colOrder, setColOrder] = useState(loadColOrder);
+  const [dragKey, setDragKey] = useState(null);
+  const [overKey, setOverKey] = useState(null);
+  const [page, setPage] = useState(1);
+
+  // Persiste el orden de columnas.
+  useEffect(() => {
+    try {
+      localStorage.setItem(ORDER_KEY, JSON.stringify(colOrder));
+    } catch {
+      /* almacenamiento no disponible */
+    }
+  }, [colOrder]);
+
+  const orderedCols = useMemo(
+    () => colOrder.map((k) => COLS.find((c) => c.key === k)).filter(Boolean),
+    [colOrder]
+  );
+
+  const moveColumn = (from, to) => {
+    if (!from || !to || from === to) return;
+    setColOrder((prev) => {
+      const arr = [...prev];
+      const fromIdx = arr.indexOf(from);
+      const toIdx = arr.indexOf(to);
+      if (fromIdx < 0 || toIdx < 0) return prev;
+      arr.splice(fromIdx, 1);
+      arr.splice(toIdx, 0, from);
+      return arr;
+    });
+  };
 
   const { warehouseId } = useMrpWorkspace();
-  const { articulos } = usePalletArticulos({ warehouseId });
 
-  const filters = useMemo(() => {
-    const f = {};
-    if (warehouseId) f.warehouseId = warehouseId;
-    if (raw.movementCode.trim()) f.movementCode = raw.movementCode.trim();
-    if (raw.taskId.trim()) f.taskId = raw.taskId.trim();
-    if (raw.movementType) f.movementType = raw.movementType;
-    if (raw.articuloId) f.articuloId = raw.articuloId;
-    if (raw.originLocation) f.originLocation = raw.originLocation;
-    if (raw.destinationLocation) f.destinationLocation = raw.destinationLocation;
-    if (raw.userEmail.trim()) f.userEmail = raw.userEmail.trim();
-    if (raw.reason.trim()) f.reason = raw.reason.trim();
-    if (raw.dateFrom) f.dateFrom = `${raw.dateFrom}T00:00:00`;
-    if (raw.dateTo) f.dateTo = `${raw.dateTo}T23:59:59`;
-    return f;
-  }, [raw, warehouseId]);
+  const filters = useMemo(
+    () => (warehouseId ? { warehouseId } : {}),
+    [warehouseId]
+  );
 
   const { movements, loading, error, refetch } = usePalletMovements(filters);
+
+  // Opciones de cada filtro de columna (valores distintos del set cargado).
+  const optionsByCol = useMemo(() => {
+    const map = {};
+    COLS.forEach((c) => {
+      const seen = new Map();
+      movements.forEach((m) => {
+        const { value, label } = c.get(m);
+        if (!seen.has(value)) seen.set(value, label);
+      });
+      map[c.key] = [...seen.entries()]
+        .map(([value, label]) => ({ value, label }))
+        .sort((a, b) => a.label.localeCompare(b.label, "es"));
+    });
+    return map;
+  }, [movements]);
+
+  // Filas tras aplicar los filtros de columna (en memoria).
+  const rows = useMemo(() => {
+    const activeCols = COLS.filter((c) => Array.isArray(colFilters[c.key]));
+    if (activeCols.length === 0) return movements;
+    return movements.filter((m) =>
+      activeCols.every((c) => colFilters[c.key].includes(c.get(m).value))
+    );
+  }, [movements, colFilters]);
+
+  // Paginación (5 por página). `safePage` clampa si el set se achica.
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageRows = useMemo(
+    () => rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [rows, safePage]
+  );
 
   return (
     <>
@@ -74,202 +248,170 @@ export default function MRPHistorialPage() {
         action={<Badge tone="accent">Movimientos</Badge>}
       />
 
-      {/* Atajos por tipo de movimiento */}
-      <ChipsRow>
-                <Chip
-                  active={!raw.movementType}
-                  onClick={() => set("movementType", "")}
-                >
-                  Todos
-                </Chip>
-                {PALLET_MOVEMENT_TYPES.map((m) => (
-                  <Chip
-                    key={m}
-                    active={raw.movementType === m}
-                    onClick={() => set("movementType", m)}
-                  >
-                    {PALLET_MOVEMENT_TYPE_LABELS[m]}
-                  </Chip>
-                ))}
-              </ChipsRow>
+      <SectionTitle
+        title="Movimientos"
+        hint={!loading ? `${rows.length} resultado(s)` : undefined}
+      />
 
-              {/* Filtros (colapsables, ocultos por defecto) */}
-              <div>
+      {loading ? (
+        <Spinner label="Cargando historial…" />
+      ) : error ? (
+        <ErrorState description={error.message} onRetry={refetch} />
+      ) : movements.length === 0 ? (
+        <EmptyState
+          icon={History}
+          title="Sin movimientos"
+          description="No hay movimientos con los filtros seleccionados."
+        />
+      ) : (
+        <Card padding={0}>
+          <TableScroll minWidth={1120}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {orderedCols.map((c) => (
+                    <th
+                      key={c.key}
+                      style={{
+                        ...th,
+                        textAlign: c.align || "left",
+                        ...(overKey === c.key && dragKey && dragKey !== c.key
+                          ? thDropTarget
+                          : {}),
+                        ...(dragKey === c.key ? { opacity: 0.5 } : {}),
+                      }}
+                      onDragOver={(e) => {
+                        if (!dragKey) return;
+                        e.preventDefault();
+                        if (overKey !== c.key) setOverKey(c.key);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        moveColumn(dragKey, c.key);
+                        setDragKey(null);
+                        setOverKey(null);
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          justifyContent:
+                            c.align === "right" ? "flex-end" : "flex-start",
+                        }}
+                      >
+                        <span
+                          draggable
+                          onDragStart={(e) => {
+                            setDragKey(c.key);
+                            e.dataTransfer.effectAllowed = "move";
+                          }}
+                          onDragEnd={() => {
+                            setDragKey(null);
+                            setOverKey(null);
+                          }}
+                          style={grip}
+                          title="Arrastrar para reordenar"
+                          aria-label="Reordenar columna"
+                        >
+                          <GripVertical size={13} strokeWidth={2.2} />
+                        </span>
+                        {c.title}
+                        <ColumnFilter
+                          options={optionsByCol[c.key] || []}
+                          selected={colFilters[c.key] ?? null}
+                          onChange={(next) => {
+                            setColFilters((f) => ({ ...f, [c.key]: next }));
+                            setPage(1);
+                          }}
+                        />
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td
+                      style={{ ...td, textAlign: "center" }}
+                      colSpan={orderedCols.length}
+                    >
+                      Sin resultados para los filtros de columna.
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    {pageRows.map((m) => (
+                      <tr key={m.id}>
+                        {orderedCols.map((c) => (
+                          <td
+                            key={c.key}
+                            style={{ ...td, textAlign: c.align || "left" }}
+                          >
+                            {c.render(m)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                    {Array.from({
+                      length: PAGE_SIZE - pageRows.length,
+                    }).map((_, i) => (
+                      <tr key={`filler-${i}`} aria-hidden="true">
+                        <td style={fillerTd} colSpan={orderedCols.length}>
+                          {" "}
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                )}
+              </tbody>
+            </table>
+          </TableScroll>
+
+          {rows.length > 0 && (
+            <div style={pager}>
+              <span style={pagerInfo}>
+                {(safePage - 1) * PAGE_SIZE + 1}–
+                {Math.min(safePage * PAGE_SIZE, rows.length)} de {rows.length}
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <GhostButton
-                  icon={SlidersHorizontal}
-                  onClick={() => setShowFilters((v) => !v)}
+                  icon={ChevronLeft}
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
-                  {showFilters ? "Ocultar filtros" : "Filtros"}
+                  Anterior
+                </GhostButton>
+                <span style={pagerInfo}>
+                  Página {safePage} de {pageCount}
+                </span>
+                <GhostButton
+                  disabled={safePage >= pageCount}
+                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                >
+                  Siguiente
+                  <ChevronRight size={16} strokeWidth={2.2} />
                 </GhostButton>
               </div>
-
-              {showFilters && (
-                <Card>
-                  <div style={filtersRow}>
-                    <Field label="ID movimiento">
-                      <Field.Input
-                        value={raw.movementCode}
-                        onChange={(e) => set("movementCode", e.target.value)}
-                        placeholder="MOV-…"
-                      />
-                    </Field>
-                    <Field label="ID tarea">
-                      <Field.Input
-                        value={raw.taskId}
-                        onChange={(e) => set("taskId", e.target.value)}
-                        placeholder="UUID de tarea"
-                      />
-                    </Field>
-                    <Field label="Artículo">
-                      <Field.Select
-                        value={raw.articuloId}
-                        onChange={(e) => set("articuloId", e.target.value)}
-                      >
-                        <option value="">Todos</option>
-                        {articulos.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.codigo} · {a.nombre}
-                          </option>
-                        ))}
-                      </Field.Select>
-                    </Field>
-                    <Field label="Origen">
-                      <Field.Select
-                        value={raw.originLocation}
-                        onChange={(e) => set("originLocation", e.target.value)}
-                      >
-                        <option value="">Todas</option>
-                        {PALLET_LOCATIONS.map((l) => (
-                          <option key={l} value={l}>
-                            {PALLET_LOCATION_LABELS[l]}
-                          </option>
-                        ))}
-                      </Field.Select>
-                    </Field>
-                    <Field label="Destino">
-                      <Field.Select
-                        value={raw.destinationLocation}
-                        onChange={(e) =>
-                          set("destinationLocation", e.target.value)
-                        }
-                      >
-                        <option value="">Todas</option>
-                        {PALLET_LOCATIONS.map((l) => (
-                          <option key={l} value={l}>
-                            {PALLET_LOCATION_LABELS[l]}
-                          </option>
-                        ))}
-                      </Field.Select>
-                    </Field>
-                    <Field label="Usuario (email)">
-                      <Field.Input
-                        value={raw.userEmail}
-                        onChange={(e) => set("userEmail", e.target.value)}
-                        placeholder="correo…"
-                      />
-                    </Field>
-                    <Field label="Motivo">
-                      <Field.Input
-                        value={raw.reason}
-                        onChange={(e) => set("reason", e.target.value)}
-                        placeholder="texto del motivo…"
-                      />
-                    </Field>
-                    <Field label="Desde">
-                      <Field.Input
-                        type="date"
-                        value={raw.dateFrom}
-                        onChange={(e) => set("dateFrom", e.target.value)}
-                      />
-                    </Field>
-                    <Field label="Hasta">
-                      <Field.Input
-                        type="date"
-                        value={raw.dateTo}
-                        onChange={(e) => set("dateTo", e.target.value)}
-                      />
-                    </Field>
-                  </div>
-                  <div style={{ marginTop: 12 }}>
-                    <GhostButton onClick={() => setRaw(EMPTY)}>
-                      Limpiar filtros
-                    </GhostButton>
-                  </div>
-                </Card>
-              )}
-
-              <SectionTitle
-                title="Movimientos"
-                hint={!loading ? `${movements.length} resultado(s)` : undefined}
-              />
-
-              {loading ? (
-                <Spinner label="Cargando historial…" />
-              ) : error ? (
-                <ErrorState description={error.message} onRetry={refetch} />
-              ) : movements.length === 0 ? (
-                <EmptyState
-                  icon={History}
-                  title="Sin movimientos"
-                  description="No hay movimientos con los filtros seleccionados."
-                />
-              ) : (
-                <Card padding={0}>
-                  <TableScroll minWidth={1120}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr>
-                          <th style={th}>Fecha</th>
-                          <th style={th}>Movimiento</th>
-                          <th style={th}>ID movimiento</th>
-                          <th style={th}>ID tarea</th>
-                          <th style={th}>Artículo</th>
-                          <th style={{ ...th, textAlign: "right" }}>Cantidad</th>
-                          <th style={th}>Origen</th>
-                          <th style={th}>Destino</th>
-                          <th style={th}>Motivo</th>
-                          <th style={th}>Usuario</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {movements.map((m) => (
-                          <tr key={m.id}>
-                            <td style={td}>{fmtDate(m.created_at)}</td>
-                            <td style={td}>
-                              <MovementBadge value={m.movement_type} metadata={m.metadata} />
-                            </td>
-                            <td style={{ ...td, fontFamily: "monospace" }}>
-                              {m.movement_code}
-                            </td>
-                            <td style={{ ...td, fontFamily: "monospace" }}>
-                              {m.task_id ? m.task_id.slice(0, 8) : "—"}
-                            </td>
-                            <td style={td}>
-                              <span
-                                style={{ fontFamily: "monospace", fontWeight: 950 }}
-                              >
-                                {m.articulo?.codigo}
-                              </span>{" "}
-                              · {m.articulo?.nombre}
-                            </td>
-                            <td style={{ ...td, textAlign: "right", fontWeight: 950 }}>
-                              {m.quantity}
-                            </td>
-                            <td style={td}>
-                              <LocationBadge value={m.origin_location} />
-                            </td>
-                            <td style={td}>
-                              <LocationBadge value={m.destination_location} />
-                            </td>
-                            <td style={td}>{m.reason || "—"}</td>
-                            <td style={td}>{m.user_email || m.user_id || "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </TableScroll>
-                </Card>
-              )}
+            </div>
+          )}
+        </Card>
+      )}
     </>
   );
 }
+
+const pager = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+  padding: "12px 16px",
+  borderTop: `1px solid ${ACCENT_SOFT}`,
+};
+const pagerInfo = { fontSize: 12.5, fontWeight: 800, color: SLATE };
+// Fila de relleno: mantiene la altura de la tabla constante entre páginas.
+const fillerTd = { ...td, height: 42, color: "transparent", userSelect: "none" };

@@ -57,7 +57,7 @@ export const PALLET_LOCATION_LABELS = Object.freeze({
   patio: "Patio",
   reparacion: "Reparación",
   merma: "Merma",
-  pend: "Pendiente",
+  pend: "En revisión",
 });
 
 export const PALLET_MOVEMENT_TYPE_LABELS = Object.freeze({

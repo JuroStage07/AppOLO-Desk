@@ -1,383 +1,231 @@
 # Base de conocimiento — Asistente AppoloDesk
 
-> Documento fuente para alimentar al asistente conversacional de AppoloDesk
-> (vía n8n / vector store en un paso posterior). Está escrito en español y
-> describe **cómo funciona el sistema**, no datos operativos en vivo.
->
-> Última revisión basada en el código: rama de UI del menú circular.
-
----
-
-## 1. ¿Qué es AppoloDesk?
-
-AppoloDesk es una **plataforma operativa interna** (aplicación web de una sola
-página, React 19 + Firebase) usada por OLO Logistics para gestionar sus
-procesos de planta: despacho, seguridad, recepción, mantenimiento, servicios
-generales, EPA, MRP de tarimas y administración. La interfaz está en español.
-
-- Frontend: React + Vite, desplegado en Firebase Hosting.
-- Backend: Firebase Auth + Firestore + Storage + Cloud Functions (Node 20,
-  región `us-central1`).
-- No hay datos en vivo expuestos al asistente todavía: el bot responde sobre
-  **funcionamiento, módulos y procesos**, no sobre registros concretos.
-
----
-
-## 2. Login y autenticación
-
-1. El usuario inicia sesión en `/login` (Firebase Auth).
-2. `src/auth/AuthProvider.jsx` es la fuente de verdad en runtime: cuando
-   `onAuthStateChanged` detecta sesión, carga el documento `profiles/{uid}` de
-   Firestore.
-3. **Si el perfil no existe o falla la lectura, se cierra sesión
-   automáticamente.** No existe el estado "logueado sin perfil".
-4. El contexto de auth expone: `{ user, profile, permisos, role, epaAdmin, loading, error }`.
-
-### Guardas de ruta
-Toda ruta protegida usa `PrivateRoute` = `RequireAuth` → `RequireTenant` → `EpaAdminRouteGuard`:
-
-- **RequireAuth**: espera a que termine la carga; si no hay `user`/`profile`,
-  redirige a `/login`.
-- **RequireTenant**: lee `localStorage["appolo_profile"]`; si falta `tenantId`,
-  redirige a `/config-region`. (La copia en localStorage y el perfil de
-  Firestore son dos fuentes paralelas que deben mantenerse sincronizadas.)
-- **EpaAdminRouteGuard**: si `profile.epaAdmin === true`, restringe la
-  navegación a una lista blanca (`/`, `/welcome`, `/areas`, `/epa/*`,
-  `/config-region`, `/seguridad/aperturas/detalle/*`) y manda el resto a `/epa`.
-
-`/config-region` es la única ruta protegida que **no** exige tenant (sirve para
-configurarlo).
-
----
-
-## 3. Tenant y company (multi-tenant)
-
-Cada documento de negocio lleva `tenantId` y `company`. El aislamiento es de dos
-capas:
-
-- **Servidor (autoritativo)**: `firestore.rules` usa `sameTenantCompanyData(data)`
-  + ayudantes de permiso. Lecturas, creaciones y actualizaciones casi siempre
-  exigen que el `tenantId`/`company` del documento coincida con el del perfil
-  del solicitante.
-- **Cliente (filtro defensivo)**: `src/utils/dataScope.js` filtra en memoria
-  (`filterByUserScope`, etc.) porque algunos documentos legados no tienen campos
-  de tenant.
-
-**Regla clave para el bot:** nunca debe mostrar ni mezclar datos de un tenant o
-company distinto al del usuario.
-
----
-
-## 4. ¿Qué es `epaAdmin`?
-
-`profile.epaAdmin` es una bandera adicional sobre el perfil. Cuando es `true`,
-el usuario es un administrador EPA **restringido**: solo puede ver el área EPA y
-unas pocas rutas permitidas. Se combina con `src/config/epaOnlyUids.js`
-(`isEpaRestrictedUser`), que en el hub oculta todos los módulos excepto EPA para
-esos usuarios.
-
----
-
-## 5. Roles y permisos
-
-Dos ejes ortogonales en `profiles/{uid}`:
-
-- **`role`**:
-  - `administrativo` y `dev` → acceso amplio (`isAdminRequester()` en las reglas).
-  - `operativo` → accesos acotados (p. ej. checklists diarias de equipos).
-- **`permisos`**: mapa de booleanos por módulo. Se administran desde
-  **Administración › Usuarios** (`UserHub.jsx`, `PERMISOS_KEYS`). Las 8 claves:
-  - `permisos.mantenimiento` — Equipos y OTs de Mantenimiento *(reforzada en reglas)*
-  - `permisos.saludOcupacional` — Visados y control de terceros *(reforzada en reglas)*
-  - `permisos.canRecepcionCofersa` — Recepción COFERSA *(reforzada en reglas)*
-  - `permisos.despachosEPA` — Recepción EPA *(reforzada en reglas)*
-  - `permisos.serviciosGenerales` — Servicios Generales *(administrable)*
-  - `permisos.documentacion` — Documentación *(administrable; lectura abierta)*
-  - `permisos.zoneFranca` — Zona Franca / pesaje *(administrable)*
-  - `permisos.mrpTarimas` — MRP Tarimas *(administrable)*
-
-Solo las primeras cuatro están reforzadas en `firestore.rules` (vía
-`hasPerm()`); el resto son banderas administrables que controlan visibilidad.
-
-Además, `role: "dev"` desbloquea rutas de desarrollo y `administrativo`/`dev`
-desbloquean Administración y Horas Extra.
-
-### ¿Qué módulos dependen de permisos?
-- **Mantenimiento** (equipos + OTs): `permisos.mantenimiento` o admin/dev.
-- **Visados y control de terceros** (Seguridad): `permisos.saludOcupacional` o admin/dev.
-- **Recepción EPA**: `permisos.despachosEPA` o admin/dev.
-- **Recepción COFERSA**: `permisos.canRecepcionCofersa` o admin/dev.
-- **Administración / Horas Extra**: rol `administrativo` o `dev`.
-- **Dev**: solo rol `dev`.
-
----
-
-## 6. Áreas de trabajo
-
-Fuente única: `src/config/workAreas.jsx` (`getVisibleAreas({ epaOnly, role })`).
-El menú visible se filtra según rol y `epaOnly`.
-
-### 6.1 Despacho
-- **Ruta:** `/despacho` · **Tag:** Operación
-- **Descripción:** Coordinación de carga, asignación de docks y seguimiento de
-  despachos en tiempo real.
-- **Módulos:** En progreso (`/despacho/in-progress`), Finalizados (`/despacho/finalizados`).
-- **Preguntas que el bot podría responder:** cómo se sigue un despacho, qué
-  significa "en progreso" vs "finalizado", dónde ver despachos cerrados.
-
-### 6.2 Seguridad (SSO)
-- **Ruta:** `/seguridad` · **Tag:** Seguridad
-- **Descripción:** Gestión de visados, control de ingreso de terceros y
-  registros de seguridad. (Marca "Seguridad"; las rutas legadas `/salud/*`
-  redirigen a `/seguridad/*`.)
-- **Módulos:**
-  - Control de marcas (`/seguridad/control-marcas`) → Historial (`/seguridad/control-marcas/historial`)
-  - Aperturas (`/seguridad/aperturas`) → Finalizadas (`/seguridad/aperturas/finalizadas`), Rechazadas (`/seguridad/aperturas/rechazadas`)
-  - Visados (`/seguridad/visado`) → Generar visado (`/seguridad/visado/generar`), Administrar visados (`/seguridad/visados`)
-  - Documentación (`/documentacion`)
-  - Métricas (`/seguridad/metricas`)
-- **Preguntas que el bot podría responder:** cómo generar un visado, dónde ver
-  aperturas finalizadas/rechazadas, cómo consultar el control de marcas.
-
-### 6.3 Salud Ocupacional
-- **Ruta:** `/salud-ocupacional` · **Tag:** Próximamente
-- **Descripción:** Bienestar, exámenes y seguimiento de salud del personal.
-- **Estado:** `comingSoon` — placeholder, sin módulos activos. Los visados,
-  control de terceros y aperturas viven ahora en **Seguridad**.
-- **Preguntas que el bot podría responder:** "¿está disponible Salud
-  Ocupacional?" → No todavía; redirigir a Seguridad para visados/aperturas.
-
-### 6.4 Recepción
-- **Ruta:** `/recepcion` · **Tag:** Inbound
-- **Descripción:** Registro de ingresos, validación documental y trazabilidad de
-  mercadería.
-- **Módulos:** Acción descarga (`/recepcion/accion-descarga`), Métricas (`/recepcion/metricas`).
-- **Preguntas que el bot podría responder:** qué es una acción de descarga, dónde
-  ver métricas de recepción, clasificación General/EPA/COFERSA.
-
-### 6.5 Mantenimiento
-- **Ruta:** `/mantenimiento` · **Tag:** Mantenimiento
-- **Descripción:** Control de equipos, checklists preventivos y gestión de fallas
-  correctivas.
-- **Módulos:**
-  - Equipos (`/mantenimiento/equipos`)
-  - Órdenes de trabajo (`/mantenimiento/ots`) → Tablero/Gestión (`/mantenimiento/OTsPage`), Finalizadas (`/mantenimiento/ots/finalizadas`), Dashboard (`/mantenimiento/ots/dashboard`)
-- **Permiso asociado:** `permisos.mantenimiento` (además de admin/dev).
-- **Preguntas que el bot podría responder:** cómo crear/seguir una OT, dónde ver
-  el dashboard de OTs, cómo registrar un equipo, cómo se envía el QR de un equipo.
-
-### 6.6 Servicios Generales
-- **Ruta:** `/servicios-generales` · **Tag:** Servicios
-- **Descripción:** Solicitudes internas, seguimiento de tareas y control de
-  servicios de planta.
-- **Módulos:**
-  - Órdenes de trabajo (`/servicios-generales/ordenes-trabajo`) → Crear OT (`/servicios-generales/ordenes-trabajo/crear`), Gestión de OTs (`/servicios-generales/ordenes-trabajo/gestion`)
-  - Validar ingreso (`/servicios-generales/validar-ingreso`)
-  - Pesaje tarimas (`/servicios-generales/pesaje-tarimas`) → Registrar (`/servicios-generales/pesaje-tarimas/registrar`), Consultar (`/servicios-generales/pesaje-tarimas/consultar`)
-- **Preguntas que el bot podría responder:** cómo crear una OT de servicios, cómo
-  pesar/consultar tarimas, dónde validar un ingreso.
-
-### 6.7 EPA
-- **Ruta:** `/epa` · **Tag:** EPA
-- **Descripción:** Panel exclusivo EPA: aperturas, reportes y administración
-  centralizada.
-- **Módulos:** Aperturas finalizadas (`/epa/aperturas-finalizadas`).
-- **Acceso:** usuarios con `epaAdmin` solo ven esta área.
-- **Preguntas que el bot podría responder:** qué ve un usuario EPA, dónde están
-  las aperturas finalizadas EPA.
-
-### 6.8 MRP Tarimas
-- **Ruta:** `/mrp-tarimas` · **Tag:** MRP
-- **Descripción:** Gestión integral de tarimas: inventario, reparaciones,
-  materiales y costos.
-- **Módulos:** Dashboard (`/mrp-tarimas/dashboard`), Inventario (`/mrp-tarimas/inventario`), Reparaciones (`/mrp-tarimas/reparaciones`), Materiales (`/mrp-tarimas/materiales`).
-- **Preguntas que el bot podría responder:** dónde ver el inventario de tarimas,
-  cómo registrar una reparación o material.
-
-### 6.9 Administración *(solo `administrativo` / `dev`)*
-- **Ruta:** `/administracion` · **Tag:** Administración
-- **Descripción:** Gestión de usuarios, roles y permisos de la plataforma.
-- **Módulos:**
-  - Usuarios (`/administracion/usuarios`) — gestiona rol, los 8 permisos, la
-    bandera `epaAdmin` y `tenantId`/`company` de cada perfil.
-  - Horas Extra (`/horas-extra`) → Aprobaciones gerencia (`/horas-extra/gerencia`),
-    Reporte mensual (`/horas-extra/reporte`), Usuarios/coordinadores
-    (`/horas-extra/usuarios`), Marcas de asistencia (`/horas-extra/marcas`).
-- **Flujo de Horas Extra:** los registros provienen de la API interna de
-  asistencia (Bit2) vía Cloud Functions; coordinador aprueba/rechaza, gerencia
-  valida, y el reporte mensual agrega por empleado y tipo (MB02/MB03/MB17). Las
-  decisiones se guardan en Firestore (`overtimeApprovals`, `overtime_control`,
-  `overtime_manager_validated`); coordinadores y overrides de horario en
-  `overtimeUsers` / `overtimeConfig`.
-- **Preguntas que el bot podría responder:** cómo se aprueban horas extra, dónde
-  está el reporte mensual, cómo se gestionan usuarios y permisos, dónde se
-  configuran coordinadores y horarios, dónde se ven las marcas de asistencia.
-
-### 6.10 Dev *(solo `dev`)*
-- **Ruta:** `/dev` · **Tag:** Desarrollo
-- **Descripción:** Herramientas internas de desarrollo: migraciones,
-  sincronización y utilidades.
-- **Módulos:** Update AppOLO Supabase (`/dev/update-supabase`), Configuración de
-  módulos (`/dev/config-modulos`) → Horas Extra (`/dev/config-modulos/horas-extra`).
-
----
-
-## 7. Rutas principales del sistema
-
-| Ruta | Pantalla | Notas |
-|------|----------|-------|
-| `/login` | Login | Pública |
-| `/config-region` | Configuración de tenant/región | Requiere login, NO tenant |
-| `/welcome` | Bienvenida post-login (HomeHub) | Botón "Iniciar" → `/areas` |
-| `/` y `/areas` | Hub principal (menú circular + modal de áreas) | |
-| `/pesado` | Pesaje de tarimas (atajo Zona Franca) | |
-| `/documentacion` | Biblioteca de documentos | |
-| `/despacho`, `/despacho/in-progress`, `/despacho/finalizados` | Despacho | |
-| `/seguridad/*` | Seguridad (control marcas, aperturas, visados, métricas) | `/salud/*` redirige aquí |
-| `/recepcion`, `/recepcion/accion-descarga`, `/recepcion/metricas` | Recepción | |
-| `/mantenimiento/*` | Equipos y OTs | |
-| `/servicios-generales/*` | OTs, validar ingreso, pesaje tarimas | |
-| `/epa`, `/epa/aperturas-finalizadas` | EPA | |
-| `/mrp-tarimas/*` | MRP Tarimas | |
-| `/administracion`, `/horas-extra/*` | Administración / Horas extra | admin o dev |
-| `/dev/*` | Herramientas dev | solo dev |
-
----
-
-## 8. Colecciones Firestore relevantes
-
-`profiles`, `usernames`, `pushTokens`, `despachos` (+ subcolecciones `items`,
-`fotos`, `layout`), `equipos`, `checklists_diarias`, `solicitudesOT` (+
-`subtareas`), `subtaskList`, `accion_descarga`, `aperturas`,
-`aperturasRecepcion`, `recepcionCofersa_lotes`, `tareas_apertura`,
-`controlMarcas/{day}/marcas`, `usuariosTerceros`, `controlTerceros`, `visados`,
-`visadosPorFirmar`, `documentacion`, `colecciones`, `fichas`,
-`chats/{id}/mensajes`, `dashboard_salud_daily`, `pesajes`,
-`overtimeApprovals`, `appConfig/overtimeCoordinatorEmails`, `mail_logs`.
-
-Hay una regla de lectura por `collectionGroup("fotos")`.
-
----
-
-## 9. Reglas generales de seguridad
-
-- Toda operación requiere estar autenticado (`request.auth != null`).
-- `isAdminRequester()` → `role in ['administrativo','dev']` tiene acceso amplio.
-- `hasPerm('clave')` valida `profiles/{uid}.permisos[clave] == true`.
-- `sameTenantCompanyData(data)` exige coincidencia de `tenantId` **y** `company`
-  entre el documento y el perfil del solicitante.
-- Caso especial mantenimiento: admin/dev **o** `permisos.mantenimiento`.
-- Checklists diarias: `operativo` o `permisos.saludOcupacional`.
-- Nunca confiar en scope enviado por el cliente: las Cloud Functions releen
-  `profiles/{uid}` en el servidor y revalidan tenant/company.
-
----
-
-## 10. Cloud Functions disponibles (`functions/index.js`, región `us-central1`)
-
-- **`sendEquipoQrLabel`** — Genera un PNG QR de un equipo y lo envía por correo
-  (Gmail SMTP). Revalida perfil + tenant/company contra `equipos/{id}` y exige
-  permiso de mantenimiento.
-- **`getOvertimeRecords`** — Lee la vista de asistencia (SQL Server / Bit2),
-  calcula horas extra (entre semana vs fin de semana) y aplica restricción por
-  coordinador (rol `dev` ve todo).
-- **`decideOvertimeRecord`** — Aprueba/rechaza un registro de horas extra
-  (`overtimeApprovals`).
-- **`getOvertimeCoordinators`** — Lista coordinadores distintos + su email
-  configurado.
-- **`saveCoordinatorEmails`** — Guarda el mapeo coordinador → email en
-  `appConfig/overtimeCoordinatorEmails`.
-- **`testSqlConnection`** — Utilidad de diagnóstico de conexión SQL.
-
-> Nota: las credenciales (SMTP, SQL, claves Firebase) viven en variables de
-> entorno / `functions/.env` y **no** forman parte de esta base de conocimiento.
-
----
-
-## 11. Preguntas frecuentes sugeridas (seeds)
-
-- ¿Cómo uso las áreas de trabajo?
-- ¿Qué puedo hacer en Mantenimiento?
-- ¿Dónde veo los reportes / métricas?
-- ¿Cómo genero un visado?
-- ¿Dónde reviso las aperturas finalizadas?
-- ¿Cómo se aprueban las horas extra?
-- ¿Cómo registro o consulto una tarima?
-- ¿Qué significa mi rol y mis permisos?
-- ¿Por qué solo veo el área EPA? (usuario `epaAdmin`)
-- ¿Cómo cambio mi región/tenant? (`/config-region`)
-
----
-
-## 12. Limitaciones del asistente
-
-- **No inventa datos operativos en tiempo real.** Mientras no esté conectado a
-  fuentes en vivo (Firestore/n8n), responde solo sobre funcionamiento, módulos,
-  rutas y procesos generales.
-- No expone secretos ni credenciales.
-- No responde con datos de otro `tenantId`/`company`.
-- Si no tiene información suficiente, debe decirlo claramente y, si aplica,
-  sugerir a qué módulo o ruta ir.
-- Distingue siempre entre **documentación general** (este conocimiento) y
-  **datos en vivo** (no disponibles aún).
-- **Excepción de escritura:** el asistente puede iniciar la creación de una
-  **Orden de Trabajo** (ver sección 13). n8n solo propone el borrador; la app lo
-  confirma y lo escribe en `solicitudesOT`.
-
----
-
-## 13. Acción del asistente: crear una OT (`create_ot_draft`)
-
-El asistente puede **proponer** un borrador de Orden de Trabajo. n8n devuelve, en
-su respuesta, un objeto `action`:
-
-```json
-{
-  "answer": "Te preparé un borrador de OT. Revisá los campos y confirmá.",
-  "action": {
-    "type": "create_ot_draft",
-    "draft": {
-      "nombreOT": "Fuga en tubería del baño piso 2",
-      "activoReferencia": "Baño hombres piso 2",
-      "departamento": "Control",
-      "lugarProblema": "Piso #2",
-      "tipoProblema": "Fontanería",
-      "descripcionOT": "Hay una fuga constante bajo el lavamanos.",
-      "notas": ""
-    }
-  }
-}
-```
-
-**Quién crea qué:** n8n **NO** crea la OT; solo propone el `draft`. La app
-(`AssistantModal.jsx`) normaliza el borrador contra los catálogos oficiales,
-infiere `tipoProblema` por palabras clave, valida los obligatorios y muestra una
-tarjeta editable. Cuando el usuario presiona **Crear OT**, la **app** escribe el
-documento en `solicitudesOT` (`addDoc`).
-
-**Campos obligatorios:** `nombreOT`, `activoReferencia`, `departamento`,
-`lugarProblema`, `tipoProblema`, `descripcionOT`. Opcional: `notas`.
-
-**Catálogos oficiales (deben coincidir exactamente; se normaliza sin acentos/mayúsculas):**
-- **departamento:** CEDI · Comercio exterior · Control · Ingeniería · Personal ·
-  Sistema · Transportes · Ventas
-- **lugarProblema:** CEDI · Parqueo · Piso #1 · Piso #2 · Piso #3 · Vehículo/Flota
-- **tipoProblema:** Aire acondicionado · Albañilería · Banda transportadora ·
-  Camaras / CCTV · Carpintería · Control de plagas · Equipos · Fontanería ·
-  Iluminación · Instalación eléctrica · Pisos · Puertas y portones · Racks ·
-  Rotulaciones · Sistema de incendios · Soldadura · Techos
-
-**Validación:** si un valor de `departamento`/`lugarProblema`/`tipoProblema` no
-coincide con el catálogo, queda en blanco y el campo se marca como pendiente; la
-OT no se crea hasta que todos los obligatorios sean válidos.
-
-**La app fija automáticamente:** `OTState = "Solicitada"`,
-`NroSolicitud = "SOL-OT-<timestamp>"`, fecha de hoy, `createdAt`/`updatedAt`,
-`createdBy` (uid), `solicitanteNombre`/`solicitanteFicha`/`createdArea` desde el
-perfil, y `tenantId`/`company` si están en el perfil.
-
-**Rutas sugeridas tras crear:** Gestión de OTs (`/mantenimiento/OTsPage`) y OTs de
-Servicios Generales (`/servicios-generales/ordenes-trabajo/gestion`).
-
-> Esta es la única acción de escritura del asistente. El resto de la
-> interacción es orientación sobre funcionamiento, módulos y rutas.
+> Documento funcional para el asistente conversacional de AppoloDesk. Describe el estado del código al 21 de julio de 2026. No contiene datos operativos en vivo ni secretos.
+
+## 1. Qué es AppoloDesk
+
+AppoloDesk es la plataforma web interna de OLO Logistics para despacho, seguridad, recepción, mantenimiento, servicios generales, EPA, MRP de tarimas, reportes y administración.
+
+- Frontend: React 19 + Vite, desplegado en Firebase Hosting.
+- Identidad y datos operativos: Firebase Auth, Firestore y Storage.
+- Backend: Cloud Functions Node 20 en `us-central1`.
+- MRP Tarimas: Supabase con RLS y funciones RPC.
+- Asistente: webhook configurable mediante `VITE_ASSISTANT_WEBHOOK_URL`, normalmente conectado a n8n.
+- Idioma de la interfaz y del asistente: español.
+
+## 2. Inicio de sesión y alcance operativo
+
+`AuthProvider.jsx` escucha Firebase Auth y carga `profiles/{uid}`. Si el perfil no existe o no puede leerse, cierra la sesión; no existe un estado válido de usuario autenticado sin perfil.
+
+El contexto expone `user`, `profile`, `permisos`, `role`, `tenantId`, `company`, `bodegaId`, `bodegaNombre`, `epaAdmin`, `loading` y `error`.
+
+Las rutas privadas aplican, en orden:
+
+1. `RequireAuth`: exige usuario y perfil.
+2. `RequireTenant`: exige `tenantId` y `bodegaId` en `localStorage["appolo_profile"]`.
+3. `EpaAdminRouteGuard`: limita a los usuarios EPA restringidos.
+4. `RequireRouteAccess`: compara la ruta con el rol y los permisos.
+
+`/config-region` requiere login, pero no tenant/bodega previos. Allí se eligen país, compañía y bodega. El selector de bodega de la barra superior actualiza tanto `profiles/{uid}` como la copia de `localStorage`; ambas deben mantenerse sincronizadas.
+
+### Países y bodegas configuradas
+
+- Costa Rica (`CR`, compañía `OLO`): CLIRO (`CR-OLO-CLIRO`) y El Coco (`CR-OLO-ELCOCO`).
+- Venezuela (`VNZ`, compañía `OLO`): San Diego (`VNZ-OLO-SANDIEGO`) y Michelena (`VNZ-OLO-MICHELENA`).
+
+El alcance actual es `tenantId + company + bodegaId`. Firestore está en una fase de transición: `sameTenantScopeData` exige tenant/company y acepta temporalmente documentos legacy sin bodega; cuando un documento sí tiene `bodegaId`, debe coincidir con el perfil. Nunca se deben mezclar datos entre tenants, compañías o bodegas.
+
+## 3. Roles, permisos y EPA
+
+Roles:
+
+- `dev`: acceso completo y herramientas internas.
+- `administrativo`: acceso administrativo general, sin herramientas dev.
+- `operativo`: solo módulos habilitados explícitamente.
+
+Permisos canónicos administrables:
+
+| Clave | Controla |
+|---|---|
+| `despacho` | Despachos en progreso y finalizados |
+| `recepcion` | Acciones de descarga y operación de Recepción |
+| `recepcionReportes` | Reportes de Descarga y de Recepción |
+| `canRecepcionCofersa` | Flujos COFERSA |
+| `despachosEPA` | Flujos de Recepción/EPA |
+| `saludOcupacional` | Seguridad: marcas, aperturas, terceros, visados y reportes |
+| `documentacion` | Biblioteca documental |
+| `epa` | Panel EPA |
+| `mantenimiento` | Equipos, OTs y dashboard |
+| `serviciosGenerales` | OTs y validación de ingreso |
+| `pesajeTarimas` | Registro y consulta de pesajes |
+| `mrpTarimas` | MRP de tarimas |
+| `horasExtra` | Aprobaciones y reportes de horas extra |
+| `gestionUsuarios` | Administración de perfiles, scope y permisos |
+
+`zoneFranca` y `zonaFranca` son alias legacy de `pesajeTarimas`.
+
+Los roles administrativo/dev actúan como override en la mayoría de módulos. Excepciones relevantes: Dev exige rol `dev`; Usuarios admite `dev` directamente o un administrativo con `gestionUsuarios`. Horas Extra exige rol administrativo/dev; aunque existe la clave `horasExtra`, el override administrativo hace que esos roles tengan acceso actualmente.
+
+`profile.epaAdmin === true` restringe el usuario a `/`, `/welcome`, `/areas`, `/epa/*`, `/config-region` y el detalle de aperturas de Seguridad/Salud. No se deben sugerir otros módulos a ese usuario.
+
+## 4. Navegación global
+
+- `/login`: acceso público.
+- `/config-region`: selección inicial de país y bodega.
+- `/welcome`: bienvenida.
+- `/` y `/areas`: hub de áreas.
+- `/reportes`: centro global de reportes, filtrado por rol/permisos.
+- `/pesado`: acceso rápido al pesaje de tarimas.
+- La paleta de comandos, el menú circular, el sidebar y los módulos fijados respetan el mismo modelo de acceso.
+
+El centro `/reportes` agrupa Reportes Seguridad, Reportes Recepción/Descarga, Dashboard de OTs y Reporte de Horas Extra según acceso. Las rutas específicas siguen siendo la fuente final.
+
+## 5. Áreas y capacidades
+
+### Despacho
+
+- `/despacho`
+- `/despacho/in-progress`: ocupación/carga en vivo.
+- `/despacho/finalizados`: historial reciente.
+- Requiere `despacho` o rol administrativo/dev.
+
+### Seguridad
+
+- `/seguridad/control-marcas` y `/seguridad/control-marcas/historial`.
+- `/seguridad/aperturas`, finalizadas, rechazadas y detalle `/:id`.
+- `/seguridad/visado/generar` y `/seguridad/visados`.
+- `/documentacion`.
+- `/seguridad/metricas`.
+- Las rutas legacy `/salud/*` redirigen a `/seguridad/*`.
+- Salud Ocupacional (`/salud-ocupacional`) sigue como área próxima; las funciones activas viven en Seguridad.
+
+Finalizar una apertura genera una acción de descarga en Recepción. Visados y terceros requieren `saludOcupacional`; Documentación admite `documentacion` o `saludOcupacional` en navegación.
+
+### Recepción
+
+- `/recepcion/accion-descarga` y detalle `/:accionId`: lista, filtros, inicio y finalización de descargas.
+- `/recepcion/metricas`: **Reportes de Descarga**, basado principalmente en `accion_descarga`; incluye cumplimiento, tiempos, productividad, andenes, proveedores, tendencias COFERSA/EPA y exportes Excel.
+- `/recepcion/metricas-recepcion`: **Reportes de Recepción**, basado en `accion_recepcion`; incluye total, creadas, en proceso, completas, tiempo promedio, gráficos por tipo/andén/proveedor/usuario, tabla con filtros tipo Excel y exportación.
+- El hub diferencia operación General, EPA y COFERSA según permisos.
+
+### Mantenimiento
+
+- `/mantenimiento/equipos` y detalle `/:id`: registro, edición, familias, revisión, fallas y envío de etiqueta QR por correo.
+- `/mantenimiento/ots`: hub.
+- `/mantenimiento/OTsPage`: tablero de gestión.
+- `/mantenimiento/ots/finalizadas`.
+- `/mantenimiento/ots/dashboard`: métricas de OTs.
+- `/mantenimiento/ots-solicitud/:id`: detalle y subtareas.
+
+Las OTs avanzan normalmente por `Solicitada → En proceso → En revisión → Finalizada`. Las subtareas pueden registrar tiempo. `tiempoRespuesta` se calcula al finalizar, excluyendo fines de semana.
+
+### Servicios Generales y Zona Franca
+
+- `/servicios-generales/ordenes-trabajo`: hub, creación y gestión de OTs.
+- `/servicios-generales/validar-ingreso`.
+- `/servicios-generales/pesaje-tarimas`, `/registrar` y `/consultar`.
+- `/pesado` abre el mismo flujo de pesaje.
+
+### EPA
+
+- `/epa` y `/epa/aperturas-finalizadas`.
+- Muestra aperturas finalizadas de tipo EPA.
+- Usuarios `epaAdmin` quedan restringidos a esta área y al detalle permitido de aperturas.
+
+### Administración y Horas Extra
+
+- `/administracion`.
+- `/administracion/usuarios`: rol, los 14 permisos, `epaAdmin`, tenant/company y bodega.
+- `/horas-extra`: aprobación de coordinador.
+- `/horas-extra/gerencia`: validación gerencial.
+- `/horas-extra/reporte`: reporte mensual.
+- `/horas-extra/usuarios`: coordinadores y overrides de horario.
+- `/horas-extra/marcas`: marcas de asistencia.
+
+Los datos provienen de SQL Server/Bit2 mediante Cloud Functions. No inventar marcas, horas ni decisiones concretas.
+
+### Dev
+
+- `/dev/update-supabase`.
+- `/dev/config-modulos/horas-extra`.
+- `/dev/config-modulos/mrp-tarimas`.
+- `/dev/config-modulos/mrp-tarimas/entidades`: relación bodega ↔ almacén MRP.
+- `/dev/config-modulos/mrp-tarimas/motivos`: motivos por tipo de ajuste o traslado.
+
+Solo rol `dev`.
+
+## 6. MRP Tarimas
+
+MRP fue reconstruido sobre Supabase. Requiere `mrpTarimas` o rol administrativo/dev y opera con `tenantId/company` del perfil. El almacén no se elige manualmente: se resuelve desde `profiles/{uid}.bodegaId` mediante `pallet_warehouses.bodega_id`. Si no existe vínculo, un dev debe configurarlo.
+
+Rutas:
+
+- `/mrp-tarimas/dashboard`: resumen.
+- `/mrp-tarimas/inventario`: existencias por artículo y ubicación; permite ajustes y traslados.
+- `/mrp-tarimas/movimientos`: historial.
+- `/mrp-tarimas/descartes`: ajustes negativos.
+- `/mrp-tarimas/catalogos`: artículos, insumos, BOM y almacenes.
+
+Ubicaciones operativas: `tienda`, `almacen`, `patio`, `reparacion`, `merma`, `pend` (Pendiente).
+
+Reglas críticas:
+
+- Un ajuste positivo ingresa stock a `pend`.
+- Un ajuste negativo descuenta stock desde una ubicación operativa y crea un registro en descartes.
+- `merma` es una ubicación operativa y su stock cuenta en el total.
+- `descartes` es un registro administrativo; no es una ubicación y no crea stock.
+- Los traslados internos mueven stock entre ubicaciones distintas.
+- Los traslados entre almacenes buscan el artículo destino por nombre y pueden crearlo si no existe.
+- Los motivos son configurables para `ajuste_positivo`, `ajuste_negativo`, `traslado` y `traslado_almacen`; si no hay catálogo, la app usa motivos de respaldo.
+- Catálogos: artículos por almacén; insumos y BOM por tenant/company; almacenes por tenant/company.
+
+Existe una integración backend `consumeTarimasFromExternalApp`: mueve tarimas de `almacen` a `tienda`, usa `externalEventId` para idempotencia y valida permiso, scope, bodega, artículo y stock antes de llamar el RPC `mrp_consume_tarimas_external`.
+
+## 7. Acciones del asistente
+
+El asistente devuelve siempre orientación y, solo para los tipos soportados, un borrador confirmable. n8n no escribe directamente.
+
+### `create_ot_draft`
+
+Campos obligatorios: `nombreOT`, `activoReferencia`, `departamento`, `lugarProblema`, `tipoProblema`, `descripcionOT`. `notas` es opcional. Los campos de catálogo deben coincidir con las opciones oficiales definidas en `appolo-knowledge.json`.
+
+La app valida, permite corregir y, al confirmar, crea `solicitudesOT` con estado `Solicitada`, número `SOL-OT-<timestamp>`, auditoría, solicitante, tenant/company y bodega.
+
+### `mrp_transfer_draft`
+
+Propone un traslado entre ubicaciones del almacén MRP activo. Requiere artículo (`articuloId` o `articuloCodigo`), cantidad entera positiva, origen y destino válidos y distintos; motivo es opcional. La app valida stock disponible y ejecuta el traslado solo al confirmar.
+
+No usar este action para traslados entre almacenes. Nunca afirmar que una OT o un traslado se completó antes de que la app devuelva estado `created`.
+
+## 8. Datos y seguridad
+
+Firestore relevante incluye `profiles`, `usernames`, `despachos`, `equipos`, `checklists_diarias`, `solicitudesOT` y subtareas, `accion_descarga`, `accion_recepcion`, `aperturas`, `aperturasRecepcion`, `recepcionCofersa_lotes`, `tareas_apertura`, marcas, terceros, visados, documentación, colecciones, chats, dashboards, pesajes y colecciones `overtime*`.
+
+Supabase MRP incluye `pallet_warehouses`, `pallet_articulos`, `pallet_inventory_articulo`, `pallet_movimientos_articulo`, `pallet_descartes_articulo`, `pallet_motivos`, `pallet_external_consumptions`, `mrp_insumos`, `mrp_boms` y `mrp_bom_insumos`.
+
+Cloud Functions actuales:
+
+- `sendEquipoQrLabel`.
+- `consumeTarimasFromExternalApp`.
+- `testSqlConnection`.
+- `getOvertimeRecords`.
+- `decideOvertimeRecord`.
+- `getOvertimeCoordinators`.
+- `saveCoordinatorEmails`.
+
+Reglas obligatorias del asistente:
+
+- No revelar credenciales SMTP, SQL, Firebase o Supabase.
+- No inventar datos operativos, stock, métricas, usuarios, estados o movimientos.
+- No mezclar tenant, company o bodega.
+- Respetar rol, permisos y `epaAdmin` al sugerir rutas.
+- Si falta información, decirlo y orientar a la ruta correcta.
+- Solo `create_ot_draft` y `mrp_transfer_draft` pueden producir acciones; el resto es orientación.
+
+## 9. Mantenimiento de este conocimiento
+
+- `src/config/workAreas.jsx` es la fuente de áreas, módulos y gates.
+- `src/App.jsx` es la fuente de rutas.
+- `docs/assistant-knowledge/appolo-capabilities.json` contiene capacidades detalladas.
+- `npm run assistant:knowledge` sincroniza áreas, rutas, navegación y capacidades hacia `docs/assistant-knowledge/appolo-knowledge.json` y `public/assistant-knowledge/appolo-knowledge.json`.
+- Después de agregar rutas, módulos, permisos o acciones, actualizar primero las fuentes y capacidades, luego ejecutar la sincronización y validar ambos JSON.

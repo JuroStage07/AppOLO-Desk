@@ -851,7 +851,12 @@ export default function MetricasRecepcion() {
                             {recientes.map((r) => (
                               <tr key={r.id}>
                                 <td style={styles.td}>
-                                  {r.nombreAccion || "—"}
+                                  <div style={styles.cellStack}>
+                                    <span>{r.nombreAccion || "—"}</span>
+                                    <span style={styles.cellSub}>
+                                      Creada: {fmtDateTime(r.creadoAt)}
+                                    </span>
+                                  </div>
                                 </td>
                                 <td style={styles.td}>{r.tipo || "—"}</td>
                                 <td style={styles.td}>{andenLabel(r)}</td>
@@ -877,7 +882,10 @@ export default function MetricasRecepcion() {
                                   length: TABLE_COLUMNS.length + 1,
                                 }).map((__, j) => (
                                   <td key={j} style={styles.tdFiller}>
-                                    &nbsp;
+                                    <div style={styles.cellStack}>
+                                      <span>&nbsp;</span>
+                                      <span style={styles.cellSub}>&nbsp;</span>
+                                    </div>
                                   </td>
                                 ))}
                               </tr>
@@ -1288,6 +1296,8 @@ const styles = {
     borderBottom: `1px solid ${BORDER}`,
     color: "transparent",
   },
+  cellStack: { display: "grid", gap: 2 },
+  cellSub: { fontSize: 11, fontWeight: 600, color: SLATE },
   td: {
     padding: "10px 12px",
     color: TEXT,

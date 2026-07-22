@@ -221,7 +221,7 @@ const RAW_AREAS = [
     icon: <ClipboardList size={18} strokeWidth={2} />,
     requiredPerm: "mrpTarimas",
     modules: [
-      { label: "Resumen", path: "/mrp-tarimas/dashboard", requiredPerm: "mrpTarimas" },
+      { label: "Dashboard", path: "/mrp-tarimas/dashboard", requiredPerm: "mrpTarimas" },
       { label: "Inventario", path: "/mrp-tarimas/inventario", requiredPerm: "mrpTarimas" },
       { label: "Historial", path: "/mrp-tarimas/movimientos", requiredPerm: "mrpTarimas" },
       { label: "Descartes", path: "/mrp-tarimas/descartes", requiredPerm: "mrpTarimas" },

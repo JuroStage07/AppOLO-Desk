@@ -10,7 +10,7 @@
       { "label": "Despachos en progreso", "path": "/despacho/in-progress" },
       { "label": "Despachos finalizados", "path": "/despacho/finalizados" }
     ],
-    "permissions": "Cualquier usuario autenticado; los datos se filtran por tenantId/company del perfil. No hay acciones de escritura desde estas pantallas (solo lectura en tiempo real).",
+    "permissions": "Requiere permisos.despacho o rol administrativo/dev. Los datos respetan el scope del perfil. No hay acciones de escritura desde estas pantallas.",
     "keywords": ["despacho", "despachos", "carga", "dock", "docks", "anden", "tarima", "camion", "en progreso", "finalizados", "cerrados", "salida"],
     "userCanAskExamples": [
       "¿Dónde veo los despachos finalizados?",
@@ -34,7 +34,7 @@
       { "label": "Aperturas rechazadas", "path": "/seguridad/aperturas/rechazadas" },
       { "label": "Detalle de apertura", "path": "/seguridad/aperturas/detalle/:id" }
     ],
-    "permissions": "Cualquier usuario autenticado puede leer y crear aperturas. Para iniciar/modificar/finalizar/rechazar/eliminar: el creador, la persona asignada o un rol administrativo/dev. Los usuarios con epaAdmin acceden al detalle en modo lectura.",
+    "permissions": "La navegación de Aperturas requiere permisos.saludOcupacional o rol administrativo/dev. Para modificar/finalizar/rechazar/eliminar también aplican creador/asignado y reglas del documento. epaAdmin puede abrir el detalle permitido en modo lectura.",
     "keywords": ["apertura", "aperturas", "en proceso", "finalizadas", "rechazadas", "detalle apertura", "formulario", "revision de seguridad", "registro fotografico", "marchamo", "dua", "expediente", "finalizar apertura", "rechazar apertura"],
     "userCanAskExamples": [
       "¿Dónde veo las aperturas finalizadas o rechazadas?",
@@ -80,7 +80,7 @@
       { "label": "Control de marcas", "path": "/seguridad/control-marcas" },
       { "label": "Historial de marcas", "path": "/seguridad/control-marcas/historial" }
     ],
-    "permissions": "Cualquier usuario autenticado puede registrar y consultar marcas. La persona debe existir en usuariosTerceros y no estar bloqueada.",
+    "permissions": "Requiere permisos.saludOcupacional o rol administrativo/dev. La persona debe existir en usuariosTerceros y no estar bloqueada.",
     "keywords": ["control de marcas", "marcas", "marca", "entrada", "salida", "cedula", "activos en sitio", "historial marcas", "ingreso de personas"],
     "userCanAskExamples": [
       "¿Cómo registro una entrada o salida en control de marcas?",
@@ -123,7 +123,7 @@
     "routes": [
       { "label": "Documentación", "path": "/documentacion" }
     ],
-    "permissions": "Lectura: cualquier usuario autenticado (los documentos son visibles globalmente, sin filtro por tenant). Crear/editar documentos: rol administrativo/dev y coincidencia de tenant/company. Crear/editar/eliminar colecciones: solo administrativo/dev.",
+    "permissions": "La ruta requiere permisos.documentacion, permisos.saludOcupacional o rol administrativo/dev. Firestore permite lectura documental autenticada; crear/editar documentos exige autorización y scope, y administrar colecciones queda reservado a administrativo/dev.",
     "keywords": ["documentacion", "documentación", "documentos", "biblioteca", "colecciones", "pdf", "subir documento", "fichas"],
     "userCanAskExamples": [
       "¿Dónde está la biblioteca de documentos?",
@@ -144,7 +144,7 @@
     "routes": [
       { "label": "Reportes Seguridad", "path": "/seguridad/metricas" }
     ],
-    "permissions": "Usuario autenticado con perfil; datos acotados por tenantId/company.",
+    "permissions": "Requiere permisos.saludOcupacional o rol administrativo/dev; datos acotados por el scope del perfil.",
     "keywords": ["metricas seguridad", "reportes seguridad", "dashboard seguridad", "salud ocupacional metricas", "cumplimiento", "aperturas metricas"],
     "userCanAskExamples": [
       "¿Dónde veo los reportes de Seguridad?",
@@ -166,7 +166,7 @@
       { "label": "Acciones de descarga", "path": "/recepcion/accion-descarga" },
       { "label": "Detalle de acción de descarga", "path": "/recepcion/accion-descarga/:accionId" }
     ],
-    "permissions": "Usuario autenticado; datos acotados por tenantId/company. La tarjeta de Recepción EPA requiere permisos.despachosEPA y la de Recepción COFERSA requiere permisos.canRecepcionCofersa (o rol administrativo/dev).",
+    "permissions": "Requiere permisos.recepcion, permisos.canRecepcionCofersa o permisos.despachosEPA; administrativo/dev tiene override. Los datos se acotan por el scope del perfil.",
     "keywords": ["recepcion", "accion descarga", "acciones de descarga", "descarga", "proveedor", "anden", "bultos", "iniciar descarga", "finalizar descarga", "epa", "cofersa", "general"],
     "userCanAskExamples": [
       "¿Qué es una acción de descarga?",
@@ -182,13 +182,14 @@
     "id": "recepcion-metricas",
     "areaKey": "recepcion",
     "areaTitle": "Recepción",
-    "title": "Reportes / Métricas de Recepción",
-    "summary": "Panel analítico de recepción con KPIs (descargas iniciadas/finalizadas, cumplimiento, tiempos promedio), gráficos por período y por operador, desglose por andén y tiempos por proveedor. Permite exportar a Excel un libro multi-hoja (incluye Tiempos_proveedor y la sección de tendencia EPA). Unifica variaciones del nombre de un mismo proveedor.",
+    "title": "Reportes de Descarga y Reportes de Recepción",
+    "summary": "Recepción tiene dos reportes separados. Reportes de Descarga analiza accion_descarga con KPIs, cumplimiento, productividad, andenes, proveedores y tendencias EPA/COFERSA, además de exportes Excel. Reportes de Recepción analiza accion_recepcion con KPIs de creadas/en proceso/completas, tiempo promedio, gráficos por tipo/andén/proveedor/usuario, tabla filtrable y Excel.",
     "primaryRoute": "/recepcion/metricas",
     "routes": [
-      { "label": "Reportes Recepción", "path": "/recepcion/metricas" }
+      { "label": "Reportes de Descarga", "path": "/recepcion/metricas" },
+      { "label": "Reportes de Recepción", "path": "/recepcion/metricas-recepcion" }
     ],
-    "permissions": "Usuario autenticado; datos acotados por tenantId/company.",
+    "permissions": "Requiere permisos.recepcionReportes, permisos.canRecepcionCofersa o permisos.despachosEPA; administrativo/dev tiene acceso implícito. Los datos se acotan por tenantId/company.",
     "keywords": ["metricas recepcion", "reportes recepcion", "analitica recepcion", "tiempos proveedor", "cumplimiento", "exportar excel", "anden", "operador", "dashboard recepcion"],
     "userCanAskExamples": [
       "¿Dónde veo las métricas de recepción?",
@@ -196,8 +197,8 @@
       "¿Puedo exportar el reporte de recepción a Excel?",
       "¿Cómo veo los tiempos por proveedor?"
     ],
-    "assistantShouldAnswer": "Dirigí a Reportes Recepción (/recepcion/metricas): KPIs, gráficos por período/operador, desglose por andén y tiempos por proveedor, con exportación a Excel multi-hoja. No des cifras concretas en vivo.",
-    "limitations": "Depende de agregados (dashboard_salud_daily) y acciones de descarga; la exportación a Excel puede tardar en rangos grandes. No inventar cifras."
+    "assistantShouldAnswer": "Diferenciá Reportes de Descarga (/recepcion/metricas), basado en accion_descarga, de Reportes de Recepción (/recepcion/metricas-recepcion), basado en accion_recepcion. Ambos permiten análisis y exportación; no des cifras concretas en vivo.",
+    "limitations": "Los reportes consultan colecciones distintas. La exportación puede tardar en rangos grandes. No inventar cifras."
   },
   {
     "id": "mantenimiento-equipos",
@@ -260,7 +261,7 @@
       { "label": "Crear OT", "path": "/servicios-generales/ordenes-trabajo/crear" },
       { "label": "Gestión de OTs", "path": "/servicios-generales/ordenes-trabajo/gestion" }
     ],
-    "permissions": "Crear y consultar la gestión: cualquier usuario autenticado (la OT se crea en solicitudesOT con estado 'Solicitada'). Abrir el detalle en Mantenimiento requiere permisos.mantenimiento o rol administrativo/dev.",
+    "permissions": "Las rutas de Servicios Generales requieren permisos.serviciosGenerales o rol administrativo/dev. La OT se crea en solicitudesOT con estado 'Solicitada'; el detalle completo de Mantenimiento requiere mantenimiento.",
     "keywords": ["servicios generales", "crear ot", "crear orden", "orden de trabajo servicios", "gestion ots servicios", "mis solicitudes", "solicitud"],
     "userCanAskExamples": [
       "¿Cómo creo una OT de servicios generales?",
@@ -284,7 +285,7 @@
       { "label": "Consultar tarimas", "path": "/servicios-generales/pesaje-tarimas/consultar" },
       { "label": "Atajo de pesaje", "path": "/pesado" }
     ],
-    "permissions": "Cualquier usuario autenticado puede registrar y consultar pesajes (lectura por número de tarima; el listado completo no está habilitado).",
+    "permissions": "Requiere permisos.pesajeTarimas (o alias legacy zoneFranca/zonaFranca) o rol administrativo/dev. La consulta es por número de tarima.",
     "keywords": ["pesaje", "pesar", "tarima", "tarimas", "registrar tarimas", "consultar tarimas", "peso", "pesado", "zona franca"],
     "userCanAskExamples": [
       "¿Cómo registro el peso de una tarima?",
@@ -305,7 +306,7 @@
     "routes": [
       { "label": "Validar ingreso", "path": "/servicios-generales/validar-ingreso" }
     ],
-    "permissions": "Usuario autenticado (ruta protegida estándar).",
+    "permissions": "Requiere permisos.serviciosGenerales o rol administrativo/dev.",
     "keywords": ["validar ingreso", "ingreso", "validacion ingreso", "servicios generales"],
     "userCanAskExamples": [
       "¿Dónde valido un ingreso?",
@@ -325,7 +326,7 @@
       { "label": "EPA (hub)", "path": "/epa" },
       { "label": "Aperturas finalizadas EPA", "path": "/epa/aperturas-finalizadas" }
     ],
-    "permissions": "Usuario autenticado; datos acotados por tenantId/company. Los usuarios con epaAdmin = true solo pueden ver el área EPA (y rutas permitidas) y no el resto de módulos.",
+    "permissions": "Requiere permisos.epa, permisos.despachosEPA, rol administrativo/dev o la excepción epaAdmin. Los datos se acotan por el scope del perfil.",
     "keywords": ["epa", "aperturas epa", "aperturas finalizadas epa", "epa fiscal", "marchamo", "dua", "expediente", "epaAdmin"],
     "userCanAskExamples": [
       "¿Qué puede consultar EPA?",
@@ -341,46 +342,49 @@
     "areaKey": "mrp-tarimas",
     "areaTitle": "MRP Tarimas",
     "title": "MRP de tarimas",
-    "summary": "Área para la gestión integral de tarimas con dashboard, inventario, reparaciones y materiales. Las rutas están implementadas con sus pantallas correspondientes.",
+    "summary": "MRP reconstruido sobre Supabase para gestionar inventario de tarimas por artículo y almacén. Incluye resumen, inventario, ajustes, traslados, historial, descartes y catálogos. El almacén de trabajo se resuelve desde la bodega activa del perfil.",
     "primaryRoute": "/mrp-tarimas",
     "routes": [
-      { "label": "Dashboard MRP", "path": "/mrp-tarimas/dashboard" },
+      { "label": "Resumen MRP", "path": "/mrp-tarimas/dashboard" },
       { "label": "Inventario", "path": "/mrp-tarimas/inventario" },
-      { "label": "Reparaciones", "path": "/mrp-tarimas/reparaciones" },
-      { "label": "Materiales", "path": "/mrp-tarimas/materiales" }
+      { "label": "Historial", "path": "/mrp-tarimas/movimientos" },
+      { "label": "Descartes", "path": "/mrp-tarimas/descartes" },
+      { "label": "Catálogos", "path": "/mrp-tarimas/catalogos" }
     ],
-    "permissions": "Usuario autenticado (ruta protegida estándar). Existe una clave de permiso permisos.mrpTarimas administrable desde Usuarios.",
-    "keywords": ["mrp", "tarimas", "inventario tarimas", "reparaciones tarimas", "materiales tarimas", "dashboard mrp"],
+    "permissions": "Requiere permisos.mrpTarimas o rol administrativo/dev. Las consultas y mutaciones usan tenantId/company y el almacén ligado a la bodega activa.",
+    "keywords": ["mrp", "tarimas", "inventario", "ajuste positivo", "ajuste negativo", "traslado", "historial", "descartes", "articulos", "insumos", "bom", "almacen", "bodega"],
     "userCanAskExamples": [
       "¿Dónde veo el inventario de tarimas?",
-      "¿Cómo registro una reparación de tarima?",
-      "¿Qué módulos tiene MRP Tarimas?"
+      "¿Cómo hago un ajuste o traslado de tarimas?",
+      "¿Qué diferencia hay entre merma y descarte?",
+      "¿Dónde configuro artículos, insumos, BOM y almacenes?",
+      "¿Por qué MRP dice que mi bodega no tiene almacén ligado?"
     ],
-    "assistantShouldAnswer": "Indicá las pantallas de MRP Tarimas: Dashboard (/mrp-tarimas/dashboard), Inventario (/mrp-tarimas/inventario), Reparaciones (/mrp-tarimas/reparaciones) y Materiales (/mrp-tarimas/materiales). Orientá por ruta y no afirmes acciones concretas que no estén verificadas.",
-    "limitations": "El detalle de las acciones de escritura de MRP Tarimas no fue auditado en profundidad; orientar por ruta sin inventar flujos."
+    "assistantShouldAnswer": "Indicá las pantallas reales: Resumen, Inventario, Historial, Descartes y Catálogos. Un ajuste positivo entra en Pendiente; uno negativo descuenta stock y deja un registro administrativo en Descartes. Merma es una ubicación operativa y cuenta en el total. Si falta almacén, un dev debe ligar la bodega con un almacén.",
+    "limitations": "MRP depende de Supabase y de que la bodega activa tenga un almacén ligado. No inventar stock, movimientos, costos ni códigos."
   },
   {
     "id": "administracion-usuarios",
     "areaKey": "administracion",
     "areaTitle": "Administración",
     "title": "Administración de usuarios, roles y permisos",
-    "summary": "Permite gestionar los perfiles de la plataforma: cambiar el rol (dev, administrativo, operativo), activar/desactivar permisos por clave, fijar la bandera epaAdmin y asignar tenantId/company. Los permisos disponibles son: mantenimiento, saludOcupacional, canRecepcionCofersa, despachosEPA, serviciosGenerales, documentacion, zoneFranca, mrpTarimas.",
+    "summary": "Permite gestionar perfiles: rol, 14 permisos granulares, epaAdmin y alcance tenantId/company/bodegaId/bodegaNombre. Los permisos canónicos son despacho, recepcion, recepcionReportes, canRecepcionCofersa, despachosEPA, saludOcupacional, documentacion, epa, mantenimiento, serviciosGenerales, pesajeTarimas, mrpTarimas, horasExtra y gestionUsuarios.",
     "primaryRoute": "/administracion/usuarios",
     "routes": [
       { "label": "Administración (hub)", "path": "/administracion" },
       { "label": "Usuarios", "path": "/administracion/usuarios" }
     ],
-    "permissions": "Solo rol administrativo o dev (área adminOnly). Escribe en profiles/{uid}.",
-    "keywords": ["usuario", "usuarios", "permisos", "roles", "rol", "administracion", "epaAdmin", "tenant", "company", "gestionar usuarios"],
+    "permissions": "La ruta admite dev directamente; un administrativo necesita permisos.gestionUsuarios. Escribe en profiles/{uid}.",
+    "keywords": ["usuario", "usuarios", "permisos", "roles", "rol", "administracion", "epaAdmin", "tenant", "company", "bodega", "gestionar usuarios"],
     "userCanAskExamples": [
       "¿Cómo gestiono usuarios?",
       "¿Cómo cambio el rol o los permisos de un usuario?",
       "¿Qué permisos existen en la plataforma?",
-      "¿Cómo asigno el tenant o la company de un usuario?",
+      "¿Cómo asigno tenant, company y bodega a un usuario?",
       "¿Qué módulos dependen de permisos?"
     ],
-    "assistantShouldAnswer": "Explicá que en Administración › Usuarios (/administracion/usuarios) los administradores cambian rol, permisos (las 8 claves), epaAdmin y tenant/company de cada perfil. Aclará que es solo para administrativo/dev. Si preguntan qué módulos dependen de permisos, mencioná: Mantenimiento (mantenimiento), Visados/Terceros (saludOcupacional), Recepción EPA (despachosEPA), Recepción COFERSA (canRecepcionCofersa).",
-    "limitations": "Solo administrativo/dev. Cambiar permisos no desactiva el perfil. La bandera epaAdmin se gestiona aparte del mapa de permisos."
+    "assistantShouldAnswer": "Explicá que Administración › Usuarios gestiona rol, los 14 permisos, epaAdmin y el alcance tenant/company/bodega. Recordá que dev entra directamente y un administrativo necesita gestionUsuarios. Los nombres zoneFranca/zonaFranca son alias legacy de pesajeTarimas.",
+    "limitations": "Cambiar permisos no desactiva el perfil. epaAdmin se gestiona aparte. Mantener sincronizados Firestore y localStorage cuando cambia el scope del usuario."
   },
   {
     "id": "administracion-horas-extra",
@@ -413,22 +417,91 @@
     "areaKey": "dev",
     "areaTitle": "Dev",
     "title": "Herramientas de desarrollo",
-    "summary": "Herramientas internas para desarrollo: actualización de AppOLO Supabase y configuración de módulos (incluida la configuración de Horas Extra).",
+    "summary": "Herramientas internas para desarrollo: actualización de AppOLO Supabase y configuración de módulos. Incluye Horas Extra y MRP Tarimas, con relación bodega ↔ almacén y motivos configurables por tipo de movimiento.",
     "primaryRoute": "/dev",
     "routes": [
       { "label": "Dev (hub)", "path": "/dev" },
       { "label": "Update AppOLO Supabase", "path": "/dev/update-supabase" },
       { "label": "Configuración de módulos", "path": "/dev/config-modulos" },
-      { "label": "Configuración de Horas Extra", "path": "/dev/config-modulos/horas-extra" }
+      { "label": "Configuración de Horas Extra", "path": "/dev/config-modulos/horas-extra" },
+      { "label": "Configuración MRP Tarimas", "path": "/dev/config-modulos/mrp-tarimas" },
+      { "label": "Relación bodega-almacén", "path": "/dev/config-modulos/mrp-tarimas/entidades" },
+      { "label": "Motivos MRP", "path": "/dev/config-modulos/mrp-tarimas/motivos" }
     ],
     "permissions": "Solo rol dev (área devOnly).",
-    "keywords": ["dev", "desarrollo", "supabase", "configuracion modulos", "config modulos", "herramientas internas"],
+    "keywords": ["dev", "desarrollo", "supabase", "configuracion modulos", "mrp", "bodega almacen", "motivos", "herramientas internas"],
     "userCanAskExamples": [
       "¿Qué herramientas de desarrollo existen?",
       "¿Dónde configuro los módulos?",
       "¿Qué es Update AppOLO Supabase?"
     ],
-    "assistantShouldAnswer": "Indicá que el área Dev (/dev) es solo para rol dev e incluye Update AppOLO Supabase y Configuración de módulos. No sugieras estas rutas a usuarios sin rol dev.",
+    "assistantShouldAnswer": "Indicá que Dev es solo para rol dev. Configuración de módulos incluye Horas Extra y MRP Tarimas; en MRP se liga cada bodega con un almacén y se administran motivos para ajustes y traslados.",
     "limitations": "Solo rol dev. No sugerir a otros roles."
+  },
+  {
+    "id": "reportes-hub",
+    "areaKey": "global",
+    "areaTitle": "Navegación global",
+    "title": "Centro de reportes",
+    "summary": "La ruta /reportes agrupa los reportes disponibles según las áreas, rol y permisos del usuario: Seguridad, Recepción, dashboard de OTs y reporte mensual de Horas Extra.",
+    "primaryRoute": "/reportes",
+    "routes": [
+      { "label": "Centro de reportes", "path": "/reportes" }
+    ],
+    "permissions": "La ruta es privada; cada tarjeta se filtra por rol y permiso. Un usuario solo ve reportes de áreas habilitadas.",
+    "keywords": ["reportes", "metricas", "centro de reportes", "dashboard", "excel"],
+    "userCanAskExamples": ["¿Dónde están todos los reportes?", "¿Por qué no veo un reporte?"],
+    "assistantShouldAnswer": "Dirigí a /reportes como punto de entrada global y explicá que las tarjetas dependen de los permisos del perfil.",
+    "limitations": "No todos los reportes del sistema necesariamente aparecen como tarjeta; usar también las rutas específicas documentadas."
+  },
+  {
+    "id": "scope-bodega",
+    "areaKey": "global",
+    "areaTitle": "Cuenta y alcance",
+    "title": "Bodega activa y alcance de datos",
+    "summary": "AppoloDesk usa tenantId + company + bodegaId como alcance operativo. Login y RequireTenant exigen país y bodega. El BodegaSwitcher actualiza profiles/{uid} y localStorage; MRP resuelve su almacén desde esa bodega.",
+    "primaryRoute": "/config-region",
+    "routes": [
+      { "label": "Configurar país y bodega", "path": "/config-region" }
+    ],
+    "permissions": "Todo usuario autenticado debe tener tenantId y bodegaId. Bodegas actuales: CLIRO y El Coco en Costa Rica; San Diego y Michelena en Venezuela, todas para company OLO.",
+    "keywords": ["bodega", "pais", "region", "tenant", "company", "cambiar bodega", "almacen mrp"],
+    "userCanAskExamples": ["¿Cómo cambio de bodega?", "¿Por qué me manda a configurar región?", "¿Qué datos controla la bodega activa?"],
+    "assistantShouldAnswer": "Explicá que /config-region configura el alcance inicial y que el selector de la barra superior cambia la bodega activa. La bodega afecta lecturas/escrituras y el almacén MRP.",
+    "limitations": "Firestore está en una fase de migración: algunos documentos legacy sin bodegaId todavía pasan por el filtro soft; no mezclar bodegas deliberadamente."
+  },
+  {
+    "id": "assistant-actions",
+    "areaKey": "global",
+    "areaTitle": "Asistente",
+    "title": "Acciones confirmables desde el asistente",
+    "summary": "El asistente admite create_ot_draft y mrp_transfer_draft. En ambos casos n8n propone un borrador y la app lo valida, muestra y ejecuta solamente después de la confirmación del usuario.",
+    "primaryRoute": "/",
+    "routes": [
+      { "label": "Gestión de OTs", "path": "/mantenimiento/OTsPage" },
+      { "label": "Inventario MRP", "path": "/mrp-tarimas/inventario" },
+      { "label": "Historial MRP", "path": "/mrp-tarimas/movimientos" }
+    ],
+    "permissions": "La acción respeta el perfil y los permisos de la pantalla/módulo. El borrador de OT escribe en Firestore; el traslado MRP escribe en Supabase bajo la bodega/almacén activo.",
+    "keywords": ["asistente", "crear ot", "borrador ot", "trasladar tarimas", "mrp transfer draft", "confirmar"],
+    "userCanAskExamples": ["Creame una OT", "Mové 10 tarimas de almacén a patio"],
+    "assistantShouldAnswer": "Recolectá los campos faltantes y devolvé la acción correcta. Nunca digas que se creó o trasladó antes de que la app confirme status created.",
+    "limitations": "No hay otras acciones de escritura soportadas. mrp_transfer_draft es traslado entre ubicaciones del almacén activo, no entre almacenes."
+  },
+  {
+    "id": "mrp-consumo-externo",
+    "areaKey": "mrp-tarimas",
+    "areaTitle": "MRP Tarimas",
+    "title": "Consumo de tarimas desde aplicación externa",
+    "summary": "La Cloud Function consumeTarimasFromExternalApp mueve unidades desde almacén hacia tienda mediante el RPC idempotente mrp_consume_tarimas_external. Identifica cada evento con externalEventId y trabaja por bodega y código de artículo.",
+    "primaryRoute": "/mrp-tarimas/movimientos",
+    "routes": [
+      { "label": "Historial MRP", "path": "/mrp-tarimas/movimientos" }
+    ],
+    "permissions": "Requiere autenticación y permiso MRP; normalmente solo puede consumir en la bodega activa, salvo perfiles autorizados para alcance cruzado.",
+    "keywords": ["consumo externo", "tarimas", "tienda", "externalEventId", "idempotencia", "cloud function"],
+    "userCanAskExamples": ["¿Cómo se reflejan consumos de otra app en MRP?", "¿Qué evita duplicar un consumo externo?"],
+    "assistantShouldAnswer": "Explicá que la integración mueve stock de almacén a tienda y usa externalEventId para idempotencia. No expongas credenciales Supabase ni prometas ejecutar la función desde el chat.",
+    "limitations": "Es una integración backend, no una acción directa del asistente. Depende de SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en Functions."
   }
 ]

@@ -1,95 +1,188 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+Guidance for coding assistants working in AppoloDesk. UI copy and user-facing flows are in Spanish.
 
 ## Commands
 
-Frontend (root):
-- `npm run dev` — Vite dev server with HMR.
-- `npm run build` — Production build to `dist/` (deployed by Firebase Hosting).
-- `npm run lint` — ESLint over the repo.
-- `npm run preview` — Serve the built `dist/` locally.
+Frontend (repository root):
 
-Firebase deploys (project `oloos-bd`, see `.firebaserc`):
-- `firebase deploy --only hosting` — Build to `dist/` first; hosting rewrites everything to `/index.html`.
-- `firebase deploy --only firestore:rules` — Publish `firestore.rules`.
-- `firebase deploy --only functions` — Publish callable functions in `functions/` (Node 20, region `us-central1`).
+- `npm run dev` — Vite dev server with HMR.
+- `npm run build` — production build to `dist/`.
+- `npm run lint` — ESLint over the repository.
+- `npm run preview` — serve `dist/` locally.
+- `npm run assistant:knowledge` — rebuild the generated assistant JSON in `docs/` and `public/` from routes, work areas and capability sources.
+
+Backfills:
+
+- `npm run backfill:profiles-area`
+- `npm run backfill:solicitudes-created-area`
+- `npm run backfill:solicitudes-bodega`
+- `npm run backfill:tiempo-respuesta`
+
+Firebase project `oloos-bd`:
+
+- `firebase deploy --only hosting` — run the build first; hosting rewrites to `/index.html`.
+- `firebase deploy --only firestore:rules`
+- `firebase deploy --only functions`
 
 Environment:
-- Frontend reads `VITE_FB_*` from `.env` (see `src/firebase.js`).
-- Functions read SMTP creds from `functions/.env` via `dotenv` (`SMTP_USER`, `SMTP_PASS` — Gmail app password).
 
-## High-level architecture
+- Frontend reads `VITE_FB_*`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and optionally `VITE_ASSISTANT_WEBHOOK_URL`.
+- Functions read SMTP, SQL Server and Supabase service credentials from `functions/.env`; never expose or commit secrets.
+- Cloud Functions run on Node 20; callable business functions use region `us-central1` where explicitly configured.
 
-Single-page React 19 app on top of Firebase (Auth + Firestore + Storage + Functions). UI is in Spanish. There is no test suite.
+There is no automated test suite. Validate changes with lint/build and focused runtime checks.
 
-### Auth + tenant gating (the critical path)
+## Architecture
 
-`src/auth/AuthProvider.jsx` is the source of truth at runtime:
-1. `onAuthStateChanged` fires; if signed in, it loads `profiles/{uid}` from Firestore.
-2. If the profile doc is missing or fails to read, it force-signs-out — there is no "logged-in without profile" state.
-3. The context exposes `{ user, profile, permisos, role, epaAdmin, loading, error }`.
+React 19 SPA backed by Firebase Auth, Firestore, Storage and Cloud Functions. MRP Tarimas uses Supabase tables/RPCs. The assistant UI sends contextual requests to an optional webhook/n8n workflow.
 
-Every protected route uses `PrivateRoute` = `RequireAuth` → `RequireTenant` → `EpaAdminRouteGuard`:
-- `RequireAuth` waits for `loading` then redirects to `/login` if no user/profile.
-- `RequireTenant` reads `localStorage["appolo_profile"]` (written at login in `pages/Login.jsx`) and redirects to `/config-region` if `tenantId` is missing. **The localStorage copy and the Firestore profile are two parallel sources — keep them in sync when editing login or profile flows.**
-- `EpaAdminRouteGuard` restricts users with `profile.epaAdmin === true` to a whitelisted path regex (`/`, `/epa/*`, `/config-region`, `/salud/aperturas/detalle/*`). Combined with `src/config/epaOnlyUids.js` (`isEpaRestrictedUser`), Home also hides every module except EPA for those UIDs.
+### Authentication and route guards
 
-### Multi-tenant scoping (tenantId + company)
+`src/auth/AuthProvider.jsx` is the runtime source of truth. On auth change it loads `profiles/{uid}`; a missing/unreadable profile forces sign-out. It exposes user/profile, role, permisos, `tenantId`, `company`, `bodegaId`, `bodegaNombre`, `epaAdmin`, loading and error.
 
-Every business document carries `tenantId` and `company`. Enforcement is two-layered:
-- **Server (authoritative):** `firestore.rules` uses `sameTenantCompanyData(data)` plus permission helpers (`isAdminRequester`, `hasPerm('mantenimiento' | 'saludOcupacional' | 'canRecepcionCofersa' | 'despachosEPA' | …)`). Reads, creates, and updates almost always require the doc's tenant/company to match the requester's profile.
-- **Client (defensive filter):** `src/utils/dataScope.js` exposes `filterByUserScope`, `filterSolicitudesOtByScope`, `filterEquiposByScope`. Listeners (e.g., `src/services/aperturas.js`) subscribe broadly and then filter in memory because some legacy docs lack tenant fields — those helpers intentionally pass through docs with no `tenantId`/`company` set.
+`PrivateRoute` applies:
 
-When adding a new collection, mirror this pattern: write rules with `sameTenantCompanyData` + a permission check, and on the client either query with `where("tenantId", "==", …)` or filter via `dataScope`.
+1. `RequireAuth`
+2. `RequireTenant`
+3. `EpaAdminRouteGuard`
+4. `RequireRouteAccess`
 
-### Permission model
+`RequireTenant` reads `localStorage["appolo_profile"]` and now requires both `tenantId` and `bodegaId`. Login, ConfigRegion and BodegaSwitcher update Firestore/localStorage; preserve synchronization when changing profile flows.
 
-Two orthogonal axes on `profiles/{uid}`:
-- `role`: `"administrativo"` / `"dev"` get blanket access via `isAdminRequester()`; `"operativo"` has its own carve-outs (e.g., checklists).
-- `permisos`: a map of booleans keyed by module (e.g., `permisos.mantenimiento`, `permisos.saludOcupacional`, `permisos.canRecepcionCofersa`, `permisos.despachosEPA`). Rules use `hasPerm('key')`.
+`RequireRouteAccess` uses `src/config/routeAccess.js` and `src/config/permissions.js`. Keep route gates synchronized with work-area visibility.
 
-`profile.epaAdmin` is a third flag layered on top (see above).
+`profile.epaAdmin === true` restricts navigation to `/`, `/welcome`, `/areas`, `/epa/*`, `/config-region` and Seguridad/Salud aperture detail paths. `src/config/epaOnlyUids.js` adds the legacy restricted-user check.
 
-### Routing & module layout
+### Scope: tenant + company + bodega
 
-`src/App.jsx` declares every route in one place. Landing/navigation entry points:
-- `/` and `/areas` → `pages/AreasTrabajoHubPage.jsx` (the main hub — module grid + quick-access strip).
-- `/welcome` → `pages/Home.jsx` (post-login welcome screen, kept separate from the hub).
-- `/config-region` → tenant/region setup, the only protected route that skips `RequireTenant`.
-- `/pesado` → shortcut to `Zona Franca/PesajeTarimas` (also reachable under `/servicios-generales/pesaje-tarimas`).
+Business data is scoped by `tenantId`, `company`, `bodegaId` and often `bodegaNombre`.
 
-Page modules live under `src/pages/<Module>/`:
-- `Despacho/` — in-progress and finalized dispatch views.
-- `Documentacion/` — document library + `colecciones` grouping.
-- `EPA/` — EPA hub and finished openings.
-- `Mantenimiento/Equipos/` and `Mantenimiento/OTs/` — equipment registry and work orders (`solicitudesOT` with `subtareas` subcollection plus a global `subtaskList` catalog). The OTs dashboard at `/mantenimiento/ots/dashboard` is fed by helpers in `src/pages/Mantenimiento/OTs/dashboard/` (`computeOTsDashboardMetrics.js`, `periodUtils.js`, `useOTsDashboardMetrics.js`) — keep period math and metric aggregation in those files rather than inside the page component.
-- `Recepcion/AccionDescarga/` — unload actions; `MetricaRecepcion.jsx` is a large analytics page that queries `accion_descarga` directly and exports via `src/utils/metricaRecepcionExcelPro.js` (multi-sheet xlsx, incl. `Tiempos_proveedor` and the EPA trend section).
-- `Salud Ocupacional/` (note the space in the path) — `Aperturas`, `ControlMarcas`, `ControlTerceros`, `Visados`, plus `MetricaSaludOcupacional.jsx` at `/salud/metricas` (reads `dashboard_salud_daily` + `aperturas`).
-- `ServiciosGenerales/` — work orders + tarima validation.
-- `Zona Franca/` (note the space) — tarima weighing and lookup.
+- Firestore rules remain authoritative.
+- `sameTenantCompanyData` checks tenant/company.
+- `sameTenantScopeData` is the phase-1 bodega migration helper: tenant/company are mandatory; documents with `bodegaId` must match the profile, while legacy documents without it temporarily pass.
+- `src/utils/dataScope.js` mirrors defensive filtering client-side.
+- New writes should include all four scope fields when available.
+- Do not switch to a strict bodega requirement in rules until the backfill is complete and verified.
 
-Two directories have spaces (`Salud Ocupacional`, `Zona Franca`); quote them in shell commands.
+Bodega catalog: `src/config/bodegas.js`. Current scopes are CR/OLO (CLIRO, El Coco) and VNZ/OLO (San Diego, Michelena). Some bodegas also map to SRO warehouse IDs.
 
-### Shared UI kit
+### Roles and permissions
 
-All pages render through a single design system under `src/components/ui/` (barrel-exported via `src/components/ui/index.js`). Design tokens (colors, radii, shadows, `CONTAINER_MAX`, `FONT_STACK`) live in `src/styles/theme.js` — the source of truth; do not hardcode hex codes in page styles. Key primitives:
-- **Layout:** `Shell` (locks body scroll + sets brand background), `Topbar` (sticky header with the global sidebar/area navigator), `Brand`, `Main` / `Container`, `Hero`.
-- **Cards & grids:** `Card`, `ModuleCard`, `ModuleGrid`, `KpiCard` / `KpiGrid`, `RowCard`, `QuickCard`, `IconBox`.
-- **Controls & status:** `Button` (+ `PrimaryButton`, `SecondaryButton`, `GhostButton`), `Badge`, `StatusPill`, `Chip` / `ChipsRow`, `SearchInput`, `Field`, `Sheet`, `EmptyState`, `Spinner`.
+Roles: `dev`, `administrativo`, `operativo`. Admin roles generally override module permissions; Dev routes still require `dev`.
 
-The "Recepción style" was the reference look; commit `cc4abeb` migrated every page to this kit. When adding a page, compose these primitives instead of writing bespoke wrappers, and import tokens (`ACCENT`, `BORDER`, `SLATE`, `TEXT`, `CONTAINER_MAX`, …) from `src/styles/theme.js`.
+Canonical permissions from `src/config/permissions.js`:
 
-### Sidebar & pinned quick-access
+- Operations: `despacho`, `recepcion`, `recepcionReportes`, `canRecepcionCofersa`, `despachosEPA`.
+- Security: `saludOcupacional`, `documentacion`, `epa`.
+- Maintenance: `mantenimiento`.
+- Services: `serviciosGenerales`, `pesajeTarimas`, `mrpTarimas`.
+- Administration: `horasExtra`, `gestionUsuarios`.
 
-`Topbar.jsx` ships a global sidebar that lists every area + its sub-modules (filtered by `epaAdmin` / `isEpaRestrictedUser`) — keep the `AREAS` array in `Topbar.jsx` in sync when routes are added or renamed.
+`zoneFranca` and `zonaFranca` are legacy aliases for `pesajeTarimas`.
 
-`src/hooks/usePinnedModules.js` persists user-pinned modules to `localStorage["appolo_pinned_modules"]` as `[{ label, path }]`. `ModuleCard` exposes a pin toggle; the hub's quick-access strip reads from this hook. (All `FooterNote` / "Tip" cards were removed — don't reintroduce them.)
+Visibility metadata lives in `src/config/workAreas.jsx`: `requiredPerm`, `anyPerms`, `allPerms`, roles/allowedRoles, admin/dev flags and `adminOverride`. Use these helpers instead of ad-hoc permission checks.
 
-### Firestore collections (most relevant)
+## Routes and modules
 
-`profiles`, `usernames`, `pushTokens`, `despachos` (+ `items`, `fotos`, `layout` subcolls), `equipos`, `checklists_diarias`, `solicitudesOT` (+ `subtareas`), `subtaskList`, `accion_descarga`, `aperturas`, `aperturasRecepcion`, `recepcionCofersa_lotes`, `tareas_apertura`, `controlMarcas/{day}/marcas`, `usuariosTerceros`, `controlTerceros`, `visados`, `visadosPorFirmar`, `documentacion`, `colecciones`, `fichas`, `chats/{id}/mensajes`, `dashboard_salud_daily`, `pesajes`. There is a `collectionGroup("fotos")` read rule (`firestore.rules:305`).
+`src/App.jsx` owns routing. `src/config/workAreas.jsx` owns area/module navigation. Keep both and `src/config/routeAccess.js` synchronized.
 
-### Cloud Functions
+Global:
 
-`functions/index.js` exposes one callable (`sendEquipoQrLabel`, region `us-central1`) that re-validates the caller's profile, tenant/company match against `equipos/{id}`, generates a QR PNG, and emails it via Gmail SMTP. New functions should follow the same pattern: pull `profiles/{uid}` server-side and re-check tenant/company — never trust client-passed scope.
+- `/welcome`, `/`, `/areas`
+- `/config-region`
+- `/reportes` — permission-filtered report center.
+- `/pesado` — pesaje shortcut.
+
+Operational areas:
+
+- Despacho: `/despacho`, `/in-progress`, `/finalizados`.
+- Seguridad: control de marcas, aperturas, visados, documentación and `/seguridad/metricas`. Legacy `/salud/*` redirects here. `/salud-ocupacional` is still a coming-soon area.
+- Recepción: `/recepcion/accion-descarga`, `/recepcion/metricas` (Reportes de Descarga) and `/recepcion/metricas-recepcion` (Reportes de Recepción over `accion_recepcion`).
+- Mantenimiento: equipment and OTs, including `/mantenimiento/ots/dashboard` and detail routes.
+- Servicios Generales: OTs, validar ingreso and pesaje.
+- EPA: hub and final apertures.
+- Administración/Horas Extra: users, approvals, manager validation, monthly report, coordinators and attendance marks.
+- Dev: Supabase update and module configuration.
+
+Directories with spaces still need quoting in shell commands: `src/pages/Zona Franca/`. The old `Salud Ocupacional` tree was replaced by `src/pages/SSO/Seguridad/`.
+
+### MRP Tarimas
+
+MRP routes are nested under `/mrp-tarimas`:
+
+- `dashboard` — summary.
+- `inventario` — stock per article/location, adjustments and transfers.
+- `movimientos` — movement history.
+- `descartes` — negative-adjustment records.
+- `catalogos` — articles, supplies, BOMs and warehouses.
+
+The workspace uses profile tenant/company and resolves its warehouse from the active `bodegaId` through `pallet_warehouses.bodega_id`; users no longer choose an arbitrary warehouse. Linking lives at `/dev/config-modulos/mrp-tarimas/entidades`; movement reasons at `/dev/config-modulos/mrp-tarimas/motivos`.
+
+Critical MRP rules:
+
+- Valid operational locations: `tienda`, `almacen`, `patio`, `reparacion`, `merma`, `pend`.
+- Positive adjustments enter `pend`.
+- Negative adjustments subtract from an operational origin and create a discard record.
+- `merma` is operational stock and counts in totals; `descartes` is an administrative log, not a location.
+- Transfers support location-to-location and cross-warehouse flows.
+- Reasons are configurable for positive/negative adjustments, regular transfers and warehouse transfers.
+- Articles are warehouse-specific; `mrp_insumos` and BOMs are tenant/company scoped.
+
+MRP service boundaries:
+
+- `src/services/mrp/` contains scope, catalogs, inventory and movement mutations.
+- `src/hooks/mrp/` owns async UI integration and refresh buses.
+- SQL migrations under `supabase/` define tables, RLS and RPCs. Preserve idempotency and tenant/company checks when changing RPCs.
+
+## Assistant knowledge and actions
+
+Sources:
+
+- `docs/assistant-knowledge/appolo-knowledge.md` — human-readable functional source.
+- `docs/assistant-knowledge/appolo-capabilities.json` — detailed retrieval units.
+- `docs/assistant-knowledge/appolo-knowledge.json` — generated aggregate.
+- `public/assistant-knowledge/appolo-knowledge.json` — public runtime copy.
+- `docs/assistant-knowledge/assistant-system-prompt.md` — n8n/model contract.
+
+After changing routes, permissions, modules or assistant actions, update the human/capability sources and run `npm run assistant:knowledge`. The sync script preserves access gates from work areas.
+
+`AssistantModal.jsx` supports exactly two write-capable drafts:
+
+- `create_ot_draft`: app validates the official OT catalogs and writes `solicitudesOT` only after user confirmation. Scope includes bodega fields.
+- `mrp_transfer_draft`: app resolves article/location, validates stock and executes an intra-warehouse transfer only after confirmation.
+
+n8n proposes; the frontend validates and writes. Do not add new action types without updating the UI, system prompt and both knowledge sources.
+
+## Shared UI kit
+
+Use `src/components/ui/` and barrel imports from `src/components/ui/index.js`. Tokens in `src/styles/theme.js` are the source of truth; do not introduce page-specific hardcoded brand colors.
+
+Important primitives include Shell, Topbar, Brand, Main/Container, Hero, Card, ModuleCard/Grid, KPI components, buttons, badges/chips, fields, sheets, tables, empty/error/loading states, toast and confirm dialog.
+
+Navigation surfaces include `AreasSidebar`, `CircleMenu`, `CommandPalette`, `PinsFlyout`, `BodegaSwitcher` and the assistant. Keep their filtering behavior consistent with workAreas/routeAccess.
+
+## Data stores
+
+Firestore additions to the prior model include `accion_recepcion` and the full `overtime*` set. `firestore.rules` contains duplicate/legacy match blocks in places; edit carefully and validate effective rule behavior, not just the nearest match.
+
+MRP Supabase tables include:
+
+- `pallet_warehouses`, `pallet_articulos`
+- `pallet_inventory_articulo`, `pallet_movimientos_articulo`, `pallet_descartes_articulo`
+- `pallet_motivos`, `pallet_external_consumptions`
+- `mrp_insumos`, `mrp_boms`, `mrp_bom_insumos`
+
+## Cloud Functions
+
+`functions/index.js` exports:
+
+- `sendEquipoQrLabel` — validates caller/profile/equipment scope and emails a QR label.
+- `consumeTarimasFromExternalApp` — authenticated, permissioned, bodega-aware and idempotent external MRP consumption (`almacen` → `tienda`) via Supabase RPC.
+- `testSqlConnection`
+- `getOvertimeRecords`
+- `decideOvertimeRecord`
+- `getOvertimeCoordinators`
+- `saveCoordinatorEmails`
+
+All new functions must reload `profiles/{uid}` server-side, validate authorization and scope, and avoid trusting client-provided tenant/company/bodega.

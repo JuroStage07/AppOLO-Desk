@@ -69,7 +69,23 @@ function cleanFeatures(features = []) {
     .map((feature) => ({
       label: feature.label,
       path: feature.path,
+      ...cleanAccessGate(feature),
     }));
+}
+
+function cleanAccessGate(item = {}) {
+  const gate = {};
+  if (item.requiredPerm) gate.requiredPerm = item.requiredPerm;
+  if (Array.isArray(item.anyPerms) && item.anyPerms.length) gate.anyPerms = item.anyPerms;
+  if (Array.isArray(item.allPerms) && item.allPerms.length) gate.allPerms = item.allPerms;
+  if (Array.isArray(item.roles) && item.roles.length) gate.roles = item.roles;
+  if (Array.isArray(item.allowedRoles) && item.allowedRoles.length) {
+    gate.allowedRoles = item.allowedRoles;
+  }
+  if (item.adminOverride === false) gate.adminOverride = false;
+  if (item.adminOnly === true) gate.adminOnly = true;
+  if (item.devOnly === true) gate.devOnly = true;
+  return gate;
 }
 
 function cleanModules(modules = []) {
@@ -78,6 +94,7 @@ function cleanModules(modules = []) {
     .map((module) => ({
       label: module.label,
       ...(module.path ? { path: module.path } : {}),
+      ...cleanAccessGate(module),
       features: cleanFeatures(module.features),
     }));
 }
@@ -103,6 +120,7 @@ function buildAreas(workAreas, existingAreas = []) {
       tag: area.tag,
       description: area.desc || previous.description || "",
       ...(area.theme ? { theme: area.theme } : {}),
+      ...cleanAccessGate(area),
       modules: cleanModules(area.modules),
       sampleQuestions: previous.sampleQuestions || defaultSampleQuestions(area),
     };
@@ -111,16 +129,11 @@ function buildAreas(workAreas, existingAreas = []) {
     if (area.comingSoonMsg) synced.comingSoonMsg = area.comingSoonMsg;
     if (area.blocked === true) synced.blocked = true;
     if (area.blockedDesc) synced.blockedDesc = area.blockedDesc;
-    if (area.adminOnly === true) {
-      synced.adminOnly = true;
+    if (area.adminOnly === true && !synced.allowedRoles) {
       synced.allowedRoles = ["administrativo", "dev"];
     }
-    if (area.devOnly === true) {
-      synced.devOnly = true;
+    if (area.devOnly === true && !synced.allowedRoles) {
       synced.allowedRoles = ["dev"];
-    }
-    if (area.key === "mantenimiento") {
-      synced.requiredPermission = previous.requiredPermission || "mantenimiento";
     }
 
     return synced;
@@ -156,12 +169,27 @@ function extractRoutePaths(appSource) {
 
   while ((match = routeRegex.exec(appSource)) !== null) {
     const routePath = match[1];
-    if (!seen.has(routePath)) {
+    // Nested React Router paths (for example "dashboard") are relative to their
+    // parent. Their canonical absolute paths come from WORK_AREAS below.
+    if (routePath.startsWith("/") && !seen.has(routePath)) {
       seen.add(routePath);
       paths.push(routePath);
     }
   }
 
+  return paths;
+}
+
+function collectModulePaths(areas = []) {
+  const paths = [];
+  for (const area of areas) {
+    for (const module of area.modules || []) {
+      if (module.path?.startsWith("/")) paths.push(module.path);
+      for (const feature of module.features || []) {
+        if (feature.path?.startsWith("/")) paths.push(feature.path);
+      }
+    }
+  }
   return paths;
 }
 
@@ -196,7 +224,9 @@ function buildRoutes(appSource, existingRoutes = [], areas = []) {
   const existingByPath = new Map(existingRoutes.map((route) => [route.path, route]));
   const labelByPath = collectAreaPathLabels(areas);
 
-  return extractRoutePaths(appSource).map((routePath) => {
+  const routePaths = [...new Set([...extractRoutePaths(appSource), ...collectModulePaths(areas)])];
+
+  return routePaths.map((routePath) => {
     const previous = existingByPath.get(routePath);
     return {
       path: routePath,

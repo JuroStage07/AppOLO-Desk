@@ -27,7 +27,7 @@ import { NoWarehouse } from "./components/WorkspaceBar";
 import { ACCENT, ACCENT_SOFT, BORDER, SLATE, TEXT } from "../../styles/theme";
 
 const NAV = [
-  { label: "Resumen", to: "/mrp-tarimas/dashboard", icon: LayoutDashboard },
+  { label: "Dashboard", to: "/mrp-tarimas/dashboard", icon: LayoutDashboard },
   { label: "Inventario", to: "/mrp-tarimas/inventario", icon: Package },
   { label: "Historial", to: "/mrp-tarimas/movimientos", icon: History },
   { label: "Descartes", to: "/mrp-tarimas/descartes", icon: Trash2 },

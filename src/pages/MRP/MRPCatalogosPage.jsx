@@ -16,6 +16,7 @@ import {
   Power,
   Ellipsis,
   Layers,
+  Users,
 } from "lucide-react";
 import {
   Badge,
@@ -38,9 +39,11 @@ import {
 import {
   usePalletWarehouses,
   usePalletArticulos,
+  usePalletClientes,
   useMrpInsumos,
   useMrpBoms,
   useMrpWorkspace,
+  useMrpUser,
 } from "../../hooks/mrp";
 import {
   SLATE,
@@ -61,6 +64,7 @@ import { NoWarehouse } from "./components/WorkspaceBar";
 
 const TABS = [
   { key: "articulos", label: "Artículos", icon: Box },
+  { key: "clientes", label: "Clientes", icon: Users },
   { key: "insumos", label: "Insumos", icon: FlaskConical },
   { key: "bom", label: "BOM", icon: Layers },
   { key: "almacenes", label: "Almacenes", icon: Warehouse },
@@ -96,6 +100,7 @@ export default function MRPCatalogosPage() {
       </ChipsRow>
 
       {tab === "articulos" && <ArticulosTab />}
+      {tab === "clientes" && <ClientesTab />}
       {tab === "insumos" && <InsumosTab />}
       {tab === "bom" && <BomTab />}
       {tab === "almacenes" && <AlmacenesTab />}
@@ -205,28 +210,69 @@ function RowActionsMenu({ open, onToggle, onClose, items }) {
 }
 
 /* ------------------------------------------------------------- Artículos */
+// Cada artículo se asigna a UN cliente. Al crear, se pueden seleccionar varios
+// clientes: se crea una fila por cliente (código correlativo distinto). Los
+// artículos antiguos sin cliente los puede asignar el rol `dev` desde la fila.
+function ClienteCell({ cliente }) {
+  if (!cliente) return <span style={{ color: SLATE, fontWeight: 800 }}>—</span>;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+      <span style={{ fontWeight: 850 }}>{cliente.nombre}</span>
+      <span style={{ fontFamily: "monospace", fontSize: 11, color: SLATE }}>
+        {cliente.codigo}
+      </span>
+    </span>
+  );
+}
+
 function ArticulosTab() {
   const { warehouseId } = useMrpWorkspace();
+  const { profile } = useMrpUser();
+  const isDev = String(profile?.role || "").toLowerCase() === "dev";
+
   const {
     articulos,
     loading,
     error,
     refetch,
-    create,
+    createForClientes,
     creating,
     setActive,
+    setCliente,
     peekNextCode,
   } = usePalletArticulos({ includeInactive: true, warehouseId });
+  // Clientes activos disponibles para asignar.
+  const { clientes, loading: loadingClientes } = usePalletClientes({
+    includeInactive: false,
+  });
+
   const [open, setOpen] = useState(false);
   const [nombre, setNombre] = useState("");
+  const [selClientes, setSelClientes] = useState([]); // ids seleccionados
   const [nextCode, setNextCode] = useState("");
-  const [err, setErr] = useState("");
+  const [errs, setErrs] = useState({});
+
+  // Asignación de cliente a un artículo existente (solo dev).
+  const [assign, setAssign] = useState(null); // artículo en asignación o null
+  const [assignId, setAssignId] = useState(""); // cliente elegido en el modal
+
+  // Previsualiza los códigos correlativos que se asignarán (uno por cliente).
+  const previewCodes = useMemo(() => {
+    const m = /^A(\d+)$/.exec(nextCode || "");
+    if (!m || selClientes.length === 0) return [];
+    const start = parseInt(m[1], 10);
+    const width = m[1].length;
+    return selClientes.map((_, i) =>
+      "A" + String(start + i).padStart(width, "0")
+    );
+  }, [nextCode, selClientes]);
 
   if (!warehouseId) return <NoWarehouse />;
 
   const openCreate = async () => {
     setNombre("");
-    setErr("");
+    setSelClientes([]);
+    setErrs({});
     setNextCode("");
     setOpen(true);
     try {
@@ -236,16 +282,32 @@ function ArticulosTab() {
     }
   };
 
+  const toggleCliente = (id) =>
+    setSelClientes((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+
   const onCreate = async () => {
-    if (!nombre.trim()) {
-      setErr("El nombre es obligatorio.");
-      return;
-    }
+    const e = {};
+    if (!nombre.trim()) e.nombre = "El nombre es obligatorio.";
+    if (selClientes.length === 0)
+      e.clientes = "Seleccione al menos un cliente.";
+    setErrs(e);
+    if (Object.keys(e).length) return;
     try {
-      await create({ nombre, warehouseId });
+      await createForClientes({ nombre, warehouseId, clienteIds: selClientes });
       setOpen(false);
-      setNombre("");
-      setErr("");
+    } catch {
+      /* toast del hook */
+    }
+  };
+
+  const onAssign = async () => {
+    if (!assign || !assignId) return;
+    try {
+      await setCliente(assign.id, assignId);
+      setAssign(null);
+      setAssignId("");
     } catch {
       /* toast del hook */
     }
@@ -273,13 +335,13 @@ function ArticulosTab() {
         />
       ) : (
         <Card padding={0}>
-          <TableScroll minWidth={560}>
+          <TableScroll minWidth={680}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
                   <th style={th}>Código</th>
                   <th style={th}>Nombre</th>
-                  <th style={{ ...th, textAlign: "right" }}>Stock</th>
+                  <th style={th}>Cliente</th>
                   <th style={th}>Estado</th>
                   <th style={{ ...th, textAlign: "right" }}>Acción</th>
                 </tr>
@@ -291,8 +353,23 @@ function ArticulosTab() {
                       {a.codigo}
                     </td>
                     <td style={td}>{a.nombre}</td>
-                    <td style={{ ...td, textAlign: "right", fontWeight: 950 }}>
-                      {a.stock ?? 0}
+                    <td style={td}>
+                      {a.cliente ? (
+                        <ClienteCell cliente={a.cliente} />
+                      ) : isDev ? (
+                        <GhostButton
+                          size="sm"
+                          icon={Users}
+                          onClick={() => {
+                            setAssign(a);
+                            setAssignId("");
+                          }}
+                        >
+                          Asignar cliente
+                        </GhostButton>
+                      ) : (
+                        <span style={{ color: SLATE, fontWeight: 800 }}>—</span>
+                      )}
                     </td>
                     <td style={td}>
                       <ActiveCell active={a.active} />
@@ -314,17 +391,233 @@ function ArticulosTab() {
         open={open}
         onClose={() => setOpen(false)}
         title="Nuevo artículo"
+        maxWidth={480}
+      >
+        <Sheet.Body>
+          <Field
+            label="Código"
+            hint={
+              previewCodes.length > 1
+                ? `Se crearán ${previewCodes.length} artículos: ${previewCodes.join(", ")}`
+                : "Se asigna automáticamente al guardar."
+            }
+          >
+            <Field.Input
+              value={previewCodes[0] || nextCode || "Calculando…"}
+              disabled
+              readOnly
+            />
+          </Field>
+          <Field label="Nombre del artículo" required error={errs.nombre}>
+            <Field.Input
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Ej: Tarima triple"
+              autoFocus
+            />
+          </Field>
+          <Field
+            label="Clientes"
+            required
+            error={errs.clientes}
+            hint={
+              loadingClientes
+                ? "Cargando clientes…"
+                : clientes.length === 0
+                ? "No hay clientes activos. Créalos en la pestaña Clientes."
+                : "Selecciona uno o más. Se crea un artículo por cliente."
+            }
+          >
+            {clientes.length > 0 ? (
+              <ChipsRow>
+                {clientes.map((c) => (
+                  <Chip
+                    key={c.id}
+                    active={selClientes.includes(c.id)}
+                    onClick={() => toggleCliente(c.id)}
+                  >
+                    {c.nombre}
+                  </Chip>
+                ))}
+              </ChipsRow>
+            ) : null}
+          </Field>
+        </Sheet.Body>
+        <Sheet.Actions>
+          <SecondaryButton onClick={() => setOpen(false)} disabled={creating}>
+            Cancelar
+          </SecondaryButton>
+          <PrimaryButton onClick={onCreate} loading={creating}>
+            Crear
+          </PrimaryButton>
+        </Sheet.Actions>
+      </Sheet>
+
+      {/* Asignar cliente a un artículo existente (solo dev). */}
+      <Sheet
+        open={!!assign}
+        onClose={() => setAssign(null)}
+        title="Asignar cliente"
+        maxWidth={440}
+      >
+        <Sheet.Body>
+          <Field label="Artículo">
+            <Field.Input
+              value={assign ? `${assign.codigo} — ${assign.nombre}` : ""}
+              disabled
+              readOnly
+            />
+          </Field>
+          <Field
+            label="Cliente"
+            required
+            hint={
+              clientes.length === 0
+                ? "No hay clientes activos. Créalos en la pestaña Clientes."
+                : undefined
+            }
+          >
+            <Field.Select
+              value={assignId}
+              disabled={loadingClientes || clientes.length === 0}
+              onChange={(e) => setAssignId(e.target.value)}
+            >
+              <option value="">Seleccione un cliente…</option>
+              {clientes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.codigo} — {c.nombre}
+                </option>
+              ))}
+            </Field.Select>
+          </Field>
+        </Sheet.Body>
+        <Sheet.Actions>
+          <SecondaryButton onClick={() => setAssign(null)}>Cancelar</SecondaryButton>
+          <PrimaryButton onClick={onAssign} disabled={!assignId}>
+            Asignar
+          </PrimaryButton>
+        </Sheet.Actions>
+      </Sheet>
+    </>
+  );
+}
+
+/* -------------------------------------------------------------- Clientes */
+// La pestaña "Clientes" administra el catálogo de clientes. No requiere
+// almacén; se fija solo por tenant/company. El código (CL####) se autogenera.
+function ClientesTab() {
+  const {
+    clientes,
+    loading,
+    error,
+    refetch,
+    create,
+    creating,
+    setActive,
+    peekNextCode,
+  } = usePalletClientes({ includeInactive: true });
+  const [open, setOpen] = useState(false);
+  const [nombre, setNombre] = useState("");
+  const [nextCode, setNextCode] = useState("");
+  const [err, setErr] = useState("");
+
+  const openCreate = async () => {
+    setNombre("");
+    setErr("");
+    setNextCode("");
+    setOpen(true);
+    try {
+      setNextCode(await peekNextCode());
+    } catch {
+      /* si falla la previsualización, el código igual se asigna al guardar */
+    }
+  };
+
+  const onCreate = async () => {
+    if (!nombre.trim()) {
+      setErr("El nombre es obligatorio.");
+      return;
+    }
+    try {
+      await create({ nombre });
+      setOpen(false);
+      setNombre("");
+      setErr("");
+    } catch {
+      /* toast del hook */
+    }
+  };
+
+  return (
+    <>
+      <SectionTitle
+        title="Clientes"
+        action={
+          <PrimaryButton icon={Plus} onClick={openCreate}>
+            Nuevo cliente
+          </PrimaryButton>
+        }
+      />
+      {loading ? (
+        <Spinner label="Cargando clientes…" />
+      ) : error ? (
+        <ErrorState description={error.message} onRetry={refetch} />
+      ) : clientes.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="Sin clientes"
+          description="Crea el primer cliente."
+        />
+      ) : (
+        <Card padding={0}>
+          <TableScroll minWidth={480}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={th}>Código</th>
+                  <th style={th}>Nombre</th>
+                  <th style={th}>Estado</th>
+                  <th style={{ ...th, textAlign: "right" }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clientes.map((c) => (
+                  <tr key={c.id}>
+                    <td style={{ ...td, fontFamily: "monospace", fontWeight: 950 }}>
+                      {c.codigo}
+                    </td>
+                    <td style={td}>{c.nombre}</td>
+                    <td style={td}>
+                      <ActiveCell active={c.active} />
+                    </td>
+                    <td style={{ ...td, textAlign: "right" }}>
+                      <GhostButton size="sm" onClick={() => setActive(c.id, !c.active)}>
+                        {c.active ? "Desactivar" : "Activar"}
+                      </GhostButton>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
+        </Card>
+      )}
+
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Nuevo cliente"
         maxWidth={460}
       >
         <Sheet.Body>
           <Field label="Código" hint="Se asigna automáticamente al guardar.">
             <Field.Input value={nextCode || "Calculando…"} disabled readOnly />
           </Field>
-          <Field label="Nombre del artículo" required error={err}>
+          <Field label="Nombre del cliente" required error={err}>
             <Field.Input
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              placeholder="Ej: Artículo X"
+              placeholder="Ej: EPA"
               autoFocus
             />
           </Field>
@@ -495,7 +788,6 @@ function InsumosSection() {
                   <th style={th}>Detalle</th>
                   <th style={{ ...th, textAlign: "right" }}>Precio</th>
                   <th style={th}>Modo</th>
-                  <th style={{ ...th, textAlign: "right" }}>Stock</th>
                   <th style={th}>Estado</th>
                   <th style={{ ...th, textAlign: "right" }}>Acciones</th>
                 </tr>
@@ -515,9 +807,6 @@ function InsumosSection() {
                     </td>
                     <td style={td}>
                       {PRICE_MODE_LABELS[i.price_mode] || i.price_mode}
-                    </td>
-                    <td style={{ ...td, textAlign: "right", fontWeight: 950 }}>
-                      {i.stock ?? 0}
                     </td>
                     <td style={td}>
                       <ActiveCell active={i.active} />

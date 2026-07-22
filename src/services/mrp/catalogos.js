@@ -207,9 +207,11 @@ export async function listPalletArticulos({
   includeInactive = false,
   warehouseId = null,
 } = {}) {
-  let q = scope(supabase.from("pallet_articulos").select("*")).order("codigo", {
-    ascending: true,
-  });
+  let q = scope(
+    supabase
+      .from("pallet_articulos")
+      .select("*, cliente:pallet_clientes(id, codigo, nombre)")
+  ).order("codigo", { ascending: true });
   if (!includeInactive) q = q.eq("active", true);
   if (warehouseId) q = q.eq("warehouse_id", warehouseId);
   const { data, error } = await q;
@@ -235,8 +237,9 @@ export async function getNextArticuloCode() {
   return "A" + String(max + 1).padStart(4, "0");
 }
 
-// El código (A####) se genera en la RPC; aquí solo se manda nombre + almacén.
-export async function createPalletArticulo({ nombre, warehouseId }) {
+// El código (A####) se genera en la RPC; aquí solo se manda nombre + almacén +
+// (opcional) el cliente al que se asigna el artículo.
+export async function createPalletArticulo({ nombre, warehouseId, clienteId = null }) {
   const clean = String(nombre || "").trim();
   if (!clean) throw new Error("El nombre del artículo es obligatorio.");
   if (!warehouseId) throw new Error("Debe seleccionar un almacén.");
@@ -246,14 +249,86 @@ export async function createPalletArticulo({ nombre, warehouseId }) {
     p_company: company,
     p_warehouse_id: warehouseId,
     p_nombre: clean,
+    p_cliente_id: clienteId || null,
   });
   if (error) throw error;
   return data; // fila completa del artículo (incluye codigo)
 }
 
+// Asigna (o reasigna) el cliente de un artículo. `clienteId` null lo deja sin
+// cliente. Update directo (la RLS permite update por tenant/company).
+export async function setPalletArticuloCliente(id, clienteId) {
+  const { data, error } = await scope(
+    supabase
+      .from("pallet_articulos")
+      .update({ cliente_id: clienteId || null })
+      .eq("id", id)
+  )
+    .select("*, cliente:pallet_clientes(id, codigo, nombre)")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function setPalletArticuloActive(id, active) {
   const { data, error } = await supabase
     .from("pallet_articulos")
+    .update({ active: !!active })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/* ---------------------------------------------------------- clientes */
+// Los clientes se fijan solo por tenant/company (no dependen de un almacén).
+
+export async function listPalletClientes({ includeInactive = false } = {}) {
+  let q = scope(supabase.from("pallet_clientes").select("*")).order("codigo", {
+    ascending: true,
+  });
+  if (!includeInactive) q = q.eq("active", true);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+// Previsualiza el próximo código (CL####) sin crear nada. La RPC sigue siendo
+// la autoridad al guardar; esto es solo para mostrarlo en el formulario.
+export async function getNextClienteCode() {
+  const { data, error } = await scope(
+    supabase.from("pallet_clientes").select("codigo")
+  );
+  if (error) throw error;
+  let max = 0;
+  for (const r of data || []) {
+    const m = /^CL(\d+)$/.exec(r.codigo || "");
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n > max) max = n;
+    }
+  }
+  return "CL" + String(max + 1).padStart(4, "0");
+}
+
+// El código (CL####) se genera en la RPC; aquí solo se manda el nombre.
+export async function createPalletCliente({ nombre }) {
+  const clean = String(nombre || "").trim();
+  if (!clean) throw new Error("El nombre del cliente es obligatorio.");
+  const { tenantId, company } = getMrpScope();
+  const { data, error } = await supabase.rpc("mrp_create_cliente", {
+    p_tenant_id: tenantId,
+    p_company: company,
+    p_nombre: clean,
+  });
+  if (error) throw error;
+  return data; // fila completa del cliente (incluye codigo)
+}
+
+export async function setPalletClienteActive(id, active) {
+  const { data, error } = await supabase
+    .from("pallet_clientes")
     .update({ active: !!active })
     .eq("id", id)
     .select()

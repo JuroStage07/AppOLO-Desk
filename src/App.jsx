@@ -80,7 +80,7 @@ import ConsultarTarimas from "./pages/Zona Franca/ConsultarTarimas";
 
 // MRP Tarimas
 import MRPTarimasPage from "./pages/MRP/MRPTarimasPage";
-import MRPDashboardPage from "./pages/MRP/MRPDashboardPage";
+import MRPDashboard from "./pages/MRP/MRPDashboard";
 import MRPInventarioPage from "./pages/MRP/MRPInventarioPage";
 import MRPHistorialPage from "./pages/MRP/MRPHistorialPage";
 import MRPDescartesPage from "./pages/MRP/MRPDescartesPage";
@@ -618,7 +618,7 @@ export default function App() {
             }
           >
             <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<MRPDashboardPage />} />
+            <Route path="dashboard" element={<MRPDashboard />} />
             <Route path="inventario" element={<MRPInventarioPage />} />
             <Route path="movimientos" element={<MRPHistorialPage />} />
             <Route path="descartes" element={<MRPDescartesPage />} />
