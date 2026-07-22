@@ -4,3 +4,4 @@ export * from "./scope";
 export * from "./catalogos";
 export * from "./inventario";
 export * from "./movimientos";
+export * from "./eventos";

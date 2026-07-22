@@ -83,6 +83,7 @@ import MRPTarimasPage from "./pages/MRP/MRPTarimasPage";
 import MRPDashboard from "./pages/MRP/MRPDashboard";
 import MRPInventarioPage from "./pages/MRP/MRPInventarioPage";
 import MRPHistorialPage from "./pages/MRP/MRPHistorialPage";
+import MRPEventosPage from "./pages/MRP/MRPEventosPage";
 import MRPDescartesPage from "./pages/MRP/MRPDescartesPage";
 import MRPCatalogosPage from "./pages/MRP/MRPCatalogosPage";
 
@@ -619,10 +620,13 @@ export default function App() {
           >
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<MRPDashboard />} />
-            <Route path="inventario" element={<MRPInventarioPage />} />
+            <Route path="inventario" element={<Navigate to="articulos" replace />} />
+            <Route path="inventario/:tab" element={<MRPInventarioPage />} />
             <Route path="movimientos" element={<MRPHistorialPage />} />
+            <Route path="eventos" element={<MRPEventosPage />} />
             <Route path="descartes" element={<MRPDescartesPage />} />
-            <Route path="catalogos" element={<MRPCatalogosPage />} />
+            <Route path="catalogos" element={<Navigate to="articulos" replace />} />
+            <Route path="catalogos/:tab" element={<MRPCatalogosPage />} />
           </Route>
 
           {/* ================= Horas extra ================= */}

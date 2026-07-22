@@ -6,6 +6,7 @@
 
 import { supabase } from "../../supabase";
 import { getMrpScope } from "./scope";
+import { logEvento } from "./eventos";
 
 const scope = (q) => {
   const { tenantId, company } = getMrpScope();
@@ -62,7 +63,64 @@ export async function setPalletWarehouseActive(id, active) {
     .select()
     .single();
   if (error) throw error;
+  await logEvento({
+    entityType: "almacen",
+    entityId: id,
+    codigo: data?.code || null,
+    nombre: data?.name || null,
+    action: active ? "activate" : "deactivate",
+  });
   return data;
+}
+
+// Edición de almacén: nombre + código (opcional).
+export async function updatePalletWarehouse(id, { name, code }) {
+  const clean = String(name || "").trim();
+  const cleanCode = String(code || "").trim();
+  if (!clean) throw new Error("El nombre del almacén es obligatorio.");
+  const { data, error } = await scope(
+    supabase
+      .from("pallet_warehouses")
+      .update({ name: clean, code: cleanCode || null })
+      .eq("id", id)
+  )
+    .select()
+    .single();
+  if (error) throw mapDuplicate(error, "Ya existe un almacén con ese nombre.");
+  await logEvento({
+    entityType: "almacen",
+    entityId: id,
+    codigo: data?.code || null,
+    nombre: data?.name || null,
+    action: "update",
+  });
+  return data;
+}
+
+// Borra un almacén. Si tiene artículos/inventario/movimientos (FK), Postgres
+// lanza 23503; lo traducimos a un mensaje claro.
+export async function deletePalletWarehouse(id) {
+  const { data: prev } = await scope(
+    supabase.from("pallet_warehouses").select("name, code").eq("id", id)
+  ).maybeSingle();
+  const { error } = await scope(
+    supabase.from("pallet_warehouses").delete().eq("id", id)
+  );
+  if (error) {
+    if (error.code === "23503") {
+      throw new Error(
+        "No se puede eliminar: el almacén tiene artículos o movimientos asociados."
+      );
+    }
+    throw error;
+  }
+  await logEvento({
+    entityType: "almacen",
+    entityId: id,
+    codigo: prev?.code || null,
+    nombre: prev?.name || null,
+    action: "delete",
+  });
 }
 
 /* ------------------------------------------- vínculo bodega ↔ almacén (MRP) */
@@ -267,6 +325,16 @@ export async function setPalletArticuloCliente(id, clienteId) {
     .select("*, cliente:pallet_clientes(id, codigo, nombre)")
     .single();
   if (error) throw error;
+  await logEvento({
+    entityType: "articulo",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: "update",
+    detail: data?.cliente
+      ? `Compañía asignada: ${data.cliente.codigo} · ${data.cliente.nombre}`
+      : "Compañía desasignada",
+  });
   return data;
 }
 
@@ -278,7 +346,61 @@ export async function setPalletArticuloActive(id, active) {
     .select()
     .single();
   if (error) throw error;
+  await logEvento({
+    entityType: "articulo",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: active ? "activate" : "deactivate",
+  });
   return data;
+}
+
+// Edición de artículo: solo el nombre (el código y la compañía no se editan
+// aquí; la compañía se reasigna con setPalletArticuloCliente).
+export async function updatePalletArticulo(id, { nombre }) {
+  const clean = String(nombre || "").trim();
+  if (!clean) throw new Error("El nombre del artículo es obligatorio.");
+  const { data, error } = await scope(
+    supabase.from("pallet_articulos").update({ nombre: clean }).eq("id", id)
+  )
+    .select("*, cliente:pallet_clientes(id, codigo, nombre)")
+    .single();
+  if (error) throw error;
+  await logEvento({
+    entityType: "articulo",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: "update",
+  });
+  return data;
+}
+
+// Borra un artículo. Si tiene inventario/movimientos/descartes (FK), Postgres
+// lanza 23503; lo traducimos a un mensaje claro.
+export async function deletePalletArticulo(id) {
+  const { data: prev } = await scope(
+    supabase.from("pallet_articulos").select("codigo, nombre").eq("id", id)
+  ).maybeSingle();
+  const { error } = await scope(
+    supabase.from("pallet_articulos").delete().eq("id", id)
+  );
+  if (error) {
+    if (error.code === "23503") {
+      throw new Error(
+        "No se puede eliminar: el artículo tiene inventario o movimientos asociados."
+      );
+    }
+    throw error;
+  }
+  await logEvento({
+    entityType: "articulo",
+    entityId: id,
+    codigo: prev?.codigo || null,
+    nombre: prev?.nombre || null,
+    action: "delete",
+  });
 }
 
 /* ---------------------------------------------------------- clientes */
@@ -334,16 +456,72 @@ export async function setPalletClienteActive(id, active) {
     .select()
     .single();
   if (error) throw error;
+  await logEvento({
+    entityType: "compania",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: active ? "activate" : "deactivate",
+  });
   return data;
+}
+
+// Edición de compañía: solo el nombre (el código no se edita).
+export async function updatePalletCliente(id, { nombre }) {
+  const clean = String(nombre || "").trim();
+  if (!clean) throw new Error("El nombre de la compañía es obligatorio.");
+  const { data, error } = await scope(
+    supabase.from("pallet_clientes").update({ nombre: clean }).eq("id", id)
+  )
+    .select()
+    .single();
+  if (error) throw error;
+  await logEvento({
+    entityType: "compania",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: "update",
+  });
+  return data;
+}
+
+// Borra una compañía. Si está asignada a artículos (FK), Postgres lanza 23503;
+// lo traducimos a un mensaje claro.
+export async function deletePalletCliente(id) {
+  const { data: prev } = await scope(
+    supabase.from("pallet_clientes").select("codigo, nombre").eq("id", id)
+  ).maybeSingle();
+  const { error } = await scope(
+    supabase.from("pallet_clientes").delete().eq("id", id)
+  );
+  if (error) {
+    if (error.code === "23503") {
+      throw new Error(
+        "No se puede eliminar: la compañía está asignada a uno o más artículos."
+      );
+    }
+    throw error;
+  }
+  await logEvento({
+    entityType: "compania",
+    entityId: id,
+    codigo: prev?.codigo || null,
+    nombre: prev?.nombre || null,
+    action: "delete",
+  });
 }
 
 /* ----------------------------------------------------- tiendas (destino) */
 // Las tiendas destino se fijan solo por tenant/company (no dependen de almacén).
 
 export async function listPalletTiendas({ includeInactive = false } = {}) {
-  let q = scope(supabase.from("pallet_tiendas").select("*")).order("codigo", {
-    ascending: true,
-  });
+  // `compania` = pallet_clientes vinculado vía cliente_id (terminología UI).
+  let q = scope(
+    supabase
+      .from("pallet_tiendas")
+      .select("*, compania:pallet_clientes(id, codigo, nombre)")
+  ).order("codigo", { ascending: true });
   if (!includeInactive) q = q.eq("active", true);
   const { data, error } = await q;
   if (error) throw error;
@@ -368,8 +546,9 @@ export async function getNextTiendaCode() {
   return "TD" + String(max + 1).padStart(4, "0");
 }
 
-// El código (TD####) se genera en la RPC; aquí solo se manda el nombre.
-export async function createPalletTienda({ nombre }) {
+// El código (TD####) se genera en la RPC; aquí se manda el nombre + (opcional)
+// la compañía a la que se vincula el cliente.
+export async function createPalletTienda({ nombre, companiaId = null }) {
   const clean = String(nombre || "").trim();
   if (!clean) throw new Error("El nombre de la tienda es obligatorio.");
   const { tenantId, company } = getMrpScope();
@@ -377,9 +556,35 @@ export async function createPalletTienda({ nombre }) {
     p_tenant_id: tenantId,
     p_company: company,
     p_nombre: clean,
+    p_cliente_id: companiaId || null,
   });
   if (error) throw error;
   return data; // fila completa de la tienda (incluye codigo)
+}
+
+// Asigna (o reasigna) la compañía de un cliente. `companiaId` null lo deja sin
+// compañía. Update directo (la RLS permite update por tenant/company).
+export async function setPalletTiendaCompania(id, companiaId) {
+  const { data, error } = await scope(
+    supabase
+      .from("pallet_tiendas")
+      .update({ cliente_id: companiaId || null })
+      .eq("id", id)
+  )
+    .select("*, compania:pallet_clientes(id, codigo, nombre)")
+    .single();
+  if (error) throw error;
+  await logEvento({
+    entityType: "cliente",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: "update",
+    detail: data?.compania
+      ? `Compañía asignada: ${data.compania.codigo} · ${data.compania.nombre}`
+      : "Compañía desasignada",
+  });
+  return data;
 }
 
 export async function setPalletTiendaActive(id, active) {
@@ -390,6 +595,13 @@ export async function setPalletTiendaActive(id, active) {
     .select()
     .single();
   if (error) throw error;
+  await logEvento({
+    entityType: "cliente",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: active ? "activate" : "deactivate",
+  });
   return data;
 }
 
@@ -403,16 +615,33 @@ export async function updatePalletTienda(id, { nombre }) {
     .select()
     .single();
   if (error) throw error;
+  await logEvento({
+    entityType: "cliente",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: "update",
+  });
   return data;
 }
 
 // Borra una tienda. Su info en movimientos vive desnormalizada en `metadata`
 // (tienda_nombre), por lo que el historial no se rompe al eliminarla.
 export async function deletePalletTienda(id) {
+  const { data: prev } = await scope(
+    supabase.from("pallet_tiendas").select("codigo, nombre").eq("id", id)
+  ).maybeSingle();
   const { error } = await scope(
     supabase.from("pallet_tiendas").delete().eq("id", id)
   );
   if (error) throw error;
+  await logEvento({
+    entityType: "cliente",
+    entityId: id,
+    codigo: prev?.codigo || null,
+    nombre: prev?.nombre || null,
+    action: "delete",
+  });
 }
 
 /* ------------------------------------------------------- insumos (Insumos) */
@@ -476,6 +705,54 @@ export async function setInsumoActive(id, active) {
     .select()
     .single();
   if (error) throw error;
+  await logEvento({
+    entityType: "insumo",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: active ? "activate" : "deactivate",
+  });
+  return data;
+}
+
+// Ajuste de stock de un insumo (entrada/salida). `mode`: "entrada" | "salida".
+// Lee el stock actual, aplica el delta (no permite negativos) y lo registra en
+// la bitácora de eventos como `adjust`.
+export async function adjustInsumoStock(id, { mode, quantity, reason }) {
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0)
+    throw new Error("La cantidad debe ser mayor a 0.");
+  if (!Number.isInteger(qty))
+    throw new Error("La cantidad debe ser un número entero.");
+  const salida = mode === "salida";
+
+  const { data: cur, error: e1 } = await scope(
+    supabase.from("mrp_insumos").select("id, codigo, nombre, stock").eq("id", id)
+  ).single();
+  if (e1) throw e1;
+
+  const prev = Number(cur.stock) || 0;
+  const next = salida ? prev - qty : prev + qty;
+  if (next < 0)
+    throw new Error(`No hay suficiente stock (disponible: ${prev}).`);
+
+  const { data, error } = await scope(
+    supabase.from("mrp_insumos").update({ stock: next }).eq("id", id)
+  )
+    .select()
+    .single();
+  if (error) throw error;
+
+  await logEvento({
+    entityType: "insumo",
+    entityId: id,
+    codigo: cur.codigo,
+    nombre: cur.nombre,
+    action: "adjust",
+    detail: `${salida ? "Salida" : "Ingreso"} de ${qty}: ${prev} → ${next}${
+      reason ? ` · ${String(reason).trim()}` : ""
+    }`,
+  });
   return data;
 }
 
@@ -507,12 +784,22 @@ export async function updateInsumo(id, { nombre, detalle, price, priceMode, stoc
     .select()
     .single();
   if (error) throw error;
+  await logEvento({
+    entityType: "insumo",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: "update",
+  });
   return data;
 }
 
 // Borra un insumo. Si está referenciado por un BOM, Postgres lanza 23503
 // (violación de FK); lo traducimos a un mensaje claro en español.
 export async function deleteInsumo(id) {
+  const { data: prev } = await scope(
+    supabase.from("mrp_insumos").select("codigo, nombre").eq("id", id)
+  ).maybeSingle();
   const { error } = await scope(
     supabase.from("mrp_insumos").delete().eq("id", id)
   );
@@ -524,6 +811,13 @@ export async function deleteInsumo(id) {
     }
     throw error;
   }
+  await logEvento({
+    entityType: "insumo",
+    entityId: id,
+    codigo: prev?.codigo || null,
+    nombre: prev?.nombre || null,
+    action: "delete",
+  });
 }
 
 /* ------------------------------------------------------------- BOM (BOM) */
@@ -623,15 +917,32 @@ export async function updateMrpBom(id, { nombre, items }) {
     p_items: payload,
   });
   if (error) throw error;
+  await logEvento({
+    entityType: "bom",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || clean,
+    action: "update",
+  });
   return data;
 }
 
 // Borra un BOM. Sus filas de unión se eliminan por `on delete cascade`.
 export async function deleteMrpBom(id) {
+  const { data: prev } = await scope(
+    supabase.from("mrp_boms").select("codigo, nombre").eq("id", id)
+  ).maybeSingle();
   const { error } = await scope(
     supabase.from("mrp_boms").delete().eq("id", id)
   );
   if (error) throw error;
+  await logEvento({
+    entityType: "bom",
+    entityId: id,
+    codigo: prev?.codigo || null,
+    nombre: prev?.nombre || null,
+    action: "delete",
+  });
 }
 
 export async function setMrpBomActive(id, active) {
@@ -642,5 +953,12 @@ export async function setMrpBomActive(id, active) {
     .select()
     .single();
   if (error) throw error;
+  await logEvento({
+    entityType: "bom",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: active ? "activate" : "deactivate",
+  });
   return data;
 }

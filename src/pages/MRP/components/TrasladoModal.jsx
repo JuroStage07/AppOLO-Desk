@@ -117,9 +117,9 @@ export default function TrasladoModal({ open, onClose, prefill }) {
       if (!form.destinationLocation) e.destinationLocation = "Seleccione el destino.";
       if (form.originLocation && form.originLocation === form.destinationLocation)
         e.destinationLocation = "El origen y el destino no pueden ser iguales.";
-      // Destino tienda: la tienda concreta es obligatoria.
+      // Destino tienda: el cliente concreto es obligatorio.
       if (form.destinationLocation === "tienda" && !form.tiendaId)
-        e.tiendaId = "Seleccione la tienda destino.";
+        e.tiendaId = "Seleccione el cliente destino.";
     }
 
     const qty = Number(form.quantity);
@@ -304,13 +304,13 @@ export default function TrasladoModal({ open, onClose, prefill }) {
 
         {!isWh && form.destinationLocation === "tienda" && (
           <Field
-            label="Tienda destino"
+            label="Cliente destino"
             required
             error={errors.tiendaId}
             hint={
               tiendas.length === 0
-                ? "No hay tiendas activas. Créalas en Catálogos › Tienda Destino."
-                : "¿A qué tienda se envían las tarimas?"
+                ? "No hay clientes activos. Créalos en Catálogos › Clientes."
+                : "¿A qué cliente se envían las tarimas?"
             }
           >
             <Field.Select

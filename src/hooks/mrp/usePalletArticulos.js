@@ -4,6 +4,8 @@ import { useToast } from "../../components/ui";
 import {
   listPalletArticulos,
   createPalletArticulo,
+  updatePalletArticulo,
+  deletePalletArticulo,
   setPalletArticuloActive,
   setPalletArticuloCliente,
   getNextArticuloCode,
@@ -22,6 +24,8 @@ export default function usePalletArticulos({
     { channels: ["articulos"] }
   );
   const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const create = useCallback(
     async ({ nombre, warehouseId: whId, clienteId = null }) => {
@@ -109,6 +113,41 @@ export default function usePalletArticulos({
     [toast]
   );
 
+  const update = useCallback(
+    async (id, { nombre }) => {
+      setUpdating(true);
+      try {
+        const a = await updatePalletArticulo(id, { nombre });
+        bumpRefresh("articulos");
+        toast.success(`Artículo ${a?.codigo || ""} actualizado.`);
+        return a;
+      } catch (e) {
+        toast.error(e.message || "No se pudo actualizar el artículo.");
+        throw e;
+      } finally {
+        setUpdating(false);
+      }
+    },
+    [toast]
+  );
+
+  const remove = useCallback(
+    async (id) => {
+      setRemoving(true);
+      try {
+        await deletePalletArticulo(id);
+        bumpRefresh("articulos");
+        toast.success("Artículo eliminado.");
+      } catch (e) {
+        toast.error(e.message || "No se pudo eliminar el artículo.");
+        throw e;
+      } finally {
+        setRemoving(false);
+      }
+    },
+    [toast]
+  );
+
   const peekNextCode = useCallback(() => getNextArticuloCode(), []);
 
   return {
@@ -119,6 +158,10 @@ export default function usePalletArticulos({
     create,
     createForClientes,
     creating,
+    update,
+    updating,
+    remove,
+    removing,
     setActive,
     setCliente,
     peekNextCode,

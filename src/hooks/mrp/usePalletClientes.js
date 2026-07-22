@@ -5,6 +5,8 @@ import { useToast } from "../../components/ui";
 import {
   listPalletClientes,
   createPalletCliente,
+  updatePalletCliente,
+  deletePalletCliente,
   setPalletClienteActive,
   getNextClienteCode,
 } from "../../services/mrp";
@@ -19,6 +21,8 @@ export default function usePalletClientes({ includeInactive = false } = {}) {
     { channels: ["clientes"] }
   );
   const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const create = useCallback(
     async ({ nombre }) => {
@@ -33,6 +37,41 @@ export default function usePalletClientes({ includeInactive = false } = {}) {
         throw e;
       } finally {
         setCreating(false);
+      }
+    },
+    [toast]
+  );
+
+  const update = useCallback(
+    async (id, { nombre }) => {
+      setUpdating(true);
+      try {
+        const c = await updatePalletCliente(id, { nombre });
+        bumpRefresh("clientes", "articulos");
+        toast.success(`Compañía ${c?.codigo || ""} actualizada.`);
+        return c;
+      } catch (e) {
+        toast.error(e.message || "No se pudo actualizar la compañía.");
+        throw e;
+      } finally {
+        setUpdating(false);
+      }
+    },
+    [toast]
+  );
+
+  const remove = useCallback(
+    async (id) => {
+      setRemoving(true);
+      try {
+        await deletePalletCliente(id);
+        bumpRefresh("clientes", "articulos");
+        toast.success("Compañía eliminada.");
+      } catch (e) {
+        toast.error(e.message || "No se pudo eliminar la compañía.");
+        throw e;
+      } finally {
+        setRemoving(false);
       }
     },
     [toast]
@@ -62,6 +101,10 @@ export default function usePalletClientes({ includeInactive = false } = {}) {
     refetch,
     create,
     creating,
+    update,
+    updating,
+    remove,
+    removing,
     setActive,
     peekNextCode,
   };

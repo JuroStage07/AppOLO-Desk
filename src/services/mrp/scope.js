@@ -18,3 +18,15 @@ export function setMrpScope({ tenantId, company } = {}) {
 export function getMrpScope() {
   return _scope;
 }
+
+// Identidad del usuario logeado, fijada por useMrpWorkspace. La usan los
+// servicios para sellar el autor en el registro de eventos (mrp_eventos).
+let _user = { userId: null, userEmail: null };
+
+export function setMrpUser({ userId, userEmail } = {}) {
+  _user = { userId: userId || null, userEmail: userEmail || null };
+}
+
+export function getMrpUser() {
+  return _user;
+}

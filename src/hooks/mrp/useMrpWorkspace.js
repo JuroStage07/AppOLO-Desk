@@ -7,7 +7,7 @@
 // TODAS las consultas/mutaciones usen el tenant/company correctos.
 import { useContext, useEffect, useSyncExternalStore } from "react";
 import { AuthCtx } from "../../auth/AuthProvider";
-import { MRP_TENANT_ID, MRP_COMPANY, setMrpScope } from "../../services/mrp";
+import { MRP_TENANT_ID, MRP_COMPANY, setMrpScope, setMrpUser } from "../../services/mrp";
 import {
   getWorkspaceWarehouse,
   subscribeWorkspaceWarehouse,
@@ -23,6 +23,11 @@ export default function useMrpWorkspace() {
 
   // Sincroniza el scope de los servicios con el perfil logeado.
   setMrpScope({ tenantId, company });
+  // Sella la identidad del usuario para la bitácora de eventos.
+  setMrpUser({
+    userId: ctx.user?.uid || null,
+    userEmail: ctx.profile?.email || ctx.user?.email || null,
+  });
 
   const ws = useSyncExternalStore(
     subscribeWorkspaceWarehouse,

@@ -5,6 +5,7 @@
 // `Insumos`. Los almacenes se crean con el tenant/company del usuario logeado.
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Plus,
   Warehouse,
@@ -30,7 +31,6 @@ import {
   Chip,
   ChipsRow,
   StatusPill,
-  TableScroll,
   Spinner,
   ErrorState,
   EmptyState,
@@ -61,17 +61,27 @@ import {
   RADIUS_LG,
   FS_SM,
 } from "../../styles/theme";
-import { th, td } from "./components/mrpFormat";
 import { NoWarehouse } from "./components/WorkspaceBar";
+import MrpDataTable from "./components/MrpDataTable";
 
+// NOTA DE TERMINOLOGÍA (importante): la capa de datos conserva nombres legados
+// distintos de las etiquetas de UI:
+//   • "Compañías" (companias)  → tabla pallet_clientes / hook usePalletClientes
+//     (código CL####). Es a lo que se asignan los artículos (EPA, Cofersa…).
+//   • "Clientes"  (clientes)   → tabla pallet_tiendas   / hook usePalletTiendas
+//     (código TD####). Es el destino al trasladar stock a la ubicación `tienda`.
+// Se mantienen los identificadores de datos para no requerir migraciones; las
+// etiquetas visibles usan la terminología nueva.
 const TABS = [
   { key: "articulos", label: "Artículos", icon: Box },
-  { key: "clientes", label: "Clientes", icon: Users },
-  { key: "tiendas", label: "Tienda Destino", icon: Store },
+  { key: "companias", label: "Compañías", icon: Users },
+  { key: "clientes", label: "Clientes", icon: Store },
   { key: "insumos", label: "Insumos", icon: FlaskConical },
   { key: "bom", label: "BOM", icon: Layers },
   { key: "almacenes", label: "Almacenes", icon: Warehouse },
 ];
+
+const CATALOG_BASE = "/mrp-tarimas/catalogos";
 
 const PRICE_MODE_LABELS = { unit: "Por unidad", batch: "Por lote" };
 
@@ -85,7 +95,12 @@ function fmtPrice(n) {
 }
 
 export default function MRPCatalogosPage() {
-  const [tab, setTab] = useState("articulos");
+  // La pestaña activa se toma de la URL (/mrp-tarimas/catalogos/:tab) para que
+  // el submenú lateral pueda enlazar directo a cada catálogo.
+  const { tab: tabParam } = useParams();
+  const navigate = useNavigate();
+  const tab = TABS.some((t) => t.key === tabParam) ? tabParam : "articulos";
+  const goTab = (key) => navigate(`${CATALOG_BASE}/${key}`);
 
   return (
     <>
@@ -96,15 +111,15 @@ export default function MRPCatalogosPage() {
 
       <ChipsRow>
         {TABS.map((t) => (
-          <Chip key={t.key} active={tab === t.key} onClick={() => setTab(t.key)}>
+          <Chip key={t.key} active={tab === t.key} onClick={() => goTab(t.key)}>
             {t.label}
           </Chip>
         ))}
       </ChipsRow>
 
       {tab === "articulos" && <ArticulosTab />}
+      {tab === "companias" && <CompaniasTab />}
       {tab === "clientes" && <ClientesTab />}
-      {tab === "tiendas" && <TiendasTab />}
       {tab === "insumos" && <InsumosTab />}
       {tab === "bom" && <BomTab />}
       {tab === "almacenes" && <AlmacenesTab />}
@@ -214,9 +229,10 @@ function RowActionsMenu({ open, onToggle, onClose, items }) {
 }
 
 /* ------------------------------------------------------------- Artículos */
-// Cada artículo se asigna a UN cliente. Al crear, se pueden seleccionar varios
-// clientes: se crea una fila por cliente (código correlativo distinto). Los
-// artículos antiguos sin cliente los puede asignar el rol `dev` desde la fila.
+// Cada artículo se asigna a UNA compañía. Al crear, se pueden seleccionar varias
+// compañías: se crea una fila por compañía (código correlativo distinto). Los
+// artículos antiguos sin compañía los puede asignar el rol `dev` desde la fila.
+// (Capa de datos legada: "compañía" == pallet_clientes / usePalletClientes.)
 function ClienteCell({ cliente }) {
   if (!cliente) return <span style={{ color: SLATE, fontWeight: 800 }}>—</span>;
   return (
@@ -233,6 +249,7 @@ function ArticulosTab() {
   const { warehouseId } = useMrpWorkspace();
   const { profile } = useMrpUser();
   const isDev = String(profile?.role || "").toLowerCase() === "dev";
+  const confirm = useConfirm();
 
   const {
     articulos,
@@ -241,6 +258,9 @@ function ArticulosTab() {
     refetch,
     createForClientes,
     creating,
+    update,
+    updating,
+    remove,
     setActive,
     setCliente,
     peekNextCode,
@@ -259,6 +279,12 @@ function ArticulosTab() {
   // Asignación de cliente a un artículo existente (solo dev).
   const [assign, setAssign] = useState(null); // artículo en asignación o null
   const [assignId, setAssignId] = useState(""); // cliente elegido en el modal
+
+  // Edición (nombre) y menú de acciones por fila.
+  const [editing, setEditing] = useState(null); // artículo en edición o null
+  const [editNombre, setEditNombre] = useState("");
+  const [editErr, setEditErr] = useState("");
+  const [openMenuId, setOpenMenuId] = useState(null);
 
   // Previsualiza los códigos correlativos que se asignarán (uno por cliente).
   const previewCodes = useMemo(() => {
@@ -295,7 +321,7 @@ function ArticulosTab() {
     const e = {};
     if (!nombre.trim()) e.nombre = "El nombre es obligatorio.";
     if (selClientes.length === 0)
-      e.clientes = "Seleccione al menos un cliente.";
+      e.clientes = "Seleccione al menos una compañía.";
     setErrs(e);
     if (Object.keys(e).length) return;
     try {
@@ -312,6 +338,43 @@ function ArticulosTab() {
       await setCliente(assign.id, assignId);
       setAssign(null);
       setAssignId("");
+    } catch {
+      /* toast del hook */
+    }
+  };
+
+  const openEdit = (a) => {
+    setEditing(a);
+    setEditNombre(a.nombre || "");
+    setEditErr("");
+  };
+
+  const onEdit = async () => {
+    if (!editing) return;
+    if (!editNombre.trim()) {
+      setEditErr("El nombre es obligatorio.");
+      return;
+    }
+    try {
+      await update(editing.id, { nombre: editNombre });
+      setEditing(null);
+      setEditNombre("");
+      setEditErr("");
+    } catch {
+      /* toast del hook */
+    }
+  };
+
+  const onDelete = async (a) => {
+    const ok = await confirm({
+      title: "Eliminar artículo",
+      message: `¿Eliminar el artículo "${a.codigo} · ${a.nombre}"? Esta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await remove(a.id);
     } catch {
       /* toast del hook */
     }
@@ -339,55 +402,88 @@ function ArticulosTab() {
         />
       ) : (
         <Card padding={0}>
-          <TableScroll minWidth={680}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={th}>Código</th>
-                  <th style={th}>Nombre</th>
-                  <th style={th}>Cliente</th>
-                  <th style={th}>Estado</th>
-                  <th style={{ ...th, textAlign: "right" }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {articulos.map((a) => (
-                  <tr key={a.id}>
-                    <td style={{ ...td, fontFamily: "monospace", fontWeight: 950 }}>
-                      {a.codigo}
-                    </td>
-                    <td style={td}>{a.nombre}</td>
-                    <td style={td}>
-                      {a.cliente ? (
-                        <ClienteCell cliente={a.cliente} />
-                      ) : isDev ? (
-                        <GhostButton
-                          size="sm"
-                          icon={Users}
-                          onClick={() => {
-                            setAssign(a);
-                            setAssignId("");
-                          }}
-                        >
-                          Asignar cliente
-                        </GhostButton>
-                      ) : (
-                        <span style={{ color: SLATE, fontWeight: 800 }}>—</span>
-                      )}
-                    </td>
-                    <td style={td}>
-                      <ActiveCell active={a.active} />
-                    </td>
-                    <td style={{ ...td, textAlign: "right" }}>
-                      <GhostButton size="sm" onClick={() => setActive(a.id, !a.active)}>
-                        {a.active ? "Desactivar" : "Activar"}
-                      </GhostButton>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableScroll>
+          <MrpDataTable
+            columns={[
+              {
+                key: "codigo",
+                title: "Código",
+                get: (a) => ({ value: a.codigo || "—", label: a.codigo || "—" }),
+                render: (a) => (
+                  <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
+                    {a.codigo}
+                  </span>
+                ),
+              },
+              {
+                key: "nombre",
+                title: "Nombre",
+                get: (a) => ({ value: a.nombre || "—", label: a.nombre || "—" }),
+                render: (a) => a.nombre,
+              },
+              {
+                key: "compania",
+                title: "Compañía",
+                get: (a) => ({
+                  value: a.cliente?.nombre || "—",
+                  label: a.cliente?.nombre || "—",
+                }),
+                render: (a) =>
+                  a.cliente ? (
+                    <ClienteCell cliente={a.cliente} />
+                  ) : isDev ? (
+                    <GhostButton
+                      size="sm"
+                      icon={Users}
+                      onClick={() => {
+                        setAssign(a);
+                        setAssignId("");
+                      }}
+                    >
+                      Asignar compañía
+                    </GhostButton>
+                  ) : (
+                    <span style={{ color: SLATE, fontWeight: 800 }}>—</span>
+                  ),
+              },
+              {
+                key: "estado",
+                title: "Estado",
+                get: (a) => ({
+                  value: a.active ? "Activa" : "Inactiva",
+                  label: a.active ? "Activa" : "Inactiva",
+                }),
+                render: (a) => <ActiveCell active={a.active} />,
+              },
+            ]}
+            rows={articulos}
+            rowKey={(a) => a.id}
+            storageKey="appolo_mrp_cat_articulos_cols"
+            pageSize={5}
+            minWidth={720}
+            renderActions={(a) => (
+              <RowActionsMenu
+                open={openMenuId === a.id}
+                onToggle={() =>
+                  setOpenMenuId((cur) => (cur === a.id ? null : a.id))
+                }
+                onClose={() => setOpenMenuId(null)}
+                items={[
+                  { label: "Editar", icon: Pencil, onClick: () => openEdit(a) },
+                  {
+                    label: a.active ? "Desactivar" : "Activar",
+                    icon: Power,
+                    onClick: () => setActive(a.id, !a.active),
+                  },
+                  {
+                    label: "Eliminar",
+                    icon: Trash2,
+                    danger: true,
+                    onClick: () => onDelete(a),
+                  },
+                ]}
+              />
+            )}
+          />
         </Card>
       )}
 
@@ -421,15 +517,15 @@ function ArticulosTab() {
             />
           </Field>
           <Field
-            label="Clientes"
+            label="Compañías"
             required
             error={errs.clientes}
             hint={
               loadingClientes
-                ? "Cargando clientes…"
+                ? "Cargando compañías…"
                 : clientes.length === 0
-                ? "No hay clientes activos. Créalos en la pestaña Clientes."
-                : "Selecciona uno o más. Se crea un artículo por cliente."
+                ? "No hay compañías activas. Créalas en la pestaña Compañías."
+                : "Selecciona una o más. Se crea un artículo por compañía."
             }
           >
             {clientes.length > 0 ? (
@@ -457,11 +553,11 @@ function ArticulosTab() {
         </Sheet.Actions>
       </Sheet>
 
-      {/* Asignar cliente a un artículo existente (solo dev). */}
+      {/* Asignar compañía a un artículo existente (solo dev). */}
       <Sheet
         open={!!assign}
         onClose={() => setAssign(null)}
-        title="Asignar cliente"
+        title="Asignar compañía"
         maxWidth={440}
       >
         <Sheet.Body>
@@ -473,11 +569,11 @@ function ArticulosTab() {
             />
           </Field>
           <Field
-            label="Cliente"
+            label="Compañía"
             required
             hint={
               clientes.length === 0
-                ? "No hay clientes activos. Créalos en la pestaña Clientes."
+                ? "No hay compañías activas. Créalas en la pestaña Compañías."
                 : undefined
             }
           >
@@ -486,7 +582,7 @@ function ArticulosTab() {
               disabled={loadingClientes || clientes.length === 0}
               onChange={(e) => setAssignId(e.target.value)}
             >
-              <option value="">Seleccione un cliente…</option>
+              <option value="">Seleccione una compañía…</option>
               {clientes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.codigo} — {c.nombre}
@@ -502,136 +598,33 @@ function ArticulosTab() {
           </PrimaryButton>
         </Sheet.Actions>
       </Sheet>
-    </>
-  );
-}
 
-/* -------------------------------------------------------------- Clientes */
-// La pestaña "Clientes" administra el catálogo de clientes. No requiere
-// almacén; se fija solo por tenant/company. El código (CL####) se autogenera.
-function ClientesTab() {
-  const {
-    clientes,
-    loading,
-    error,
-    refetch,
-    create,
-    creating,
-    setActive,
-    peekNextCode,
-  } = usePalletClientes({ includeInactive: true });
-  const [open, setOpen] = useState(false);
-  const [nombre, setNombre] = useState("");
-  const [nextCode, setNextCode] = useState("");
-  const [err, setErr] = useState("");
-
-  const openCreate = async () => {
-    setNombre("");
-    setErr("");
-    setNextCode("");
-    setOpen(true);
-    try {
-      setNextCode(await peekNextCode());
-    } catch {
-      /* si falla la previsualización, el código igual se asigna al guardar */
-    }
-  };
-
-  const onCreate = async () => {
-    if (!nombre.trim()) {
-      setErr("El nombre es obligatorio.");
-      return;
-    }
-    try {
-      await create({ nombre });
-      setOpen(false);
-      setNombre("");
-      setErr("");
-    } catch {
-      /* toast del hook */
-    }
-  };
-
-  return (
-    <>
-      <SectionTitle
-        title="Clientes"
-        action={
-          <PrimaryButton icon={Plus} onClick={openCreate}>
-            Nuevo cliente
-          </PrimaryButton>
-        }
-      />
-      {loading ? (
-        <Spinner label="Cargando clientes…" />
-      ) : error ? (
-        <ErrorState description={error.message} onRetry={refetch} />
-      ) : clientes.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title="Sin clientes"
-          description="Crea el primer cliente."
-        />
-      ) : (
-        <Card padding={0}>
-          <TableScroll minWidth={480}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={th}>Código</th>
-                  <th style={th}>Nombre</th>
-                  <th style={th}>Estado</th>
-                  <th style={{ ...th, textAlign: "right" }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clientes.map((c) => (
-                  <tr key={c.id}>
-                    <td style={{ ...td, fontFamily: "monospace", fontWeight: 950 }}>
-                      {c.codigo}
-                    </td>
-                    <td style={td}>{c.nombre}</td>
-                    <td style={td}>
-                      <ActiveCell active={c.active} />
-                    </td>
-                    <td style={{ ...td, textAlign: "right" }}>
-                      <GhostButton size="sm" onClick={() => setActive(c.id, !c.active)}>
-                        {c.active ? "Desactivar" : "Activar"}
-                      </GhostButton>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableScroll>
-        </Card>
-      )}
-
+      {/* Editar artículo (nombre). El código y la compañía no se editan aquí. */}
       <Sheet
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Nuevo cliente"
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title="Editar artículo"
         maxWidth={460}
       >
         <Sheet.Body>
-          <Field label="Código" hint="Se asigna automáticamente al guardar.">
-            <Field.Input value={nextCode || "Calculando…"} disabled readOnly />
+          <Field label="Código" hint="El código no se puede editar.">
+            <Field.Input value={editing?.codigo || ""} disabled readOnly />
           </Field>
-          <Field label="Nombre del cliente" required error={err}>
+          <Field label="Nombre del artículo" required error={editErr}>
             <Field.Input
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              placeholder="Ej: EPA"
+              value={editNombre}
+              onChange={(e) => setEditNombre(e.target.value)}
+              placeholder="Ej: Tarima triple"
               autoFocus
             />
           </Field>
         </Sheet.Body>
         <Sheet.Actions>
-          <SecondaryButton onClick={() => setOpen(false)} disabled={creating}>
+          <SecondaryButton onClick={() => setEditing(null)} disabled={updating}>
             Cancelar
           </SecondaryButton>
-          <PrimaryButton onClick={onCreate} loading={creating}>
-            Crear
+          <PrimaryButton onClick={onEdit} loading={updating}>
+            Guardar cambios
           </PrimaryButton>
         </Sheet.Actions>
       </Sheet>
@@ -639,16 +632,15 @@ function ClientesTab() {
   );
 }
 
-/* -------------------------------------------------------- Tienda Destino */
-// La pestaña "Tienda Destino" administra el catálogo de tiendas. No requiere
-// almacén; se fija solo por tenant/company. El código (TD####) se autogenera.
-// Estas tiendas se seleccionan como destino al trasladar stock a `tienda`.
-function TiendasTab() {
-  const { profile } = useMrpUser();
-  const isDev = String(profile?.role || "").toLowerCase() === "dev";
+/* ------------------------------------------------------------- Compañías */
+// La pestaña "Compañías" administra el catálogo de compañías (a las que se
+// asignan los artículos: EPA, Cofersa…). No requiere almacén; se fija solo por
+// tenant/company. El código (CL####) se autogenera.
+// (Capa de datos legada: pallet_clientes / usePalletClientes.)
+function CompaniasTab() {
   const confirm = useConfirm();
   const {
-    tiendas,
+    clientes,
     loading,
     error,
     refetch,
@@ -659,10 +651,10 @@ function TiendasTab() {
     remove,
     setActive,
     peekNextCode,
-  } = usePalletTiendas({ includeInactive: true });
+  } = usePalletClientes({ includeInactive: true });
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(null); // tienda en edición o null
-  const [openMenuId, setOpenMenuId] = useState(null); // fila con menú abierto
+  const [editing, setEditing] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
   const [nombre, setNombre] = useState("");
   const [nextCode, setNextCode] = useState("");
   const [err, setErr] = useState("");
@@ -680,9 +672,9 @@ function TiendasTab() {
     }
   };
 
-  const openEdit = (t) => {
-    setEditing(t);
-    setNombre(t.nombre || "");
+  const openEdit = (c) => {
+    setEditing(c);
+    setNombre(c.nombre || "");
     setErr("");
     setNextCode("");
     setOpen(true);
@@ -708,16 +700,16 @@ function TiendasTab() {
     }
   };
 
-  const onDelete = async (t) => {
+  const onDelete = async (c) => {
     const ok = await confirm({
-      title: "Eliminar tienda",
-      message: `¿Eliminar la tienda "${t.codigo} · ${t.nombre}"? Esta acción no se puede deshacer.`,
+      title: "Eliminar compañía",
+      message: `¿Eliminar la compañía "${c.codigo} · ${c.nombre}"? Esta acción no se puede deshacer.`,
       confirmText: "Eliminar",
       tone: "danger",
     });
     if (!ok) return;
     try {
-      await remove(t.id);
+      await remove(c.id);
     } catch {
       /* toast del hook */
     }
@@ -726,92 +718,89 @@ function TiendasTab() {
   return (
     <>
       <SectionTitle
-        title="Tiendas destino"
+        title="Compañías"
         action={
           <PrimaryButton icon={Plus} onClick={openCreate}>
-            Nueva tienda
+            Nueva compañía
           </PrimaryButton>
         }
       />
       {loading ? (
-        <Spinner label="Cargando tiendas…" />
+        <Spinner label="Cargando compañías…" />
       ) : error ? (
         <ErrorState description={error.message} onRetry={refetch} />
-      ) : tiendas.length === 0 ? (
+      ) : clientes.length === 0 ? (
         <EmptyState
-          icon={Store}
-          title="Sin tiendas"
-          description="Crea la primera tienda destino."
+          icon={Users}
+          title="Sin compañías"
+          description="Crea la primera compañía."
         />
       ) : (
         <Card padding={0}>
-          <TableScroll minWidth={480}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={th}>Código</th>
-                  <th style={th}>Nombre</th>
-                  <th style={th}>Estado</th>
-                  <th style={{ ...th, textAlign: "right" }}>
-                    {isDev ? "Acciones" : "Acción"}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {tiendas.map((t) => (
-                  <tr key={t.id}>
-                    <td style={{ ...td, fontFamily: "monospace", fontWeight: 950 }}>
-                      {t.codigo}
-                    </td>
-                    <td style={td}>{t.nombre}</td>
-                    <td style={td}>
-                      <ActiveCell active={t.active} />
-                    </td>
-                    <td style={{ ...td, textAlign: "right" }}>
-                      {isDev ? (
-                        <RowActionsMenu
-                          open={openMenuId === t.id}
-                          onToggle={() =>
-                            setOpenMenuId((cur) => (cur === t.id ? null : t.id))
-                          }
-                          onClose={() => setOpenMenuId(null)}
-                          items={[
-                            {
-                              label: "Editar",
-                              icon: Pencil,
-                              onClick: () => openEdit(t),
-                            },
-                            {
-                              label: t.active ? "Desactivar" : "Activar",
-                              icon: Power,
-                              onClick: () => setActive(t.id, !t.active),
-                            },
-                            {
-                              label: "Eliminar",
-                              icon: Trash2,
-                              danger: true,
-                              onClick: () => onDelete(t),
-                            },
-                          ]}
-                        />
-                      ) : (
-                        <GhostButton size="sm" onClick={() => setActive(t.id, !t.active)}>
-                          {t.active ? "Desactivar" : "Activar"}
-                        </GhostButton>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableScroll>
+          <MrpDataTable
+            columns={[
+              {
+                key: "codigo",
+                title: "Código",
+                get: (c) => ({ value: c.codigo || "—", label: c.codigo || "—" }),
+                render: (c) => (
+                  <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
+                    {c.codigo}
+                  </span>
+                ),
+              },
+              {
+                key: "nombre",
+                title: "Nombre",
+                get: (c) => ({ value: c.nombre || "—", label: c.nombre || "—" }),
+                render: (c) => c.nombre,
+              },
+              {
+                key: "estado",
+                title: "Estado",
+                get: (c) => ({
+                  value: c.active ? "Activa" : "Inactiva",
+                  label: c.active ? "Activa" : "Inactiva",
+                }),
+                render: (c) => <ActiveCell active={c.active} />,
+              },
+            ]}
+            rows={clientes}
+            rowKey={(c) => c.id}
+            storageKey="appolo_mrp_cat_companias_cols"
+            pageSize={5}
+            minWidth={480}
+            renderActions={(c) => (
+              <RowActionsMenu
+                open={openMenuId === c.id}
+                onToggle={() =>
+                  setOpenMenuId((cur) => (cur === c.id ? null : c.id))
+                }
+                onClose={() => setOpenMenuId(null)}
+                items={[
+                  { label: "Editar", icon: Pencil, onClick: () => openEdit(c) },
+                  {
+                    label: c.active ? "Desactivar" : "Activar",
+                    icon: Power,
+                    onClick: () => setActive(c.id, !c.active),
+                  },
+                  {
+                    label: "Eliminar",
+                    icon: Trash2,
+                    danger: true,
+                    onClick: () => onDelete(c),
+                  },
+                ]}
+              />
+            )}
+          />
         </Card>
       )}
 
       <Sheet
         open={open}
         onClose={() => setOpen(false)}
-        title={editing ? "Editar tienda" : "Nueva tienda"}
+        title={editing ? "Editar compañía" : "Nueva compañía"}
         maxWidth={460}
       >
         <Sheet.Body>
@@ -829,11 +818,11 @@ function TiendasTab() {
               readOnly
             />
           </Field>
-          <Field label="Nombre de la tienda" required error={err}>
+          <Field label="Nombre de la compañía" required error={err}>
             <Field.Input
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              placeholder="Ej: Tienda Central"
+              placeholder="Ej: EPA"
               autoFocus
             />
           </Field>
@@ -847,6 +836,405 @@ function TiendasTab() {
           </SecondaryButton>
           <PrimaryButton onClick={onSubmit} loading={editing ? updating : creating}>
             {editing ? "Guardar cambios" : "Crear"}
+          </PrimaryButton>
+        </Sheet.Actions>
+      </Sheet>
+    </>
+  );
+}
+
+/* -------------------------------------------------------------- Clientes */
+// La pestaña "Clientes" administra el catálogo de clientes (destino al trasladar
+// stock a la ubicación `tienda`). No requiere almacén; se fija solo por
+// tenant/company. El código (TD####) se autogenera. Editar/eliminar: solo `dev`.
+// Cada cliente se vincula a UNA compañía (misma lógica que Artículos): al crear
+// se pueden seleccionar varias compañías → una fila por compañía; el rol `dev`
+// asigna la compañía a los clientes antiguos que no la tengan.
+// (Capa de datos legada: pallet_tiendas / usePalletTiendas; compania = pallet_clientes.)
+function ClientesTab() {
+  const { profile } = useMrpUser();
+  const isDev = String(profile?.role || "").toLowerCase() === "dev";
+  const confirm = useConfirm();
+  const {
+    tiendas,
+    loading,
+    error,
+    refetch,
+    createForCompanias,
+    creating,
+    update,
+    updating,
+    remove,
+    setActive,
+    setCompania,
+    peekNextCode,
+  } = usePalletTiendas({ includeInactive: true });
+  // Compañías activas disponibles para vincular.
+  const { clientes: companias, loading: loadingCompanias } = usePalletClientes({
+    includeInactive: false,
+  });
+
+  const [open, setOpen] = useState(false); // sheet de creación
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [nombre, setNombre] = useState("");
+  const [selCompanias, setSelCompanias] = useState([]); // ids seleccionados
+  const [nextCode, setNextCode] = useState("");
+  const [errs, setErrs] = useState({});
+
+  // Edición (nombre, solo dev).
+  const [editing, setEditing] = useState(null);
+  const [editNombre, setEditNombre] = useState("");
+  const [editErr, setEditErr] = useState("");
+
+  // Asignación de compañía a un cliente existente (solo dev).
+  const [assign, setAssign] = useState(null);
+  const [assignId, setAssignId] = useState("");
+
+  // Previsualiza los códigos correlativos que se asignarán (uno por compañía).
+  const previewCodes = useMemo(() => {
+    const m = /^TD(\d+)$/.exec(nextCode || "");
+    if (!m || selCompanias.length === 0) return [];
+    const start = parseInt(m[1], 10);
+    const width = m[1].length;
+    return selCompanias.map((_, i) =>
+      "TD" + String(start + i).padStart(width, "0")
+    );
+  }, [nextCode, selCompanias]);
+
+  const openCreate = async () => {
+    setNombre("");
+    setSelCompanias([]);
+    setErrs({});
+    setNextCode("");
+    setOpen(true);
+    try {
+      setNextCode(await peekNextCode());
+    } catch {
+      /* si falla la previsualización, el código igual se asigna al guardar */
+    }
+  };
+
+  const toggleCompania = (id) =>
+    setSelCompanias((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+
+  const onCreate = async () => {
+    const e = {};
+    if (!nombre.trim()) e.nombre = "El nombre es obligatorio.";
+    if (selCompanias.length === 0)
+      e.companias = "Seleccione al menos una compañía.";
+    setErrs(e);
+    if (Object.keys(e).length) return;
+    try {
+      await createForCompanias({ nombre, companiaIds: selCompanias });
+      setOpen(false);
+    } catch {
+      /* toast del hook */
+    }
+  };
+
+  const openEdit = (t) => {
+    setEditing(t);
+    setEditNombre(t.nombre || "");
+    setEditErr("");
+  };
+
+  const onEdit = async () => {
+    if (!editing) return;
+    if (!editNombre.trim()) {
+      setEditErr("El nombre es obligatorio.");
+      return;
+    }
+    try {
+      await update(editing.id, { nombre: editNombre });
+      setEditing(null);
+      setEditNombre("");
+      setEditErr("");
+    } catch {
+      /* toast del hook */
+    }
+  };
+
+  const onAssign = async () => {
+    if (!assign || !assignId) return;
+    try {
+      await setCompania(assign.id, assignId);
+      setAssign(null);
+      setAssignId("");
+    } catch {
+      /* toast del hook */
+    }
+  };
+
+  const onDelete = async (t) => {
+    const ok = await confirm({
+      title: "Eliminar cliente",
+      message: `¿Eliminar el cliente "${t.codigo} · ${t.nombre}"? Esta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await remove(t.id);
+    } catch {
+      /* toast del hook */
+    }
+  };
+
+  return (
+    <>
+      <SectionTitle
+        title="Clientes"
+        action={
+          <PrimaryButton icon={Plus} onClick={openCreate}>
+            Nuevo cliente
+          </PrimaryButton>
+        }
+      />
+      {loading ? (
+        <Spinner label="Cargando clientes…" />
+      ) : error ? (
+        <ErrorState description={error.message} onRetry={refetch} />
+      ) : tiendas.length === 0 ? (
+        <EmptyState
+          icon={Store}
+          title="Sin clientes"
+          description="Crea el primer cliente."
+        />
+      ) : (
+        <Card padding={0}>
+          <MrpDataTable
+            columns={[
+              {
+                key: "codigo",
+                title: "Código",
+                get: (t) => ({ value: t.codigo || "—", label: t.codigo || "—" }),
+                render: (t) => (
+                  <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
+                    {t.codigo}
+                  </span>
+                ),
+              },
+              {
+                key: "nombre",
+                title: "Nombre",
+                get: (t) => ({ value: t.nombre || "—", label: t.nombre || "—" }),
+                render: (t) => t.nombre,
+              },
+              {
+                key: "compania",
+                title: "Compañía",
+                get: (t) => ({
+                  value: t.compania?.nombre || "—",
+                  label: t.compania?.nombre || "—",
+                }),
+                render: (t) =>
+                  t.compania ? (
+                    <ClienteCell cliente={t.compania} />
+                  ) : isDev ? (
+                    <GhostButton
+                      size="sm"
+                      icon={Users}
+                      onClick={() => {
+                        setAssign(t);
+                        setAssignId("");
+                      }}
+                    >
+                      Asignar compañía
+                    </GhostButton>
+                  ) : (
+                    <span style={{ color: SLATE, fontWeight: 800 }}>—</span>
+                  ),
+              },
+              {
+                key: "estado",
+                title: "Estado",
+                get: (t) => ({
+                  value: t.active ? "Activa" : "Inactiva",
+                  label: t.active ? "Activa" : "Inactiva",
+                }),
+                render: (t) => <ActiveCell active={t.active} />,
+              },
+            ]}
+            rows={tiendas}
+            rowKey={(t) => t.id}
+            storageKey="appolo_mrp_cat_clientes_cols"
+            pageSize={5}
+            minWidth={640}
+            actionsLabel={isDev ? "Acciones" : "Acción"}
+            renderActions={(t) =>
+              isDev ? (
+                <RowActionsMenu
+                  open={openMenuId === t.id}
+                  onToggle={() =>
+                    setOpenMenuId((cur) => (cur === t.id ? null : t.id))
+                  }
+                  onClose={() => setOpenMenuId(null)}
+                  items={[
+                    { label: "Editar", icon: Pencil, onClick: () => openEdit(t) },
+                    {
+                      label: t.active ? "Desactivar" : "Activar",
+                      icon: Power,
+                      onClick: () => setActive(t.id, !t.active),
+                    },
+                    {
+                      label: "Eliminar",
+                      icon: Trash2,
+                      danger: true,
+                      onClick: () => onDelete(t),
+                    },
+                  ]}
+                />
+              ) : (
+                <GhostButton size="sm" onClick={() => setActive(t.id, !t.active)}>
+                  {t.active ? "Desactivar" : "Activar"}
+                </GhostButton>
+              )
+            }
+          />
+        </Card>
+      )}
+
+      {/* Crear cliente(s): uno por compañía seleccionada. */}
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Nuevo cliente"
+        maxWidth={480}
+      >
+        <Sheet.Body>
+          <Field
+            label="Código"
+            hint={
+              previewCodes.length > 1
+                ? `Se crearán ${previewCodes.length} clientes: ${previewCodes.join(", ")}`
+                : "Se asigna automáticamente al guardar."
+            }
+          >
+            <Field.Input
+              value={previewCodes[0] || nextCode || "Calculando…"}
+              disabled
+              readOnly
+            />
+          </Field>
+          <Field label="Nombre del cliente" required error={errs.nombre}>
+            <Field.Input
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Ej: Tienda Central"
+              autoFocus
+            />
+          </Field>
+          <Field
+            label="Compañías"
+            required
+            error={errs.companias}
+            hint={
+              loadingCompanias
+                ? "Cargando compañías…"
+                : companias.length === 0
+                ? "No hay compañías activas. Créalas en la pestaña Compañías."
+                : "Selecciona una o más. Se crea un cliente por compañía."
+            }
+          >
+            {companias.length > 0 ? (
+              <ChipsRow>
+                {companias.map((c) => (
+                  <Chip
+                    key={c.id}
+                    active={selCompanias.includes(c.id)}
+                    onClick={() => toggleCompania(c.id)}
+                  >
+                    {c.nombre}
+                  </Chip>
+                ))}
+              </ChipsRow>
+            ) : null}
+          </Field>
+        </Sheet.Body>
+        <Sheet.Actions>
+          <SecondaryButton onClick={() => setOpen(false)} disabled={creating}>
+            Cancelar
+          </SecondaryButton>
+          <PrimaryButton onClick={onCreate} loading={creating}>
+            Crear
+          </PrimaryButton>
+        </Sheet.Actions>
+      </Sheet>
+
+      {/* Editar cliente (nombre, solo dev). */}
+      <Sheet
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title="Editar cliente"
+        maxWidth={460}
+      >
+        <Sheet.Body>
+          <Field label="Código" hint="El código no se puede editar.">
+            <Field.Input value={editing?.codigo || ""} disabled readOnly />
+          </Field>
+          <Field label="Nombre del cliente" required error={editErr}>
+            <Field.Input
+              value={editNombre}
+              onChange={(e) => setEditNombre(e.target.value)}
+              placeholder="Ej: Tienda Central"
+              autoFocus
+            />
+          </Field>
+        </Sheet.Body>
+        <Sheet.Actions>
+          <SecondaryButton onClick={() => setEditing(null)} disabled={updating}>
+            Cancelar
+          </SecondaryButton>
+          <PrimaryButton onClick={onEdit} loading={updating}>
+            Guardar cambios
+          </PrimaryButton>
+        </Sheet.Actions>
+      </Sheet>
+
+      {/* Asignar compañía a un cliente existente (solo dev). */}
+      <Sheet
+        open={!!assign}
+        onClose={() => setAssign(null)}
+        title="Asignar compañía"
+        maxWidth={440}
+      >
+        <Sheet.Body>
+          <Field label="Cliente">
+            <Field.Input
+              value={assign ? `${assign.codigo} — ${assign.nombre}` : ""}
+              disabled
+              readOnly
+            />
+          </Field>
+          <Field
+            label="Compañía"
+            required
+            hint={
+              companias.length === 0
+                ? "No hay compañías activas. Créalas en la pestaña Compañías."
+                : undefined
+            }
+          >
+            <Field.Select
+              value={assignId}
+              disabled={loadingCompanias || companias.length === 0}
+              onChange={(e) => setAssignId(e.target.value)}
+            >
+              <option value="">Seleccione una compañía…</option>
+              {companias.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.codigo} — {c.nombre}
+                </option>
+              ))}
+            </Field.Select>
+          </Field>
+        </Sheet.Body>
+        <Sheet.Actions>
+          <SecondaryButton onClick={() => setAssign(null)}>Cancelar</SecondaryButton>
+          <PrimaryButton onClick={onAssign} disabled={!assignId}>
+            Asignar
           </PrimaryButton>
         </Sheet.Actions>
       </Sheet>
@@ -998,70 +1386,88 @@ function InsumosSection() {
         />
       ) : (
         <Card padding={0}>
-          <TableScroll minWidth={760}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={th}>Código</th>
-                  <th style={th}>Nombre</th>
-                  <th style={th}>Detalle</th>
-                  <th style={{ ...th, textAlign: "right" }}>Precio</th>
-                  <th style={th}>Modo</th>
-                  <th style={th}>Estado</th>
-                  <th style={{ ...th, textAlign: "right" }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {insumos.map((i) => (
-                  <tr key={i.id}>
-                    <td style={{ ...td, fontFamily: "monospace", fontWeight: 950 }}>
-                      {i.codigo}
-                    </td>
-                    <td style={td}>{i.nombre}</td>
-                    <td style={{ ...td, whiteSpace: "normal" }}>
-                      {i.detalle || "—"}
-                    </td>
-                    <td style={{ ...td, textAlign: "right", fontWeight: 950 }}>
-                      {fmtPrice(i.price)}
-                    </td>
-                    <td style={td}>
-                      {PRICE_MODE_LABELS[i.price_mode] || i.price_mode}
-                    </td>
-                    <td style={td}>
-                      <ActiveCell active={i.active} />
-                    </td>
-                    <td style={{ ...td, textAlign: "right" }}>
-                      <RowActionsMenu
-                        open={openMenuId === i.id}
-                        onToggle={() =>
-                          setOpenMenuId((cur) => (cur === i.id ? null : i.id))
-                        }
-                        onClose={() => setOpenMenuId(null)}
-                        items={[
-                          {
-                            label: "Editar",
-                            icon: Pencil,
-                            onClick: () => openEdit(i),
-                          },
-                          {
-                            label: i.active ? "Desactivar" : "Activar",
-                            icon: Power,
-                            onClick: () => setActive(i.id, !i.active),
-                          },
-                          {
-                            label: "Eliminar",
-                            icon: Trash2,
-                            danger: true,
-                            onClick: () => onDelete(i),
-                          },
-                        ]}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableScroll>
+          <MrpDataTable
+            columns={[
+              {
+                key: "codigo",
+                title: "Código",
+                get: (i) => ({ value: i.codigo || "—", label: i.codigo || "—" }),
+                render: (i) => (
+                  <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
+                    {i.codigo}
+                  </span>
+                ),
+              },
+              {
+                key: "nombre",
+                title: "Nombre",
+                get: (i) => ({ value: i.nombre || "—", label: i.nombre || "—" }),
+                render: (i) => i.nombre,
+              },
+              {
+                key: "detalle",
+                title: "Detalle",
+                get: (i) => ({ value: i.detalle || "—", label: i.detalle || "—" }),
+                render: (i) => i.detalle || "—",
+              },
+              {
+                key: "precio",
+                title: "Precio",
+                align: "right",
+                get: (i) => ({
+                  value: String(i.price ?? ""),
+                  label: fmtPrice(i.price),
+                }),
+                render: (i) => fmtPrice(i.price),
+              },
+              {
+                key: "modo",
+                title: "Modo",
+                get: (i) => ({
+                  value: i.price_mode || "—",
+                  label: PRICE_MODE_LABELS[i.price_mode] || i.price_mode || "—",
+                }),
+                render: (i) => PRICE_MODE_LABELS[i.price_mode] || i.price_mode,
+              },
+              {
+                key: "estado",
+                title: "Estado",
+                get: (i) => ({
+                  value: i.active ? "Activo" : "Inactivo",
+                  label: i.active ? "Activo" : "Inactivo",
+                }),
+                render: (i) => <ActiveCell active={i.active} />,
+              },
+            ]}
+            rows={insumos}
+            rowKey={(i) => i.id}
+            storageKey="appolo_mrp_cat_insumos_cols"
+            pageSize={5}
+            minWidth={760}
+            renderActions={(i) => (
+              <RowActionsMenu
+                open={openMenuId === i.id}
+                onToggle={() =>
+                  setOpenMenuId((cur) => (cur === i.id ? null : i.id))
+                }
+                onClose={() => setOpenMenuId(null)}
+                items={[
+                  { label: "Editar", icon: Pencil, onClick: () => openEdit(i) },
+                  {
+                    label: i.active ? "Desactivar" : "Activar",
+                    icon: Power,
+                    onClick: () => setActive(i.id, !i.active),
+                  },
+                  {
+                    label: "Eliminar",
+                    icon: Trash2,
+                    danger: true,
+                    onClick: () => onDelete(i),
+                  },
+                ]}
+              />
+            )}
+          />
         </Card>
       )}
 
@@ -1309,73 +1715,94 @@ function BomSection() {
         />
       ) : (
         <Card padding={0}>
-          <TableScroll minWidth={680}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={th}>Código</th>
-                  <th style={th}>Nombre</th>
-                  <th style={th}>Insumos</th>
-                  <th style={{ ...th, textAlign: "right" }}>Total</th>
-                  <th style={th}>Estado</th>
-                  <th style={{ ...th, textAlign: "right" }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {boms.map((r) => {
-                  const nombres = (r.insumos || [])
+          <MrpDataTable
+            columns={[
+              {
+                key: "codigo",
+                title: "Código",
+                get: (r) => ({ value: r.codigo || "—", label: r.codigo || "—" }),
+                render: (r) => (
+                  <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
+                    {r.codigo}
+                  </span>
+                ),
+              },
+              {
+                key: "nombre",
+                title: "Nombre",
+                get: (r) => ({ value: r.nombre || "—", label: r.nombre || "—" }),
+                render: (r) => r.nombre,
+              },
+              {
+                key: "insumos",
+                title: "Insumos",
+                filterable: false,
+                get: (r) => {
+                  const v = (r.insumos || [])
                     .map((i) => `${i.nombre} x ${i.quantity ?? 1}`)
                     .join(", ");
-                  return (
-                    <tr key={r.id}>
-                      <td
-                        style={{ ...td, fontFamily: "monospace", fontWeight: 950 }}
-                      >
-                        {r.codigo}
-                      </td>
-                      <td style={td}>{r.nombre}</td>
-                      <td style={{ ...td, whiteSpace: "normal" }}>
-                        {nombres || "—"}
-                      </td>
-                      <td style={{ ...td, textAlign: "right", fontWeight: 950 }}>
-                        {(r.insumos || []).length}
-                      </td>
-                      <td style={td}>
-                        <ActiveCell active={r.active} />
-                      </td>
-                      <td style={{ ...td, textAlign: "right" }}>
-                        <RowActionsMenu
-                          open={openMenuId === r.id}
-                          onToggle={() =>
-                            setOpenMenuId((cur) => (cur === r.id ? null : r.id))
-                          }
-                          onClose={() => setOpenMenuId(null)}
-                          items={[
-                            {
-                              label: "Editar",
-                              icon: Pencil,
-                              onClick: () => openEdit(r),
-                            },
-                            {
-                              label: r.active ? "Desactivar" : "Activar",
-                              icon: Power,
-                              onClick: () => setActive(r.id, !r.active),
-                            },
-                            {
-                              label: "Eliminar",
-                              icon: Trash2,
-                              danger: true,
-                              onClick: () => onDelete(r),
-                            },
-                          ]}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </TableScroll>
+                  return { value: v || "—", label: v || "—" };
+                },
+                render: (r) => {
+                  const v = (r.insumos || [])
+                    .map((i) => `${i.nombre} x ${i.quantity ?? 1}`)
+                    .join(", ");
+                  return v || "—";
+                },
+              },
+              {
+                key: "total",
+                title: "Total",
+                align: "right",
+                get: (r) => ({
+                  value: String((r.insumos || []).length),
+                  label: String((r.insumos || []).length),
+                }),
+                render: (r) => (
+                  <span style={{ fontWeight: 950 }}>
+                    {(r.insumos || []).length}
+                  </span>
+                ),
+              },
+              {
+                key: "estado",
+                title: "Estado",
+                get: (r) => ({
+                  value: r.active ? "Activo" : "Inactivo",
+                  label: r.active ? "Activo" : "Inactivo",
+                }),
+                render: (r) => <ActiveCell active={r.active} />,
+              },
+            ]}
+            rows={boms}
+            rowKey={(r) => r.id}
+            storageKey="appolo_mrp_cat_bom_cols"
+            pageSize={5}
+            minWidth={700}
+            renderActions={(r) => (
+              <RowActionsMenu
+                open={openMenuId === r.id}
+                onToggle={() =>
+                  setOpenMenuId((cur) => (cur === r.id ? null : r.id))
+                }
+                onClose={() => setOpenMenuId(null)}
+                items={[
+                  { label: "Editar", icon: Pencil, onClick: () => openEdit(r) },
+                  {
+                    label: r.active ? "Desactivar" : "Activar",
+                    icon: Power,
+                    onClick: () => setActive(r.id, !r.active),
+                  },
+                  {
+                    label: "Eliminar",
+                    icon: Trash2,
+                    danger: true,
+                    onClick: () => onDelete(r),
+                  },
+                ]}
+              />
+            )}
+          />
         </Card>
       )}
 
@@ -1578,22 +2005,69 @@ const selectedRow = {
 
 /* ------------------------------------------------------------ Almacenes */
 function AlmacenesTab() {
-  const { warehouses, loading, error, refetch, create, creating, setActive } =
-    usePalletWarehouses({ includeInactive: true });
+  const confirm = useConfirm();
+  const {
+    warehouses,
+    loading,
+    error,
+    refetch,
+    create,
+    creating,
+    update,
+    updating,
+    remove,
+    setActive,
+  } = usePalletWarehouses({ includeInactive: true });
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
   const [form, setForm] = useState({ name: "", code: "" });
   const [errs, setErrs] = useState({});
 
-  const onCreate = async () => {
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ name: "", code: "" });
+    setErrs({});
+    setOpen(true);
+  };
+
+  const openEdit = (w) => {
+    setEditing(w);
+    setForm({ name: w.name || "", code: w.code || "" });
+    setErrs({});
+    setOpen(true);
+  };
+
+  const onSubmit = async () => {
     const e = {};
     if (!form.name.trim()) e.name = "Requerido.";
     setErrs(e);
     if (Object.keys(e).length) return;
     try {
-      await create(form);
+      if (editing) {
+        await update(editing.id, form);
+      } else {
+        await create(form);
+      }
       setOpen(false);
+      setEditing(null);
       setForm({ name: "", code: "" });
       setErrs({});
+    } catch {
+      /* toast del hook */
+    }
+  };
+
+  const onDelete = async (w) => {
+    const ok = await confirm({
+      title: "Eliminar almacén",
+      message: `¿Eliminar el almacén "${w.name}"? Esta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await remove(w.id);
     } catch {
       /* toast del hook */
     }
@@ -1604,7 +2078,7 @@ function AlmacenesTab() {
       <SectionTitle
         title="Almacenes"
         action={
-          <PrimaryButton icon={Plus} onClick={() => setOpen(true)}>
+          <PrimaryButton icon={Plus} onClick={openCreate}>
             Nuevo almacén
           </PrimaryButton>
         }
@@ -1621,38 +2095,68 @@ function AlmacenesTab() {
         />
       ) : (
         <Card padding={0}>
-          <TableScroll minWidth={520}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={th}>Nombre</th>
-                  <th style={th}>Código</th>
-                  <th style={th}>Estado</th>
-                  <th style={{ ...th, textAlign: "right" }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {warehouses.map((w) => (
-                  <tr key={w.id}>
-                    <td style={td}>{w.name}</td>
-                    <td style={td}>{w.code || "—"}</td>
-                    <td style={td}>
-                      <ActiveCell active={w.active} />
-                    </td>
-                    <td style={{ ...td, textAlign: "right" }}>
-                      <GhostButton size="sm" onClick={() => setActive(w.id, !w.active)}>
-                        {w.active ? "Desactivar" : "Activar"}
-                      </GhostButton>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableScroll>
+          <MrpDataTable
+            columns={[
+              {
+                key: "nombre",
+                title: "Nombre",
+                get: (w) => ({ value: w.name || "—", label: w.name || "—" }),
+                render: (w) => w.name,
+              },
+              {
+                key: "codigo",
+                title: "Código",
+                get: (w) => ({ value: w.code || "—", label: w.code || "—" }),
+                render: (w) => w.code || "—",
+              },
+              {
+                key: "estado",
+                title: "Estado",
+                get: (w) => ({
+                  value: w.active ? "Activo" : "Inactivo",
+                  label: w.active ? "Activo" : "Inactivo",
+                }),
+                render: (w) => <ActiveCell active={w.active} />,
+              },
+            ]}
+            rows={warehouses}
+            rowKey={(w) => w.id}
+            storageKey="appolo_mrp_cat_almacenes_cols"
+            pageSize={5}
+            minWidth={520}
+            renderActions={(w) => (
+              <RowActionsMenu
+                open={openMenuId === w.id}
+                onToggle={() =>
+                  setOpenMenuId((cur) => (cur === w.id ? null : w.id))
+                }
+                onClose={() => setOpenMenuId(null)}
+                items={[
+                  { label: "Editar", icon: Pencil, onClick: () => openEdit(w) },
+                  {
+                    label: w.active ? "Desactivar" : "Activar",
+                    icon: Power,
+                    onClick: () => setActive(w.id, !w.active),
+                  },
+                  {
+                    label: "Eliminar",
+                    icon: Trash2,
+                    danger: true,
+                    onClick: () => onDelete(w),
+                  },
+                ]}
+              />
+            )}
+          />
         </Card>
       )}
 
-      <Sheet open={open} onClose={() => setOpen(false)} title="Nuevo almacén" maxWidth={460}>
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title={editing ? "Editar almacén" : "Nuevo almacén"}
+        maxWidth={460}
+      >
         <Sheet.Body>
           <Field label="Nombre del almacén" required error={errs.name}>
             <Field.Input
@@ -1671,11 +2175,14 @@ function AlmacenesTab() {
           </Field>
         </Sheet.Body>
         <Sheet.Actions>
-          <SecondaryButton onClick={() => setOpen(false)} disabled={creating}>
+          <SecondaryButton
+            onClick={() => setOpen(false)}
+            disabled={creating || updating}
+          >
             Cancelar
           </SecondaryButton>
-          <PrimaryButton onClick={onCreate} loading={creating}>
-            Crear
+          <PrimaryButton onClick={onSubmit} loading={editing ? updating : creating}>
+            {editing ? "Guardar cambios" : "Crear"}
           </PrimaryButton>
         </Sheet.Actions>
       </Sheet>

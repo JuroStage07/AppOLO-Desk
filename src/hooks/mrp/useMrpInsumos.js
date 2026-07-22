@@ -8,6 +8,7 @@ import {
   updateInsumo,
   deleteInsumo,
   setInsumoActive,
+  adjustInsumoStock,
   getNextInsumoCode,
 } from "../../services/mrp";
 import useAsyncData from "./useAsyncData";
@@ -92,6 +93,25 @@ export default function useMrpInsumos({ includeInactive = false } = {}) {
     [toast]
   );
 
+  const [adjusting, setAdjusting] = useState(false);
+  const adjust = useCallback(
+    async (id, { mode, quantity, reason }) => {
+      setAdjusting(true);
+      try {
+        const i = await adjustInsumoStock(id, { mode, quantity, reason });
+        bumpRefresh("insumos");
+        toast.success("Ajuste registrado.");
+        return i;
+      } catch (e) {
+        toast.error(e.message || "No se pudo registrar el ajuste.");
+        throw e;
+      } finally {
+        setAdjusting(false);
+      }
+    },
+    [toast]
+  );
+
   const peekNextCode = useCallback(() => getNextInsumoCode(), []);
 
   return {
@@ -106,6 +126,8 @@ export default function useMrpInsumos({ includeInactive = false } = {}) {
     remove,
     removing,
     setActive,
+    adjust,
+    adjusting,
     peekNextCode,
   };
 }

@@ -3,8 +3,8 @@
 //
 // El almacén NO se elige a mano: se resuelve de la BODEGA activa (BodegaSwitcher
 // en el Topbar) según el vínculo configurado en /dev/config-modulos/mrp-tarimas.
-import React from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import React, { useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Package,
@@ -12,6 +12,8 @@ import {
   Trash2,
   Settings2,
   Warehouse,
+  Plus,
+  Minus,
 } from "lucide-react";
 import {
   Shell,
@@ -28,10 +30,39 @@ import { ACCENT, ACCENT_SOFT, BORDER, SLATE, TEXT } from "../../styles/theme";
 
 const NAV = [
   { label: "Dashboard", to: "/mrp-tarimas/dashboard", icon: LayoutDashboard },
-  { label: "Inventario", to: "/mrp-tarimas/inventario", icon: Package },
-  { label: "Historial", to: "/mrp-tarimas/movimientos", icon: History },
+  {
+    label: "Inventario",
+    to: "/mrp-tarimas/inventario",
+    icon: Package,
+    children: [
+      { label: "Artículos", to: "/mrp-tarimas/inventario/articulos" },
+      { label: "Insumos", to: "/mrp-tarimas/inventario/insumos" },
+    ],
+  },
+  {
+    label: "Historial",
+    to: "/mrp-tarimas/movimientos",
+    icon: History,
+    children: [
+      { label: "Historial de movimientos", to: "/mrp-tarimas/movimientos" },
+      { label: "Registro de eventos", to: "/mrp-tarimas/eventos" },
+    ],
+  },
   { label: "Descartes", to: "/mrp-tarimas/descartes", icon: Trash2 },
-  { label: "Catálogos", to: "/mrp-tarimas/catalogos", icon: Settings2 },
+  {
+    label: "Catálogos",
+    to: "/mrp-tarimas/catalogos",
+    icon: Settings2,
+    // Sub-opciones (catálogos) que se despliegan bajo "Catálogos" en el submenú.
+    children: [
+      { label: "Artículos", to: "/mrp-tarimas/catalogos/articulos" },
+      { label: "Compañías", to: "/mrp-tarimas/catalogos/companias" },
+      { label: "Clientes", to: "/mrp-tarimas/catalogos/clientes" },
+      { label: "Insumos", to: "/mrp-tarimas/catalogos/insumos" },
+      { label: "BOM", to: "/mrp-tarimas/catalogos/bom" },
+      { label: "Almacenes", to: "/mrp-tarimas/catalogos/almacenes" },
+    ],
+  },
 ];
 
 const linkBase = {
@@ -52,35 +83,124 @@ const linkActive = {
   border: `1px solid ${ACCENT}`,
   color: ACCENT,
 };
+const subLinkBase = {
+  display: "flex",
+  alignItems: "center",
+  padding: "7px 10px",
+  borderRadius: 10,
+  color: SLATE,
+  fontWeight: 800,
+  fontSize: 13,
+  textDecoration: "none",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+const subLinkActive = { background: ACCENT_SOFT, color: ACCENT };
 
 export default function MRPTarimasPage() {
   const isMobile = useIsMobile();
+  const { pathname } = useLocation();
   const { warehouse, warehouseId, warehouseLoading, bodegaNombre } =
     useMrpWorkspace();
+
+  // Acordeón: una sola sección abierta a la vez. `openKey` undefined ⇒ sigue la
+  // sección activa; al hacer clic se fija (o se cierra) manualmente.
+  const [openKey, setOpenKey] = useState(undefined);
+  const activeParent =
+    (
+      NAV.find(
+        (it) =>
+          it.children &&
+          (pathname.startsWith(it.to) ||
+            it.children.some((c) => pathname.startsWith(c.to)))
+      ) || {}
+    ).to || null;
+  const effectiveOpen = openKey === undefined ? activeParent : openKey;
 
   const nav = (
     <nav
       style={{
         display: isMobile ? "flex" : "grid",
-        gap: 6,
+        gap: isMobile ? 8 : 4,
         overflowX: isMobile ? "auto" : "visible",
       }}
     >
       {NAV.map((item) => {
         const Icon = item.icon;
+        // La sección está activa si la ruta actual cuelga de la ruta del ítem o
+        // de cualquiera de sus hijos (p.ej. Historial, cuyos hijos son rutas
+        // hermanas sin prefijo común).
+        const sectionActive =
+          pathname.startsWith(item.to) ||
+          (item.children || []).some((c) => pathname.startsWith(c.to));
+        const hasChildren = !!item.children && !isMobile;
+        const isOpen = hasChildren && effectiveOpen === item.to;
+
         return (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            style={({ isActive }) => ({
-              ...linkBase,
-              whiteSpace: "nowrap",
-              ...(isActive ? linkActive : {}),
-            })}
-          >
-            <Icon size={16} strokeWidth={2.2} />
-            {item.label}
-          </NavLink>
+          <div key={item.to} style={{ display: "grid", gap: 4 }}>
+            {/* El propio botón de la pestaña navega Y despliega las opciones; el
+                indicador +/- va dentro, al extremo derecho. */}
+            <NavLink
+              to={item.to}
+              className="mrp-nav-link"
+              onClick={() => {
+                // Abre solo esta sección (cierra las demás); si ya está abierta,
+                // la cierra.
+                if (hasChildren) setOpenKey(isOpen ? null : item.to);
+              }}
+              aria-expanded={hasChildren ? isOpen : undefined}
+              style={({ isActive }) => ({
+                ...linkBase,
+                whiteSpace: "nowrap",
+                ...(isActive || sectionActive ? linkActive : {}),
+              })}
+            >
+              <Icon size={16} strokeWidth={2.2} style={{ flexShrink: 0 }} />
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {item.label}
+              </span>
+              {hasChildren ? (
+                isOpen ? (
+                  <Minus size={15} strokeWidth={2.6} style={{ flexShrink: 0 }} />
+                ) : (
+                  <Plus size={15} strokeWidth={2.6} style={{ flexShrink: 0 }} />
+                )
+              ) : null}
+            </NavLink>
+
+            {hasChildren && isOpen ? (
+              <div
+                style={{
+                  display: "grid",
+                  gap: 2,
+                  marginLeft: 12,
+                  paddingLeft: 10,
+                  borderLeft: `1px solid ${BORDER}`,
+                }}
+              >
+                {item.children.map((c) => (
+                  <NavLink
+                    key={c.to}
+                    to={c.to}
+                    className="mrp-sub-link"
+                    style={({ isActive }) => ({
+                      ...subLinkBase,
+                      ...(isActive ? subLinkActive : {}),
+                    })}
+                  >
+                    {c.label}
+                  </NavLink>
+                ))}
+              </div>
+            ) : null}
+          </div>
         );
       })}
     </nav>
@@ -154,16 +274,41 @@ export default function MRPTarimasPage() {
 
   return (
     <Shell>
+      <style>{`
+        .mrp-side-scroll { scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
+        .mrp-side-scroll::-webkit-scrollbar { width: 7px; }
+        .mrp-side-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 999px; }
+        .mrp-side-scroll::-webkit-scrollbar-track { background: transparent; }
+        .mrp-nav-link:hover { background: #F1F5F9; }
+        .mrp-sub-link:hover { background: #F1F5F9; color: ${TEXT}; }
+      `}</style>
+
       <Topbar />
-      <Main>
-        <Container>
-          {/* Sidebar (info de almacén + módulos) + contenido del módulo activo */}
+      <Main
+        style={
+          isMobile
+            ? undefined
+            : { overflow: "hidden", display: "flex", flexDirection: "column" }
+        }
+      >
+        <Container
+          style={
+            isMobile
+              ? undefined
+              : { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }
+          }
+        >
+          {/* Sidebar (info de almacén + módulos) + contenido del módulo activo.
+              En escritorio, el layout ocupa el alto visible: la barra lateral
+              queda fija y SOLO el panel de contenido hace scroll (la página no).
+              Se usa flex (flex:1 + minHeight:0) para una altura definida y fiable. */}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "220px 1fr",
+              gridTemplateColumns: isMobile ? "1fr" : "232px 1fr",
               gap: 16,
-              alignItems: "start",
+              alignItems: isMobile ? "start" : "stretch",
+              ...(isMobile ? {} : { flex: 1, minHeight: 0, overflow: "hidden" }),
             }}
           >
             {isMobile ? (
@@ -172,17 +317,77 @@ export default function MRPTarimasPage() {
                 {nav}
               </div>
             ) : (
-              <Card
-                padding={10}
-                style={{ position: "sticky", top: 84, display: "grid", gap: 12 }}
-              >
-                {workspaceInfo}
-                <div style={{ height: 1, background: BORDER }} />
-                {nav}
-              </Card>
+              // Barra lateral fija: ocupa el alto del panel y hace scroll interno
+              // (no genera scroll de página). La info del almacén queda fija
+              // arriba y solo la lista de módulos se desplaza.
+              <div style={{ height: "100%", minHeight: 0 }}>
+                <Card
+                  padding={0}
+                  style={{
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div style={{ padding: 12 }}>{workspaceInfo}</div>
+                  <div style={{ height: 1, background: BORDER, flexShrink: 0 }} />
+                  <div
+                    className="mrp-side-scroll"
+                    style={{
+                      flex: 1,
+                      minHeight: 0,
+                      overflowY: "auto",
+                      padding: 12,
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: SLATE,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.4,
+                        marginBottom: 8,
+                      }}
+                    >
+                      Módulos
+                    </span>
+                    {nav}
+                  </div>
+                </Card>
+              </div>
             )}
 
-            <div style={{ minWidth: 0, display: "grid", gap: 16 }}>{content}</div>
+            {/* Panel de contenido: contenedor de scroll a nivel de bloque (el
+                scrollHeight incluye todo el contenido con fiabilidad) con una
+                rejilla interna solo para el espaciado entre secciones. */}
+            <div
+              className={isMobile ? undefined : "mrp-side-scroll"}
+              style={{
+                minWidth: 0,
+                ...(isMobile
+                  ? {}
+                  : {
+                      height: "100%",
+                      minHeight: 0,
+                      overflowY: "auto",
+                      paddingRight: 4,
+                    }),
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gap: 16,
+                  alignContent: "start",
+                  paddingBottom: isMobile ? 0 : 24,
+                }}
+              >
+                {content}
+              </div>
+            </div>
           </div>
         </Container>
       </Main>
