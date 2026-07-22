@@ -337,6 +337,62 @@ export async function setPalletClienteActive(id, active) {
   return data;
 }
 
+/* ----------------------------------------------------- tiendas (destino) */
+// Las tiendas destino se fijan solo por tenant/company (no dependen de almacén).
+
+export async function listPalletTiendas({ includeInactive = false } = {}) {
+  let q = scope(supabase.from("pallet_tiendas").select("*")).order("codigo", {
+    ascending: true,
+  });
+  if (!includeInactive) q = q.eq("active", true);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+// Previsualiza el próximo código (TD####) sin crear nada. La RPC sigue siendo
+// la autoridad al guardar; esto es solo para mostrarlo en el formulario.
+export async function getNextTiendaCode() {
+  const { data, error } = await scope(
+    supabase.from("pallet_tiendas").select("codigo")
+  );
+  if (error) throw error;
+  let max = 0;
+  for (const r of data || []) {
+    const m = /^TD(\d+)$/.exec(r.codigo || "");
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n > max) max = n;
+    }
+  }
+  return "TD" + String(max + 1).padStart(4, "0");
+}
+
+// El código (TD####) se genera en la RPC; aquí solo se manda el nombre.
+export async function createPalletTienda({ nombre }) {
+  const clean = String(nombre || "").trim();
+  if (!clean) throw new Error("El nombre de la tienda es obligatorio.");
+  const { tenantId, company } = getMrpScope();
+  const { data, error } = await supabase.rpc("mrp_create_tienda", {
+    p_tenant_id: tenantId,
+    p_company: company,
+    p_nombre: clean,
+  });
+  if (error) throw error;
+  return data; // fila completa de la tienda (incluye codigo)
+}
+
+export async function setPalletTiendaActive(id, active) {
+  const { data, error } = await supabase
+    .from("pallet_tiendas")
+    .update({ active: !!active })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 /* ------------------------------------------------------- insumos (Insumos) */
 // Los insumos se fijan solo por tenant/company (no dependen de un almacén).
 

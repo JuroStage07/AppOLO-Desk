@@ -5,6 +5,7 @@ export { default as usePalletWarehouses } from "./usePalletWarehouses";
 export { default as usePalletMotivos } from "./usePalletMotivos";
 export { default as usePalletArticulos } from "./usePalletArticulos";
 export { default as usePalletClientes } from "./usePalletClientes";
+export { default as usePalletTiendas } from "./usePalletTiendas";
 export { default as useMrpInsumos } from "./useMrpInsumos";
 export { default as useMrpBoms } from "./useMrpBoms";
 export { default as usePalletAdjustments } from "./usePalletAdjustments";

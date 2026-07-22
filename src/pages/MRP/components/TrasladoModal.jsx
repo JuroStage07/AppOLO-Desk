@@ -21,6 +21,7 @@ import {
   usePalletInventory,
   usePalletWarehouses,
   usePalletMotivos,
+  usePalletTiendas,
   useMrpWorkspace,
 } from "../../../hooks/mrp";
 import useIsMobile from "../../../hooks/useIsMobile";
@@ -40,6 +41,7 @@ function initialForm(prefillArg, mode) {
     articuloId: prefill.articuloId || "",
     quantity: "",
     reason: "",
+    tiendaId: "",
   };
 }
 
@@ -49,6 +51,7 @@ export default function TrasladoModal({ open, onClose, prefill }) {
   const { transfer, transferBetweenWarehouses, loading } = usePalletTransfers();
   const { articulos } = usePalletArticulos({ warehouseId });
   const { warehouses } = usePalletWarehouses();
+  const { tiendas } = usePalletTiendas();
 
   const isMobile = useIsMobile(560);
 
@@ -114,6 +117,9 @@ export default function TrasladoModal({ open, onClose, prefill }) {
       if (!form.destinationLocation) e.destinationLocation = "Seleccione el destino.";
       if (form.originLocation && form.originLocation === form.destinationLocation)
         e.destinationLocation = "El origen y el destino no pueden ser iguales.";
+      // Destino tienda: la tienda concreta es obligatoria.
+      if (form.destinationLocation === "tienda" && !form.tiendaId)
+        e.tiendaId = "Seleccione la tienda destino.";
     }
 
     const qty = Number(form.quantity);
@@ -168,6 +174,8 @@ export default function TrasladoModal({ open, onClose, prefill }) {
           articuloId: form.articuloId,
           quantity: Number(form.quantity),
           reason: form.reason.trim() || null,
+          tiendaId:
+            form.destinationLocation === "tienda" ? form.tiendaId : null,
         });
       }
       onClose?.();
@@ -280,12 +288,45 @@ export default function TrasladoModal({ open, onClose, prefill }) {
             <Field.Select
               value={form.destinationLocation}
               disabled={!form.articuloId}
-              onChange={(e) => set("destinationLocation", e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setForm((f) => ({
+                  ...f,
+                  destinationLocation: v,
+                  tiendaId: v === "tienda" ? f.tiendaId : "",
+                }));
+              }}
             >
               {locationOptions(isWh ? whLocations : allLocations)}
             </Field.Select>
           </Field>
         </div>
+
+        {!isWh && form.destinationLocation === "tienda" && (
+          <Field
+            label="Tienda destino"
+            required
+            error={errors.tiendaId}
+            hint={
+              tiendas.length === 0
+                ? "No hay tiendas activas. Créalas en Catálogos › Tienda Destino."
+                : "¿A qué tienda se envían las tarimas?"
+            }
+          >
+            <Field.Select
+              value={form.tiendaId}
+              disabled={!form.articuloId || tiendas.length === 0}
+              onChange={(e) => set("tiendaId", e.target.value)}
+            >
+              <option value="">— Seleccionar —</option>
+              {tiendas.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.codigo} · {t.nombre}
+                </option>
+              ))}
+            </Field.Select>
+          </Field>
+        )}
 
         <Field label="Cantidad" required error={errors.quantity}>
           <Field.Input

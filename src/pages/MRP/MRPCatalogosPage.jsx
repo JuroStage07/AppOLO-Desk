@@ -17,6 +17,7 @@ import {
   Ellipsis,
   Layers,
   Users,
+  Store,
 } from "lucide-react";
 import {
   Badge,
@@ -40,6 +41,7 @@ import {
   usePalletWarehouses,
   usePalletArticulos,
   usePalletClientes,
+  usePalletTiendas,
   useMrpInsumos,
   useMrpBoms,
   useMrpWorkspace,
@@ -65,6 +67,7 @@ import { NoWarehouse } from "./components/WorkspaceBar";
 const TABS = [
   { key: "articulos", label: "Artículos", icon: Box },
   { key: "clientes", label: "Clientes", icon: Users },
+  { key: "tiendas", label: "Tienda Destino", icon: Store },
   { key: "insumos", label: "Insumos", icon: FlaskConical },
   { key: "bom", label: "BOM", icon: Layers },
   { key: "almacenes", label: "Almacenes", icon: Warehouse },
@@ -101,6 +104,7 @@ export default function MRPCatalogosPage() {
 
       {tab === "articulos" && <ArticulosTab />}
       {tab === "clientes" && <ClientesTab />}
+      {tab === "tiendas" && <TiendasTab />}
       {tab === "insumos" && <InsumosTab />}
       {tab === "bom" && <BomTab />}
       {tab === "almacenes" && <AlmacenesTab />}
@@ -618,6 +622,140 @@ function ClientesTab() {
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               placeholder="Ej: EPA"
+              autoFocus
+            />
+          </Field>
+        </Sheet.Body>
+        <Sheet.Actions>
+          <SecondaryButton onClick={() => setOpen(false)} disabled={creating}>
+            Cancelar
+          </SecondaryButton>
+          <PrimaryButton onClick={onCreate} loading={creating}>
+            Crear
+          </PrimaryButton>
+        </Sheet.Actions>
+      </Sheet>
+    </>
+  );
+}
+
+/* -------------------------------------------------------- Tienda Destino */
+// La pestaña "Tienda Destino" administra el catálogo de tiendas. No requiere
+// almacén; se fija solo por tenant/company. El código (TD####) se autogenera.
+// Estas tiendas se seleccionan como destino al trasladar stock a `tienda`.
+function TiendasTab() {
+  const {
+    tiendas,
+    loading,
+    error,
+    refetch,
+    create,
+    creating,
+    setActive,
+    peekNextCode,
+  } = usePalletTiendas({ includeInactive: true });
+  const [open, setOpen] = useState(false);
+  const [nombre, setNombre] = useState("");
+  const [nextCode, setNextCode] = useState("");
+  const [err, setErr] = useState("");
+
+  const openCreate = async () => {
+    setNombre("");
+    setErr("");
+    setNextCode("");
+    setOpen(true);
+    try {
+      setNextCode(await peekNextCode());
+    } catch {
+      /* si falla la previsualización, el código igual se asigna al guardar */
+    }
+  };
+
+  const onCreate = async () => {
+    if (!nombre.trim()) {
+      setErr("El nombre es obligatorio.");
+      return;
+    }
+    try {
+      await create({ nombre });
+      setOpen(false);
+      setNombre("");
+      setErr("");
+    } catch {
+      /* toast del hook */
+    }
+  };
+
+  return (
+    <>
+      <SectionTitle
+        title="Tiendas destino"
+        action={
+          <PrimaryButton icon={Plus} onClick={openCreate}>
+            Nueva tienda
+          </PrimaryButton>
+        }
+      />
+      {loading ? (
+        <Spinner label="Cargando tiendas…" />
+      ) : error ? (
+        <ErrorState description={error.message} onRetry={refetch} />
+      ) : tiendas.length === 0 ? (
+        <EmptyState
+          icon={Store}
+          title="Sin tiendas"
+          description="Crea la primera tienda destino."
+        />
+      ) : (
+        <Card padding={0}>
+          <TableScroll minWidth={480}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={th}>Código</th>
+                  <th style={th}>Nombre</th>
+                  <th style={th}>Estado</th>
+                  <th style={{ ...th, textAlign: "right" }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tiendas.map((t) => (
+                  <tr key={t.id}>
+                    <td style={{ ...td, fontFamily: "monospace", fontWeight: 950 }}>
+                      {t.codigo}
+                    </td>
+                    <td style={td}>{t.nombre}</td>
+                    <td style={td}>
+                      <ActiveCell active={t.active} />
+                    </td>
+                    <td style={{ ...td, textAlign: "right" }}>
+                      <GhostButton size="sm" onClick={() => setActive(t.id, !t.active)}>
+                        {t.active ? "Desactivar" : "Activar"}
+                      </GhostButton>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
+        </Card>
+      )}
+
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Nueva tienda"
+        maxWidth={460}
+      >
+        <Sheet.Body>
+          <Field label="Código" hint="Se asigna automáticamente al guardar.">
+            <Field.Input value={nextCode || "Calculando…"} disabled readOnly />
+          </Field>
+          <Field label="Nombre de la tienda" required error={err}>
+            <Field.Input
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Ej: Tienda Central"
               autoFocus
             />
           </Field>

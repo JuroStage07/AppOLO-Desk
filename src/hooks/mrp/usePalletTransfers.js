@@ -20,11 +20,10 @@ export default function usePalletTransfers() {
       warehouseId,
       originLocation,
       destinationLocation,
-      originStoreId,
-      destinationStoreId,
       articuloId,
       quantity,
       reason,
+      tiendaId,
     }) => {
       setLoading(true);
       setError(null);
@@ -33,11 +32,10 @@ export default function usePalletTransfers() {
           warehouseId,
           originLocation,
           destinationLocation,
-          originStoreId,
-          destinationStoreId,
           articuloId,
           quantity,
           reason,
+          tiendaId,
           userId,
           userEmail,
         });
