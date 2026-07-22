@@ -644,6 +644,9 @@ function ClientesTab() {
 // almacén; se fija solo por tenant/company. El código (TD####) se autogenera.
 // Estas tiendas se seleccionan como destino al trasladar stock a `tienda`.
 function TiendasTab() {
+  const { profile } = useMrpUser();
+  const isDev = String(profile?.role || "").toLowerCase() === "dev";
+  const confirm = useConfirm();
   const {
     tiendas,
     loading,
@@ -651,15 +654,21 @@ function TiendasTab() {
     refetch,
     create,
     creating,
+    update,
+    updating,
+    remove,
     setActive,
     peekNextCode,
   } = usePalletTiendas({ includeInactive: true });
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null); // tienda en edición o null
+  const [openMenuId, setOpenMenuId] = useState(null); // fila con menú abierto
   const [nombre, setNombre] = useState("");
   const [nextCode, setNextCode] = useState("");
   const [err, setErr] = useState("");
 
   const openCreate = async () => {
+    setEditing(null);
     setNombre("");
     setErr("");
     setNextCode("");
@@ -671,16 +680,44 @@ function TiendasTab() {
     }
   };
 
-  const onCreate = async () => {
+  const openEdit = (t) => {
+    setEditing(t);
+    setNombre(t.nombre || "");
+    setErr("");
+    setNextCode("");
+    setOpen(true);
+  };
+
+  const onSubmit = async () => {
     if (!nombre.trim()) {
       setErr("El nombre es obligatorio.");
       return;
     }
     try {
-      await create({ nombre });
+      if (editing) {
+        await update(editing.id, { nombre });
+      } else {
+        await create({ nombre });
+      }
       setOpen(false);
+      setEditing(null);
       setNombre("");
       setErr("");
+    } catch {
+      /* toast del hook */
+    }
+  };
+
+  const onDelete = async (t) => {
+    const ok = await confirm({
+      title: "Eliminar tienda",
+      message: `¿Eliminar la tienda "${t.codigo} · ${t.nombre}"? Esta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await remove(t.id);
     } catch {
       /* toast del hook */
     }
@@ -715,7 +752,9 @@ function TiendasTab() {
                   <th style={th}>Código</th>
                   <th style={th}>Nombre</th>
                   <th style={th}>Estado</th>
-                  <th style={{ ...th, textAlign: "right" }}>Acción</th>
+                  <th style={{ ...th, textAlign: "right" }}>
+                    {isDev ? "Acciones" : "Acción"}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -729,9 +768,37 @@ function TiendasTab() {
                       <ActiveCell active={t.active} />
                     </td>
                     <td style={{ ...td, textAlign: "right" }}>
-                      <GhostButton size="sm" onClick={() => setActive(t.id, !t.active)}>
-                        {t.active ? "Desactivar" : "Activar"}
-                      </GhostButton>
+                      {isDev ? (
+                        <RowActionsMenu
+                          open={openMenuId === t.id}
+                          onToggle={() =>
+                            setOpenMenuId((cur) => (cur === t.id ? null : t.id))
+                          }
+                          onClose={() => setOpenMenuId(null)}
+                          items={[
+                            {
+                              label: "Editar",
+                              icon: Pencil,
+                              onClick: () => openEdit(t),
+                            },
+                            {
+                              label: t.active ? "Desactivar" : "Activar",
+                              icon: Power,
+                              onClick: () => setActive(t.id, !t.active),
+                            },
+                            {
+                              label: "Eliminar",
+                              icon: Trash2,
+                              danger: true,
+                              onClick: () => onDelete(t),
+                            },
+                          ]}
+                        />
+                      ) : (
+                        <GhostButton size="sm" onClick={() => setActive(t.id, !t.active)}>
+                          {t.active ? "Desactivar" : "Activar"}
+                        </GhostButton>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -744,12 +811,23 @@ function TiendasTab() {
       <Sheet
         open={open}
         onClose={() => setOpen(false)}
-        title="Nueva tienda"
+        title={editing ? "Editar tienda" : "Nueva tienda"}
         maxWidth={460}
       >
         <Sheet.Body>
-          <Field label="Código" hint="Se asigna automáticamente al guardar.">
-            <Field.Input value={nextCode || "Calculando…"} disabled readOnly />
+          <Field
+            label="Código"
+            hint={
+              editing
+                ? "El código no se puede editar."
+                : "Se asigna automáticamente al guardar."
+            }
+          >
+            <Field.Input
+              value={editing ? editing.codigo : nextCode || "Calculando…"}
+              disabled
+              readOnly
+            />
           </Field>
           <Field label="Nombre de la tienda" required error={err}>
             <Field.Input
@@ -761,11 +839,14 @@ function TiendasTab() {
           </Field>
         </Sheet.Body>
         <Sheet.Actions>
-          <SecondaryButton onClick={() => setOpen(false)} disabled={creating}>
+          <SecondaryButton
+            onClick={() => setOpen(false)}
+            disabled={creating || updating}
+          >
             Cancelar
           </SecondaryButton>
-          <PrimaryButton onClick={onCreate} loading={creating}>
-            Crear
+          <PrimaryButton onClick={onSubmit} loading={editing ? updating : creating}>
+            {editing ? "Guardar cambios" : "Crear"}
           </PrimaryButton>
         </Sheet.Actions>
       </Sheet>

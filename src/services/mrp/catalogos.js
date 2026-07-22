@@ -393,6 +393,28 @@ export async function setPalletTiendaActive(id, active) {
   return data;
 }
 
+// Edición de tienda: solo el nombre (el código no se edita).
+export async function updatePalletTienda(id, { nombre }) {
+  const clean = String(nombre || "").trim();
+  if (!clean) throw new Error("El nombre de la tienda es obligatorio.");
+  const { data, error } = await scope(
+    supabase.from("pallet_tiendas").update({ nombre: clean }).eq("id", id)
+  )
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Borra una tienda. Su info en movimientos vive desnormalizada en `metadata`
+// (tienda_nombre), por lo que el historial no se rompe al eliminarla.
+export async function deletePalletTienda(id) {
+  const { error } = await scope(
+    supabase.from("pallet_tiendas").delete().eq("id", id)
+  );
+  if (error) throw error;
+}
+
 /* ------------------------------------------------------- insumos (Insumos) */
 // Los insumos se fijan solo por tenant/company (no dependen de un almacén).
 

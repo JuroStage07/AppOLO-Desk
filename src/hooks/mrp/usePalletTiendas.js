@@ -5,6 +5,8 @@ import { useToast } from "../../components/ui";
 import {
   listPalletTiendas,
   createPalletTienda,
+  updatePalletTienda,
+  deletePalletTienda,
   setPalletTiendaActive,
   getNextTiendaCode,
 } from "../../services/mrp";
@@ -19,6 +21,8 @@ export default function usePalletTiendas({ includeInactive = false } = {}) {
     { channels: ["tiendas"] }
   );
   const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const create = useCallback(
     async ({ nombre }) => {
@@ -33,6 +37,41 @@ export default function usePalletTiendas({ includeInactive = false } = {}) {
         throw e;
       } finally {
         setCreating(false);
+      }
+    },
+    [toast]
+  );
+
+  const update = useCallback(
+    async (id, { nombre }) => {
+      setUpdating(true);
+      try {
+        const t = await updatePalletTienda(id, { nombre });
+        bumpRefresh("tiendas");
+        toast.success(`Tienda ${t?.codigo || ""} actualizada.`);
+        return t;
+      } catch (e) {
+        toast.error(e.message || "No se pudo actualizar la tienda.");
+        throw e;
+      } finally {
+        setUpdating(false);
+      }
+    },
+    [toast]
+  );
+
+  const remove = useCallback(
+    async (id) => {
+      setRemoving(true);
+      try {
+        await deletePalletTienda(id);
+        bumpRefresh("tiendas");
+        toast.success("Tienda eliminada.");
+      } catch (e) {
+        toast.error(e.message || "No se pudo eliminar la tienda.");
+        throw e;
+      } finally {
+        setRemoving(false);
       }
     },
     [toast]
@@ -62,6 +101,10 @@ export default function usePalletTiendas({ includeInactive = false } = {}) {
     refetch,
     create,
     creating,
+    update,
+    updating,
+    remove,
+    removing,
     setActive,
     peekNextCode,
   };
