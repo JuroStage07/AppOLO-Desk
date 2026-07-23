@@ -445,11 +445,16 @@ exports.consumeTarimasFromExternalApp = onCall(
       cantidad,
       quantity,
       reason,
+      tienda,
+      tiendaExterna,
     } = req.data || {};
 
     const cleanExternalEventId = safe(externalEventId);
     const cleanBodegaId = safe(bodegaId);
     const cleanArticuloCodigo = safe(articuloCodigo).toUpperCase();
+    // Código externo de la tienda destino (p. ej. "T2"). Opcional: si no viene,
+    // el consumo queda como "Sin asignar" en el inventario por tienda.
+    const cleanTiendaExterna = safe(tiendaExterna ?? tienda) || null;
     const qty = Number(cantidad ?? quantity);
 
     if (!cleanExternalEventId) {
@@ -506,6 +511,7 @@ exports.consumeTarimasFromExternalApp = onCall(
         p_reason: cleanReason,
         p_user_id: caller.uid,
         p_user_email: callerEmail || null,
+        p_tienda_externa: cleanTiendaExterna,
       });
 
       return {

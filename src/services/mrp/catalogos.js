@@ -625,6 +625,37 @@ export async function updatePalletTienda(id, { nombre }) {
   return data;
 }
 
+// Liga (o desliga) el CÓDIGO EXTERNO de la app de despacho a un cliente MRP.
+// La app externa envía este código (p. ej. "T2") al consumir tarimas; el MRP lo
+// resuelve a la tienda destino. `code` vacío/null lo desliga. Único por
+// tenant/company (índice en Supabase); el 23505 se traduce a un mensaje claro.
+export async function setPalletTiendaExternalCode(id, code) {
+  const clean = String(code || "").trim() || null;
+  const { data, error } = await scope(
+    supabase
+      .from("pallet_tiendas")
+      .update({ external_code: clean })
+      .eq("id", id)
+  )
+    .select()
+    .single();
+  if (error) {
+    throw mapDuplicate(
+      error,
+      `El código externo “${clean}” ya está ligado a otro cliente.`
+    );
+  }
+  await logEvento({
+    entityType: "cliente",
+    entityId: id,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: "update",
+    detail: clean ? `Código externo: ${clean}` : "Código externo removido",
+  });
+  return data;
+}
+
 // Borra una tienda. Su info en movimientos vive desnormalizada en `metadata`
 // (tienda_nombre), por lo que el historial no se rompe al eliminarla.
 export async function deletePalletTienda(id) {

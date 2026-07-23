@@ -7,10 +7,20 @@
 // El vínculo se guarda en Supabase (requiere supabase/mrp_pallets_bodega_link.sql).
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Boxes, Warehouse, Link2, Link2Off } from "lucide-react";
+import {
+  ArrowLeft,
+  Boxes,
+  Warehouse,
+  Link2,
+  Link2Off,
+  Smartphone,
+  Store,
+} from "lucide-react";
 import {
   Badge,
   Brand,
+  Chip,
+  ChipsRow,
   Container,
   EmptyState,
   Field,
@@ -27,6 +37,8 @@ import {
   listAllPalletWarehouses,
   setWarehouseBodega,
   unlinkBodega,
+  listPalletTiendas,
+  setPalletTiendaExternalCode,
 } from "../../services/mrp";
 import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE, TEXT } from "../../styles/theme";
 
@@ -35,6 +47,9 @@ const HUB_PATH = "/dev/config-modulos/mrp-tarimas";
 export default function ConfigMRPEntidades() {
   const nav = useNavigate();
   const toast = useToast();
+
+  // Dos relaciones configurables: bodega↔almacén y app externa↔cliente.
+  const [view, setView] = useState("bodegas"); // "bodegas" | "externo"
 
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -133,12 +148,37 @@ export default function ConfigMRPEntidades() {
         <Container>
           <Hero
             kicker="Relación de entidades"
-            title="Bodegas ↔ Almacenes del MRP"
-            subtitle="Ligá cada bodega a un almacén del MRP. Al seleccionar una bodega para trabajar, el módulo carga automáticamente los datos del almacén ligado."
+            title={
+              view === "bodegas"
+                ? "Bodegas ↔ Almacenes del MRP"
+                : "App externa ↔ Clientes del MRP"
+            }
+            subtitle={
+              view === "bodegas"
+                ? "Ligá cada bodega a un almacén del MRP. Al seleccionar una bodega para trabajar, el módulo carga automáticamente los datos del almacén ligado."
+                : "Ligá el código externo de la app de despacho (p. ej. “T2”) a un cliente del MRP. Al consumir tarimas, el traslado a tienda se atribuye al cliente correcto."
+            }
             badge={<Badge icon={Boxes}>Módulo MRP Tarimas</Badge>}
           />
 
-          {loading ? (
+          <ChipsRow>
+            <Chip active={view === "bodegas"} onClick={() => setView("bodegas")}>
+              <span style={styles.chipInner}>
+                <Warehouse size={14} strokeWidth={2.4} />
+                Bodegas ↔ Almacenes
+              </span>
+            </Chip>
+            <Chip active={view === "externo"} onClick={() => setView("externo")}>
+              <span style={styles.chipInner}>
+                <Smartphone size={14} strokeWidth={2.4} />
+                App externa ↔ Clientes
+              </span>
+            </Chip>
+          </ChipsRow>
+
+          {view === "externo" ? (
+            <ClientesExternoView />
+          ) : loading ? (
             <Spinner label="Cargando almacenes…" />
           ) : error ? (
             <EmptyState
@@ -224,8 +264,147 @@ export default function ConfigMRPEntidades() {
   );
 }
 
+// Vista "App externa ↔ Clientes": cada cliente MRP (pallet_tiendas) puede ligar
+// un código externo (el que envía la app de despacho, p. ej. "T2"). Al consumir
+// tarimas, el RPC resuelve ese código a la tienda destino.
+function ClientesExternoView() {
+  const toast = useToast();
+  const [tiendas, setTiendas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [savingId, setSavingId] = useState(null);
+  const [drafts, setDrafts] = useState({}); // { [tiendaId]: code }
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await listPalletTiendas({ includeInactive: true });
+      setTiendas(data);
+      setDrafts(
+        Object.fromEntries(data.map((t) => [t.id, t.external_code || ""]))
+      );
+    } catch (e) {
+      console.error("Error cargando clientes del MRP:", e);
+      setError(e?.message || "No se pudieron cargar los clientes.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const linkedCount = useMemo(
+    () => tiendas.filter((t) => (t.external_code || "").trim()).length,
+    [tiendas]
+  );
+
+  const save = async (t) => {
+    const next = (drafts[t.id] || "").trim();
+    if (next === (t.external_code || "")) return; // sin cambios
+    setSavingId(t.id);
+    try {
+      await setPalletTiendaExternalCode(t.id, next);
+      toast.success(
+        next
+          ? `Código externo “${next}” ligado a ${t.nombre}.`
+          : `Código externo removido de ${t.nombre}.`
+      );
+      await load();
+    } catch (e) {
+      console.error("Error ligando código externo:", e);
+      toast.error(e?.message || "No se pudo guardar el código externo.");
+      setDrafts((d) => ({ ...d, [t.id]: t.external_code || "" })); // revertir
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  if (loading) return <Spinner label="Cargando clientes…" />;
+  if (error)
+    return (
+      <EmptyState
+        icon={Store}
+        title="No se pudieron cargar los clientes"
+        description={error}
+        action={<GhostButton onClick={load}>Reintentar</GhostButton>}
+      />
+    );
+  if (tiendas.length === 0)
+    return (
+      <EmptyState
+        icon={Store}
+        title="Sin clientes"
+        description="Creá clientes en el MRP (Catálogos › Clientes) para poder ligar sus códigos externos."
+      />
+    );
+
+  return (
+    <div style={styles.wrap}>
+      <div style={styles.summary}>
+        <Badge tone="accent" icon={Link2}>
+          {linkedCount}/{tiendas.length} clientes con código externo
+        </Badge>
+      </div>
+
+      <div style={styles.list}>
+        {tiendas.map((t) => {
+          const busy = savingId === t.id;
+          return (
+            <div key={t.id} style={styles.row}>
+              <div style={styles.bodegaInfo}>
+                <div style={styles.iconBox}>
+                  <Store size={17} strokeWidth={2.2} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={styles.bodegaName}>
+                    {t.nombre}
+                    {t.active ? "" : " · inactivo"}
+                  </div>
+                  <div style={styles.bodegaId}>{t.codigo}</div>
+                </div>
+              </div>
+
+              <div style={styles.control}>
+                <Field.Input
+                  value={drafts[t.id] ?? ""}
+                  disabled={busy}
+                  placeholder="Código externo (ej: T2)"
+                  onChange={(e) =>
+                    setDrafts((d) => ({ ...d, [t.id]: e.target.value }))
+                  }
+                  onBlur={() => save(t)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  style={{
+                    fontWeight: 800,
+                    ...((t.external_code || "").trim()
+                      ? { borderColor: ACCENT, background: ACCENT_SOFT }
+                      : {}),
+                  }}
+                />
+                {busy ? <Spinner inline /> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <p style={styles.note}>
+        El código externo es el identificador que envía la app de despacho (campo
+        “tienda”, p. ej. “T2”). Debe ser único por país/compañía. Los clientes se
+        crean en el MRP (Catálogos › Clientes).
+      </p>
+    </div>
+  );
+}
+
 const styles = {
   wrap: { display: "grid", gap: 20 },
+  chipInner: { display: "inline-flex", alignItems: "center", gap: 6 },
   summary: { display: "flex", gap: 8, flexWrap: "wrap" },
   section: { display: "grid", gap: 10 },
   sectionTitle: {
