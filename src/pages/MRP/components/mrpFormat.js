@@ -1,5 +1,13 @@
 // MRP Tarimas — helpers de formato y estilos de tabla (sin componentes).
-import { BORDER, SLATE, TEXT } from "../../../styles/theme";
+import {
+  BORDER,
+  SLATE,
+  TEXT,
+  FS_SM,
+  FS_BASE,
+  FW_BOLD,
+  FW_EXTRABOLD,
+} from "../../../styles/theme";
 
 export function fmtDate(ts) {
   if (!ts) return "—";
@@ -17,8 +25,8 @@ export function fmtDate(ts) {
 export const th = {
   textAlign: "left",
   padding: "10px 12px",
-  fontSize: 12,
-  fontWeight: 900,
+  fontSize: FS_SM,
+  fontWeight: FW_EXTRABOLD,
   color: SLATE,
   borderBottom: `1px solid ${BORDER}`,
   whiteSpace: "nowrap",
@@ -26,8 +34,8 @@ export const th = {
 
 export const td = {
   padding: "10px 12px",
-  fontSize: 13,
-  fontWeight: 700,
+  fontSize: FS_BASE,
+  fontWeight: FW_BOLD,
   color: TEXT,
   borderBottom: `1px solid ${BORDER}`,
   whiteSpace: "nowrap",

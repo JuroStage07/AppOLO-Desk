@@ -6,7 +6,6 @@ import {
   Sheet,
   PrimaryButton,
   SecondaryButton,
-  TableScroll,
   Spinner,
   ErrorState,
   EmptyState,
@@ -14,6 +13,8 @@ import {
 import { usePalletMovements, useMrpWorkspace } from "../../../hooks/mrp";
 import { th, td, fmtDate } from "./mrpFormat";
 import { LocationBadge, MovementBadge } from "./mrpUi";
+import MrpTable from "./MrpTable";
+import { FW_EXTRABOLD } from "../../../styles/theme";
 
 export default function ArticuloHistorialModal({
   open,
@@ -62,8 +63,7 @@ export default function ArticuloHistorialModal({
             description="Este artículo aún no tiene movimientos registrados."
           />
         ) : (
-          <TableScroll minWidth={620}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <MrpTable minWidth={620}>
               <thead>
                 <tr>
                   <th style={th}>Fecha</th>
@@ -82,7 +82,7 @@ export default function ArticuloHistorialModal({
                     <td style={td}>
                       <MovementBadge value={m.movement_type} metadata={m.metadata} />
                     </td>
-                    <td style={{ ...td, textAlign: "right", fontWeight: 950 }}>
+                    <td style={{ ...td, textAlign: "right", fontWeight: FW_EXTRABOLD }}>
                       {m.quantity}
                     </td>
                     <td style={td}>
@@ -96,8 +96,7 @@ export default function ArticuloHistorialModal({
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </TableScroll>
+          </MrpTable>
         )}
       </Sheet.Body>
 

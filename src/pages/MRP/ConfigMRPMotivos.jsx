@@ -26,7 +26,7 @@ import {
 } from "../../components/ui";
 import { usePalletMotivos } from "../../hooks/mrp";
 import { MOTIVO_TIPOS, MOTIVO_TIPO_LABELS } from "../../services/mrp";
-import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE, TEXT } from "../../styles/theme";
+import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE, SURFACE_INSET, TEXT, FW_EXTRABOLD } from "../../styles/theme";
 
 const HUB_PATH = "/dev/config-modulos/mrp-tarimas";
 
@@ -208,9 +208,9 @@ const styles = {
   label: { fontSize: 14, fontWeight: 800, color: TEXT },
   tagOff: {
     fontSize: 10.5,
-    fontWeight: 850,
+    fontWeight: FW_EXTRABOLD,
     color: SLATE,
-    background: "#F2F4FB",
+    background: SURFACE_INSET,
     border: `1px solid ${BORDER}`,
     borderRadius: 999,
     padding: "1px 8px",

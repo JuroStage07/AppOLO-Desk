@@ -13,6 +13,7 @@ import {
 } from "../../components/ui";
 import { useMrpEventos } from "../../hooks/mrp";
 import { fmtDate } from "./components/mrpFormat";
+import { CodeText } from "./components/mrpUi";
 import MrpDataTable from "./components/MrpDataTable";
 
 const ENTITY_LABELS = {
@@ -71,9 +72,7 @@ const COLS = [
     render: (e) => (
       <>
         {e.entity_codigo ? (
-          <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
-            {e.entity_codigo}
-          </span>
+          <CodeText>{e.entity_codigo}</CodeText>
         ) : null}
         {e.entity_codigo && e.entity_nombre ? " · " : ""}
         {e.entity_nombre || (!e.entity_codigo ? "—" : "")}

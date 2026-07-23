@@ -9,7 +9,7 @@
 //
 // REGLA DE NEGOCIO: `merma` es ubicación operativa y cuenta en el total global;
 // los `descartes` (ajustes negativos) NO son inventario y se reportan aparte.
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Boxes,
   Inbox,
@@ -27,7 +27,6 @@ import {
   SectionTitle,
   Card,
   Badge,
-  TableScroll,
   Spinner,
   ErrorState,
   EmptyState,
@@ -38,9 +37,24 @@ import {
   useMrpWorkspace,
 } from "../../hooks/mrp";
 import { PALLET_LOCATION_LABELS } from "../../services/mrp";
-import { ACCENT, TEXT, SLATE, SURFACE_INSET } from "../../styles/theme";
+import {
+  ACCENT,
+  ACCENT_LIGHT,
+  ACCENT_SOFT,
+  TEXT,
+  SLATE,
+  SURFACE_INSET,
+  RADIUS_MD,
+  FS_XS,
+  FS_BASE,
+  FS_LG,
+  FW_SEMIBOLD,
+  FW_BOLD,
+  FW_EXTRABOLD,
+} from "../../styles/theme";
 import { th, td, fmtDate } from "./components/mrpFormat";
 import { MovementBadge, LocationBadge } from "./components/mrpUi";
+import MrpTable from "./components/MrpTable";
 import UbicacionDetalleModal from "./components/UbicacionDetalleModal";
 
 const KPI_STYLE = { minHeight: 100, padding: 14, gap: 6, borderRadius: 18 };
@@ -48,7 +62,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const fmtInt = (n) => new Intl.NumberFormat("es-CR").format(Number(n || 0));
 
-const BAR_FILL = "linear-gradient(90deg, #089F8A 0%, #26C6AC 100%)";
+const BAR_FILL = `linear-gradient(90deg, ${ACCENT} 0%, ${ACCENT_LIGHT} 100%)`;
 
 // Barra horizontal para la distribución por ubicación (valor + porcentaje).
 // `share` es el % sobre el total del almacén; el ancho se calcula sobre el
@@ -84,7 +98,7 @@ function DistributionBar({ label, value, max, total, onClick }) {
           gap: 10,
         }}
       >
-        <span style={{ fontSize: 13.5, fontWeight: 800, color: TEXT }}>
+        <span style={{ fontSize: FS_BASE, fontWeight: FW_BOLD, color: TEXT }}>
           {label}
         </span>
         <span
@@ -95,13 +109,13 @@ function DistributionBar({ label, value, max, total, onClick }) {
             flexShrink: 0,
           }}
         >
-          <span style={{ fontSize: 14, fontWeight: 950, color: TEXT }}>
+          <span style={{ fontSize: FS_BASE, fontWeight: FW_EXTRABOLD, color: TEXT }}>
             {fmtInt(value)}
           </span>
           <span
             style={{
-              fontSize: 11,
-              fontWeight: 800,
+              fontSize: FS_XS,
+              fontWeight: FW_SEMIBOLD,
               color: SLATE,
               minWidth: 34,
               textAlign: "right",
@@ -133,14 +147,59 @@ function DistributionBar({ label, value, max, total, onClick }) {
   );
 }
 
+// Métrica compacta en línea (icono + cifra + etiqueta) para la tira de actividad.
+function MetricInline({ icon: Icon, label, value, accent }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+      <span
+        style={{
+          display: "grid",
+          placeItems: "center",
+          width: 36,
+          height: 36,
+          borderRadius: RADIUS_MD,
+          background: accent ? ACCENT_SOFT : SURFACE_INSET,
+          color: accent ? ACCENT : SLATE,
+          flexShrink: 0,
+        }}
+      >
+        {Icon ? <Icon size={18} strokeWidth={2.2} /> : null}
+      </span>
+      <div style={{ display: "grid", lineHeight: 1.1, minWidth: 0 }}>
+        <span style={{ fontSize: FS_LG, fontWeight: FW_EXTRABOLD, color: TEXT }}>
+          {fmtInt(value)}
+        </span>
+        <span style={{ fontSize: FS_XS, fontWeight: FW_BOLD, color: SLATE }}>
+          {label}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function MRPDashboard() {
   const { warehouseId, warehouse } = useMrpWorkspace();
   // Captura del instante de montaje (fuera del render) para la ventana de 7 días.
   const [mountedAt] = useState(() => Date.now());
   const [ubic, setUbic] = useState(null); // { location, label }
 
-  const filters = useMemo(
-    () => (warehouseId ? { warehouseId } : {}),
+  // Ventana estable de 7 días (ISO) para acotar la consulta de actividad en la
+  // BD (created_at >= dateFrom), en lugar de filtrar en memoria.
+  const sevenDaysAgoISO = useMemo(
+    () => new Date(mountedAt - 7 * DAY_MS).toISOString(),
+    [mountedAt]
+  );
+
+  const activityFilters = useMemo(
+    () =>
+      warehouseId
+        ? { warehouseId, dateFrom: sevenDaysAgoISO }
+        : { dateFrom: sevenDaysAgoISO },
+    [warehouseId, sevenDaysAgoISO]
+  );
+
+  const recentFilters = useMemo(
+    () => (warehouseId ? { warehouseId, limit: 8 } : { limit: 8 }),
     [warehouseId]
   );
 
@@ -151,37 +210,49 @@ export default function MRPDashboard() {
     refetch: refetchSummary,
   } = usePalletSummary({ warehouseId: warehouseId || null });
 
+  // KPIs de actividad: consulta acotada a 7 días en la BD, para que los conteos
+  // reflejen exactamente la ventana y no dependan de cuántos movimientos se
+  // hayan cargado en la lista general.
   const {
-    movements,
-    loading: movLoading,
-    error: movError,
-    refetch: refetchMovements,
-  } = usePalletMovements(filters);
+    movements: activityMovements,
+    loading: actLoading,
+    error: actError,
+    refetch: refetchActivity,
+  } = usePalletMovements(activityFilters);
 
-  const loading = sumLoading || movLoading;
-  const error = sumError || movError;
+  // Últimos movimientos: solo los 8 más recientes (consulta independiente).
+  const {
+    movements: recentMovements,
+    loading: recentLoading,
+    error: recentError,
+    refetch: refetchRecent,
+  } = usePalletMovements(recentFilters);
+
+  const loading = sumLoading || actLoading || recentLoading;
+  const error = sumError || actError || recentError;
   const refetch = () => {
     refetchSummary();
-    refetchMovements();
+    refetchActivity();
+    refetchRecent();
   };
 
-  // Actividad de los últimos 7 días, derivada del historial cargado.
+  // Conteo por tipo sobre la ventana ya acotada a 7 días.
   const activity = useMemo(() => {
-    const since = mountedAt - 7 * DAY_MS;
-    const recent = movements.filter((m) => {
-      const t = new Date(m.created_at).getTime();
-      return Number.isFinite(t) && t >= since;
-    });
     let ingresos = 0;
     let salidas = 0;
     let traslados = 0;
-    for (const m of recent) {
+    for (const m of activityMovements) {
       if (m.movement_type === "ajuste_positivo") ingresos += 1;
       else if (m.movement_type === "ajuste_negativo") salidas += 1;
       else if (m.movement_type === "traslado") traslados += 1;
     }
-    return { total: recent.length, ingresos, salidas, traslados };
-  }, [movements, mountedAt]);
+    return {
+      total: activityMovements.length,
+      ingresos,
+      salidas,
+      traslados,
+    };
+  }, [activityMovements]);
 
   const byLocation = useMemo(
     () =>
@@ -202,16 +273,8 @@ export default function MRPDashboard() {
     [summary.byArticulo]
   );
 
-  const recentMovements = useMemo(() => movements.slice(0, 8), [movements]);
-
   return (
     <>
-      <style>{`
-        .mrp-dash-table tbody tr { transition: background-color .12s ease; }
-        .mrp-dash-table tbody tr:nth-child(even) { background: ${SURFACE_INSET}; }
-        .mrp-dash-table tbody tr:hover { background: rgba(8,159,138,0.08); }
-      `}</style>
-
       <SectionTitle
         title="Dashboard"
         action={
@@ -259,41 +322,69 @@ export default function MRPDashboard() {
             />
           </KpiGrid>
 
-          {/* KPIs de actividad (7 días) */}
-          <SectionTitle
-            title="Actividad reciente"
-            hint="Movimientos de los últimos 7 días"
-          />
-          <KpiGrid min={170}>
-            <KpiCard
-              label="Movimientos"
-              value={fmtInt(activity.total)}
-              hint="Total 7 días"
-              icon={Activity}
-              accent
-              style={KPI_STYLE}
-            />
-            <KpiCard
-              label="Ingresos"
-              value={fmtInt(activity.ingresos)}
-              hint="Ajustes positivos"
-              icon={ArrowDownToLine}
-              style={KPI_STYLE}
-            />
-            <KpiCard
-              label="Salidas"
-              value={fmtInt(activity.salidas)}
-              hint="Ajustes negativos"
-              icon={ArrowUpFromLine}
-              style={KPI_STYLE}
-            />
-            <KpiCard
-              label="Traslados"
-              value={fmtInt(activity.traslados)}
-              icon={ArrowLeftRight}
-              style={KPI_STYLE}
-            />
-          </KpiGrid>
+          {/* Actividad (7 días): tira compacta. Es contexto secundario, así que
+              no compite con los KPIs de stock ni ocupa una fila completa. */}
+          <Card style={{ padding: 14 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginRight: "auto",
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: ACCENT,
+                    flexShrink: 0,
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: FS_XS,
+                    fontWeight: FW_EXTRABOLD,
+                    letterSpacing: 0.4,
+                    textTransform: "uppercase",
+                    color: SLATE,
+                  }}
+                >
+                  Actividad · últimos 7 días
+                </span>
+              </div>
+              <MetricInline
+                icon={Activity}
+                label="Movimientos"
+                value={activity.total}
+                accent
+              />
+              <MetricInline
+                icon={ArrowDownToLine}
+                label="Ingresos"
+                value={activity.ingresos}
+              />
+              <MetricInline
+                icon={ArrowUpFromLine}
+                label="Salidas"
+                value={activity.salidas}
+              />
+              <MetricInline
+                icon={ArrowLeftRight}
+                label="Traslados"
+                value={activity.traslados}
+              />
+            </div>
+          </Card>
 
           {/* Distribución por ubicación + top de artículos */}
           <div
@@ -344,11 +435,7 @@ export default function MRPDashboard() {
                 />
               ) : (
                 <Card padding={0}>
-                  <TableScroll minWidth={320}>
-                    <table
-                      className="mrp-dash-table"
-                      style={{ width: "100%", borderCollapse: "collapse" }}
-                    >
+                  <MrpTable minWidth={320}>
                       <thead>
                         <tr>
                           <th style={{ ...th, width: 40, textAlign: "right" }}>#</th>
@@ -365,7 +452,7 @@ export default function MRPDashboard() {
                                 ...td,
                                 textAlign: "right",
                                 color: SLATE,
-                                fontWeight: 900,
+                                fontWeight: FW_BOLD,
                               }}
                             >
                               {i + 1}
@@ -374,7 +461,7 @@ export default function MRPDashboard() {
                               style={{
                                 ...td,
                                 fontFamily: "monospace",
-                                fontWeight: 950,
+                                fontWeight: FW_EXTRABOLD,
                               }}
                             >
                               {a.codigo}
@@ -384,7 +471,7 @@ export default function MRPDashboard() {
                               style={{
                                 ...td,
                                 textAlign: "right",
-                                fontWeight: 950,
+                                fontWeight: FW_EXTRABOLD,
                               }}
                             >
                               {fmtInt(a.total)}
@@ -392,8 +479,7 @@ export default function MRPDashboard() {
                           </tr>
                         ))}
                       </tbody>
-                    </table>
-                  </TableScroll>
+                  </MrpTable>
                 </Card>
               )}
             </div>
@@ -409,11 +495,7 @@ export default function MRPDashboard() {
             />
           ) : (
             <Card padding={0}>
-              <TableScroll minWidth={640}>
-                <table
-                  className="mrp-dash-table"
-                  style={{ width: "100%", borderCollapse: "collapse" }}
-                >
+              <MrpTable minWidth={640}>
                   <thead>
                     <tr>
                       <th style={th}>Fecha</th>
@@ -435,12 +517,12 @@ export default function MRPDashboard() {
                           />
                         </td>
                         <td style={td}>
-                          <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
+                          <span style={{ fontFamily: "monospace", fontWeight: FW_EXTRABOLD }}>
                             {m.articulo?.codigo}
                           </span>{" "}
                           · {m.articulo?.nombre}
                         </td>
-                        <td style={{ ...td, textAlign: "right", fontWeight: 950 }}>
+                        <td style={{ ...td, textAlign: "right", fontWeight: FW_EXTRABOLD }}>
                           {fmtInt(m.quantity)}
                         </td>
                         <td style={td}>
@@ -452,8 +534,7 @@ export default function MRPDashboard() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
-              </TableScroll>
+              </MrpTable>
             </Card>
           )}
         </>

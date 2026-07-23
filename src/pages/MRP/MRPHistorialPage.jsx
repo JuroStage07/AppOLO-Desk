@@ -17,7 +17,7 @@ import {
   PALLET_MOVEMENT_TYPE_LABELS,
 } from "../../services/mrp";
 import { fmtDate } from "./components/mrpFormat";
-import { LocationBadge, MovementBadge } from "./components/mrpUi";
+import { LocationBadge, MovementBadge, CodeText } from "./components/mrpUi";
 import MrpDataTable from "./components/MrpDataTable";
 
 // Etiqueta del movimiento (coherente con MovementBadge, incl. traslado de almacén).
@@ -82,9 +82,7 @@ const COLS = [
     },
     render: (m) => (
       <>
-        <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
-          {m.articulo?.codigo}
-        </span>{" "}
+        <CodeText>{m.articulo?.codigo}</CodeText>{" "}
         · {m.articulo?.nombre}
       </>
     ),

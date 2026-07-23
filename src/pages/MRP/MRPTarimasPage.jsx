@@ -26,7 +26,20 @@ import {
 import { useMrpWorkspace } from "../../hooks/mrp";
 import useIsMobile from "../../hooks/useIsMobile";
 import { NoWarehouse } from "./components/WorkspaceBar";
-import { ACCENT, ACCENT_SOFT, BORDER, SLATE, TEXT } from "../../styles/theme";
+import {
+  ACCENT,
+  ACCENT_SOFT,
+  BORDER,
+  SLATE,
+  TEXT,
+  SURFACE_INSET,
+  withAlpha,
+  FS_XS,
+  FS_SM,
+  FS_BASE,
+  FW_BOLD,
+  FW_EXTRABOLD,
+} from "../../styles/theme";
 
 const NAV = [
   { label: "Dashboard", to: "/mrp-tarimas/dashboard", icon: LayoutDashboard },
@@ -37,6 +50,7 @@ const NAV = [
     children: [
       { label: "Artículos", to: "/mrp-tarimas/inventario/articulos" },
       { label: "Insumos", to: "/mrp-tarimas/inventario/insumos" },
+      { label: "En tienda", to: "/mrp-tarimas/inventario/tiendas" },
     ],
   },
   {
@@ -73,8 +87,8 @@ const linkBase = {
   borderRadius: 12,
   border: `1px solid transparent`,
   color: TEXT,
-  fontWeight: 800,
-  fontSize: 14,
+  fontWeight: FW_EXTRABOLD,
+  fontSize: FS_BASE,
   textDecoration: "none",
   cursor: "pointer",
 };
@@ -89,8 +103,8 @@ const subLinkBase = {
   padding: "7px 10px",
   borderRadius: 10,
   color: SLATE,
-  fontWeight: 800,
-  fontSize: 13,
+  fontWeight: FW_BOLD,
+  fontSize: FS_SM,
   textDecoration: "none",
   cursor: "pointer",
   whiteSpace: "nowrap",
@@ -211,8 +225,8 @@ export default function MRPTarimasPage() {
     <div style={{ display: "grid", gap: 6 }}>
       <span
         style={{
-          fontSize: 11,
-          fontWeight: 800,
+          fontSize: FS_XS,
+          fontWeight: FW_EXTRABOLD,
           color: SLATE,
           textTransform: "uppercase",
           letterSpacing: 0.4,
@@ -235,8 +249,8 @@ export default function MRPTarimasPage() {
         <div style={{ display: "grid", minWidth: 0 }}>
           <span
             style={{
-              fontSize: 13.5,
-              fontWeight: 900,
+              fontSize: FS_BASE,
+              fontWeight: FW_EXTRABOLD,
               color: TEXT,
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -248,14 +262,14 @@ export default function MRPTarimasPage() {
               : warehouse?.name || "— sin ligar —"}
           </span>
           {warehouse?.code ? (
-            <span style={{ fontSize: 11, fontWeight: 700, color: SLATE }}>
+            <span style={{ fontSize: FS_XS, fontWeight: FW_BOLD, color: SLATE }}>
               {warehouse.code}
             </span>
           ) : null}
         </div>
       </div>
       {bodegaNombre ? (
-        <span style={{ fontSize: 11, fontWeight: 700, color: SLATE }}>
+        <span style={{ fontSize: FS_XS, fontWeight: FW_BOLD, color: SLATE }}>
           Bodega: {bodegaNombre}
         </span>
       ) : null}
@@ -275,12 +289,12 @@ export default function MRPTarimasPage() {
   return (
     <Shell>
       <style>{`
-        .mrp-side-scroll { scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
+        .mrp-side-scroll { scrollbar-width: thin; scrollbar-color: ${withAlpha(SLATE, 0.45)} transparent; }
         .mrp-side-scroll::-webkit-scrollbar { width: 7px; }
-        .mrp-side-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 999px; }
+        .mrp-side-scroll::-webkit-scrollbar-thumb { background: ${withAlpha(SLATE, 0.45)}; border-radius: 999px; }
         .mrp-side-scroll::-webkit-scrollbar-track { background: transparent; }
-        .mrp-nav-link:hover { background: #F1F5F9; }
-        .mrp-sub-link:hover { background: #F1F5F9; color: ${TEXT}; }
+        .mrp-nav-link:hover { background: ${SURFACE_INSET}; }
+        .mrp-sub-link:hover { background: ${SURFACE_INSET}; color: ${TEXT}; }
       `}</style>
 
       <Topbar />
@@ -344,8 +358,8 @@ export default function MRPTarimasPage() {
                     <span
                       style={{
                         display: "block",
-                        fontSize: 11,
-                        fontWeight: 800,
+                        fontSize: FS_XS,
+                        fontWeight: FW_EXTRABOLD,
                         color: SLATE,
                         textTransform: "uppercase",
                         letterSpacing: 0.4,

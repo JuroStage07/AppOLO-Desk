@@ -59,10 +59,16 @@ import {
   SHADOW_CARD_HOVER,
   RADIUS_MD,
   RADIUS_LG,
+  FS_XS,
   FS_SM,
+  FS_BASE,
+  FW_BOLD,
+  FW_EXTRABOLD,
 } from "../../styles/theme";
 import { NoWarehouse } from "./components/WorkspaceBar";
 import MrpDataTable from "./components/MrpDataTable";
+import { CodeText, Dash } from "./components/mrpUi";
+import useIsMobile from "../../hooks/useIsMobile";
 
 // NOTA DE TERMINOLOGÍA (importante): la capa de datos conserva nombres legados
 // distintos de las etiquetas de UI:
@@ -99,6 +105,7 @@ export default function MRPCatalogosPage() {
   // el submenú lateral pueda enlazar directo a cada catálogo.
   const { tab: tabParam } = useParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const tab = TABS.some((t) => t.key === tabParam) ? tabParam : "articulos";
   const goTab = (key) => navigate(`${CATALOG_BASE}/${key}`);
 
@@ -109,13 +116,18 @@ export default function MRPCatalogosPage() {
         action={<Badge tone="accent">Configuración</Badge>}
       />
 
-      <ChipsRow>
-        {TABS.map((t) => (
-          <Chip key={t.key} active={tab === t.key} onClick={() => goTab(t.key)}>
-            {t.label}
-          </Chip>
-        ))}
-      </ChipsRow>
+      {/* Los chips sólo se muestran en móvil: en escritorio la navegación entre
+          catálogos vive en el submenú lateral (acordeón "Catálogos"), por lo que
+          aquí serían redundantes. */}
+      {isMobile ? (
+        <ChipsRow>
+          {TABS.map((t) => (
+            <Chip key={t.key} active={tab === t.key} onClick={() => goTab(t.key)}>
+              {t.label}
+            </Chip>
+          ))}
+        </ChipsRow>
+      ) : null}
 
       {tab === "articulos" && <ArticulosTab />}
       {tab === "companias" && <CompaniasTab />}
@@ -234,11 +246,11 @@ function RowActionsMenu({ open, onToggle, onClose, items }) {
 // artículos antiguos sin compañía los puede asignar el rol `dev` desde la fila.
 // (Capa de datos legada: "compañía" == pallet_clientes / usePalletClientes.)
 function ClienteCell({ cliente }) {
-  if (!cliente) return <span style={{ color: SLATE, fontWeight: 800 }}>—</span>;
+  if (!cliente) return <Dash />;
   return (
     <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
-      <span style={{ fontWeight: 850 }}>{cliente.nombre}</span>
-      <span style={{ fontFamily: "monospace", fontSize: 11, color: SLATE }}>
+      <span style={{ fontWeight: FW_BOLD }}>{cliente.nombre}</span>
+      <span style={{ fontFamily: "monospace", fontSize: FS_XS, color: SLATE }}>
         {cliente.codigo}
       </span>
     </span>
@@ -409,9 +421,7 @@ function ArticulosTab() {
                 title: "Código",
                 get: (a) => ({ value: a.codigo || "—", label: a.codigo || "—" }),
                 render: (a) => (
-                  <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
-                    {a.codigo}
-                  </span>
+                  <CodeText>{a.codigo}</CodeText>
                 ),
               },
               {
@@ -442,7 +452,7 @@ function ArticulosTab() {
                       Asignar compañía
                     </GhostButton>
                   ) : (
-                    <span style={{ color: SLATE, fontWeight: 800 }}>—</span>
+                    <Dash />
                   ),
               },
               {
@@ -744,9 +754,7 @@ function CompaniasTab() {
                 title: "Código",
                 get: (c) => ({ value: c.codigo || "—", label: c.codigo || "—" }),
                 render: (c) => (
-                  <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
-                    {c.codigo}
-                  </span>
+                  <CodeText>{c.codigo}</CodeText>
                 ),
               },
               {
@@ -1011,9 +1019,7 @@ function ClientesTab() {
                 title: "Código",
                 get: (t) => ({ value: t.codigo || "—", label: t.codigo || "—" }),
                 render: (t) => (
-                  <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
-                    {t.codigo}
-                  </span>
+                  <CodeText>{t.codigo}</CodeText>
                 ),
               },
               {
@@ -1044,7 +1050,7 @@ function ClientesTab() {
                       Asignar compañía
                     </GhostButton>
                   ) : (
-                    <span style={{ color: SLATE, fontWeight: 800 }}>—</span>
+                    <Dash />
                   ),
               },
               {
@@ -1393,9 +1399,7 @@ function InsumosSection() {
                 title: "Código",
                 get: (i) => ({ value: i.codigo || "—", label: i.codigo || "—" }),
                 render: (i) => (
-                  <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
-                    {i.codigo}
-                  </span>
+                  <CodeText>{i.codigo}</CodeText>
                 ),
               },
               {
@@ -1546,7 +1550,7 @@ function InsumosSection() {
             />
             <span>
               Precio por lote
-              <span style={{ color: SLATE, fontWeight: 700 }}>
+              <span style={{ color: SLATE, fontWeight: FW_BOLD }}>
                 {" "}
                 — sin marcar, el precio es por unidad
               </span>
@@ -1722,9 +1726,7 @@ function BomSection() {
                 title: "Código",
                 get: (r) => ({ value: r.codigo || "—", label: r.codigo || "—" }),
                 render: (r) => (
-                  <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
-                    {r.codigo}
-                  </span>
+                  <CodeText>{r.codigo}</CodeText>
                 ),
               },
               {
@@ -1759,7 +1761,7 @@ function BomSection() {
                   label: String((r.insumos || []).length),
                 }),
                 render: (r) => (
-                  <span style={{ fontWeight: 950 }}>
+                  <span style={{ fontWeight: FW_EXTRABOLD }}>
                     {(r.insumos || []).length}
                   </span>
                 ),
@@ -1865,22 +1867,20 @@ function BomSection() {
 
           {selected.length > 0 && (
             <div style={{ display: "grid", gap: 8 }}>
-              <span style={{ color: SLATE, fontWeight: 950, fontSize: 12 }}>
+              <span style={{ color: SLATE, fontWeight: FW_EXTRABOLD, fontSize: FS_SM }}>
                 Insumos seleccionados ({selected.length})
               </span>
               <div style={{ display: "grid", gap: 6 }}>
                 {selected.map((s) => (
                   <div key={s.id} style={selectedRow}>
                     <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ fontFamily: "monospace", fontWeight: 950 }}>
-                        {s.codigo}
-                      </span>{" "}
+                      <CodeText>{s.codigo}</CodeText>{" "}
                       {s.nombre}
                     </span>
                     <span
                       style={{ display: "flex", alignItems: "center", gap: 6 }}
                     >
-                      <span style={{ color: SLATE, fontWeight: 900 }}>x</span>
+                      <span style={{ color: SLATE, fontWeight: FW_EXTRABOLD }}>x</span>
                       <Field.Input
                         type="number"
                         min="1"
@@ -1972,7 +1972,7 @@ const menuItem = {
   border: "none",
   background: "transparent",
   color: TEXT,
-  fontWeight: 800,
+  fontWeight: FW_EXTRABOLD,
   fontSize: FS_SM,
   fontFamily: "inherit",
   cursor: "pointer",
@@ -1984,8 +1984,8 @@ const checkboxRow = {
   display: "flex",
   alignItems: "center",
   gap: 10,
-  fontWeight: 850,
-  fontSize: 13,
+  fontWeight: FW_EXTRABOLD,
+  fontSize: FS_BASE,
   color: TEXT,
   cursor: "pointer",
 };
@@ -1996,10 +1996,10 @@ const selectedRow = {
   justifyContent: "space-between",
   gap: 10,
   padding: "8px 12px",
-  borderRadius: 12,
-  background: "#F2F4FB",
-  fontWeight: 800,
-  fontSize: 13,
+  borderRadius: RADIUS_MD,
+  background: SURFACE_INSET,
+  fontWeight: FW_EXTRABOLD,
+  fontSize: FS_BASE,
   color: TEXT,
 };
 

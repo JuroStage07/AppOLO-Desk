@@ -4,7 +4,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Filter, Search, Check, X } from "lucide-react";
-import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE, TEXT } from "../../../styles/theme";
+import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE, SURFACE_SOFT, TEXT } from "../../../styles/theme";
 
 export default function ColumnFilter({ options, selected, onChange }) {
   const [open, setOpen] = useState(false);
@@ -197,7 +197,7 @@ const searchWrap = {
   border: `1px solid ${BORDER}`,
   borderRadius: 9,
   padding: "7px 9px",
-  background: "#FBFCFF",
+  background: SURFACE_SOFT,
 };
 const searchInput = {
   flex: 1,

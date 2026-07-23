@@ -2,13 +2,15 @@
 import React, { useMemo } from "react";
 import {
   Sheet,
-  TableScroll,
   Spinner,
   ErrorState,
   EmptyState,
 } from "../../../components/ui";
 import { usePalletInventory, useMrpWorkspace } from "../../../hooks/mrp";
 import { th, td } from "./mrpFormat";
+import { CodeText } from "./mrpUi";
+import MrpTable from "./MrpTable";
+import { FW_EXTRABOLD } from "../../../styles/theme";
 
 export default function UbicacionDetalleModal({
   open,
@@ -57,8 +59,7 @@ export default function UbicacionDetalleModal({
             description="No hay artículos con stock en esta ubicación."
           />
         ) : (
-          <TableScroll minWidth={400}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <MrpTable minWidth={400}>
               <thead>
                 <tr>
                   <th style={th}>Código</th>
@@ -69,28 +70,27 @@ export default function UbicacionDetalleModal({
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id}>
-                    <td
-                      style={{ ...td, fontFamily: "monospace", fontWeight: 950 }}
-                    >
-                      {r.codigo}
+                    <td style={td}>
+                      <CodeText>{r.codigo}</CodeText>
                     </td>
                     <td style={td}>{r.nombre}</td>
-                    <td style={{ ...td, textAlign: "right", fontWeight: 950 }}>
+                    <td style={{ ...td, textAlign: "right", fontWeight: FW_EXTRABOLD }}>
                       {r.qty}
                     </td>
                   </tr>
                 ))}
+              </tbody>
+              <tfoot>
                 <tr>
-                  <td style={{ ...td, fontWeight: 950 }} colSpan={2}>
+                  <td style={{ ...td, fontWeight: FW_EXTRABOLD }} colSpan={2}>
                     Total
                   </td>
-                  <td style={{ ...td, textAlign: "right", fontWeight: 950 }}>
+                  <td style={{ ...td, textAlign: "right", fontWeight: FW_EXTRABOLD }}>
                     {total}
                   </td>
                 </tr>
-              </tbody>
-            </table>
-          </TableScroll>
+              </tfoot>
+          </MrpTable>
         )}
       </Sheet.Body>
     </Sheet>

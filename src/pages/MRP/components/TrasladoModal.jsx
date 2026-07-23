@@ -80,11 +80,51 @@ export default function TrasladoModal({ open, onClose, prefill }) {
     onlyWithStock: false,
   });
 
-  const originAvailable = useMemo(() => {
-    if (!form.articuloId || !form.originLocation) return null;
-    const row = inventory.find((r) => r.location === form.originLocation);
+  // Disponible en una ubicación (para el artículo seleccionado). En `tienda` el
+  // stock está desglosado por tienda: depende de la tienda indicada.
+  const availableAt = (loc, storeId) => {
+    if (!form.articuloId || !loc) return null;
+    if (loc === "tienda") {
+      if (!storeId) return null;
+      const row = inventory.find(
+        (r) => r.location === "tienda" && r.store_id === storeId
+      );
+      return row ? Number(row.quantity) || 0 : 0;
+    }
+    const row = inventory.find((r) => r.location === loc && !r.store_id);
     return row ? Number(row.quantity) || 0 : 0;
-  }, [inventory, form.articuloId, form.originLocation]);
+  };
+
+  const originAvailable = useMemo(
+    () =>
+      availableAt(
+        form.originLocation,
+        form.originLocation === "tienda" ? form.tiendaId : null
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inventory, form.articuloId, form.originLocation, form.tiendaId]
+  );
+
+  const destinationAvailable = useMemo(
+    () =>
+      availableAt(
+        form.destinationLocation,
+        form.destinationLocation === "tienda" ? form.tiendaId : null
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inventory, form.articuloId, form.destinationLocation, form.tiendaId]
+  );
+
+  // Total por ubicación (suma de todas las tiendas para `tienda`), para mostrar
+  // la cantidad junto a cada opción del selector, p. ej. "Patio (35)".
+  const totalsByLocation = useMemo(() => {
+    const m = {};
+    if (!form.articuloId) return m;
+    for (const r of inventory) {
+      m[r.location] = (m[r.location] || 0) + (Number(r.quantity) || 0);
+    }
+    return m;
+  }, [inventory, form.articuloId]);
 
   useEffect(() => {
     if (open) {
@@ -117,9 +157,13 @@ export default function TrasladoModal({ open, onClose, prefill }) {
       if (!form.destinationLocation) e.destinationLocation = "Seleccione el destino.";
       if (form.originLocation && form.originLocation === form.destinationLocation)
         e.destinationLocation = "El origen y el destino no pueden ser iguales.";
-      // Destino tienda: el cliente concreto es obligatorio.
-      if (form.destinationLocation === "tienda" && !form.tiendaId)
-        e.tiendaId = "Seleccione el cliente destino.";
+      // Origen o destino tienda: la tienda concreta es obligatoria.
+      if (
+        (form.destinationLocation === "tienda" ||
+          form.originLocation === "tienda") &&
+        !form.tiendaId
+      )
+        e.tiendaId = "Seleccione la tienda.";
     }
 
     const qty = Number(form.quantity);
@@ -184,12 +228,13 @@ export default function TrasladoModal({ open, onClose, prefill }) {
     }
   };
 
-  const locationOptions = (locations) => (
+  const locationOptions = (locations, showQty = true) => (
     <>
       <option value="">— Seleccionar —</option>
       {locations.map((l) => (
         <option key={l} value={l}>
           {PALLET_LOCATION_LABELS[l]}
+          {showQty && form.articuloId ? ` (${totalsByLocation[l] || 0})` : ""}
         </option>
       ))}
     </>
@@ -275,7 +320,17 @@ export default function TrasladoModal({ open, onClose, prefill }) {
             <Field.Select
               value={form.originLocation}
               disabled={!form.articuloId}
-              onChange={(e) => set("originLocation", e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setForm((f) => ({
+                  ...f,
+                  originLocation: v,
+                  tiendaId:
+                    v === "tienda" || f.destinationLocation === "tienda"
+                      ? f.tiendaId
+                      : "",
+                }));
+              }}
             >
               {locationOptions(isWh ? whLocations : allLocations)}
             </Field.Select>
@@ -284,6 +339,11 @@ export default function TrasladoModal({ open, onClose, prefill }) {
             label={isWh ? "Ubicación destino (en almacén destino)" : "Ubicación destino"}
             required
             error={errors.destinationLocation}
+            hint={
+              !isWh && destinationAvailable !== null
+                ? `Disponible: ${destinationAvailable}`
+                : undefined
+            }
           >
             <Field.Select
               value={form.destinationLocation}
@@ -293,23 +353,32 @@ export default function TrasladoModal({ open, onClose, prefill }) {
                 setForm((f) => ({
                   ...f,
                   destinationLocation: v,
-                  tiendaId: v === "tienda" ? f.tiendaId : "",
+                  tiendaId:
+                    v === "tienda" || f.originLocation === "tienda"
+                      ? f.tiendaId
+                      : "",
                 }));
               }}
             >
-              {locationOptions(isWh ? whLocations : allLocations)}
+              {locationOptions(isWh ? whLocations : allLocations, !isWh)}
             </Field.Select>
           </Field>
         </div>
 
-        {!isWh && form.destinationLocation === "tienda" && (
+        {!isWh &&
+          (form.destinationLocation === "tienda" ||
+            form.originLocation === "tienda") && (
           <Field
-            label="Cliente destino"
+            label={
+              form.originLocation === "tienda" ? "Tienda origen" : "Tienda destino"
+            }
             required
             error={errors.tiendaId}
             hint={
               tiendas.length === 0
                 ? "No hay clientes activos. Créalos en Catálogos › Clientes."
+                : form.originLocation === "tienda"
+                ? "¿De qué tienda salen las tarimas?"
                 : "¿A qué cliente se envían las tarimas?"
             }
           >

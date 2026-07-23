@@ -9,13 +9,20 @@ export default function usePalletInventory(filters = {}) {
     warehouseId = null,
     location = null,
     articuloId = null,
+    storeId = null,
     onlyWithStock = true,
   } = filters;
 
   const { data, loading, error, refetch } = useAsyncData(
     () =>
-      listPalletInventory({ warehouseId, location, articuloId, onlyWithStock }),
-    [warehouseId, location, articuloId, onlyWithStock],
+      listPalletInventory({
+        warehouseId,
+        location,
+        articuloId,
+        storeId,
+        onlyWithStock,
+      }),
+    [warehouseId, location, articuloId, storeId, onlyWithStock],
     { channels: ["inventory"] }
   );
 

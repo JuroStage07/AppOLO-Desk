@@ -21,19 +21,22 @@ export async function listPalletInventory({
   warehouseId,
   location,
   articuloId,
+  storeId = null,
   onlyWithStock = true,
 } = {}) {
   let q = scope(
     supabase.from("pallet_inventory_articulo").select(
-      `id, warehouse_id, location, articulo_id, quantity, updated_at,
+      `id, warehouse_id, location, articulo_id, quantity, store_id, updated_at,
        articulo:pallet_articulos(id, codigo, nombre),
-       warehouse:pallet_warehouses(id, name, code)`
+       warehouse:pallet_warehouses(id, name, code),
+       tienda:pallet_tiendas(id, codigo, nombre)`
     )
   );
 
   if (warehouseId) q = q.eq("warehouse_id", warehouseId);
   if (location) q = q.eq("location", location);
   if (articuloId) q = q.eq("articulo_id", articuloId);
+  if (storeId) q = q.eq("store_id", storeId);
   if (onlyWithStock) q = q.gt("quantity", 0);
 
   const { data, error } = await q.order("updated_at", { ascending: false });

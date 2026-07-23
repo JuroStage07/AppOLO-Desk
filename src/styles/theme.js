@@ -2,6 +2,7 @@
 // Source of truth: src/pages/Recepcion/* (mirrors that look & feel).
 
 export const ACCENT = "#089F8A";
+export const ACCENT_LIGHT = "#26C6AC"; // brand accent, lighter end (gradients)
 export const ACCENT_SOFT = "rgba(8, 159, 138, 0.12)";
 export const ACCENT_BORDER = "rgba(8, 159, 138, 0.35)";
 export const ACCENT_SHADOW = "rgba(8, 159, 138, 0.28)";
@@ -105,6 +106,7 @@ export const SPACE_16 = 64;
 // Aggregate export for ergonomic imports: `import { theme } from "../../styles/theme"`
 export const theme = {
   ACCENT,
+  ACCENT_LIGHT,
   ACCENT_SOFT,
   ACCENT_BORDER,
   ACCENT_SHADOW,

@@ -3,7 +3,7 @@
 // Excel + reorden por arrastre + primera columna fija).
 import React, { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Package, Plus, ArrowLeftRight, FlaskConical } from "lucide-react";
+import { Package, Plus, ArrowLeftRight, FlaskConical, Store } from "lucide-react";
 import {
   Card,
   Chip,
@@ -21,15 +21,29 @@ import {
 import {
   usePalletInventory,
   usePalletArticulos,
+  usePalletTiendas,
   useMrpInsumos,
   useMrpWorkspace,
 } from "../../hooks/mrp";
 import { PALLET_LOCATION_LABELS } from "../../services/mrp";
-import { ACCENT, SLATE } from "../../styles/theme";
+import {
+  ACCENT,
+  SLATE,
+  TEXT,
+  FS_XS,
+  FS_SM,
+  FS_BASE,
+  FS_LG,
+  FW_BOLD,
+  FW_EXTRABOLD,
+} from "../../styles/theme";
+import useIsMobile from "../../hooks/useIsMobile";
 import MrpDataTable from "./components/MrpDataTable";
+import { CodeText } from "./components/mrpUi";
 import AjusteModal from "./components/AjusteModal";
 import TrasladoModal from "./components/TrasladoModal";
 import ArticuloHistorialModal from "./components/ArticuloHistorialModal";
+import ArticuloTiendaModal from "./components/ArticuloTiendaModal";
 
 const LOCATION_COLS = ["pend", "almacen", "patio", "reparacion", "merma", "tienda"];
 
@@ -37,6 +51,7 @@ const INV_BASE = "/mrp-tarimas/inventario";
 const INV_TABS = [
   { key: "articulos", label: "Artículos", icon: Package },
   { key: "insumos", label: "Insumos", icon: FlaskConical },
+  { key: "tiendas", label: "En tienda", icon: Store },
 ];
 
 // Wrapper de Inventario: tabs (Artículos / Insumos) manejados por URL para que
@@ -44,28 +59,40 @@ const INV_TABS = [
 export default function MRPInventarioPage() {
   const { tab: tabParam } = useParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const tab = INV_TABS.some((t) => t.key === tabParam) ? tabParam : "articulos";
 
   return (
     <>
-      <ChipsRow>
-        {INV_TABS.map((t) => (
-          <Chip
-            key={t.key}
-            active={tab === t.key}
-            onClick={() => navigate(`${INV_BASE}/${t.key}`)}
-          >
-            {t.label}
-          </Chip>
-        ))}
-      </ChipsRow>
+      {/* Chips sólo en móvil: en escritorio la navegación Artículos/Insumos vive
+          en el submenú lateral (acordeón "Inventario"). */}
+      {isMobile ? (
+        <ChipsRow>
+          {INV_TABS.map((t) => (
+            <Chip
+              key={t.key}
+              active={tab === t.key}
+              onClick={() => navigate(`${INV_BASE}/${t.key}`)}
+            >
+              {t.label}
+            </Chip>
+          ))}
+        </ChipsRow>
+      ) : null}
 
-      {tab === "insumos" ? <InsumosInventario /> : <ArticulosInventario />}
+      {tab === "insumos" ? (
+        <InsumosInventario />
+      ) : tab === "tiendas" ? (
+        <TiendaInventario />
+      ) : (
+        <ArticulosInventario />
+      )}
     </>
   );
 }
 
 function ArticulosInventario() {
+  const isMobile = useIsMobile();
   const { warehouseId } = useMrpWorkspace();
 
   const { articulos } = usePalletArticulos({ warehouseId });
@@ -109,6 +136,7 @@ function ArticulosInventario() {
   const [ajuste, setAjuste] = useState({ open: false, prefill: null });
   const [traslado, setTraslado] = useState({ open: false, prefill: null });
   const [historial, setHistorial] = useState(null);
+  const [tiendaDist, setTiendaDist] = useState(null);
   const openAjuste = (prefill = null) => setAjuste({ open: true, prefill });
   const openTraslado = (prefill = null) => setTraslado({ open: true, prefill });
 
@@ -130,8 +158,8 @@ function ArticulosInventario() {
             padding: 0,
             cursor: "pointer",
             fontFamily: "monospace",
-            fontWeight: 950,
-            fontSize: 13,
+            fontWeight: FW_EXTRABOLD,
+            fontSize: FS_BASE,
             color: ACCENT,
             textDecoration: "underline",
           }}
@@ -156,13 +184,13 @@ function ArticulosInventario() {
       render: (r) =>
         r.cliente ? (
           <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
-            <span style={{ fontWeight: 850 }}>{r.cliente.nombre}</span>
-            <span style={{ fontFamily: "monospace", fontSize: 11, color: SLATE }}>
+            <span style={{ fontWeight: FW_BOLD }}>{r.cliente.nombre}</span>
+            <span style={{ fontFamily: "monospace", fontSize: FS_XS, color: SLATE }}>
               {r.cliente.codigo}
             </span>
           </span>
         ) : (
-          <span style={{ color: SLATE, fontWeight: 800 }}>—</span>
+          <span style={{ color: SLATE, fontWeight: FW_BOLD }}>—</span>
         ),
     },
     ...LOCATION_COLS.map((loc) => ({
@@ -173,37 +201,102 @@ function ArticulosInventario() {
         value: String(r.perLocation[loc] || 0),
         label: String(r.perLocation[loc] || 0),
       }),
-      render: (r) => r.perLocation[loc] || 0,
+      render: (r) => {
+        const qty = r.perLocation[loc] || 0;
+        // La celda de "tienda" con cantidad abre la distribución por tienda.
+        if (loc === "tienda" && qty > 0) {
+          return (
+            <button
+              type="button"
+              onClick={() =>
+                setTiendaDist({ id: r.id, codigo: r.codigo, nombre: r.nombre })
+              }
+              title="Ver distribución por tienda"
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                fontWeight: FW_EXTRABOLD,
+                color: ACCENT,
+                textDecoration: "underline",
+              }}
+            >
+              {qty}
+            </button>
+          );
+        }
+        return qty;
+      },
     })),
     {
       key: "total",
       title: "Total",
       align: "right",
       get: (r) => ({ value: String(r.total), label: String(r.total) }),
-      render: (r) => <span style={{ fontWeight: 950 }}>{r.total}</span>,
+      render: (r) => <span style={{ fontWeight: FW_EXTRABOLD }}>{r.total}</span>,
     },
   ];
 
   return (
     <>
-      <SectionTitle
-        title="Inventario de artículos"
-        action={
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <PrimaryButton icon={Plus} onClick={() => openAjuste()}>
-              Ajuste
-            </PrimaryButton>
-            <SecondaryButton icon={ArrowLeftRight} onClick={() => openTraslado()}>
-              Traslado
-            </SecondaryButton>
+      {/* Encabezado de 3 zonas: (izq) título "Existencias" + conteo,
+          (centro) nombre de la vista, (der) acciones. En móvil se apila. */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr auto 1fr",
+          alignItems: "center",
+          gap: 12,
+          marginTop: 8,
+          marginBottom: 6,
+          textAlign: isMobile ? "center" : undefined,
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gap: 2,
+            justifyItems: isMobile ? "center" : "start",
+          }}
+        >
+          <div style={{ fontWeight: FW_EXTRABOLD, fontSize: FS_LG, color: TEXT }}>
+            Existencias
           </div>
-        }
-      />
+          {!loading ? (
+            <div style={{ color: SLATE, fontWeight: FW_BOLD, fontSize: FS_SM }}>
+              {rows.length} artículo(s)
+            </div>
+          ) : null}
+        </div>
 
-      <SectionTitle
-        title="Existencias"
-        hint={!loading ? `${rows.length} artículo(s)` : undefined}
-      />
+        <div
+          style={{
+            fontWeight: FW_EXTRABOLD,
+            fontSize: FS_LG,
+            color: TEXT,
+            textAlign: "center",
+          }}
+        >
+          Inventario de artículos
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            justifyContent: isMobile ? "center" : "flex-end",
+          }}
+        >
+          <PrimaryButton icon={Plus} onClick={() => openAjuste()}>
+            Ajuste
+          </PrimaryButton>
+          <SecondaryButton icon={ArrowLeftRight} onClick={() => openTraslado()}>
+            Traslado
+          </SecondaryButton>
+        </div>
+      </div>
 
       {loading ? (
         <Spinner label="Cargando inventario…" />
@@ -228,7 +321,7 @@ function ArticulosInventario() {
             rowKey={(r) => r.id}
             storageKey="appolo_mrp_inv_art_cols"
             pageSize={5}
-            minWidth={1120}
+            minWidth={0}
             actionsLabel="Acciones"
             renderActions={(r) => (
               <div
@@ -281,6 +374,15 @@ function ArticulosInventario() {
             setHistorial(null);
             openTraslado({ articuloId: id });
           }}
+        />
+      )}
+      {tiendaDist && (
+        <ArticuloTiendaModal
+          open
+          articuloId={tiendaDist.id}
+          codigo={tiendaDist.codigo}
+          nombre={tiendaDist.nombre}
+          onClose={() => setTiendaDist(null)}
         />
       )}
     </>
@@ -347,7 +449,7 @@ function InsumosInventario() {
       title: "Código",
       get: (i) => ({ value: i.codigo || "—", label: i.codigo || "—" }),
       render: (i) => (
-        <span style={{ fontFamily: "monospace", fontWeight: 950 }}>{i.codigo}</span>
+        <span style={{ fontFamily: "monospace", fontWeight: FW_EXTRABOLD }}>{i.codigo}</span>
       ),
     },
     {
@@ -367,7 +469,7 @@ function InsumosInventario() {
       title: "Stock",
       align: "right",
       get: (i) => ({ value: String(i.stock ?? 0), label: String(i.stock ?? 0) }),
-      render: (i) => <span style={{ fontWeight: 950 }}>{i.stock ?? 0}</span>,
+      render: (i) => <span style={{ fontWeight: FW_EXTRABOLD }}>{i.stock ?? 0}</span>,
     },
   ];
 
@@ -472,6 +574,134 @@ function InsumosInventario() {
           </PrimaryButton>
         </Sheet.Actions>
       </Sheet>
+    </>
+  );
+}
+
+// Inventario "En tienda": pivote artículo × tienda del stock que está en la
+// ubicación `tienda`. Cada tienda del catálogo es una columna; la primera es el
+// N° de artículo. Requiere el rastreo por tienda del inventario (store_id) que
+// vive en `pallet_inventory_articulo` (ver supabase/mrp_tienda_inventario.sql).
+function TiendaInventario() {
+  const { warehouseId } = useMrpWorkspace();
+  const { tiendas, loading: loadingTiendas } = usePalletTiendas({
+    includeInactive: false,
+  });
+  const { inventory, loading, error, refetch } = usePalletInventory({
+    warehouseId,
+    location: "tienda",
+    onlyWithStock: false,
+  });
+
+  // Agrupa el inventario de la ubicación `tienda` por artículo, con el desglose
+  // por tienda (store_id) y una bolsa "Sin asignar" (store_id nulo).
+  const { rows, hasUnassigned } = useMemo(() => {
+    const byArt = new Map();
+    let unassignedAny = false;
+    for (const r of inventory) {
+      const qty = Number(r.quantity) || 0;
+      if (qty <= 0) continue;
+      const art = r.articulo || {};
+      let row = byArt.get(r.articulo_id);
+      if (!row) {
+        row = {
+          id: r.articulo_id,
+          codigo: art.codigo || "—",
+          nombre: art.nombre || "",
+          perTienda: {},
+          unassigned: 0,
+          total: 0,
+        };
+        byArt.set(r.articulo_id, row);
+      }
+      if (r.store_id) {
+        row.perTienda[r.store_id] = (row.perTienda[r.store_id] || 0) + qty;
+      } else {
+        row.unassigned += qty;
+        unassignedAny = true;
+      }
+      row.total += qty;
+    }
+    const list = Array.from(byArt.values()).sort((a, b) =>
+      String(a.codigo).localeCompare(String(b.codigo), "es")
+    );
+    return { rows: list, hasUnassigned: unassignedAny };
+  }, [inventory]);
+
+  const columns = useMemo(() => {
+    const cols = [
+      {
+        key: "codigo",
+        title: "N° Artículo",
+        get: (r) => ({ value: r.codigo || "—", label: r.codigo || "—" }),
+        render: (r) => <CodeText>{r.codigo}</CodeText>,
+      },
+    ];
+    for (const t of tiendas) {
+      cols.push({
+        key: `t_${t.id}`,
+        title: t.nombre,
+        align: "right",
+        get: (r) => {
+          const v = r.perTienda[t.id] || 0;
+          return { value: String(v), label: String(v) };
+        },
+        render: (r) => r.perTienda[t.id] || 0,
+      });
+    }
+    if (hasUnassigned) {
+      cols.push({
+        key: "unassigned",
+        title: "Sin asignar",
+        align: "right",
+        get: (r) => ({
+          value: String(r.unassigned || 0),
+          label: String(r.unassigned || 0),
+        }),
+        render: (r) => r.unassigned || 0,
+      });
+    }
+    cols.push({
+      key: "total",
+      title: "Total",
+      align: "right",
+      get: (r) => ({ value: String(r.total), label: String(r.total) }),
+      render: (r) => <span style={{ fontWeight: FW_EXTRABOLD }}>{r.total}</span>,
+    });
+    return cols;
+  }, [tiendas, hasUnassigned]);
+
+  const busy = loading || loadingTiendas;
+
+  return (
+    <>
+      <SectionTitle
+        title="Inventario en tienda"
+        hint={!busy ? `${rows.length} artículo(s) en tienda` : undefined}
+      />
+
+      {busy ? (
+        <Spinner label="Cargando inventario…" />
+      ) : error ? (
+        <ErrorState description={error.message} onRetry={refetch} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={Store}
+          title="Sin stock en tienda"
+          description="Traslada artículos a la ubicación tienda para verlos aquí."
+        />
+      ) : (
+        <Card padding={0}>
+          <MrpDataTable
+            columns={columns}
+            rows={rows}
+            rowKey={(r) => r.id}
+            storageKey="appolo_mrp_inv_tienda_cols"
+            pageSize={5}
+            minWidth={0}
+          />
+        </Card>
+      )}
     </>
   );
 }

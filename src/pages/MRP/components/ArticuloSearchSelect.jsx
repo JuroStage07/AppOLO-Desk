@@ -7,6 +7,7 @@ import {
   ACCENT_SOFT,
   BORDER,
   SLATE,
+  SURFACE_SOFT,
   TEXT,
 } from "../../../styles/theme";
 
@@ -103,7 +104,7 @@ const trigger = {
   padding: "8px 10px",
   borderRadius: 14,
   border: `1px solid ${BORDER}`,
-  background: "#FBFCFF",
+  background: SURFACE_SOFT,
   color: TEXT,
   fontWeight: 850,
   fontSize: 13,

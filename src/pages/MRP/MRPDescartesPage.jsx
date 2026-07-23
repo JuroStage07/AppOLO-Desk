@@ -8,7 +8,6 @@ import {
   Card,
   Field,
   GhostButton,
-  TableScroll,
   Spinner,
   ErrorState,
   EmptyState,
@@ -20,6 +19,9 @@ import {
   useMrpWorkspace,
 } from "../../hooks/mrp";
 import { th, td, filtersRow, fmtDate } from "./components/mrpFormat";
+import { CodeText } from "./components/mrpUi";
+import MrpTable from "./components/MrpTable";
+import { FS_BASE, FW_BOLD, FW_EXTRABOLD, LH_NORMAL } from "../../styles/theme";
 
 const EMPTY = {
   articuloId: "",
@@ -54,17 +56,17 @@ export default function MRPDescartesPage() {
         action={<Badge tone="dark">Administrativo</Badge>}
       />
 
-      <Card tone="accent">
-                <div style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.5 }}>
-                  Los descartes son un registro administrativo.{" "}
-                  <b>No son inventario</b> y{" "}
-                  <b>no se mezclan con la ubicación merma</b>.
-                </div>
-              </Card>
+      <Card tone="accent" padding={16}>
+        <div style={{ fontSize: FS_BASE, fontWeight: FW_BOLD, lineHeight: LH_NORMAL }}>
+          Los descartes son un registro administrativo.{" "}
+          <b>No son inventario</b> y{" "}
+          <b>no se mezclan con la ubicación merma</b>.
+        </div>
+      </Card>
 
-              {/* Filtros */}
-              <Card>
-                <div style={filtersRow}>
+      {/* Filtros */}
+      <Card padding={16}>
+        <div style={filtersRow}>
                   <Field label="Artículo">
                     <Field.Select
                       value={raw.articuloId}
@@ -124,8 +126,7 @@ export default function MRPDescartesPage() {
                 />
               ) : (
                 <Card padding={0}>
-                  <TableScroll minWidth={820}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <MrpTable minWidth={820}>
                       <thead>
                         <tr>
                           <th style={th}>Fecha</th>
@@ -141,14 +142,10 @@ export default function MRPDescartesPage() {
                           <tr key={d.id}>
                             <td style={td}>{fmtDate(d.created_at)}</td>
                             <td style={td}>
-                              <span
-                                style={{ fontFamily: "monospace", fontWeight: 950 }}
-                              >
-                                {d.articulo?.codigo}
-                              </span>{" "}
+                              <CodeText>{d.articulo?.codigo}</CodeText>{" "}
                               · {d.articulo?.nombre}
                             </td>
-                            <td style={{ ...td, textAlign: "right", fontWeight: 950 }}>
+                            <td style={{ ...td, textAlign: "right", fontWeight: FW_EXTRABOLD }}>
                               {d.quantity}
                             </td>
                             <td style={td}>{d.reason || "—"}</td>
@@ -159,8 +156,7 @@ export default function MRPDescartesPage() {
                           </tr>
                         ))}
                       </tbody>
-                    </table>
-                  </TableScroll>
+                  </MrpTable>
                 </Card>
               )}
     </>

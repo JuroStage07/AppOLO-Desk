@@ -117,9 +117,11 @@ export async function transferPallets({
     throw new Error("Ubicación destino inválida.");
   if (originLocation === destinationLocation)
     throw new Error("El origen y el destino no pueden ser iguales.");
-  // Cuando el destino es una tienda, la tienda destino es obligatoria (UI).
-  if (destinationLocation === "tienda" && !tiendaId)
-    throw new Error("Debe seleccionar la tienda destino.");
+  // Cuando el origen o el destino es una tienda, la tienda es obligatoria (UI).
+  const involvesTienda =
+    destinationLocation === "tienda" || originLocation === "tienda";
+  if (involvesTienda && !tiendaId)
+    throw new Error("Debe seleccionar la tienda.");
   if (!userId) throw new Error("Usuario no identificado.");
 
   const { tenantId, company } = getMrpScope();
@@ -134,7 +136,7 @@ export async function transferPallets({
     p_reason: reason ? String(reason).trim() : null,
     p_user_id: userId,
     p_user_email: userEmail || null,
-    p_tienda_id: destinationLocation === "tienda" ? tiendaId : null,
+    p_tienda_id: involvesTienda ? tiendaId : null,
   });
   if (error) throw error;
   return data; // { movement_id, movement_code, task_id }
