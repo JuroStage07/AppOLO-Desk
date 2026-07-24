@@ -43,7 +43,7 @@ const ConfirmCtx = createContext(null);
 const TONES = {
   danger: { icon: Trash2, accent: DANGER, bg: DANGER_BG, border: DANGER_BORDER },
   warning: { icon: AlertTriangle, accent: "#92600A", bg: WARN_BG, border: "#FFE1A8" },
-  default: { icon: HelpCircle, accent: ACCENT, bg: "#fff", border: BORDER },
+  default: { icon: HelpCircle, accent: ACCENT, bg: "var(--c-surface, #fff)", border: BORDER },
 };
 
 export function ConfirmProvider({ children }) {
@@ -184,7 +184,7 @@ const backdrop = {
 const card = {
   position: "relative",
   width: "min(400px, 100%)",
-  background: "#fff",
+  background: "var(--c-surface, #fff)",
   borderRadius: 20,
   border: `1px solid ${BORDER}`,
   padding: "24px 22px 20px",
@@ -245,7 +245,7 @@ const ghostBtn = {
   padding: "11px 14px",
   borderRadius: 12,
   border: `1px solid ${BORDER}`,
-  background: "#fff",
+  background: "var(--c-surface, #fff)",
   color: TEXT,
   fontWeight: 850,
   fontSize: 13.5,

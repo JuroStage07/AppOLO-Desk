@@ -5,6 +5,7 @@ import {
   ACCENT_BORDER,
   BORDER,
   SHADOW_BTN,
+  SURFACE,
   SURFACE_INSET,
   TEXT,
 } from "../../styles/theme";
@@ -104,7 +105,7 @@ const secondary = {
 };
 
 const ghost = {
-  background: "#fff",
+  background: SURFACE,
   color: TEXT,
   fontWeight: 800,
   boxShadow: SHADOW_BTN,

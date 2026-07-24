@@ -3,16 +3,57 @@
   line-height: 1.5;
   font-weight: 400;
 
-  /* App is light-only; force native controls (selects, scrollbars, date
-     pickers) to render light for visual consistency. Was `light dark`. */
+  /* ─── Theme tokens (neutrals) ───────────────────────────────────────
+     Light is the default. Dark mode is opt-in via data-theme="dark" on
+     <html> (see ThemeProvider). The brand accent (green) is intentionally
+     NOT themed — it stays identical in both modes. These variables back the
+     var(--c-*) references exported from src/styles/theme.js, so every
+     component that imports BG/SURFACE/TEXT/etc. becomes theme-aware for free. */
+  --c-bg: #F6F7FB;
+  --c-surface: #FFFFFF;
+  --c-surface-soft: #FBFCFF;
+  --c-surface-inset: #F2F4FB;
+  --c-surface-alt: #F1F5F9;
+  --c-surface-translucent: rgba(255, 255, 255, 0.85);
+  --c-text: #0F172A;
+  --c-text-secondary: #475569;
+  --c-muted: #94A3B8;
+  --c-border: #E7E9F2;
+  --c-border-soft: #EEF0F7;
+  /* Translucent chrome (topbars, sub-bars, sticky headers). */
+  --c-bg-translucent: rgba(246, 247, 251, 0.97);
+  --c-subbar: rgba(248, 250, 252, 0.7);
+  --c-overlay: rgba(15, 23, 42, 0.4);
+
   color-scheme: light;
-  color: #0F172A;
-  background-color: #F6F7FB;
+  color: var(--c-text);
+  background-color: var(--c-bg);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Dark theme ──────────────────────────────────────────────────────
+   "White → black" with the same green accent. Surfaces are near-black,
+   text is near-white, borders are subtle. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --c-bg: #0B0F12;
+  --c-surface: #14181D;
+  --c-surface-soft: #171C22;
+  --c-surface-inset: #1B2229;
+  --c-surface-alt: #1B2229;
+  --c-surface-translucent: rgba(16, 20, 25, 0.85);
+  --c-text: #E6EBF0;
+  --c-text-secondary: #B4C0CC;
+  --c-muted: #7C8A99;
+  --c-border: #272F37;
+  --c-border-soft: #20272E;
+  --c-bg-translucent: rgba(11, 15, 18, 0.97);
+  --c-subbar: rgba(18, 22, 27, 0.7);
+  --c-overlay: rgba(0, 0, 0, 0.55);
 }
 
 html {
@@ -34,8 +75,10 @@ body {
   min-width: 320px;
   min-height: 100vh;
   width: 100%;
-  background: #F6F7FB;
+  background: var(--c-bg);
+  color: var(--c-text);
   overflow-x: hidden;
+  transition: background-color 220ms ease, color 220ms ease;
 }
 
 h1 {
@@ -66,21 +109,6 @@ button {
 /* Remove the default outline only when a visible focus ring will be shown. */
 :focus:not(:focus-visible) {
   outline: none;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-
-  a:hover {
-    color: #747bff;
-  }
-
-  button {
-    background-color: #f9f9f9;
-  }
 }
 
 /* Pantalla completa: evitar flex en body (rompía el ancho de rutas con layout propio). */

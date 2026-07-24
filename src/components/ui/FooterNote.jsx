@@ -20,7 +20,7 @@ export default function FooterNote({ title = "Tip", children, style }) {
 const wrap = {
   borderRadius: 18,
   border: `1px solid ${BORDER}`,
-  background: "#FFFFFF",
+  background: "var(--c-surface, #FFFFFF)",
   padding: 16,
   boxShadow: SHADOW_SOFT,
   borderTop: `3px solid ${ACCENT_SOFT}`,

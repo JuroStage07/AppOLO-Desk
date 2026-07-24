@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Pin, X } from "lucide-react";
-import { ACCENT, ACCENT_SOFT, BORDER, MUTED, SHADOW_SOFT, SLATE, TEXT } from "../../styles/theme";
+import { ACCENT, ACCENT_SOFT, BORDER, MUTED, SHADOW_SOFT, SLATE, SURFACE, SURFACE_SOFT, TEXT } from "../../styles/theme";
 import usePinnedModules from "../../hooks/usePinnedModules";
 
 /**
@@ -82,7 +82,7 @@ export default function QuickCard({ label = "Acceso rápido", actions, children,
 }
 
 const card = {
-  background: "#fff",
+  background: SURFACE,
   border: `1px solid ${BORDER}`,
   borderRadius: 16,
   padding: "14px 16px",
@@ -95,7 +95,7 @@ const btns = { display: "grid", gap: 8 };
 const quickBtn = {
   borderRadius: 12,
   border: `1px solid ${BORDER}`,
-  background: "#FBFCFF",
+  background: SURFACE_SOFT,
   padding: "10px 12px",
   cursor: "pointer",
   fontWeight: 800,
@@ -107,7 +107,7 @@ const quickBtn = {
 const quickBtnAccent = {
   borderRadius: 12,
   border: "1px solid rgba(8,159,138,0.35)",
-  background: "#F3FBF9",
+  background: ACCENT_SOFT,
   padding: "10px 12px",
   cursor: "pointer",
   fontWeight: 800,

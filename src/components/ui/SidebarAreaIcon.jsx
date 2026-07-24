@@ -20,7 +20,7 @@ const box = {
   width: 32,
   height: 32,
   borderRadius: 8,
-  background: "#F1F5F9",
+  background: "var(--c-surface-inset, #F1F5F9)",
   border: `1px solid ${BORDER_SOFT}`,
   color: SLATE,
   display: "grid",

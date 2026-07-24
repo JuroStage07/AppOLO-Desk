@@ -60,7 +60,7 @@ const TONES = {
   },
   info: {
     icon: Info,
-    bg: "#FFFFFF",
+    bg: "var(--c-surface, #FFFFFF)",
     border: BORDER,
     accent: ACCENT,
   },
@@ -223,7 +223,7 @@ const itemStyle = {
   padding: "12px 12px 12px 14px",
   borderRadius: 14,
   border: `1px solid ${BORDER}`,
-  background: "#fff",
+  background: "var(--c-surface, #fff)",
   boxShadow: "0 14px 36px rgba(15,23,42,0.16)",
   fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
 };

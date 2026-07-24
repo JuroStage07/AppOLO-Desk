@@ -226,7 +226,7 @@ const backdrop = {
 const panel = {
   position: "relative",
   width: "min(560px, 100%)",
-  background: "#fff",
+  background: "var(--c-surface, #fff)",
   borderRadius: 18,
   border: `1px solid ${BORDER}`,
   boxShadow: "0 24px 60px rgba(15,23,42,0.30)",
@@ -259,7 +259,7 @@ const escBtn = {
   height: 26,
   borderRadius: 8,
   border: "none",
-  background: "#F1F5F9",
+  background: "var(--c-surface-inset, #F1F5F9)",
   color: SLATE,
   display: "grid",
   placeItems: "center",
@@ -302,7 +302,7 @@ const footer = {
   gap: 16,
   padding: "9px 14px",
   borderTop: `1px solid ${BORDER}`,
-  background: "#FBFCFF",
+  background: "var(--c-surface-soft, #FBFCFF)",
 };
 const footHint = { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: SLATE };
 const kbd = {
@@ -312,7 +312,7 @@ const kbd = {
   height: 18,
   padding: "0 4px",
   borderRadius: 5,
-  background: "#fff",
+  background: "var(--c-surface, #fff)",
   border: `1px solid ${BORDER}`,
   fontSize: 10,
   fontWeight: 800,

@@ -41,7 +41,7 @@ export function KpiGrid({ children, min = 200, gap = 12, style }) {
 }
 
 const card = {
-  background: "linear-gradient(180deg, #FFFFFF 0%, #FCFDFE 100%)",
+  background: "linear-gradient(180deg, var(--c-surface, #FFFFFF) 0%, var(--c-surface-soft, #FCFDFE) 100%)",
   border: `1px solid ${BORDER}`,
   borderRadius: 22,
   padding: 16,
@@ -61,7 +61,7 @@ const iconWrap = {
   width: 28,
   height: 28,
   borderRadius: 10,
-  background: "#F1F5F9",
+  background: "var(--c-surface-inset, #F1F5F9)",
   border: `1px solid ${BORDER}`,
   display: "grid",
   placeItems: "center",

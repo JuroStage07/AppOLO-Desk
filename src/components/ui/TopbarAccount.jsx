@@ -87,7 +87,7 @@ const logoutBtn = {
   height: 28,
   borderRadius: 8,
   border: `1px solid ${BORDER}`,
-  background: "#fff",
+  background: "var(--c-surface, #fff)",
   display: "inline-flex",
   alignItems: "center",
   gap: 6,

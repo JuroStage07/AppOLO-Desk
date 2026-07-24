@@ -103,7 +103,7 @@ const req = { color: DANGER, fontWeight: 950 };
 const inputStyle = {
   borderRadius: 14,
   border: `1px solid ${BORDER}`,
-  background: "#FBFCFF",
+  background: "var(--c-surface-soft, #FBFCFF)",
   padding: "12px 12px",
   outline: "none",
   fontWeight: 850,

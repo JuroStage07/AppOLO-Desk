@@ -5,7 +5,7 @@ import { doc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../../firebase";
 import { AuthCtx } from "../../auth/AuthProvider";
 import { getBodegasForScope, getBodegaLabel } from "../../config/bodegas";
-import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE, TEXT } from "../../styles/theme";
+import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE, SURFACE_SOFT, TEXT } from "../../styles/theme";
 
 /**
  * Chip en la sub-barra (junto a "CR · OLO") que abre un modal para cambiar la
@@ -212,7 +212,7 @@ const chip = {
   height: 26,
   padding: "0 8px",
   borderRadius: 8,
-  background: "#fff",
+  background: SURFACE,
   border: `1px solid ${BORDER}`,
   cursor: "pointer",
   fontFamily: "inherit",
@@ -285,7 +285,7 @@ const row = {
   padding: "12px 12px",
   borderRadius: 12,
   border: `1px solid ${BORDER}`,
-  background: "#FBFBFE",
+  background: SURFACE_SOFT,
   cursor: "pointer",
   textAlign: "left",
   fontFamily: "inherit",
@@ -300,7 +300,7 @@ const currentTag = {
   fontSize: 10,
   fontWeight: 800,
   color: ACCENT,
-  background: "#fff",
+  background: SURFACE,
   border: `1px solid ${ACCENT}`,
   borderRadius: 999,
   padding: "1px 7px",
@@ -337,7 +337,7 @@ const btnBase = {
 const btnGhost = {
   ...btnBase,
   border: `1px solid ${BORDER}`,
-  background: "#fff",
+  background: SURFACE,
   color: SLATE,
 };
 const btnPrimary = {

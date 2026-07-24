@@ -10,18 +10,19 @@ import PinsFlyout from "./PinsFlyout";
 import { onOpenPins } from "./pinsBus";
 import { openAssistantModal } from "./assistantBus";
 import SidebarAreaIcon from "./SidebarAreaIcon";
+import ThemeToggle from "./ThemeToggle";
 import { useToast } from "./Toast";
 
-/* ─── Local design tokens (mirror AreasTrabajoHubPage drawer) ─── */
+/* ─── Design tokens — theme-aware (light/dark) via CSS variables ─── */
 const T = {
   accent: "#089F8A",
   accentSoft: "rgba(8, 159, 138, 0.10)",
-  surface: "#FFFFFF",
-  surfaceAlt: "#F1F5F9",
-  border: "#E5E9F0",
-  text: "#0F172A",
-  textSecondary: "#475569",
-  textMuted: "#94A3B8",
+  surface: "var(--c-surface, #FFFFFF)",
+  surfaceAlt: "var(--c-surface-alt, #F1F5F9)",
+  border: "var(--c-border, #E5E9F0)",
+  text: "var(--c-text, #0F172A)",
+  textSecondary: "var(--c-text-secondary, #475569)",
+  textMuted: "var(--c-muted, #94A3B8)",
   shadowLg: "0 8px 24px rgba(15,23,42,0.08), 0 20px 60px rgba(15,23,42,0.12)",
 };
 
@@ -265,8 +266,9 @@ export default function AreasSidebar({ open, onClose, openPins = false }) {
           </div>
         </nav>
 
-        {/* Fixed footer with Chatbot + Mis Pins */}
+        {/* Fixed footer with theme switch + Chatbot + Mis Pins */}
         <div style={styles.sidebarFooter}>
+          <ThemeToggle variant="full" style={{ gridColumn: "1 / -1" }} />
           <button
             type="button"
             onClick={() => { closeAll(); openAssistantModal(); }}

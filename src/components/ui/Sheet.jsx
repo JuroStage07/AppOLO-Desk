@@ -111,7 +111,7 @@ const backdrop = {
 const sheetBase = {
   position: "relative",
   width: "100%",
-  background: "#fff",
+  background: "var(--c-surface, #fff)",
   border: `1px solid ${BORDER}`,
   padding: 16,
   margin: 12,
@@ -158,7 +158,7 @@ const closeBtn = {
   padding: "8px 12px",
   borderRadius: 999,
   border: `1px solid ${BORDER}`,
-  backgroundColor: "#F2F4FB",
+  backgroundColor: "var(--c-surface-inset, #F2F4FB)",
   cursor: "pointer",
   fontWeight: 950,
   color: TEXT,

@@ -22,6 +22,9 @@ async function authedFetch(path, { method = "GET", body } = {}) {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
+      // ngrok (plan gratuito) intercepta la primera visita con una página de
+      // advertencia HTML; este header la omite para recibir siempre el JSON.
+      "ngrok-skip-browser-warning": "true",
     },
     body: body ? JSON.stringify(body) : undefined,
   });

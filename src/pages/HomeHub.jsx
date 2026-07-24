@@ -3,10 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { AuthCtx } from "../auth/AuthProvider";
 import { auth } from "../firebase";
-import { ArrowRight, LayoutDashboard, Loader2, LogOut, Menu, User } from "lucide-react";
+import { ArrowRight, LayoutDashboard, Loader2, LogOut, Menu, Moon, Sun, User } from "lucide-react";
 import logoAppolo from "../assets/AppOLO_logo.png";
 import { AreasSidebar } from "../components/ui";
 import { ACCENT, ACCENT_SOFT, BG, BORDER, MUTED, SLATE_DEEP, TEXT } from "../styles/theme";
+import { useTheme } from "../theme/themeCore";
 
 /* ─── Design tokens (aligned with the app theme accent #089F8A) ─── */
 const T = {
@@ -15,10 +16,10 @@ const T = {
   accentSoft: ACCENT_SOFT,
   accentGlow: "rgba(8,159,138,0.28)",
   bg: BG,
-  surface: "#FFFFFF",
-  surfaceAlt: "#F1F5F9",
+  surface: "var(--c-surface, #FFFFFF)",
+  surfaceAlt: "var(--c-surface-alt, #F1F5F9)",
   border: BORDER,
-  borderSoft: "rgba(231,233,242,0.7)",
+  borderSoft: "var(--c-border-soft, rgba(231,233,242,0.7))",
   text: TEXT,
   textSecondary: SLATE_DEEP,
   textMuted: MUTED,
@@ -31,6 +32,7 @@ export default function HomeHub() {
   const nav = useNavigate();
   const { user: ctxUser } = useContext(AuthCtx);
   const user = ctxUser ?? auth.currentUser;
+  const { isDark, toggle: toggleTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [busyLogout, setBusyLogout] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -112,6 +114,20 @@ export default function HomeHub() {
           </div>
 
           <div style={s.headerActions}>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              style={s.themeBtn}
+              title={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+              aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+              aria-pressed={isDark}
+            >
+              {isDark ? (
+                <Sun size={17} strokeWidth={2.2} />
+              ) : (
+                <Moon size={17} strokeWidth={2.2} />
+              )}
+            </button>
             <div style={s.userPill}>
               <div style={s.userPillAvatar}>
                 <User size={14} strokeWidth={2.2} />
@@ -189,7 +205,7 @@ const s = {
   header: {
     width: "100%",
     borderBottom: `1px solid ${T.border}`,
-    background: "rgba(255,255,255,0.85)",
+    background: "var(--c-surface-translucent, rgba(255,255,255,0.85))",
     backdropFilter: "blur(12px) saturate(1.4)",
     WebkitBackdropFilter: "blur(12px) saturate(1.4)",
     position: "sticky",
@@ -271,6 +287,21 @@ const s = {
     transition: "all 150ms ease",
     fontFamily: "inherit",
     padding: 0,
+  },
+  themeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    border: `1px solid ${T.border}`,
+    background: T.surface,
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+    color: T.textSecondary,
+    transition: "all 150ms ease",
+    fontFamily: "inherit",
+    padding: 0,
+    flexShrink: 0,
   },
   menuBtn: {
     width: 38,

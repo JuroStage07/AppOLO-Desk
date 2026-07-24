@@ -58,7 +58,7 @@ export default function RowCard({
 }
 
 const rowCard = {
-  backgroundColor: "#ffffff",
+  backgroundColor: "var(--c-surface, #ffffff)",
   borderRadius: 16,
   padding: 14,
   border: `1px solid ${BORDER}`,

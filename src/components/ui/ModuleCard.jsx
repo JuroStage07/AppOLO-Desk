@@ -2,7 +2,7 @@ import React from "react";
 import { ArrowRight, Pin } from "lucide-react";
 import Card from "./Card";
 import IconBox from "./IconBox";
-import { ACCENT, ACCENT_SOFT, BORDER_SOFT, MUTED, SLATE, TEXT } from "../../styles/theme";
+import { ACCENT, ACCENT_SOFT, BORDER_SOFT, MUTED, SLATE, SURFACE, SURFACE_SOFT, TEXT } from "../../styles/theme";
 
 /**
  * Module tile used on hub pages (Recepción, Mantenimiento, etc.).
@@ -142,7 +142,7 @@ const statusOnImgOk = {};
 const simpleHeader = {
   padding: 14,
   borderBottom: `1px solid ${BORDER_SOFT}`,
-  background: "linear-gradient(180deg, #FBFCFF 0%, #fff 100%)",
+  background: `linear-gradient(180deg, ${SURFACE_SOFT} 0%, ${SURFACE} 100%)`,
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -154,14 +154,14 @@ const pillSolid = {
   padding: "6px 10px",
   borderRadius: 999,
   border: `1px solid ${BORDER_SOFT}`,
-  background: "#fff",
+  background: SURFACE,
   color: TEXT,
   fontWeight: 800,
   fontSize: 11,
 };
 const pillSolidAccent = {
   borderColor: "rgba(8,159,138,0.30)",
-  background: "#F3FBF9",
+  background: ACCENT_SOFT,
   color: ACCENT,
 };
 
@@ -178,7 +178,7 @@ const pinBtn = {
   height: 30,
   borderRadius: 8,
   border: `1px solid ${BORDER_SOFT}`,
-  background: "#fff",
+  background: SURFACE,
   display: "grid",
   placeItems: "center",
   cursor: "pointer",

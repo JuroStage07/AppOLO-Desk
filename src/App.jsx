@@ -7,6 +7,8 @@ import PrivateRoute from "./auth/PrivateRoute";
 import RequireRole from "./auth/RequireRole";
 
 import { ToastProvider, ConfirmProvider, CircleMenu, AssistantModal, FloatingChatButton, CommandPalette } from "./components/ui";
+import { resolvePageTitle } from "./components/ui/routeTrail";
+import ThemeProvider from "./theme/ThemeProvider";
 
 import Login from "./pages/Login";
 import HomeHub from "./pages/HomeHub";
@@ -90,6 +92,22 @@ import MRPCatalogosPage from "./pages/MRP/MRPCatalogosPage";
 
 
 
+const APP_NAME = "AppoloDesk";
+
+/**
+ * Keeps the browser tab title in sync with the current route, reusing the same
+ * label as the breadcrumb (e.g. "Registrar tarimas · AppoloDesk"). Falls back
+ * to the plain app name on root/unknown pages. Renders nothing.
+ */
+function DocumentTitle() {
+  const location = useLocation();
+  React.useEffect(() => {
+    const page = resolvePageTitle(location.pathname);
+    document.title = page ? `${page} · ${APP_NAME}` : APP_NAME;
+  }, [location.pathname]);
+  return null;
+}
+
 /** Redirects legacy /salud/* paths to the renamed /seguridad/* routes. */
 function SaludLegacyRedirect() {
   const location = useLocation();
@@ -100,10 +118,12 @@ function SaludLegacyRedirect() {
 
 export default function App() {
   return (
+    <ThemeProvider>
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
         <ConfirmProvider>
+        <DocumentTitle />
         <CircleMenu />
         <AssistantModal />
         <FloatingChatButton />
@@ -685,6 +705,7 @@ export default function App() {
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

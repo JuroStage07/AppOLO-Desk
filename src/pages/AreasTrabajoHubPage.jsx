@@ -35,7 +35,7 @@ import {
   OT_TIPOS_PROBLEMA,
 } from "../config/otOptions";
 import { getVisibleAreas } from "../config/workAreas";
-import { AreasSidebar, SidebarAreaIcon, TopbarAccount, BodegaSwitcher, openCommandPalette, useConfirm, useToast } from "../components/ui";
+import { AreasSidebar, SidebarAreaIcon, TopbarAccount, BodegaSwitcher, ThemeToggle, openCommandPalette, useConfirm, useToast } from "../components/ui";
 import {
   ACCENT,
   ACCENT_SHADOW,
@@ -587,7 +587,7 @@ function AreasModal({ areas, onClose, onNavigate, onComingSoon }) {
               className="hh-modal-center"
               style={{
                 ...styles.center,
-                background: `linear-gradient(160deg, ${hexToRgba(accent, 0.07)} 0%, #fff 55%)`,
+                background: `linear-gradient(160deg, ${hexToRgba(accent, 0.07)} 0%, ${T.surface} 55%)`,
                 borderColor: hexToRgba(accent, 0.25),
               }}
             >
@@ -1437,6 +1437,7 @@ export default function AreasTrabajoHubPage() {
           </div>
 
           <div style={styles.headerActions}>
+            <ThemeToggle />
             <div style={styles.userPill}>
               <div style={styles.userPillAvatar}>
                 <User size={14} strokeWidth={2.2} />
@@ -1675,7 +1676,7 @@ export default function AreasTrabajoHubPage() {
                     return {
                       ...styles.center,
                       background: active
-                        ? `linear-gradient(160deg, ${hexToRgba(accent, 0.07)} 0%, #fff 55%)`
+                        ? `linear-gradient(160deg, ${hexToRgba(accent, 0.07)} 0%, ${T.surface} 55%)`
                         : T.surface,
                       borderColor: active ? hexToRgba(accent, 0.25) : T.border,
                     };
@@ -1979,7 +1980,7 @@ const styles = {
   header: {
     width: "100%",
     borderBottom: `1px solid ${T.border}`,
-    background: "rgba(255,255,255,0.82)",
+    background: "var(--c-surface-translucent, rgba(255,255,255,0.82))",
     backdropFilter: "blur(12px) saturate(1.4)",
     WebkitBackdropFilter: "blur(12px) saturate(1.4)",
     position: "sticky",
@@ -1997,7 +1998,7 @@ const styles = {
   headerSubBar: {
     width: "100%",
     borderTop: `1px solid ${T.borderSoft}`,
-    background: "rgba(248,250,252,0.7)",
+    background: "var(--c-subbar, rgba(248,250,252,0.7))",
   },
   headerSubBarInner: {
     width: "100%",
@@ -2045,7 +2046,7 @@ const styles = {
     padding: "0 8px 0 10px",
     borderRadius: 8,
     border: `1px solid ${T.border}`,
-    background: "#fff",
+    background: T.surface,
     color: T.textSecondary,
     cursor: "pointer",
     fontFamily: "inherit",
@@ -2058,7 +2059,7 @@ const styles = {
     placeItems: "center",
     padding: "1px 5px",
     borderRadius: 5,
-    background: "#F1F5F9",
+    background: T.surfaceAlt,
     border: `1px solid ${T.border}`,
     fontSize: 10,
     fontWeight: 800,
@@ -2167,7 +2168,7 @@ const styles = {
     flexWrap: "wrap",
     padding: "10px 18px",
     borderRadius: 14,
-    background: `linear-gradient(135deg, #fff 0%, ${T.accentSoft} 150%)`,
+    background: `linear-gradient(135deg, ${T.surface} 0%, ${T.accentSoft} 150%)`,
     border: `1px solid ${T.border}`,
     boxShadow: T.shadow,
     transition: "opacity 400ms ease, transform 400ms ease",

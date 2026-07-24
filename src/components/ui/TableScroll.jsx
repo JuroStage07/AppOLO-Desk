@@ -31,7 +31,7 @@ const outer = {
 };
 const borderedOuter = {
   border: `1px solid ${BORDER}`,
-  background: "#fff",
+  background: "var(--c-surface, #fff)",
 };
 const scroller = {
   width: "100%",

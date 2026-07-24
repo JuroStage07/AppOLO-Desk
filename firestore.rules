@@ -190,7 +190,7 @@ function solicitudOtCreateTenantCompanyOk() {
           )
         );
     }
-
+    
     function canUploadDocumentacionAdmin() {
       return isAdminRequester();
     }
@@ -320,7 +320,7 @@ function solicitudOtCreateTenantCompanyOk() {
 
       allow delete: if canMantenimientoOT();
     }
-
+    
     // =========================
 // Permisos Recepcion Cofersa
 // =========================
@@ -339,14 +339,14 @@ function canRecepcionEPA() {
 match /tareas_apertura/{tareaId} {
   function canRecepcion() {
     return authed() && (
-      isAdminRequester() ||
-      canRecepcionCofersa() ||
+      isAdminRequester() || 
+      canRecepcionCofersa() || 
       canRecepcionEPA()
     );
   }
-
+  
   allow get, list: if canRecepcion() && sameTenantScopeData(resource.data);
-
+  
   allow create: if canRecepcion()
     && request.resource.data.keys().hasOnly([
       'reserva',
@@ -381,7 +381,7 @@ match /tareas_apertura/{tareaId} {
     && (!('reservaId' in request.resource.data) || request.resource.data.reservaId == null || request.resource.data.reservaId is string)
     && (!('test' in request.resource.data) || request.resource.data.test is bool)
     && (!('autoCreated' in request.resource.data) || request.resource.data.autoCreated is bool);
-
+  
   allow update: if canRecepcion()
     && sameTenantCompanyData(resource.data)
     && sameTenantCompanyData(request.resource.data)
@@ -391,15 +391,15 @@ match /tareas_apertura/{tareaId} {
       'completedAt',
       'updatedAt'
     ])
-    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['estado'])
+    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['estado']) 
       || request.resource.data.estado in ['pendiente', 'completada'])
-    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['aperturaId'])
+    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['aperturaId']) 
       || request.resource.data.aperturaId is string)
-    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['completedAt'])
+    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['completedAt']) 
       || request.resource.data.completedAt is timestamp)
-    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['updatedAt'])
+    && (!request.resource.data.diff(resource.data).changedKeys().hasAny(['updatedAt']) 
       || request.resource.data.updatedAt is timestamp);
-
+  
   allow delete: if isAdminRequester() && sameTenantCompanyData(resource.data);
 }
 
@@ -408,7 +408,7 @@ match /tareas_apertura/{tareaId} {
 match /{path=**}/fotos/{fotoId} {
   allow read: if authed();
 }
-
+    
     match /{path=**}/subtareas/{subtareaId} {
       allow read: if canMantenimientoOT();
     }
@@ -826,17 +826,17 @@ match /{path=**}/fotos/{fotoId} {
           && request.resource.data.company is string
           && request.resource.data.motivo is string
           && request.resource.data.tenantId is string
+          && validBodegaData(request.resource.data)
           && request.resource.data.tipo is string
           && request.resource.data.tipo in ['entrada', 'salida']
           && request.resource.data.createdAt is timestamp
           && request.resource.data.fecha is string
-          && request.resource.data.horaTexto is string
-          && validBodegaData(request.resource.data);
+          && request.resource.data.horaTexto is string;
 
         allow update, delete: if false;
       }
     }
-
+    
     // =========================
     // ✅ Dashboard Salud / Recepción (agregado diario)
     // =========================
@@ -1077,7 +1077,7 @@ allow list: if isAdminDev() || canMantenimientoOT();
       && request.resource.data.token == token;
 
     allow delete: if isSelfLocal();
-     }
+	 }
  }
 
 // =========================
@@ -1752,7 +1752,7 @@ match /controlTerceros/{eventId} {
 
       allow delete: if false;
     }
-
+    
         // =========================
     // Control de marcas (ControlMarcas.jsx)
     // controlMarcas/{YYYY-MM-DD} + subcolección marcas
@@ -1805,17 +1805,17 @@ match /controlTerceros/{eventId} {
           && request.resource.data.company is string
           && request.resource.data.motivo is string
           && request.resource.data.tenantId is string
+          && validBodegaData(request.resource.data)
           && request.resource.data.tipo is string
           && request.resource.data.tipo in ['entrada', 'salida']
           && request.resource.data.createdAt is timestamp
           && request.resource.data.fecha is string
-          && request.resource.data.horaTexto is string
-          && validBodegaData(request.resource.data);
+          && request.resource.data.horaTexto is string;
 
         allow update, delete: if false;
       }
     }
-
+    
     // =========================
     // ✅ VISADOS
     // =========================
@@ -1828,21 +1828,21 @@ match /controlTerceros/{eventId} {
       allow get, list: if canSaludOcupacional() && sameTenantScopeData(resource.data);
 
       allow create: if canSaludOcupacional()
-            && request.resource.data.keys().hasOnly([
-              'tenantId','company','bodegaId','bodegaNombre',
-              'cedula','nombre','nombreLower',
-              'empresa','empresaLower',
-              'motivo','fechaISO',
-              'numeroPatronal','telefonoEmpresa','supervisor','telefonoSupervisor',
-              'tipoTramite','tipoTramiteDetalle',
-              'familiares','familiarNombre','familiarParentesco','familiarPuesto','familiarUnidadVenta',
-              'capAltura','capConfinados','capElectricos','capSoldadura',
-              'empresaAportaCert','aceptaNormas',
-              'createdAt','updatedAt',
-              'creadoPor'
-            ])
-            && request.resource.data.tenantId is string
-            && request.resource.data.company is string
+		    && request.resource.data.keys().hasOnly([
+		      'tenantId','company','bodegaId','bodegaNombre',
+		      'cedula','nombre','nombreLower',
+		      'empresa','empresaLower',
+		      'motivo','fechaISO',
+		      'numeroPatronal','telefonoEmpresa','supervisor','telefonoSupervisor',
+		      'tipoTramite','tipoTramiteDetalle',
+		      'familiares','familiarNombre','familiarParentesco','familiarPuesto','familiarUnidadVenta',
+		      'capAltura','capConfinados','capElectricos','capSoldadura',
+		      'empresaAportaCert','aceptaNormas',
+		      'createdAt','updatedAt',
+		      'creadoPor'
+		    ])
+		    && request.resource.data.tenantId is string
+		    && request.resource.data.company is string
         && sameTenantCompanyData(request.resource.data)
         && validBodegaData(request.resource.data)
         && request.resource.data.cedula is string
@@ -1902,35 +1902,35 @@ match /controlTerceros/{eventId} {
       allow get, list: if canSaludOcupacional() && sameTenantScopeData(resource.data);
 
      allow create: if canSaludOcupacional()
-            && request.resource.data.keys().hasOnly([
-              'tenantId','company','bodegaId','bodegaNombre',
-              'visadoUID',
-              'solicitudNum',
-              'createdAt',
-              'updatedAt',
-              'createdBy',
-              'terceroNombre',
-              'terceroCedula',
-              'terceroEmpresa',
-              'status',
-              'firmaColaborador',
-              'firmaRepresentante'
-            ])
-            && request.resource.data.tenantId is string
-            && request.resource.data.company is string
+		    && request.resource.data.keys().hasOnly([
+		      'tenantId','company','bodegaId','bodegaNombre',
+		      'visadoUID',
+		      'solicitudNum',
+		      'createdAt',
+		      'updatedAt',
+		      'createdBy',
+		      'terceroNombre',
+		      'terceroCedula',
+		      'terceroEmpresa',
+		      'status',
+		      'firmaColaborador',
+		      'firmaRepresentante'
+		    ])
+		    && request.resource.data.tenantId is string
+		    && request.resource.data.company is string
         && sameTenantCompanyData(request.resource.data)
         && validBodegaData(request.resource.data)
-            && request.resource.data.visadoUID is string
-            && request.resource.data.solicitudNum is string
-            && request.resource.data.createdAt is timestamp
-            && request.resource.data.updatedAt is timestamp
-            && request.resource.data.createdBy is string
-            && request.resource.data.terceroNombre is string
-            && request.resource.data.terceroCedula is string
-            && request.resource.data.terceroEmpresa is string
-            && request.resource.data.status == "PENDIENTE"
-            && request.resource.data.firmaColaborador is map
-            && request.resource.data.firmaRepresentante is map;
+		    && request.resource.data.visadoUID is string
+		    && request.resource.data.solicitudNum is string
+		    && request.resource.data.createdAt is timestamp
+		    && request.resource.data.updatedAt is timestamp
+		    && request.resource.data.createdBy is string
+		    && request.resource.data.terceroNombre is string
+		    && request.resource.data.terceroCedula is string
+		    && request.resource.data.terceroEmpresa is string
+		    && request.resource.data.status == "PENDIENTE"
+		    && request.resource.data.firmaColaborador is map
+		    && request.resource.data.firmaRepresentante is map;
 
       allow update: if canSaludOcupacional()
         && request.resource.data.diff(resource.data).changedKeys().hasOnly([
@@ -2151,7 +2151,7 @@ match /controlTerceros/{eventId} {
 
       allow delete: if isAdminRequester();
     }
-
+    
     // =========================
     // AperturasRecepcion
     // =========================
@@ -2336,6 +2336,37 @@ match /controlTerceros/{eventId} {
             || request.resource.data.updatedBy == request.auth.uid);
 
       allow delete: if isAdminRequester();
+    }
+
+    // =========================
+    // ✅ Config MRP: mapeo tarima (S/D) -> código de artículo del MRP.
+    // Editable SOLO por rol dev. Scope por tenant/company; doc id `${tenantId}__${company}`.
+    // =========================
+    match /mrpTarimasConfig/{docId} {
+      // resource == null => el doc aún no existe (tenant sin config); permitir
+      // la lectura para que el cliente caiga a los defaults sin permission-denied.
+      allow get: if authed()
+        && (resource == null || sameTenantCompanyData(resource.data));
+      allow list: if false;
+
+      allow create, update: if authed()
+        && userExists(request.auth.uid)
+        && requesterProfile().role == 'dev'
+        && sameTenantCompanyData(request.resource.data)
+        && request.resource.data.keys().hasOnly([
+          'tenantId',
+          'company',
+          'articuloS',
+          'articuloD',
+          'updatedAt',
+          'updatedBy'
+        ])
+        && request.resource.data.articuloS is string
+        && request.resource.data.articuloD is string
+        && (request.resource.data.updatedBy == null
+            || request.resource.data.updatedBy == request.auth.uid);
+
+      allow delete: if false;
     }
 
     // =========================

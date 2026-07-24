@@ -42,7 +42,7 @@ export default function SearchInput({
 }
 
 const row = {
-  backgroundColor: "#ffffff",
+  backgroundColor: "var(--c-surface, #ffffff)",
   borderRadius: 14,
   border: `1px solid ${BORDER}`,
   padding: "10px 10px",
@@ -66,7 +66,7 @@ const clearBtn = {
   height: 30,
   borderRadius: 10,
   border: `1px solid ${BORDER}`,
-  background: "#fff",
+  background: "var(--c-surface, #fff)",
   cursor: "pointer",
   color: "#64748B",
   display: "grid",

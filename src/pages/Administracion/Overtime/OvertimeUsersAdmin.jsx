@@ -602,7 +602,10 @@ export default function OvertimeUsersAdmin() {
       const token = await user.getIdToken();
 
       const res = await fetch(`${API_URL}/overtime/users-sync`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "ngrok-skip-browser-warning": "true",
+        },
       });
       const data = await res.json();
       console.log("users-sync response:", data);

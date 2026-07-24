@@ -1,5 +1,5 @@
 import React from "react";
-import { ACCENT, ACCENT_SOFT, BORDER, SLATE } from "../../styles/theme";
+import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE_INSET } from "../../styles/theme";
 
 /**
  * Rounded square icon container used in card headers.
@@ -37,7 +37,7 @@ const base = {
   borderRadius: 14,
   display: "grid",
   placeItems: "center",
-  background: "#F1F5F9",
+  background: SURFACE_INSET,
   border: `1px solid ${BORDER}`,
 };
 

@@ -10,7 +10,8 @@ import { openCommandPalette } from "./commandPaletteBus";
 import { openPinsFlyout } from "./pinsBus";
 import { openAssistantModal } from "./assistantBus";
 import { AuthCtx } from "../../auth/AuthProvider";
-import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE, TEXT } from "../../styles/theme";
+import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE, SURFACE_INSET, SURFACE_TRANSLUCENT, BG_TRANSLUCENT, SUBBAR_BG, TEXT } from "../../styles/theme";
+import ThemeToggle from "./ThemeToggle";
 
 const IS_MAC =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || "");
@@ -97,6 +98,7 @@ export default function Topbar({
                   <span style={searchTriggerLabel}>Buscar</span>
                   <span style={searchTriggerKbd}>{CMD_HINT}</span>
                 </button>
+                <ThemeToggle />
                 <TopbarAccount />
               </div>
             </div>
@@ -141,7 +143,7 @@ const topbar = {
   boxSizing: "border-box",
   flexShrink: 0,
   borderBottom: `1px solid ${BORDER}`,
-  background: "linear-gradient(180deg, #fff 0%, rgba(246,247,251,0.97) 100%)",
+  background: `linear-gradient(180deg, ${SURFACE} 0%, ${BG_TRANSLUCENT} 100%)`,
   backdropFilter: "blur(8px)",
   WebkitBackdropFilter: "blur(8px)",
 };
@@ -150,7 +152,7 @@ const topbarPinned = { position: "sticky", top: 0, zIndex: 120 };
 const subBar = {
   width: "100%",
   borderTop: `1px solid ${BORDER}`,
-  background: "rgba(248,250,252,0.7)",
+  background: SUBBAR_BG,
 };
 const subBarInner = {
   width: "100%",
@@ -175,7 +177,7 @@ const searchTrigger = {
   padding: "0 8px 0 10px",
   borderRadius: 8,
   border: `1px solid ${BORDER}`,
-  background: "#fff",
+  background: SURFACE,
   color: SLATE,
   cursor: "pointer",
   fontFamily: "inherit",
@@ -189,7 +191,7 @@ const searchTriggerKbd = {
   placeItems: "center",
   padding: "1px 5px",
   borderRadius: 5,
-  background: "#F1F5F9",
+  background: SURFACE_INSET,
   border: `1px solid ${BORDER}`,
   fontSize: 10,
   fontWeight: 800,
@@ -245,7 +247,7 @@ const userBox = {
   padding: "6px 12px 6px 6px",
   borderRadius: 12,
   border: `1px solid ${BORDER}`,
-  background: "#fff",
+  background: SURFACE,
   boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
   maxWidth: 220,
   minWidth: 0,

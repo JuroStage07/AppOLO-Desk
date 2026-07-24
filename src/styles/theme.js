@@ -22,18 +22,33 @@ export function withAlpha(hex, alpha) {
 }
 export const accentAlpha = (alpha) => withAlpha(ACCENT, alpha);
 
+// SLATE stays a raw hex: it feeds withAlpha() (which parses hex) and the
+// canvas report exporters, and reads acceptably on both light and dark.
 export const SLATE = "#64748B";
-export const SLATE_DEEP = "#475569";
-export const TEXT = "#0F172A";
-export const MUTED = "#94A3B8";
 
-export const SURFACE = "#FFFFFF";
-export const SURFACE_SOFT = "#FBFCFF";
-export const SURFACE_INSET = "#F2F4FB";
-export const BG = "#F6F7FB";
+// Neutral tokens are backed by CSS variables (defined in src/index.css) so the
+// app can switch between light and dark at runtime without touching every
+// component. The second arg is a fallback equal to the original light value, so
+// rendering is unchanged if the stylesheet hasn't loaded.
+export const SLATE_DEEP = "var(--c-text-secondary, #475569)";
+export const TEXT = "var(--c-text, #0F172A)";
+export const MUTED = "var(--c-muted, #94A3B8)";
 
-export const BORDER = "#E7E9F2";
-export const BORDER_SOFT = "#EEF0F7";
+export const SURFACE = "var(--c-surface, #FFFFFF)";
+export const SURFACE_SOFT = "var(--c-surface-soft, #FBFCFF)";
+export const SURFACE_INSET = "var(--c-surface-inset, #F2F4FB)";
+export const BG = "var(--c-bg, #F6F7FB)";
+
+export const BORDER = "var(--c-border, #E7E9F2)";
+export const BORDER_SOFT = "var(--c-border-soft, #EEF0F7)";
+
+// Alternate surface (soft gray fills: pills, inputs, chips) and translucent
+// chrome (topbars, sub-bars, drawer overlay). All theme-aware.
+export const SURFACE_ALT = "var(--c-surface-alt, #F1F5F9)";
+export const SURFACE_TRANSLUCENT = "var(--c-surface-translucent, rgba(255, 255, 255, 0.85))";
+export const BG_TRANSLUCENT = "var(--c-bg-translucent, rgba(246, 247, 251, 0.97))";
+export const SUBBAR_BG = "var(--c-subbar, rgba(248, 250, 252, 0.7))";
+export const OVERLAY = "var(--c-overlay, rgba(15, 23, 42, 0.4))";
 
 // Status palette (used by StatusPill, Field validation, etc.)
 export const OK_BG = "#EAF7EE";
@@ -122,6 +137,11 @@ export const theme = {
   BG,
   BORDER,
   BORDER_SOFT,
+  SURFACE_ALT,
+  SURFACE_TRANSLUCENT,
+  BG_TRANSLUCENT,
+  SUBBAR_BG,
+  OVERLAY,
   OK_BG,
   OK_BORDER,
   WARN_BG,

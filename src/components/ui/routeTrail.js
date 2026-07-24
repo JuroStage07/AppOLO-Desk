@@ -90,6 +90,20 @@ const areaSections = (area) => [
 const findSection = (area, path) =>
   areaSections(area).find((s) => s.path === path) || null;
 
+/**
+ * Current page label for `document.title`, reusing the same resolution as the
+ * breadcrumb: the deepest crumb of the trail. Returns null for root/unknown
+ * paths so callers can fall back to the plain app name.
+ */
+export function resolvePageTitle(pathname) {
+  const trail = resolveTrail(pathname);
+  if (!trail.length) return null;
+  const last = trail[trail.length - 1];
+  // "Inicio" is the home crumb; not a meaningful page title on its own.
+  if (last.home) return null;
+  return last.label || null;
+}
+
 export function resolveTrail(pathname) {
   if (isRootPath(pathname)) return [];
 
