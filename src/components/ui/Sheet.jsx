@@ -1,7 +1,26 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { BORDER, TEXT } from "../../styles/theme";
 import useIsMobile from "../../hooks/useIsMobile";
+
+// Selector de elementos enfocables usado por el focus-trap. Se excluyen los
+// deshabilitados y los que optan por salir del orden de tabulación (tabindex=-1).
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "textarea:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+// Devuelve los elementos enfocables visibles dentro del contenedor del diálogo.
+function getFocusableElements(container) {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
+    (el) => !el.hasAttribute("disabled") && el.getClientRects().length > 0
+  );
+}
 
 /**
  * Bottom-sheet modal. Composable header / body / footer.
@@ -32,6 +51,8 @@ export default function Sheet({
   children,
 }) {
   const isMobile = useIsMobile(560);
+  const dialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
@@ -41,6 +62,62 @@ export default function Sheet({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  // Accesibilidad (retrocompatible): foco inicial, confinamiento de Tab y
+  // restauración del foco al disparador al cerrar/desmontar.
+  useEffect(() => {
+    if (!open) return;
+
+    // Recordar el elemento que tenía el foco antes de abrir (el disparador).
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const dialog = dialogRef.current;
+
+    // Mover el foco al primer elemento interactivo; si no hay, al contenedor.
+    const focusables = getFocusableElements(dialog);
+    if (focusables.length > 0) {
+      focusables[0].focus();
+    } else if (dialog) {
+      dialog.focus();
+    }
+
+    const onKeyDown = (e) => {
+      if (e.key !== "Tab") return;
+      const items = getFocusableElements(dialog);
+      if (items.length === 0) {
+        // Sin elementos enfocables: mantener el foco dentro del contenedor.
+        e.preventDefault();
+        dialog?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      const insideDialog = dialog?.contains(active);
+      if (e.shiftKey) {
+        if (active === first || !insideDialog) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !insideDialog) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      // Restaurar el foco al elemento disparador (incluye cierre por Escape).
+      const previous = previousFocusRef.current;
+      previousFocusRef.current = null;
+      if (previous && typeof previous.focus === "function") {
+        previous.focus();
+      }
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -56,8 +133,10 @@ export default function Sheet({
         style={backdrop}
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        tabIndex={-1}
         style={{
           ...sheetBase,
           ...(placement === "center" ? sheetCenter : sheetBottom),

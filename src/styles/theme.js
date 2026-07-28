@@ -59,6 +59,50 @@ export const DANGER_BG = "#FEECEC";
 export const DANGER_BORDER = "#F6C7C7";
 export const DANGER = "#B91C1C";
 
+// ─── Estado tokens (Despachos) ───────────────────────────────────────
+// Source of truth for despacho status colors and icons. Consumers must read
+// these from the theme; never embed the hex/icon values elsewhere.
+// Neutral fallback for unknown/missing status codes.
+export const ESTADO_NEUTRO_COLOR = "#9ca3af";
+export const ESTADO_NEUTRO_ICON = "FileText";
+
+// codigo → hex color.
+export const ESTADO_COLORS = {
+  creado: "#6b7280",
+  "en proceso": "#2563eb",
+  chofer_pendiente: "#d97706",
+  completo: "#0891b2",
+  pendiente_validacion: "#7c3aed",
+  despachado: "#059669",
+  rechazado: "#dc2626",
+  eliminado: "#9ca3af",
+  finalizado: "#0891b2",
+};
+
+// ─── Colores del grid de carga (posiciones del contenedor) ──────────────────
+// Tipo de tarima por celda: E vacío, S simple, D doble, T triple, C cuádruple.
+// Fuente de verdad para el grid de "Cargas en tiempo real"; no embeber literales.
+export const CARGA_SLOT_COLORS = {
+  E: "#E5E7EB", // libre
+  S: "#60A5FA", // simple
+  D: "#F59E0B", // doble
+  T: "#8B5CF6", // triple
+  C: "#EF4444", // cuádruple
+};
+
+// codigo → lucide icon name.
+export const ESTADO_ICONS = {
+  creado: "FileText",
+  "en proceso": "Loader",
+  chofer_pendiente: "UserRound",
+  completo: "CheckCircle2",
+  pendiente_validacion: "ClipboardCheck",
+  despachado: "Truck",
+  rechazado: "XOctagon",
+  eliminado: "Trash2",
+  finalizado: "Lock",
+};
+
 // Effects
 export const SHADOW_CARD = "0 12px 26px rgba(15, 23, 42, 0.06)";
 export const SHADOW_CARD_HOVER = "0 16px 36px rgba(15, 23, 42, 0.12)";
@@ -149,6 +193,11 @@ export const theme = {
   DANGER_BG,
   DANGER_BORDER,
   DANGER,
+  ESTADO_NEUTRO_COLOR,
+  ESTADO_NEUTRO_ICON,
+  ESTADO_COLORS,
+  ESTADO_ICONS,
+  CARGA_SLOT_COLORS,
   SHADOW_CARD,
   SHADOW_CARD_HOVER,
   SHADOW_SOFT,

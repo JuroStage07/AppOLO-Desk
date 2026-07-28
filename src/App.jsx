@@ -63,6 +63,7 @@ import AperturasFinalizadasEPA from "./pages/EPA/AperturasFinalizadasEPA";
 import DevHub from "./pages/Dev/DevHub";
 import UpdateSupabasePage from "./pages/Dev/UpdateSupabasePage";
 import ModulesConfigHub from "./pages/Dev/ModulesConfigHub";
+import DespachosDevPage from "./pages/Dev/DespachosDev/DespachosDevPage";
 import OvertimeSettingsHub from "./pages/Administracion/Overtime/OvertimeSettingsHub";
 import ConfigMRPTarimas from "./pages/MRP/ConfigMRPTarimas";
 import ConfigMRPEntidades from "./pages/MRP/ConfigMRPEntidades";
@@ -433,6 +434,14 @@ export default function App() {
             element={
               <PrivateRoute>
                 <ConfigMRPMotivos />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/dev/despachos-dev"
+            element={
+              <PrivateRoute>
+                <DespachosDevPage />
               </PrivateRoute>
             }
           />

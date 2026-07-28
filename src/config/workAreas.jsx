@@ -263,6 +263,7 @@ const RAW_AREAS = [
     devOnly: true,
     modules: [
       { label: "Update AppOLO Supabase", path: "/dev/update-supabase" },
+      { label: "Despachos Dev", path: "/dev/despachos-dev" },
       {
         label: "Configuración de módulos",
         path: "/dev/config-modulos",
