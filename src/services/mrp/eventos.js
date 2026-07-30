@@ -16,11 +16,13 @@ export async function logEvento({
   detail = null,
 }) {
   try {
-    const { tenantId, company } = getMrpScope();
+    const { tenantId, company, bodegaId, bodegaNombre } = getMrpScope();
     const { userId, userEmail } = getMrpUser();
     const { error } = await supabase.from("mrp_eventos").insert({
       tenant_id: tenantId,
       company,
+      bodega_id: bodegaId || null,
+      bodega_nombre: bodegaNombre || null,
       entity_type: entityType,
       entity_id: entityId,
       entity_codigo: codigo,
@@ -39,15 +41,19 @@ export async function logEvento({
 }
 
 export async function listEventos(filters = {}) {
-  const { tenantId, company } = getMrpScope();
+  const { tenantId, company, bodegaId } = getMrpScope();
   let q = supabase
     .from("mrp_eventos")
     .select("*")
     .eq("tenant_id", tenantId)
     .eq("company", company);
+  // Alcance por bodega activa (toda la app es por bodega).
+  if (bodegaId) q = q.eq("bodega_id", bodegaId);
 
-  const { entityType, action, dateFrom, dateTo, limit = 500 } = filters;
+  const { entityType, excludeEntityType, action, dateFrom, dateTo, limit = 500 } =
+    filters;
   if (entityType) q = q.eq("entity_type", entityType);
+  if (excludeEntityType) q = q.neq("entity_type", excludeEntityType);
   if (action) q = q.eq("action", action);
   if (dateFrom) q = q.gte("created_at", dateFrom);
   if (dateTo) q = q.lte("created_at", dateTo);

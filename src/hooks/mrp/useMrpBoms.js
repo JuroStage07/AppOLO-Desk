@@ -9,6 +9,7 @@ import {
   updateMrpBom,
   deleteMrpBom,
   setMrpBomActive,
+  consumeBom,
   getNextBomCode,
 } from "../../services/mrp";
 import useAsyncData from "./useAsyncData";
@@ -93,6 +94,27 @@ export default function useMrpBoms({ includeInactive = false } = {}) {
     [toast]
   );
 
+  // Consumir una receta BOM (por bodega). Descuenta insumos atómicamente y
+  // registra un evento por insumo (entity_type='insumo', action='consume').
+  const [consuming, setConsuming] = useState(false);
+  const consume = useCallback(
+    async ({ bomId, multiplier = 1, reason, fecha } = {}) => {
+      setConsuming(true);
+      try {
+        const res = await consumeBom({ bomId, multiplier, reason, fecha });
+        bumpRefresh("insumos", "eventos", "boms");
+        toast.success("Consumo de receta registrado.");
+        return res;
+      } catch (e) {
+        toast.error(e.message || "No se pudo consumir la receta.");
+        throw e;
+      } finally {
+        setConsuming(false);
+      }
+    },
+    [toast]
+  );
+
   const peekNextCode = useCallback(() => getNextBomCode(), []);
 
   return {
@@ -107,6 +129,8 @@ export default function useMrpBoms({ includeInactive = false } = {}) {
     remove,
     removing,
     setActive,
+    consume,
+    consuming,
     peekNextCode,
   };
 }

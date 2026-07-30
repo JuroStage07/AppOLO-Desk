@@ -3,7 +3,7 @@
 // Excel + reorden por arrastre + primera columna fija).
 import React, { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Package, Plus, ArrowLeftRight, FlaskConical, Store } from "lucide-react";
+import { Package, Plus, Minus, ArrowLeftRight, FlaskConical, Store } from "lucide-react";
 import {
   Card,
   Chip,
@@ -393,9 +393,8 @@ function ArticulosInventario() {
 // sin ubicaciones). Se fija por tenant/company (no depende del almacén). Permite
 // ajustar el stock (Ingreso/Salida); el ajuste queda en el Registro de eventos.
 function InsumosInventario() {
-  const { insumos, loading, error, refetch, adjust, adjusting } = useMrpInsumos({
-    includeInactive: false,
-  });
+  const { insumos, loading, error, refetch, adjust, adjusting, consume, consuming } =
+    useMrpInsumos({ includeInactive: false });
 
   const totalStock = useMemo(
     () => insumos.reduce((s, i) => s + (Number(i.stock) || 0), 0),
@@ -415,6 +414,45 @@ function InsumosInventario() {
     setReason("");
     setErr("");
   };
+
+  // Estado del modal de consumo (salida vía RPC atómica).
+  const [consumeTarget, setConsumeTarget] = useState(null);
+  const [consumeQty, setConsumeQty] = useState("");
+  const [consumeReason, setConsumeReason] = useState("");
+  const [consumeErr, setConsumeErr] = useState("");
+
+  const openConsume = (i) => {
+    setConsumeTarget(i);
+    setConsumeQty("");
+    setConsumeReason("");
+    setConsumeErr("");
+  };
+
+  const onConsume = async () => {
+    const qc = Number(consumeQty);
+    if (!Number.isInteger(qc) || qc <= 0) {
+      setConsumeErr("La cantidad debe ser un entero mayor a 0.");
+      return;
+    }
+    if (qc > (Number(consumeTarget?.stock) || 0)) {
+      setConsumeErr("No hay stock suficiente para ese consumo.");
+      return;
+    }
+    try {
+      await consume({
+        items: [{ insumoId: consumeTarget.id, quantity: qc }],
+        reason: consumeReason,
+      });
+      setConsumeTarget(null);
+    } catch {
+      /* toast del hook */
+    }
+  };
+
+  const consumeCurrent = Number(consumeTarget?.stock) || 0;
+  const qc = Number(consumeQty);
+  const consumePreview =
+    consumeTarget && Number.isInteger(qc) && qc > 0 ? consumeCurrent - qc : null;
 
   const onAdjust = async () => {
     const q = Number(quantity);
@@ -503,15 +541,84 @@ function InsumosInventario() {
             storageKey="appolo_mrp_inv_ins_cols"
             pageSize={5}
             minWidth={640}
-            actionsLabel="Acción"
+            actionsLabel="Acciones"
             renderActions={(i) => (
-              <GhostButton size="sm" icon={Plus} onClick={() => openAdjust(i)}>
-                Ajustar
-              </GhostButton>
+              <div style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
+                <GhostButton
+                  size="sm"
+                  icon={Minus}
+                  disabled={(Number(i.stock) || 0) <= 0}
+                  title={
+                    (Number(i.stock) || 0) <= 0
+                      ? "Sin stock para consumir"
+                      : "Consumir insumo"
+                  }
+                  onClick={() => openConsume(i)}
+                >
+                  Consumir
+                </GhostButton>
+                <GhostButton size="sm" icon={Plus} onClick={() => openAdjust(i)}>
+                  Ajustar
+                </GhostButton>
+              </div>
             )}
           />
         </Card>
       )}
+
+      <Sheet
+        open={!!consumeTarget}
+        onClose={() => setConsumeTarget(null)}
+        title="Consumir insumo"
+        maxWidth={460}
+      >
+        <Sheet.Body>
+          <Field label="Insumo">
+            <Field.Input
+              value={
+                consumeTarget ? `${consumeTarget.codigo} — ${consumeTarget.nombre}` : ""
+              }
+              disabled
+              readOnly
+            />
+          </Field>
+          <Field
+            label="Cantidad a consumir"
+            required
+            error={consumeErr}
+            hint={
+              consumePreview !== null
+                ? `Stock: ${consumeCurrent} → ${consumePreview}`
+                : `Stock actual: ${consumeCurrent}`
+            }
+          >
+            <Field.Input
+              type="number"
+              min={1}
+              step={1}
+              value={consumeQty}
+              onChange={(e) => setConsumeQty(e.target.value)}
+              placeholder="0"
+              autoFocus
+            />
+          </Field>
+          <Field label="Motivo (opcional)">
+            <Field.Input
+              value={consumeReason}
+              onChange={(e) => setConsumeReason(e.target.value)}
+              placeholder="Ej: Consumo producción del día"
+            />
+          </Field>
+        </Sheet.Body>
+        <Sheet.Actions>
+          <SecondaryButton onClick={() => setConsumeTarget(null)} disabled={consuming}>
+            Cancelar
+          </SecondaryButton>
+          <PrimaryButton onClick={onConsume} loading={consuming}>
+            Registrar consumo
+          </PrimaryButton>
+        </Sheet.Actions>
+      </Sheet>
 
       <Sheet
         open={!!target}

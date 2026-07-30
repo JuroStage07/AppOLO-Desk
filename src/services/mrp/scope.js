@@ -6,12 +6,20 @@
 // valores por defecto si el perfil no los trae.
 import { MRP_TENANT_ID, MRP_COMPANY } from "./constants";
 
-let _scope = { tenantId: MRP_TENANT_ID, company: MRP_COMPANY };
+let _scope = {
+  tenantId: MRP_TENANT_ID,
+  company: MRP_COMPANY,
+  bodegaId: null,
+  bodegaNombre: null,
+};
 
-export function setMrpScope({ tenantId, company } = {}) {
+export function setMrpScope({ tenantId, company, bodegaId, bodegaNombre } = {}) {
   _scope = {
     tenantId: tenantId || _scope.tenantId,
     company: company || _scope.company,
+    // bodega es opcional; se puede limpiar pasando null explícito.
+    bodegaId: bodegaId !== undefined ? bodegaId : _scope.bodegaId,
+    bodegaNombre: bodegaNombre !== undefined ? bodegaNombre : _scope.bodegaNombre,
   };
 }
 

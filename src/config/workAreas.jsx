@@ -222,10 +222,10 @@ const RAW_AREAS = [
     requiredPerm: "mrpTarimas",
     modules: [
       { label: "Dashboard", path: "/mrp-tarimas/dashboard", requiredPerm: "mrpTarimas" },
+      { label: "Catálogos", path: "/mrp-tarimas/catalogos", requiredPerm: "mrpTarimas" },
       { label: "Inventario", path: "/mrp-tarimas/inventario", requiredPerm: "mrpTarimas" },
       { label: "Historial", path: "/mrp-tarimas/movimientos", requiredPerm: "mrpTarimas" },
       { label: "Descartes", path: "/mrp-tarimas/descartes", requiredPerm: "mrpTarimas" },
-      { label: "Catálogos", path: "/mrp-tarimas/catalogos", requiredPerm: "mrpTarimas" },
     ],
   },
   {

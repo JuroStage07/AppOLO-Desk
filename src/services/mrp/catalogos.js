@@ -5,7 +5,7 @@
 // el gating de permisos vive en el cliente (route guard + permiso `mrpTarimas`).
 
 import { supabase } from "../../supabase";
-import { getMrpScope } from "./scope";
+import { getMrpScope, getMrpUser } from "./scope";
 import { logEvento } from "./eventos";
 
 const scope = (q) => {
@@ -17,6 +17,23 @@ const scope = (q) => {
 const scopeFields = () => {
   const { tenantId, company } = getMrpScope();
   return { tenant_id: tenantId, company };
+};
+
+// Scope por BODEGA (además de tenant/company). Usado solo por insumos, BOM y
+// sus filas puente, cuyo catálogo es por bodega. Si no hay bodega activa, cae al
+// scope tenant/company (compatibilidad).
+const scopeBodega = (q) => {
+  const { tenantId, company, bodegaId } = getMrpScope();
+  let out = q.eq("tenant_id", tenantId).eq("company", company);
+  if (bodegaId) out = out.eq("bodega_id", bodegaId);
+  return out;
+};
+
+// Columnas de bodega para sellar filas de insumos/BOM tras crearlas.
+const bodegaFields = () => {
+  const { bodegaId, bodegaNombre } = getMrpScope();
+  if (!bodegaId) return null;
+  return { bodega_id: bodegaId, bodega_nombre: bodegaNombre || "" };
 };
 
 // Traduce el error de violación de unicidad de Postgres (23505) a un mensaje claro.
@@ -261,17 +278,19 @@ export async function deleteMotivo(id) {
 
 /* --------------------------------------------------------------- artículos */
 
-export async function listPalletArticulos({
-  includeInactive = false,
-  warehouseId = null,
-} = {}) {
+// El CATÁLOGO de artículos es por tenant/company (NO por bodega/almacén): un
+// artículo existe una sola vez para la operación y puede tener inventario en
+// varios almacenes. Esto es lo que permite trasladarlo entre almacenes. Las
+// CANTIDADES por stock y ubicación sí van por almacén (pallet_inventory_articulo).
+// Nota: los callers pueden seguir pasando `warehouseId`; se ignora a propósito
+// (el catálogo ya no se filtra por almacén).
+export async function listPalletArticulos({ includeInactive = false } = {}) {
   let q = scope(
     supabase
       .from("pallet_articulos")
       .select("*, cliente:pallet_clientes(id, codigo, nombre)")
   ).order("codigo", { ascending: true });
   if (!includeInactive) q = q.eq("active", true);
-  if (warehouseId) q = q.eq("warehouse_id", warehouseId);
   const { data, error } = await q;
   if (error) throw error;
   return data || [];
@@ -679,7 +698,7 @@ export async function deletePalletTienda(id) {
 // Los insumos se fijan solo por tenant/company (no dependen de un almacén).
 
 export async function listInsumos({ includeInactive = false } = {}) {
-  let q = scope(supabase.from("mrp_insumos").select("*")).order("codigo", {
+  let q = scopeBodega(supabase.from("mrp_insumos").select("*")).order("codigo", {
     ascending: true,
   });
   if (!includeInactive) q = q.eq("active", true);
@@ -725,6 +744,16 @@ export async function createInsumo({ nombre, detalle, price, priceMode }) {
     p_price_mode: mode,
   });
   if (error) throw error;
+
+  // Sella la bodega activa en el insumo recién creado (catálogo por bodega).
+  const bodega = bodegaFields();
+  if (data?.id && bodega) {
+    const { error: e2 } = await supabase
+      .from("mrp_insumos")
+      .update(bodega)
+      .eq("id", data.id);
+    if (!e2) Object.assign(data, bodega);
+  }
   return data; // fila completa del insumo (incluye codigo)
 }
 
@@ -851,12 +880,92 @@ export async function deleteInsumo(id) {
   });
 }
 
+// Consumo de insumos (salida) atómico vía RPC `mrp_consume_insumos`.
+// `items`: [{ insumoId | insumo_id, quantity }]. La RPC descuenta el stock
+// (sin negativos), sella el scope y registra un evento por insumo
+// (entity_type='insumo', action='consume') que alimenta el "Registro de insumos".
+// Reutilizable desde la app móvil llamando a la misma RPC con estos parámetros.
+export async function consumeInsumos({
+  items,
+  reason = null,
+  fecha = null,
+  bomId = null,
+  bomCodigo = null,
+  multiplier = null,
+} = {}) {
+  const list = Array.isArray(items) ? items : [];
+  const payload = [];
+  for (const it of list) {
+    const insumoId = it?.insumoId || it?.insumo_id;
+    const qty = Number(it?.quantity);
+    if (!insumoId) continue;
+    if (!Number.isInteger(qty) || qty <= 0) {
+      throw new Error("Cada insumo debe tener una cantidad entera mayor a 0.");
+    }
+    payload.push({ insumo_id: insumoId, quantity: qty });
+  }
+  if (!payload.length) {
+    throw new Error("Debe seleccionar al menos un insumo a consumir.");
+  }
+
+  const { tenantId, company, bodegaId, bodegaNombre } = getMrpScope();
+  const { userId, userEmail } = getMrpUser();
+  const { data, error } = await supabase.rpc("mrp_consume_insumos", {
+    p_tenant_id: tenantId,
+    p_company: company,
+    p_bodega_id: bodegaId || null,
+    p_bodega_nombre: bodegaNombre || null,
+    p_items: payload,
+    p_reason: reason ? String(reason).trim() : null,
+    p_fecha: fecha || null, // 'YYYY-MM-DD' o null (hoy)
+    p_user_id: userId,
+    p_user_email: userEmail,
+    p_bom_id: bomId || null,
+    p_bom_codigo: bomCodigo || null,
+    p_multiplier: multiplier ?? null,
+  });
+  if (error) throw error;
+  return data; // { fecha, count, total_consumed, items: [{ insumo_id, codigo, nombre, consumed, stock_after }] }
+}
+
+// Consumo de una receta BOM (por bodega) vía RPC `mrp_consume_bom`. El servidor
+// expande la receta (cantidad_requerida * multiplier) y descuenta atómicamente
+// el stock de los insumos de la bodega, registrando un evento por insumo.
+export async function consumeBom({
+  bomId,
+  multiplier = 1,
+  reason = null,
+  fecha = null,
+} = {}) {
+  if (!bomId) throw new Error("Falta el BOM a consumir.");
+  const mult = Number(multiplier);
+  if (!Number.isInteger(mult) || mult <= 0) {
+    throw new Error("El multiplicador debe ser un entero mayor a 0.");
+  }
+  const { tenantId, company, bodegaId, bodegaNombre } = getMrpScope();
+  const { userId, userEmail } = getMrpUser();
+  const { data, error } = await supabase.rpc("mrp_consume_bom", {
+    p_tenant_id: tenantId,
+    p_company: company,
+    p_bodega_id: bodegaId || null,
+    p_bodega_nombre: bodegaNombre || null,
+    p_bom_id: bomId,
+    p_multiplier: mult,
+    p_reason: reason ? String(reason).trim() : null,
+    p_fecha: fecha || null,
+    p_user_id: userId,
+    p_user_email: userEmail,
+  });
+  if (error) throw error;
+  return data; // { fecha, bodega_id, count, total_consumed, items: [...] }
+}
+
 /* ------------------------------------------------------------- BOM (BOM) */
 // Un BOM (Bill of Materials) es la composición de materiales que consume
 // insumos. Se fija solo por tenant/company (no depende de un almacén).
 
 export async function listMrpBoms({ includeInactive = false } = {}) {
-  let q = scope(
+  let q = scopeBodega(
     supabase
       .from("mrp_boms")
       .select(
@@ -930,6 +1039,23 @@ export async function createMrpBom({ nombre, items }) {
     p_items: payload,
   });
   if (error) throw error;
+
+  // Sella la bodega activa en el BOM y sus filas puente (catálogo por bodega).
+  const bodega = bodegaFields();
+  if (bodega) {
+    let bomId = data?.id || null;
+    if (!bomId && data?.codigo) {
+      const { data: found } = await scope(
+        supabase.from("mrp_boms").select("id").eq("codigo", data.codigo)
+      ).maybeSingle();
+      bomId = found?.id || null;
+    }
+    if (bomId) {
+      await supabase.from("mrp_boms").update(bodega).eq("id", bomId);
+      await supabase.from("mrp_bom_insumos").update(bodega).eq("bom_id", bomId);
+      Object.assign(data, bodega);
+    }
+  }
   return data; // fila del BOM (incluye codigo, insumo_count)
 }
 
@@ -948,6 +1074,14 @@ export async function updateMrpBom(id, { nombre, items }) {
     p_items: payload,
   });
   if (error) throw error;
+
+  // La RPC reemplaza las filas puente; re-sella la bodega en las nuevas filas.
+  const bodega = bodegaFields();
+  if (bodega) {
+    await supabase.from("mrp_bom_insumos").update(bodega).eq("bom_id", id);
+    await supabase.from("mrp_boms").update(bodega).eq("id", id);
+  }
+
   await logEvento({
     entityType: "bom",
     entityId: id,

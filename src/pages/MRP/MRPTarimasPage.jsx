@@ -44,6 +44,20 @@ import {
 const NAV = [
   { label: "Dashboard", to: "/mrp-tarimas/dashboard", icon: LayoutDashboard },
   {
+    label: "Catálogos",
+    to: "/mrp-tarimas/catalogos",
+    icon: Settings2,
+    // Sub-opciones (catálogos) que se despliegan bajo "Catálogos" en el submenú.
+    children: [
+      { label: "Artículos", to: "/mrp-tarimas/catalogos/articulos" },
+      { label: "Compañías", to: "/mrp-tarimas/catalogos/companias" },
+      { label: "Clientes", to: "/mrp-tarimas/catalogos/clientes" },
+      { label: "Insumos", to: "/mrp-tarimas/catalogos/insumos" },
+      { label: "BOM", to: "/mrp-tarimas/catalogos/bom" },
+      { label: "Almacenes", to: "/mrp-tarimas/catalogos/almacenes" },
+    ],
+  },
+  {
     label: "Inventario",
     to: "/mrp-tarimas/inventario",
     icon: Package,
@@ -60,23 +74,10 @@ const NAV = [
     children: [
       { label: "Historial de movimientos", to: "/mrp-tarimas/movimientos" },
       { label: "Registro de eventos", to: "/mrp-tarimas/eventos" },
+      { label: "Registro de insumos", to: "/mrp-tarimas/insumos-registro" },
     ],
   },
   { label: "Descartes", to: "/mrp-tarimas/descartes", icon: Trash2 },
-  {
-    label: "Catálogos",
-    to: "/mrp-tarimas/catalogos",
-    icon: Settings2,
-    // Sub-opciones (catálogos) que se despliegan bajo "Catálogos" en el submenú.
-    children: [
-      { label: "Artículos", to: "/mrp-tarimas/catalogos/articulos" },
-      { label: "Compañías", to: "/mrp-tarimas/catalogos/companias" },
-      { label: "Clientes", to: "/mrp-tarimas/catalogos/clientes" },
-      { label: "Insumos", to: "/mrp-tarimas/catalogos/insumos" },
-      { label: "BOM", to: "/mrp-tarimas/catalogos/bom" },
-      { label: "Almacenes", to: "/mrp-tarimas/catalogos/almacenes" },
-    ],
-  },
 ];
 
 const linkBase = {

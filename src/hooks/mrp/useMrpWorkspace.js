@@ -21,8 +21,9 @@ export default function useMrpWorkspace() {
   const bodegaId = ctx.profile?.bodegaId || null;
   const bodegaNombre = ctx.profile?.bodegaNombre || null;
 
-  // Sincroniza el scope de los servicios con el perfil logeado.
-  setMrpScope({ tenantId, company });
+  // Sincroniza el scope de los servicios con el perfil logeado (incluida la
+  // bodega activa: insumos, BOM y eventos se alcanzan por tenant/company/bodega).
+  setMrpScope({ tenantId, company, bodegaId, bodegaNombre });
   // Sella la identidad del usuario para la bitácora de eventos.
   setMrpUser({
     userId: ctx.user?.uid || null,

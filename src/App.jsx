@@ -87,6 +87,7 @@ import MRPDashboard from "./pages/MRP/MRPDashboard";
 import MRPInventarioPage from "./pages/MRP/MRPInventarioPage";
 import MRPHistorialPage from "./pages/MRP/MRPHistorialPage";
 import MRPEventosPage from "./pages/MRP/MRPEventosPage";
+import MRPInsumosRegistroPage from "./pages/MRP/MRPInsumosRegistroPage";
 import MRPDescartesPage from "./pages/MRP/MRPDescartesPage";
 import MRPCatalogosPage from "./pages/MRP/MRPCatalogosPage";
 
@@ -653,6 +654,7 @@ export default function App() {
             <Route path="inventario/:tab" element={<MRPInventarioPage />} />
             <Route path="movimientos" element={<MRPHistorialPage />} />
             <Route path="eventos" element={<MRPEventosPage />} />
+            <Route path="insumos-registro" element={<MRPInsumosRegistroPage />} />
             <Route path="descartes" element={<MRPDescartesPage />} />
             <Route path="catalogos" element={<Navigate to="articulos" replace />} />
             <Route path="catalogos/:tab" element={<MRPCatalogosPage />} />

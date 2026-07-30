@@ -1,8 +1,9 @@
-// MRP Tarimas — Registro de eventos: bitácora de auditoría de los catálogos
-// (edición, activación, desactivación, eliminación) y ajustes de stock de
-// insumos. Es independiente del Historial de movimientos (stock por tarima).
+// MRP Tarimas — Registro de insumos: bitácora de auditoría específica de los
+// insumos (creación, edición, activación/desactivación, ajustes de stock,
+// consumos y eliminación). Es la vista "espejo" del Registro de eventos, pero
+// filtrada a entity_type = 'insumo' (que se excluyen del Registro de eventos).
 import React from "react";
-import { ClipboardList } from "lucide-react";
+import { Boxes } from "lucide-react";
 import {
   Badge,
   Card,
@@ -16,15 +17,6 @@ import { fmtDate } from "./components/mrpFormat";
 import { CodeText } from "./components/mrpUi";
 import MrpDataTable from "./components/MrpDataTable";
 
-const ENTITY_LABELS = {
-  articulo: "Artículo",
-  compania: "Compañía",
-  cliente: "Cliente",
-  insumo: "Insumo",
-  bom: "BOM",
-  almacen: "Almacén",
-};
-
 const ACTION_LABELS = {
   create: "Creación",
   update: "Edición",
@@ -32,13 +24,14 @@ const ACTION_LABELS = {
   deactivate: "Desactivación",
   delete: "Eliminación",
   adjust: "Ajuste",
+  consume: "Consumo",
 };
 
 function ActionBadge({ action }) {
   const tone =
     action === "delete"
       ? "dark"
-      : action === "adjust" || action === "create" || action === "activate"
+      : action === "consume" || action === "adjust" || action === "create" || action === "activate"
       ? "accent"
       : "neutral";
   return <Badge tone={tone}>{ACTION_LABELS[action] || action}</Badge>;
@@ -57,23 +50,12 @@ const COLS = [
     render: (e) => fmtDate(e.created_at),
   },
   {
-    key: "tipo",
-    title: "Tipo",
-    get: (e) => ({
-      value: e.entity_type,
-      label: ENTITY_LABELS[e.entity_type] || e.entity_type,
-    }),
-    render: (e) => ENTITY_LABELS[e.entity_type] || e.entity_type,
-  },
-  {
-    key: "objeto",
-    title: "Objeto",
+    key: "insumo",
+    title: "Insumo",
     get: (e) => ({ value: objetoText(e), label: objetoText(e) }),
     render: (e) => (
       <>
-        {e.entity_codigo ? (
-          <CodeText>{e.entity_codigo}</CodeText>
-        ) : null}
+        {e.entity_codigo ? <CodeText>{e.entity_codigo}</CodeText> : null}
         {e.entity_codigo && e.entity_nombre ? " · " : ""}
         {e.entity_nombre || (!e.entity_codigo ? "—" : "")}
       </>
@@ -82,10 +64,7 @@ const COLS = [
   {
     key: "accion",
     title: "Acción",
-    get: (e) => ({
-      value: e.action,
-      label: ACTION_LABELS[e.action] || e.action,
-    }),
+    get: (e) => ({ value: e.action, label: ACTION_LABELS[e.action] || e.action }),
     render: (e) => <ActionBadge action={e.action} />,
   },
   {
@@ -105,34 +84,32 @@ const COLS = [
   },
 ];
 
-export default function MRPEventosPage() {
-  // Los eventos de insumos se muestran en su propia vista ("Registro de
-  // insumos"); aquí se excluyen para no duplicarlos.
+export default function MRPInsumosRegistroPage() {
   const { eventos, loading, error, refetch } = useMrpEventos({
-    excludeEntityType: "insumo",
+    entityType: "insumo",
   });
 
   return (
     <>
       <SectionTitle
-        title="Registro de eventos"
+        title="Registro de insumos"
         action={<Badge tone="accent">Auditoría</Badge>}
       />
 
       <SectionTitle
-        title="Eventos"
-        hint={!loading ? `${eventos.length} evento(s)` : undefined}
+        title="Movimientos de insumos"
+        hint={!loading ? `${eventos.length} registro(s)` : undefined}
       />
 
       {loading ? (
-        <Spinner label="Cargando eventos…" />
+        <Spinner label="Cargando registros…" />
       ) : error ? (
         <ErrorState description={error.message} onRetry={refetch} />
       ) : eventos.length === 0 ? (
         <EmptyState
-          icon={ClipboardList}
-          title="Sin eventos"
-          description="Aún no se ha registrado actividad en los catálogos."
+          icon={Boxes}
+          title="Sin registros de insumos"
+          description="Aún no se ha registrado actividad de insumos (creación, ajustes o consumos)."
         />
       ) : (
         <Card padding={0}>
@@ -140,7 +117,7 @@ export default function MRPEventosPage() {
             columns={COLS}
             rows={eventos}
             rowKey={(e) => e.id}
-            storageKey="appolo_mrp_eventos_cols"
+            storageKey="appolo_mrp_insumos_registro_cols"
             pageSize={5}
             minWidth={860}
           />

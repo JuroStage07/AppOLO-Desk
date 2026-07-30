@@ -12,9 +12,7 @@ import {
   ChipsRow,
   PrimaryButton,
   SecondaryButton,
-  useConfirm,
 } from "../../../components/ui";
-import { findArticuloByNombre } from "../../../services/mrp";
 import {
   usePalletTransfers,
   usePalletArticulos,
@@ -47,7 +45,6 @@ function initialForm(prefillArg, mode) {
 
 export default function TrasladoModal({ open, onClose, prefill }) {
   const { warehouse, warehouseId } = useMrpWorkspace();
-  const confirm = useConfirm();
   const { transfer, transferBetweenWarehouses, loading } = usePalletTransfers();
   const { articulos } = usePalletArticulos({ warehouseId });
   const { warehouses } = usePalletWarehouses();
@@ -180,27 +177,8 @@ export default function TrasladoModal({ open, onClose, prefill }) {
     if (!validate()) return;
     try {
       if (isWh) {
-        // Si el artículo no existe en el almacén destino, confirmar la auto-creación.
-        const art = articulos.find((a) => a.id === form.articuloId);
-        let exists = true;
-        try {
-          exists = !!(await findArticuloByNombre(form.destWarehouseId, art?.nombre));
-        } catch {
-          exists = true; // ante la duda no bloqueamos; la RPC decide igual
-        }
-        if (!exists) {
-          const destName =
-            destWarehouses.find((w) => w.id === form.destWarehouseId)?.name ||
-            "destino";
-          const ok = await confirm({
-            title: "Crear artículo en almacén destino",
-            message: `El artículo "${art?.codigo} · ${art?.nombre}" no existe en el almacén "${destName}". Se creará automáticamente (mismo nombre, código nuevo) para completar el traslado. ¿Continuar?`,
-            confirmText: "Crear y trasladar",
-            tone: "warning",
-          });
-          if (!ok) return;
-        }
-
+        // Catálogo de artículos compartido por tenant/company: el traslado entre
+        // almacenes usa el MISMO artículo (no se auto-crea uno en el destino).
         await transferBetweenWarehouses({
           originWarehouseId: warehouseId,
           destWarehouseId: form.destWarehouseId,

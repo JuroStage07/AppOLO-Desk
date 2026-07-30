@@ -9,6 +9,7 @@ import {
   deleteInsumo,
   setInsumoActive,
   adjustInsumoStock,
+  consumeInsumos,
   getNextInsumoCode,
 } from "../../services/mrp";
 import useAsyncData from "./useAsyncData";
@@ -112,6 +113,35 @@ export default function useMrpInsumos({ includeInactive = false } = {}) {
     [toast]
   );
 
+  // Consumo (salida) atómico vía RPC `mrp_consume_insumos`. Descuenta el stock
+  // (sin negativos) y registra un evento por insumo (entity_type='insumo',
+  // action='consume') que alimenta el "Registro de insumos".
+  const [consuming, setConsuming] = useState(false);
+  const consume = useCallback(
+    async ({ items, reason, fecha, bomId, bomCodigo, multiplier } = {}) => {
+      setConsuming(true);
+      try {
+        const res = await consumeInsumos({
+          items,
+          reason,
+          fecha,
+          bomId,
+          bomCodigo,
+          multiplier,
+        });
+        bumpRefresh("insumos", "eventos");
+        toast.success("Consumo registrado.");
+        return res;
+      } catch (e) {
+        toast.error(e.message || "No se pudo registrar el consumo.");
+        throw e;
+      } finally {
+        setConsuming(false);
+      }
+    },
+    [toast]
+  );
+
   const peekNextCode = useCallback(() => getNextInsumoCode(), []);
 
   return {
@@ -128,6 +158,8 @@ export default function useMrpInsumos({ includeInactive = false } = {}) {
     setActive,
     adjust,
     adjusting,
+    consume,
+    consuming,
     peekNextCode,
   };
 }
