@@ -51,7 +51,7 @@ const INV_BASE = "/mrp-tarimas/inventario";
 const INV_TABS = [
   { key: "articulos", label: "Artículos", icon: Package },
   { key: "insumos", label: "Insumos", icon: FlaskConical },
-  { key: "tiendas", label: "En tienda", icon: Store },
+  { key: "tiendas", label: "En Cliente / Tienda", icon: Store },
 ];
 
 // Wrapper de Inventario: tabs (Artículos / Insumos) manejados por URL para que

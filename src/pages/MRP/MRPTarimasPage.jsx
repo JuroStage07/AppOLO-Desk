@@ -64,7 +64,7 @@ const NAV = [
     children: [
       { label: "Artículos", to: "/mrp-tarimas/inventario/articulos" },
       { label: "Insumos", to: "/mrp-tarimas/inventario/insumos" },
-      { label: "En tienda", to: "/mrp-tarimas/inventario/tiendas" },
+      { label: "En Cliente / Tienda", to: "/mrp-tarimas/inventario/tiendas" },
     ],
   },
   {
