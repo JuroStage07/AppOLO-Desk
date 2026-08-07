@@ -270,7 +270,11 @@ function startOfWeekMonday(date = new Date()) {
   return d;
 }
 
-function buildDayKeysForFilter(filterKey, range = null) {
+// Firma alineada con buildDashboardFromDailyDocs: (filterKey, selectedDate, range).
+// `selectedDate` no se usa aquí (los períodos se anclan a "hoy"), pero se recibe
+// para que el 3er argumento siga siendo el rango personalizado.
+// eslint-disable-next-line no-unused-vars
+function buildDayKeysForFilter(filterKey, selectedDate = "", range = null) {
   const now = new Date();
 
   if (filterKey === "hoy") {
