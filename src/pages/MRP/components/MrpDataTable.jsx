@@ -8,11 +8,13 @@
 //   render(row) }. Columnas de acciones: pásalas por `renderActions(row)` (van
 //   fijas al final, sin filtro ni arrastre).
 import React, { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
-import { GhostButton, TableScroll } from "../../../components/ui";
+import { ChevronLeft, ChevronRight, GripVertical, FileSpreadsheet } from "lucide-react";
+import { GhostButton, TableScroll, useToast } from "../../../components/ui";
 import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE } from "../../../styles/theme";
 import { th, td } from "./mrpFormat";
 import ColumnFilter from "./ColumnFilter";
+import useMrpWorkspace from "../../../hooks/mrp/useMrpWorkspace";
+import { downloadMrpReport } from "../../../utils/mrpExcelReport";
 
 const grip = {
   display: "inline-grid",
@@ -56,6 +58,9 @@ export default function MrpDataTable({
   actionsLabel = "Acciones",
   emptyFilterText = "Sin resultados para los filtros de columna.",
   stickyFirst = true,
+  exportTitle,
+  exportFileName,
+  exportMeta,
 }) {
   const allKeys = useMemo(() => columns.map((c) => c.key), [columns]);
   const [colOrder, setColOrder] = useState(() => loadOrder(storageKey, allKeys));
@@ -63,6 +68,9 @@ export default function MrpDataTable({
   const [overKey, setOverKey] = useState(null);
   const [colFilters, setColFilters] = useState({});
   const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
+  const toast = useToast();
+  const { company, bodegaNombre, warehouse } = useMrpWorkspace();
 
   // Persiste el orden (localStorage es un sistema externo, no estado de React).
   useEffect(() => {
@@ -122,6 +130,66 @@ export default function MrpDataTable({
     );
   }, [rows, filterable, colFilters]);
 
+  // Exporta a Excel EXACTAMENTE las filas visibles tras los filtros de columna
+  // (`filtered`), usando el orden de columnas actual. Documenta los filtros
+  // aplicados en el encabezado del reporte.
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const exportCols = orderedCols.map((c) => ({
+        header: c.title,
+        align: c.align,
+        numeric: c.align === "right",
+      }));
+      const exportRows = filtered.map((row) =>
+        orderedCols.map((c) => {
+          const { value, label } = c.get(row);
+          if (c.align === "right") {
+            const n = Number(value);
+            return Number.isFinite(n) ? n : label ?? value;
+          }
+          return label ?? value;
+        })
+      );
+
+      // Resumen legible de los filtros activos por columna.
+      const activeFilters = filterable
+        .filter((c) => Array.isArray(colFilters[c.key]) && colFilters[c.key].length)
+        .map((c) => {
+          const opts = optionsByCol[c.key] || [];
+          const labels = colFilters[c.key].map((v) => {
+            const o = opts.find((x) => x.value === v);
+            return o ? o.label : v;
+          });
+          return `${c.title}: ${labels.join(", ")}`;
+        });
+
+      const meta = [
+        ["Empresa", company || "—"],
+        ["Bodega", bodegaNombre || "—"],
+        ["Almacén", warehouse?.name || "—"],
+        ["Registros", filtered.length],
+        ...(Array.isArray(exportMeta) ? exportMeta : []),
+      ];
+
+      await downloadMrpReport({
+        title: exportTitle,
+        meta,
+        filtersText: activeFilters.length
+          ? activeFilters.join("  ·  ")
+          : "Sin filtros (todos los registros)",
+        sheetName: exportTitle,
+        fileName: exportFileName || exportTitle,
+        sections: [{ columns: exportCols, rows: exportRows }],
+      });
+    } catch (e) {
+      toast.error(`No se pudo generar el Excel: ${e?.message || e}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const pageCount = Math.max(1, Math.ceil(filtered.length / (pageSize || 1)));
   const safePage = Math.min(page, pageCount);
   const pageRows = useMemo(
@@ -147,6 +215,29 @@ export default function MrpDataTable({
 
   return (
     <>
+      {exportTitle ? (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            padding: "10px 12px 0",
+          }}
+        >
+          <GhostButton
+            icon={FileSpreadsheet}
+            onClick={handleExport}
+            disabled={exporting || filtered.length === 0}
+            title={
+              filtered.length === 0
+                ? "No hay registros para exportar"
+                : "Descargar los registros filtrados en Excel"
+            }
+          >
+            {exporting ? "Generando…" : "Exportar Excel"}
+          </GhostButton>
+        </div>
+      ) : null}
+
       <TableScroll minWidth={minWidth}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>

@@ -1,42 +1,29 @@
 -- ============================================================================
--- MRP Tarimas — Código externo de cliente (App externa ↔ Cliente MRP)
--- ============================================================================
+-- MRP Tarimas — Consumo externo con catálogo de artículos COMPARTIDO
+-- ----------------------------------------------------------------------------
 -- Ejecutar en el editor SQL de Supabase. NO DESTRUCTIVO e idempotente.
--- Requiere: mrp_pallets_tiendas.sql, mrp_external_consumptions.sql y
---           mrp_tienda_inventario.sql.
 --
--- La app de despacho identifica la tienda con su propio código (p. ej. "T2").
--- Aquí ligamos ese código externo a un cliente del MRP (pallet_tiendas). El
--- consumo externo (almacén → tienda) resuelve la tienda destino por ese código,
--- de modo que el stock aterriza en la tienda correcta en vez de "Sin asignar".
+-- Contexto: el catálogo de artículos es por tenant/company (una sola fila por
+-- código; el stock por almacén vive en pallet_inventory_articulo). La migración
+-- 20260732 ya alineó `mrp_articulo_warehouse_transfer` con esa semántica, pero
+-- `mrp_consume_tarimas_external` (despachos automáticos almacén → tienda) quedó
+-- rezagada: seguía resolviendo el artículo exigiendo
+--   warehouse_id = <almacén de la bodega>.
+-- Como la única fila del artículo apunta al almacén donde se creó (p. ej. el de
+-- CLIRO), el consumo desde OTRA bodega (p. ej. El Coco) fallaba con:
+--   "No existe un articulo activo con codigo % en el almacen ligado a %".
 --
--- El vínculo se administra en la UI: Dev › Configurar MRP Tarimas › Relación de
--- entidades › "App externa ↔ Clientes del MRP".
+-- Cambio (ÚNICO): el lookup del artículo ya NO filtra por `warehouse_id`; se
+-- resuelve por tenant/company + código (único por tenant/company). El almacén de
+-- la bodega (`v_warehouse_id`) se sigue usando para el traslado y el inventario,
+-- que es donde el stock SÍ es independiente por bodega.
+--
+-- Todo lo demás queda IDÉNTICO a la versión de 10 args (mrp_tienda_external_code.sql):
+-- validaciones, resolución de tienda por código externo, idempotencia por
+-- external_event_id, contrato de retorno y metadata. Sigue siendo SECURITY DEFINER.
+--
+-- Idempotente: create or replace con la MISMA firma de 10 args.
 -- ============================================================================
-
-/* 1) Código externo en el cliente (único por tenant/company) ---------------- */
-alter table pallet_tiendas
-  add column if not exists external_code text;
-
--- Único (case-insensitive) cuando está definido: un código externo apunta a un
--- solo cliente MRP.
-create unique index if not exists pallet_tiendas_external_code_uniq
-  on pallet_tiendas (tenant_id, company, upper(external_code))
-  where external_code is not null and btrim(external_code) <> '';
-
-/* 2) Guardar el código externo también en el registro de consumo externo ----- */
-alter table pallet_external_consumptions
-  add column if not exists tienda_externa text;
-alter table pallet_external_consumptions
-  add column if not exists store_id uuid references pallet_tiendas (id);
-
-/* 3) Consumo externo: resuelve la tienda destino por código externo ---------- */
--- Se recrea añadiendo `p_tienda_externa` (DEFAULT NULL) al final. Las llamadas
--- de 9 args existentes siguen funcionando por el valor por defecto (destino
--- "Sin asignar"). Si se envía el código y no resuelve, se lanza excepción.
-drop function if exists mrp_consume_tarimas_external(
-  text, text, text, text, text, integer, text, text, text
-);
 
 create or replace function mrp_consume_tarimas_external(
   p_tenant_id text,
@@ -92,12 +79,11 @@ begin
     raise exception 'No existe un almacen MRP activo ligado a la bodega %', v_bodega_id;
   end if;
 
-  -- Catálogo COMPARTIDO por tenant/company: el artículo se resuelve por código
-  -- (único por tenant/company), NO por warehouse_id. La fila del artículo apunta
-  -- al almacén donde se creó, pero el consumo puede hacerse desde cualquier
-  -- bodega del mismo tenant/company; el stock por almacén se gestiona en
-  -- pallet_inventory_articulo vía mrp_articulo_transfer. Ver migración
-  -- 20260735_mrp_consume_tarimas_external_shared_catalog.sql.
+  -- Catálogo COMPARTIDO: el artículo se resuelve por tenant/company + código
+  -- (único por tenant/company). Ya NO se filtra por warehouse_id: la fila del
+  -- artículo apunta al almacén donde se creó, pero el consumo puede hacerse
+  -- desde cualquier bodega del mismo tenant/company. El stock por almacén se
+  -- gestiona en pallet_inventory_articulo vía mrp_articulo_transfer.
   select id, nombre
     into v_articulo_id, v_articulo_nombre
     from pallet_articulos
@@ -216,4 +202,11 @@ $$;
 grant execute on function mrp_consume_tarimas_external(
   text, text, text, text, text, integer, text, text, text, text
 ) to anon, authenticated;
--- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- Verificación: debe listar la firma de 10 args.
+-- ----------------------------------------------------------------------------
+select p.oid::regprocedure as firma
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.proname = 'mrp_consume_tarimas_external';

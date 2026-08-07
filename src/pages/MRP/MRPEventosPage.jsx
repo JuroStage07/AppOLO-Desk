@@ -143,6 +143,8 @@ export default function MRPEventosPage() {
             storageKey="appolo_mrp_eventos_cols"
             pageSize={5}
             minWidth={860}
+            exportTitle="Registro de eventos"
+            exportFileName="registro_eventos"
           />
         </Card>
       )}

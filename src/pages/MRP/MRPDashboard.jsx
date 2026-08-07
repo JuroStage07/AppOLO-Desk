@@ -20,6 +20,7 @@ import {
   ArrowLeftRight,
   Activity,
   Package,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   KpiCard,
@@ -30,13 +31,19 @@ import {
   Spinner,
   ErrorState,
   EmptyState,
+  GhostButton,
+  useToast,
 } from "../../components/ui";
 import {
   usePalletSummary,
   usePalletMovements,
   useMrpWorkspace,
 } from "../../hooks/mrp";
-import { PALLET_LOCATION_LABELS } from "../../services/mrp";
+import {
+  PALLET_LOCATION_LABELS,
+  PALLET_MOVEMENT_TYPE_LABELS,
+} from "../../services/mrp";
+import { downloadMrpReport } from "../../utils/mrpExcelReport";
 import {
   ACCENT,
   ACCENT_LIGHT,
@@ -178,10 +185,12 @@ function MetricInline({ icon: Icon, label, value, accent }) {
 }
 
 export default function MRPDashboard() {
-  const { warehouseId, warehouse } = useMrpWorkspace();
+  const { warehouseId, warehouse, company, bodegaNombre } = useMrpWorkspace();
+  const toast = useToast();
   // Captura del instante de montaje (fuera del render) para la ventana de 7 días.
   const [mountedAt] = useState(() => Date.now());
   const [ubic, setUbic] = useState(null); // { location, label }
+  const [exporting, setExporting] = useState(false);
 
   // Ventana estable de 7 días (ISO) para acotar la consulta de actividad en la
   // BD (created_at >= dateFrom), en lugar de filtrar en memoria.
@@ -273,14 +282,129 @@ export default function MRPDashboard() {
     [summary.byArticulo]
   );
 
+  // Exporta el panorama del dashboard (KPIs, distribución, top y últimos
+  // movimientos) a un Excel profesional con logo AppOLO Desk.
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const num = (v) => Number(v || 0);
+      const sections = [
+        {
+          heading: "Indicadores de stock",
+          columns: [
+            { header: "Indicador" },
+            { header: "Valor", align: "right", numeric: true },
+          ],
+          rows: [
+            ["Stock total (incl. merma)", num(summary.totalGlobal)],
+            ["En revisión", num(summary.totalPend)],
+            ["En merma", num(summary.totalMerma)],
+            ["Descartes (histórico)", num(summary.totalDiscards)],
+          ],
+        },
+        {
+          heading: "Actividad · últimos 7 días",
+          columns: [
+            { header: "Métrica" },
+            { header: "Cantidad", align: "right", numeric: true },
+          ],
+          rows: [
+            ["Movimientos", num(activity.total)],
+            ["Ingresos", num(activity.ingresos)],
+            ["Salidas", num(activity.salidas)],
+            ["Traslados", num(activity.traslados)],
+          ],
+        },
+        {
+          heading: "Distribución por ubicación",
+          columns: [
+            { header: "Ubicación" },
+            { header: "Total", align: "right", numeric: true },
+            { header: "%", align: "right", numeric: true },
+          ],
+          rows: byLocation.map((l) => [
+            PALLET_LOCATION_LABELS[l.location] || l.location,
+            num(l.total),
+            totalLocation > 0 ? Math.round((l.total / totalLocation) * 100) : 0,
+          ]),
+        },
+        {
+          heading: "Top artículos (mayor stock global)",
+          columns: [
+            { header: "#", align: "right", numeric: true },
+            { header: "Código" },
+            { header: "Artículo" },
+            { header: "Total", align: "right", numeric: true },
+          ],
+          rows: topArticulos.map((a, i) => [
+            i + 1,
+            a.codigo || "—",
+            a.nombre || "",
+            num(a.total),
+          ]),
+        },
+        {
+          heading: "Últimos movimientos",
+          columns: [
+            { header: "Fecha" },
+            { header: "Movimiento" },
+            { header: "Artículo" },
+            { header: "Cantidad", align: "right", numeric: true },
+            { header: "Origen" },
+            { header: "Destino" },
+          ],
+          rows: recentMovements.map((m) => [
+            fmtDate(m.created_at),
+            PALLET_MOVEMENT_TYPE_LABELS[m.movement_type] || m.movement_type || "—",
+            `${m.articulo?.codigo || ""} · ${m.articulo?.nombre || ""}`.trim(),
+            num(m.quantity),
+            PALLET_LOCATION_LABELS[m.origin_location] || m.origin_location || "—",
+            PALLET_LOCATION_LABELS[m.destination_location] ||
+              m.destination_location ||
+              "—",
+          ]),
+        },
+      ];
+
+      await downloadMrpReport({
+        title: "Dashboard MRP Tarimas",
+        meta: [
+          ["Empresa", company || "—"],
+          ["Bodega", bodegaNombre || "—"],
+          ["Almacén", warehouse?.name || "—"],
+        ],
+        sheetName: "Dashboard",
+        fileName: "dashboard_mrp",
+        sections,
+      });
+    } catch (e) {
+      toast.error(`No se pudo generar el Excel: ${e?.message || e}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <>
       <SectionTitle
         title="Dashboard"
         action={
-          warehouse?.name ? (
-            <Badge tone="accent">{warehouse.name}</Badge>
-          ) : undefined
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+            {warehouse?.name ? (
+              <Badge tone="accent">{warehouse.name}</Badge>
+            ) : null}
+            {!loading && !error ? (
+              <GhostButton
+                icon={FileSpreadsheet}
+                onClick={handleExport}
+                disabled={exporting}
+                title="Descargar el panorama del dashboard en Excel"
+              >
+                {exporting ? "Generando…" : "Exportar Excel"}
+              </GhostButton>
+            ) : null}
+          </div>
         }
       />
 

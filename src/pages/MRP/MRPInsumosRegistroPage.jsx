@@ -120,6 +120,8 @@ export default function MRPInsumosRegistroPage() {
             storageKey="appolo_mrp_insumos_registro_cols"
             pageSize={5}
             minWidth={860}
+            exportTitle="Registro de insumos"
+            exportFileName="registro_insumos"
           />
         </Card>
       )}

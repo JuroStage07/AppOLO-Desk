@@ -35,6 +35,14 @@ const movementLabel = (m) => {
 };
 const locLabel = (l) => (l ? PALLET_LOCATION_LABELS[l] || l : "—");
 
+// Cliente/tienda destino: solo aplica a movimientos cuyo destino es `tienda`.
+// La RPC de traslado guarda el nombre de la tienda en metadata.tienda_nombre;
+// los consumos externos sin código de tienda quedan "Sin asignar".
+const tiendaDestino = (m) => {
+  if (m.destination_location !== "tienda") return "—";
+  return m.metadata?.tienda_nombre || "Sin asignar";
+};
+
 // Definición de columnas: value (clave del filtro) + label (texto visible) + render.
 const COLS = [
   {
@@ -113,6 +121,15 @@ const COLS = [
     render: (m) => <LocationBadge value={m.destination_location} />,
   },
   {
+    key: "tienda",
+    title: "Tienda destino",
+    get: (m) => {
+      const v = tiendaDestino(m);
+      return { value: v, label: v };
+    },
+    render: (m) => tiendaDestino(m),
+  },
+  {
     key: "motivo",
     title: "Motivo",
     get: (m) => ({ value: m.reason || "—", label: m.reason || "—" }),
@@ -169,7 +186,9 @@ export default function MRPHistorialPage() {
             rowKey={(m) => m.id}
             storageKey="appolo_mrp_hist_cols"
             pageSize={5}
-            minWidth={1120}
+            minWidth={1280}
+            exportTitle="Historial de movimientos"
+            exportFileName="historial_movimientos"
           />
         </Card>
       )}

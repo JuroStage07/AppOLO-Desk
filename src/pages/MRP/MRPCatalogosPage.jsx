@@ -47,6 +47,7 @@ import {
   useMrpWorkspace,
   useMrpUser,
 } from "../../hooks/mrp";
+import { validateArticuloCode } from "../../services/mrp";
 import {
   SLATE,
   TEXT,
@@ -287,6 +288,12 @@ function ArticulosTab() {
   const [selClientes, setSelClientes] = useState([]); // ids seleccionados
   const [nextCode, setNextCode] = useState("");
   const [errs, setErrs] = useState({});
+  // Código: "auto" = correlativo A#### que asigna la RPC; "manual" = el que se
+  // escriba. El manual solo admite UNA compañía (el código es único por
+  // tenant/company, así que la segunda chocaría).
+  const [codeMode, setCodeMode] = useState("auto");
+  const [codigo, setCodigo] = useState("");
+  const manualCode = codeMode === "manual";
 
   // Asignación de cliente a un artículo existente (solo dev).
   const [assign, setAssign] = useState(null); // artículo en asignación o null
@@ -299,7 +306,9 @@ function ArticulosTab() {
   const [openMenuId, setOpenMenuId] = useState(null);
 
   // Previsualiza los códigos correlativos que se asignarán (uno por cliente).
+  // Con código manual no hay nada que previsualizar: se usa el que se escribe.
   const previewCodes = useMemo(() => {
+    if (manualCode) return [];
     const m = /^A(\d+)$/.exec(nextCode || "");
     if (!m || selClientes.length === 0) return [];
     const start = parseInt(m[1], 10);
@@ -307,7 +316,7 @@ function ArticulosTab() {
     return selClientes.map((_, i) =>
       "A" + String(start + i).padStart(width, "0")
     );
-  }, [nextCode, selClientes]);
+  }, [manualCode, nextCode, selClientes]);
 
   if (!warehouseId) return <NoWarehouse />;
 
@@ -316,6 +325,8 @@ function ArticulosTab() {
     setSelClientes([]);
     setErrs({});
     setNextCode("");
+    setCodeMode("auto");
+    setCodigo("");
     setOpen(true);
     try {
       setNextCode(await peekNextCode());
@@ -324,20 +335,36 @@ function ArticulosTab() {
     }
   };
 
+  // Con código manual la selección es de una sola compañía (el código es único
+  // por tenant/company), así que el chip se comporta como radio.
   const toggleCliente = (id) =>
-    setSelClientes((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    setSelClientes((prev) => {
+      if (manualCode) return prev.includes(id) ? [] : [id];
+      return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+    });
 
   const onCreate = async () => {
     const e = {};
     if (!nombre.trim()) e.nombre = "El nombre es obligatorio.";
-    if (selClientes.length === 0)
+    if (manualCode) {
+      const codeErr = validateArticuloCode(codigo);
+      if (codeErr) e.codigo = codeErr;
+    }
+    if (selClientes.length === 0) {
       e.clientes = "Seleccione al menos una compañía.";
+    } else if (manualCode && selClientes.length > 1) {
+      e.clientes =
+        "Con código manual solo se puede seleccionar una compañía (el código es único).";
+    }
     setErrs(e);
     if (Object.keys(e).length) return;
     try {
-      await createForClientes({ nombre, warehouseId, clienteIds: selClientes });
+      await createForClientes({
+        nombre,
+        warehouseId,
+        clienteIds: selClientes,
+        codigo: manualCode ? codigo : null,
+      });
       setOpen(false);
     } catch {
       /* toast del hook */
@@ -506,17 +533,52 @@ function ArticulosTab() {
         <Sheet.Body>
           <Field
             label="Código"
+            required={manualCode}
+            error={errs.codigo}
             hint={
-              previewCodes.length > 1
+              manualCode
+                ? "Letras, números y . _ / - (se guarda en mayúsculas). Debe ser único."
+                : previewCodes.length > 1
                 ? `Se crearán ${previewCodes.length} artículos: ${previewCodes.join(", ")}`
                 : "Se asigna automáticamente al guardar."
             }
           >
-            <Field.Input
-              value={previewCodes[0] || nextCode || "Calculando…"}
-              disabled
-              readOnly
-            />
+            <ChipsRow style={{ marginBottom: 8 }}>
+              <Chip
+                active={!manualCode}
+                onClick={() => {
+                  setCodeMode("auto");
+                  setErrs((p) => ({ ...p, codigo: undefined }));
+                }}
+              >
+                Automático
+              </Chip>
+              <Chip
+                active={manualCode}
+                onClick={() => {
+                  setCodeMode("manual");
+                  // El manual admite una sola compañía: conserva la primera.
+                  setSelClientes((prev) => prev.slice(0, 1));
+                  setErrs((p) => ({ ...p, clientes: undefined }));
+                }}
+              >
+                Manual
+              </Chip>
+            </ChipsRow>
+            {manualCode ? (
+              <Field.Input
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value.toUpperCase())}
+                placeholder="Ej: TAR-001"
+                maxLength={24}
+              />
+            ) : (
+              <Field.Input
+                value={previewCodes[0] || nextCode || "Calculando…"}
+                disabled
+                readOnly
+              />
+            )}
           </Field>
           <Field label="Nombre del artículo" required error={errs.nombre}>
             <Field.Input
@@ -535,6 +597,8 @@ function ArticulosTab() {
                 ? "Cargando compañías…"
                 : clientes.length === 0
                 ? "No hay compañías activas. Créalas en la pestaña Compañías."
+                : manualCode
+                ? "Con código manual: solo una compañía."
                 : "Selecciona una o más. Se crea un artículo por compañía."
             }
           >

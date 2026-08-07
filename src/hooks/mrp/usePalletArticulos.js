@@ -28,13 +28,14 @@ export default function usePalletArticulos({
   const [removing, setRemoving] = useState(false);
 
   const create = useCallback(
-    async ({ nombre, warehouseId: whId, clienteId = null }) => {
+    async ({ nombre, warehouseId: whId, clienteId = null, codigo = null }) => {
       setCreating(true);
       try {
         const articulo = await createPalletArticulo({
           nombre,
           warehouseId: whId,
           clienteId,
+          codigo,
         });
         bumpRefresh("articulos");
         toast.success(`Artículo ${articulo?.codigo || ""} creado.`);
@@ -52,15 +53,30 @@ export default function usePalletArticulos({
   // Crea el mismo artículo (por nombre) para cada cliente indicado: una fila por
   // cliente con código correlativo distinto. Los códigos se asignan en secuencia
   // porque las llamadas a la RPC se serializan (await por cliente).
+  //
+  // `codigo` (opcional) fuerza el código en vez de autogenerarlo. Como el código
+  // es único por tenant/company, solo tiene sentido con UN cliente: con varios
+  // el segundo chocaría. Se valida aquí antes de tocar la RPC.
   const createForClientes = useCallback(
-    async ({ nombre, warehouseId: whId, clienteIds }) => {
+    async ({ nombre, warehouseId: whId, clienteIds, codigo = null }) => {
       const ids = Array.isArray(clienteIds) ? clienteIds : [];
+      if (codigo && ids.length > 1) {
+        const msg =
+          "Con código manual solo se puede crear para una compañía a la vez.";
+        toast.error(msg);
+        throw new Error(msg);
+      }
       setCreating(true);
       try {
         const created = [];
         for (const clienteId of ids) {
           created.push(
-            await createPalletArticulo({ nombre, warehouseId: whId, clienteId })
+            await createPalletArticulo({
+              nombre,
+              warehouseId: whId,
+              clienteId,
+              codigo,
+            })
           );
         }
         bumpRefresh("articulos");

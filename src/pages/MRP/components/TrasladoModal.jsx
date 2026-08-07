@@ -196,8 +196,13 @@ export default function TrasladoModal({ open, onClose, prefill }) {
           articuloId: form.articuloId,
           quantity: Number(form.quantity),
           reason: form.reason.trim() || null,
+          // La tienda aplica cuando el origen O el destino es `tienda`
+          // (coherente con la validación del modal y la RPC).
           tiendaId:
-            form.destinationLocation === "tienda" ? form.tiendaId : null,
+            form.originLocation === "tienda" ||
+            form.destinationLocation === "tienda"
+              ? form.tiendaId
+              : null,
         });
       }
       onClose?.();

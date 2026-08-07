@@ -322,6 +322,8 @@ function ArticulosInventario() {
             storageKey="appolo_mrp_inv_art_cols"
             pageSize={5}
             minWidth={0}
+            exportTitle="Inventario de artículos"
+            exportFileName="inventario_articulos"
             actionsLabel="Acciones"
             renderActions={(r) => (
               <div
@@ -541,6 +543,8 @@ function InsumosInventario() {
             storageKey="appolo_mrp_inv_ins_cols"
             pageSize={5}
             minWidth={640}
+            exportTitle="Inventario de insumos"
+            exportFileName="inventario_insumos"
             actionsLabel="Acciones"
             renderActions={(i) => (
               <div style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
@@ -806,6 +810,8 @@ function TiendaInventario() {
             storageKey="appolo_mrp_inv_tienda_cols"
             pageSize={5}
             minWidth={0}
+            exportTitle="Inventario en tienda"
+            exportFileName="inventario_en_tienda"
           />
         </Card>
       )}

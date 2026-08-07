@@ -314,21 +314,64 @@ export async function getNextArticuloCode() {
   return "A" + String(max + 1).padStart(4, "0");
 }
 
-// El código (A####) se genera en la RPC; aquí solo se manda nombre + almacén +
-// (opcional) el cliente al que se asigna el artículo.
-export async function createPalletArticulo({ nombre, warehouseId, clienteId = null }) {
+// Normaliza un código escrito a mano: trim + MAYÚSCULAS. Devuelve null si viene
+// vacío (que es la señal para que la RPC autogenere el correlativo A####).
+export function normalizeArticuloCode(codigo) {
+  return String(codigo || "").trim().toUpperCase() || null;
+}
+
+// Valida un código manual con las MISMAS reglas que la RPC, para poder mostrar
+// el error en el formulario sin ir al servidor. La RPC sigue siendo la
+// autoridad (incluida la unicidad, que aquí no se puede comprobar).
+// Devuelve un mensaje de error o null si es válido.
+export function validateArticuloCode(codigo) {
+  const clean = normalizeArticuloCode(codigo);
+  if (!clean) return "El código es obligatorio.";
+  if (clean.length > 24) return "El código no puede tener más de 24 caracteres.";
+  if (!/^[A-Z0-9][A-Z0-9._/-]*$/.test(clean))
+    return "Use solo letras, números y . _ / - (sin espacios).";
+  return null;
+}
+
+// El código lo asigna la RPC: si `codigo` viene vacío genera el correlativo
+// A####; si viene con valor lo usa tal cual (normalizado). Además del nombre y
+// el almacén se manda (opcional) el cliente al que se asigna el artículo.
+export async function createPalletArticulo({
+  nombre,
+  warehouseId,
+  clienteId = null,
+  codigo = null,
+}) {
   const clean = String(nombre || "").trim();
   if (!clean) throw new Error("El nombre del artículo es obligatorio.");
   if (!warehouseId) throw new Error("Debe seleccionar un almacén.");
+  const code = normalizeArticuloCode(codigo);
+  if (code) {
+    const codeErr = validateArticuloCode(code);
+    if (codeErr) throw new Error(codeErr);
+  }
   const { tenantId, company } = getMrpScope();
+  // `p_codigo` solo se manda cuando hay código manual: así el alta automática
+  // sigue funcionando aunque la migración 20260733 no esté aplicada todavía
+  // (con la firma vieja de 5 args, mandar p_codigo daría "function not found").
   const { data, error } = await supabase.rpc("mrp_create_articulo", {
     p_tenant_id: tenantId,
     p_company: company,
     p_warehouse_id: warehouseId,
     p_nombre: clean,
     p_cliente_id: clienteId || null,
+    ...(code ? { p_codigo: code } : {}),
   });
   if (error) throw error;
+  // La RPC crea el artículo pero no escribe la bitácora; el evento se registra
+  // aquí (best-effort) para que el alta aparezca en el Registro de eventos.
+  await logEvento({
+    entityType: "articulo",
+    entityId: data?.id || null,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: "create",
+  });
   return data; // fila completa del artículo (incluye codigo)
 }
 
@@ -464,6 +507,14 @@ export async function createPalletCliente({ nombre }) {
     p_nombre: clean,
   });
   if (error) throw error;
+  // La RPC no escribe la bitácora; el evento se registra aquí (best-effort).
+  await logEvento({
+    entityType: "compania",
+    entityId: data?.id || null,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: "create",
+  });
   return data; // fila completa del cliente (incluye codigo)
 }
 
@@ -578,6 +629,14 @@ export async function createPalletTienda({ nombre, companiaId = null }) {
     p_cliente_id: companiaId || null,
   });
   if (error) throw error;
+  // La RPC no escribe la bitácora; el evento se registra aquí (best-effort).
+  await logEvento({
+    entityType: "cliente",
+    entityId: data?.id || null,
+    codigo: data?.codigo || null,
+    nombre: data?.nombre || null,
+    action: "create",
+  });
   return data; // fila completa de la tienda (incluye codigo)
 }
 
@@ -681,9 +740,14 @@ export async function deletePalletTienda(id) {
   const { data: prev } = await scope(
     supabase.from("pallet_tiendas").select("codigo, nombre").eq("id", id)
   ).maybeSingle();
-  const { error } = await scope(
-    supabase.from("pallet_tiendas").delete().eq("id", id)
-  );
+  // Borrado vía RPC: limpia el inventario residual en cero y desliga los consumos
+  // externos antes de eliminar. La RPC bloquea si el cliente aún tiene stock (>0).
+  const { tenantId, company } = getMrpScope();
+  const { error } = await supabase.rpc("mrp_delete_tienda", {
+    p_tenant_id: tenantId,
+    p_company: company,
+    p_tienda_id: id,
+  });
   if (error) throw error;
   await logEvento({
     entityType: "cliente",
