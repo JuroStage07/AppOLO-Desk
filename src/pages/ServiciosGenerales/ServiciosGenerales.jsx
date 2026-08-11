@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ClipboardList,
+  FileOutput,
   Lock,
   Scale,
   ScanLine,
@@ -59,6 +60,15 @@ export default function ServiciosGenerales() {
         anyPerms: ["serviciosGenerales"],
         icon: ScanLine,
         tag: "Control",
+      },
+      {
+        key: "boletas-salida",
+        title: "Boletas de salida",
+        desc: "Generá boletas de salida de vehículos, validalas con checklist y firma, y consultá su historial.",
+        path: "/servicios-generales/boletas-salida",
+        anyPerms: ["boletasSalida"],
+        icon: FileOutput,
+        tag: "Salida",
       },
     ],
     []

@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Code2, Database, Lock, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Code2, Database, KeyRound, Lock, SlidersHorizontal } from "lucide-react";
 import {
   Badge,
   Brand,
@@ -31,6 +31,14 @@ export default function DevHub() {
         path: "/dev/update-supabase",
         icon: Database,
         tag: "Sincronización",
+      },
+      {
+        key: "supabase",
+        title: "Supabase",
+        desc: "Login interno de Supabase (sesión propia con scope por JWT) para Despacho Dev y Registro de salida.",
+        path: "/dev/supabase",
+        icon: KeyRound,
+        tag: "Sesión",
       },
       {
         key: "config-modulos",

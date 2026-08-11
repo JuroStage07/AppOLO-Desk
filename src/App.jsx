@@ -64,6 +64,8 @@ import DevHub from "./pages/Dev/DevHub";
 import UpdateSupabasePage from "./pages/Dev/UpdateSupabasePage";
 import ModulesConfigHub from "./pages/Dev/ModulesConfigHub";
 import DespachosDevPage from "./pages/Dev/DespachosDev/DespachosDevPage";
+import SupabaseAuthPage from "./pages/Dev/Supabase/SupabaseAuthPage";
+import SupabaseAuthProvider from "./contexts/SupabaseAuthContext";
 import OvertimeSettingsHub from "./pages/Administracion/Overtime/OvertimeSettingsHub";
 import ConfigMRPTarimas from "./pages/MRP/ConfigMRPTarimas";
 import ConfigMRPEntidades from "./pages/MRP/ConfigMRPEntidades";
@@ -77,6 +79,7 @@ import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGenerales/Servici
 import ServiciosGeneralesOTCrear from "./pages/ServiciosGenerales/ServiciosGeneralesOTCrear";
 import ServiciosGeneralesOTGestion from "./pages/ServiciosGenerales/ServiciosGeneralesOTGestion";
 import ValidarIngreso from "./pages/ServiciosGenerales/ValidarIngreso";
+import BoletasSalidaHome from "./pages/ServiciosGenerales/Boletas/BoletasSalidaHome";
 import PesajeTarimas from "./pages/Zona Franca/PesajeTarimas";
 import RegistrarTarimas from "./pages/Zona Franca/RegistrarTarimas";
 import ConsultarTarimas from "./pages/Zona Franca/ConsultarTarimas";
@@ -125,6 +128,7 @@ export default function App() {
       <AuthProvider>
         <ToastProvider>
         <ConfirmProvider>
+        <SupabaseAuthProvider>
         <DocumentTitle />
         <CircleMenu />
         <AssistantModal />
@@ -439,6 +443,14 @@ export default function App() {
             }
           />
           <Route
+            path="/dev/supabase"
+            element={
+              <PrivateRoute>
+                <SupabaseAuthPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/dev/despachos-dev"
             element={
               <PrivateRoute>
@@ -489,6 +501,15 @@ export default function App() {
             element={
               <PrivateRoute>
                 <ValidarIngreso />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/servicios-generales/boletas-salida"
+            element={
+              <PrivateRoute>
+                <BoletasSalidaHome />
               </PrivateRoute>
             }
           />
@@ -712,6 +733,7 @@ export default function App() {
             }
           />
         </Routes>
+        </SupabaseAuthProvider>
         </ConfirmProvider>
         </ToastProvider>
       </AuthProvider>
