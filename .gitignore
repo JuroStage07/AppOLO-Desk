@@ -10,6 +10,9 @@ lerna-debug.log*
 # Temp files
 .tmp_payload.json
 
+# Datos locales de importaciones (reportes WMS + logs de import)
+saldos/
+
 # Firebase/Admin credentials
 serviceAccountKey.json
 *serviceAccount*.json

@@ -11,6 +11,7 @@
     "backfill:solicitudes-created-area": "node scripts/backfill-solicitudes-created-area.mjs",
     "backfill:solicitudes-bodega": "node scripts/backfill-solicitudes-bodega.mjs",
     "backfill:tiempo-respuesta": "node scripts/backfill-tiempo-respuesta.mjs",
+    "import:mrp-movimientos": "node scripts/import-mrp-movimientos-tarimas.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
