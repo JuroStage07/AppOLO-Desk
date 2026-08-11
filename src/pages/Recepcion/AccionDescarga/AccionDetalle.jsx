@@ -10,7 +10,7 @@ import {
   updateDoc,
   Timestamp,
 } from "firebase/firestore";
-import { auth, db } from "../../../firebase";
+import { db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { isInUserScope } from "../../../utils/dataScope";
 import { Brand, Topbar, useToast, useConfirm } from "../../../components/ui";
@@ -191,6 +191,12 @@ export default function AccionDetalle() {
   const confirm = useConfirm();
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
+  const role = authCtx?.role || null;
+
+  // Flag de control: solo perfiles admin (administrativo) y dev pueden ver y
+  // ejecutar las acciones de la descarga (iniciar / finalizar / etc.). El resto
+  // de los perfiles ve el detalle en modo solo lectura.
+  const canControlDescarga = role === "administrativo" || role === "dev";
 
   // Ruta esperada: /recepcion/accion-descarga/:accionId
   const accionId = params?.accionId || null;
@@ -223,8 +229,8 @@ export default function AccionDetalle() {
   const bultos = accion?.cantidadBultos != null ? String(accion.cantidadBultos) : "—";
   const tiempo = accion?.totalTimeTxt || "—";
 
-  const canStart = !!accion && !started && !completed;
-  const canFinish = !!accion && started && !completed;
+  const canStart = canControlDescarga && !!accion && !started && !completed;
+  const canFinish = canControlDescarga && !!accion && started && !completed;
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -345,7 +351,7 @@ export default function AccionDetalle() {
 
     const done = !!completedAtValue;
     if (done) return { label: "Completada", tone: "success" };
-    if (!!accion?.startedAt) return { label: "En proceso", tone: "warning" };
+    if (accion?.startedAt) return { label: "En proceso", tone: "warning" };
     return { label: "Pendiente", tone: "neutral" };
   }, [accion, completedAtValue]);
 
@@ -380,6 +386,7 @@ export default function AccionDetalle() {
   };
 
   const onStartPress = () => {
+    if (!canControlDescarga) return;
     if (started || completed) return;
     setTipoDescarga("A granel");
     setCantidadBultos("");
@@ -387,6 +394,7 @@ export default function AccionDetalle() {
   };
 
   const confirmStart = async () => {
+    if (!canControlDescarga) return;
     try {
       const n = Number(cantidadBultos);
       if (!Number.isFinite(n) || n <= 0) {
@@ -403,6 +411,7 @@ export default function AccionDetalle() {
   };
 
   const confirmFinish = async () => {
+    if (!canControlDescarga) return;
     if (!accion?.id) return;
     const ok = await confirm({
       title: "Finalizar descarga",
@@ -497,36 +506,49 @@ export default function AccionDetalle() {
                   <StatPill icon="⏱" label="Tiempo" value={tiempo} />
                 </div>
 
-                {/* Actions */}
-                <div style={ui.actionsGrid}>
-                  <button
-                    type="button"
-                    onClick={onStartPress}
-                    disabled={!canStart}
-                    style={{ ...ui.actionBtn, ...(canStart ? {} : ui.btnDisabled) }}
-                  >
-                    ▶ Iniciar
-                  </button>
+                {/* Actions — solo perfiles admin y dev controlan la descarga */}
+                {(canControlDescarga || !!accion?.aperturaId) && (
+                  <div style={ui.actionsGrid}>
+                    {canControlDescarga && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={onStartPress}
+                          disabled={!canStart}
+                          style={{ ...ui.actionBtn, ...(canStart ? {} : ui.btnDisabled) }}
+                        >
+                          ▶ Iniciar
+                        </button>
 
-                  <button
-                    type="button"
-                    onClick={confirmFinish}
-                    disabled={!canFinish}
-                    style={{ ...ui.actionBtn, ...ui.primaryBtn, ...(canFinish ? {} : ui.btnDisabled) }}
-                  >
-                    ■ Finalizar
-                  </button>
+                        <button
+                          type="button"
+                          onClick={confirmFinish}
+                          disabled={!canFinish}
+                          style={{ ...ui.actionBtn, ...ui.primaryBtn, ...(canFinish ? {} : ui.btnDisabled) }}
+                        >
+                          ■ Finalizar
+                        </button>
+                      </>
+                    )}
 
-                  {!!accion?.aperturaId && (
-                    <button
-                      type="button"
-                      onClick={() => nav(`/aperturas/${accion.aperturaId}`)} // ajustá ruta si aplica
-                      style={ui.actionBtn}
-                    >
-                      📄 Ver apertura
-                    </button>
-                  )}
-                </div>
+                    {!!accion?.aperturaId && (
+                      <button
+                        type="button"
+                        onClick={() => nav(`/aperturas/${accion.aperturaId}`)} // ajustá ruta si aplica
+                        style={ui.actionBtn}
+                      >
+                        📄 Ver apertura
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {!canControlDescarga && (
+                  <div style={ui.readonlyNote}>
+                    Vista de solo lectura. El control de la descarga (iniciar y finalizar) está
+                    disponible únicamente para perfiles administrativos y dev.
+                  </div>
+                )}
 
                 {!!err && <div style={{ ...ui.sectionSubtitle, marginTop: 10 }}>{err}</div>}
               </div>
@@ -936,6 +958,18 @@ const ui = {
   sectionHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
   sectionTitle: { color: "#0F172A", fontSize: 14, fontWeight: 980 },
   sectionSubtitle: { marginTop: 4, color: "#64748B", fontWeight: 850, fontSize: 13, lineHeight: 1.35 },
+
+  readonlyNote: {
+    marginTop: 12,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #E7E9F2",
+    background: "#FBFCFF",
+    color: "#64748B",
+    fontWeight: 850,
+    fontSize: 12.5,
+    lineHeight: 1.4,
+  },
 
   row: { display: "flex", justifyContent: "space-between", gap: 12, padding: "10px 0" },
   rowClickable: { cursor: "pointer" },

@@ -1,24 +1,78 @@
 // screens/AccionDescarga.jsx
-import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Inbox, Truck } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Calendar,
+  CheckSquare,
+  ChevronRight,
+  Clock,
+  Inbox,
+  Layers,
+  ListChecks,
+  Loader,
+  Lock,
+  Package,
+  ShieldAlert,
+  SlidersHorizontal,
+  Square,
+  Trash2,
+  Truck,
+  User,
+  X,
+} from "lucide-react";
 import {
   Brand,
   Container,
   EmptyState,
   ErrorState,
+  Field,
   GhostButton,
   Main,
+  PrimaryButton,
+  SearchInput,
+  SecondaryButton,
+  Sheet,
   Shell,
   Spinner,
+  StatusPill,
   Topbar,
+  useToast,
 } from "../../../components/ui";
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+  writeBatch,
+} from "firebase/firestore";
+import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { AuthCtx } from "../../../auth/AuthProvider";
-import { db } from "../../../firebase";
+import { auth, db } from "../../../firebase";
 import { filterByUserScope } from "../../../utils/dataScope";
 import imgAccionDescarga from "../../../assets/accionDescarga.png";
-import { ACCENT, SLATE } from "../../../styles/theme";
+import {
+  ACCENT,
+  ACCENT_SOFT,
+  BORDER,
+  BG,
+  DANGER,
+  DANGER_BG,
+  DANGER_BORDER,
+  MUTED,
+  SHADOW_CARD,
+  SHADOW_CARD_HOVER,
+  SHADOW_HERO,
+  SHADOW_SOFT,
+  SLATE,
+  SURFACE,
+  SURFACE_INSET,
+  SURFACE_SOFT,
+  TEXT,
+} from "../../../styles/theme";
 
 /* ===================== Helpers ===================== */
 function toDateSafe(value) {
@@ -39,6 +93,12 @@ function getEstado(item) {
   if (completed) return "Completada";
   if (started) return "En proceso";
   return "Pendiente";
+}
+
+function estadoTone(estado) {
+  if (estado === "Completada") return "ok";
+  if (estado === "En proceso") return "warn";
+  return "neutral";
 }
 
 function parseYMD(ymd) {
@@ -81,12 +141,109 @@ function formatDateTimeSafe(ts) {
   return s;
 }
 
-function pad2(n) {
-  return String(n).padStart(2, "0");
+/* ===================== Estado config ===================== */
+const ESTADOS = [
+  { key: "Todos", label: "Todos", icon: ListChecks },
+  { key: "Pendiente", label: "Pendiente", icon: Clock },
+  { key: "En proceso", label: "En proceso", icon: Loader },
+  { key: "Completada", label: "Completada", icon: ListChecks },
+];
+
+/* ===================== Presentational parts ===================== */
+function MetaItem({ Icon, children, title }) {
+  return (
+    <span style={ui.metaItem} title={title}>
+      {React.createElement(Icon, {
+        size: 13,
+        strokeWidth: 2.2,
+        style: { color: MUTED, flexShrink: 0 },
+      })}
+      <span style={ui.metaTxt}>{children}</span>
+    </span>
+  );
 }
-function dateToYMD(d) {
-  if (!d) return "";
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+function RowCard({ item, hovered, onHover, onOpen, selectable, selected, onToggleSelect }) {
+  const proveedor = item?.proveedorNombre || "(sin proveedor)";
+  const anden = item?.idAnden || "—";
+
+  const creadoPor = item?.creadoPorNombre || "—";
+  const aperturaId = item?.aperturaId || "—";
+  const fecha = formatDateTimeSafe(item?.creadoAt);
+
+  const estado = getEstado(item);
+  const tipo = item?.tipoDescarga || "—";
+  const bultos = item?.cantidadBultos ? String(item.cantidadBultos) : "—";
+  const dur = item?.totalTimeTxt || "—";
+
+  const isHover = hovered === item.id;
+  const handleActivate = () => (selectable ? onToggleSelect(item.id) : onOpen(item.id));
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={selectable ? selected : undefined}
+      onClick={handleActivate}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), handleActivate())}
+      onMouseEnter={() => onHover(item.id)}
+      onMouseLeave={() => onHover(null)}
+      style={{
+        ...ui.rowCard,
+        ...(isHover ? ui.rowCardHover : {}),
+        ...(selectable && selected ? ui.rowCardSelected : {}),
+      }}
+    >
+      {selectable ? (
+        <span style={ui.rowCheck} aria-hidden="true">
+          {selected ? (
+            <CheckSquare size={22} strokeWidth={2.2} color={ACCENT} />
+          ) : (
+            <Square size={22} strokeWidth={2.2} color={MUTED} />
+          )}
+        </span>
+      ) : (
+        <span style={ui.rowAvatar} aria-hidden="true">
+          <Truck size={20} strokeWidth={2.2} color={ACCENT} />
+        </span>
+      )}
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={ui.rowTop}>
+          <div style={ui.rowTitle} title={proveedor}>
+            {proveedor}
+          </div>
+          <StatusPill tone={estadoTone(estado)}>{estado}</StatusPill>
+        </div>
+
+        <div style={ui.rowMetaGrid}>
+          <MetaItem Icon={Layers} title={`Andén ${anden}`}>
+            Andén {anden}
+          </MetaItem>
+          <MetaItem Icon={Package} title={`Tipo: ${tipo} · Bultos: ${bultos}`}>
+            {tipo} · {bultos} bultos
+          </MetaItem>
+          <MetaItem Icon={Clock} title={`Tiempo: ${dur}`}>
+            {dur}
+          </MetaItem>
+          <MetaItem Icon={User} title={`Creado por: ${creadoPor}`}>
+            {creadoPor}
+          </MetaItem>
+          <MetaItem Icon={Calendar} title={`${fecha} · Apertura: ${aperturaId}`}>
+            {fecha}
+          </MetaItem>
+        </div>
+      </div>
+
+      {selectable ? null : (
+        <ChevronRight
+          size={22}
+          strokeWidth={2.4}
+          style={{ color: isHover ? ACCENT : MUTED, flexShrink: 0, transition: "color 120ms ease" }}
+        />
+      )}
+    </div>
+  );
 }
 
 /* ===================== Screen ===================== */
@@ -95,8 +252,22 @@ export default function AccionDescarga() {
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
+  const isDev = authCtx?.role === "dev";
+  const toast = useToast();
 
   const [hovered, setHovered] = useState(null);
+
+  // ── Herramientas dev (limpieza de datos) ──
+  const [devSheetOpen, setDevSheetOpen] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [devDesde, setDevDesde] = useState("");
+  const [devHasta, setDevHasta] = useState("");
+  // Confirmación con contraseña: { ids, label } | null
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [pwd, setPwd] = useState("");
+  const [pwdError, setPwdError] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -111,12 +282,8 @@ export default function AccionDescarga() {
   const [fDesde, setFDesde] = useState(""); // YYYY-MM-DD
   const [fHasta, setFHasta] = useState(""); // YYYY-MM-DD
 
-  // “Sheet” (modal) filtros
+  // Sheet (modal) filtros
   const [filtersOpen, setFiltersOpen] = useState(false);
-
-  // Fecha: input type="date"
-  const desdeRef = useRef(null);
-  const hastaRef = useRef(null);
 
   // realtime
   useEffect(() => {
@@ -161,7 +328,7 @@ export default function AccionDescarga() {
 
   // Conteo por estado (TOTAL)
   const estadoCounts = useMemo(() => {
-    const counts = { Pendiente: 0, "En proceso": 0, Completada: 0 };
+    const counts = { Todos: items.length, Pendiente: 0, "En proceso": 0, Completada: 0 };
     for (const it of items) {
       const est = getEstado(it);
       if (counts[est] != null) counts[est] += 1;
@@ -206,8 +373,9 @@ export default function AccionDescarga() {
     });
   }, [items, qDebounced, fProveedor, fAnden, fEstado, fDesde, fHasta]);
 
+  const advancedActive = [fProveedor, fAnden, fDesde, fHasta].filter(Boolean).length;
   const hasActiveFilters =
-    fEstado !== "Todos" || !!qText || !!fProveedor || !!fAnden || !!fDesde || !!fHasta;
+    fEstado !== "Todos" || !!qText || advancedActive > 0;
 
   const clearAll = () => {
     setQText("");
@@ -219,169 +387,153 @@ export default function AccionDescarga() {
     setFHasta("");
   };
 
-  const toggleEstado = (estado) => {
-    setFEstado((prev) => (prev === estado ? "Todos" : estado));
-  };
-
-  const openFilters = () => setFiltersOpen(true);
-  const closeFilters = () => setFiltersOpen(false);
-
   const onCardOpen = (id) => {
-    // Ajustá esta ruta según tu router
     nav(`/recepcion/accion-descarga/${id}`);
   };
 
-  /* ===================== UI Parts ===================== */
-  const TopStickyHeader = () => (
-    <div style={ui.stickyWrap}>
-      {/* Chips estado */}
-      <div style={ui.chipsRow}>
-        {["Pendiente", "En proceso", "Completada"].map((x) => {
-          const selected = fEstado === x;
-          const n = estadoCounts?.[x] ?? 0;
-
-          return (
-            <button
-              key={x}
-              type="button"
-              onClick={() => toggleEstado(x)}
-              style={{ ...ui.chip, ...(selected ? ui.chipOn : {}) }}
-            >
-              <span style={{ ...ui.chipTxt, ...(selected ? ui.chipTxtOn : {}) }}>
-                {x} ({n})
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Summary bar */}
-      <div style={ui.summaryBar}>
-        <div style={ui.summaryTxt} title="Resumen">
-          {fEstado !== "Todos"
-            ? `Filtro: ${fEstado} · ${filteredItems.length} resultados`
-            : `Mostrando ${filteredItems.length} resultados`}
-        </div>
-
-        {hasActiveFilters ? (
-          <button type="button" style={ui.summaryBtn} onClick={clearAll}>
-            <span style={ui.summaryBtnTxt}>Limpiar</span>
-          </button>
-        ) : (
-          <button type="button" style={ui.summaryBtn} onClick={openFilters}>
-            <span style={ui.summaryBtnTxt}>Filtros</span>
-          </button>
-        )}
-      </div>
-
-      {/* Search */}
-      <div style={ui.searchRow}>
-        <div style={ui.searchIcon}>⌕</div>
-
-        <input
-          value={qText}
-          onChange={(e) => setQText(e.target.value)}
-          placeholder="Buscar proveedor, andén, apertura…"
-          style={ui.searchInput}
-        />
-
-        {qText ? (
-          <button
-            type="button"
-            title="Borrar"
-            style={ui.searchClearBtn}
-            onClick={() => {
-              setQText("");
-              setQDebounced("");
-            }}
-          >
-            ×
-          </button>
-        ) : (
-          <div style={{ width: 34 }} />
-        )}
-      </div>
-    </div>
-  );
-
-  const Empty = () => (
-    <EmptyState
-      center
-      icon={Inbox}
-      title="No hay acciones"
-      description="Probá quitando filtros o revisá más tarde."
-      action={
-        <button type="button" style={ui.emptyBtn} onClick={clearAll}>
-          <span style={ui.emptyBtnTxt}>Limpiar filtros</span>
-        </button>
-      }
-    />
-  );
-
-  const RowCard = ({ item }) => {
-    const proveedor = item?.proveedorNombre || "(sin proveedor)";
-    const anden = item?.idAnden || "—";
-    const titulo = `${proveedor} · Andén ${anden}`;
-
-    const creadoPor = item?.creadoPorNombre || "—";
-    const aperturaId = item?.aperturaId || "—";
-    const fecha = formatDateTimeSafe(item?.creadoAt);
-
-    const estado = getEstado(item);
-    const tipo = item?.tipoDescarga || "—";
-    const bultos = item?.cantidadBultos ? String(item.cantidadBultos) : "—";
-    const dur = item?.totalTimeTxt || "—";
-
-    const pillStyle =
-      estado === "Completada"
-        ? ui.estadoPillOk
-        : estado === "En proceso"
-        ? ui.estadoPillWarn
-        : ui.estadoPillNeutral;
-
-    const isHover = hovered === item.id;
-
-    return (
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onCardOpen(item.id)}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onCardOpen(item.id)}
-        onMouseEnter={() => setHovered(item.id)}
-        onMouseLeave={() => setHovered(null)}
-        style={{
-          ...ui.rowCard,
-          ...(isHover ? ui.rowCardHover : {}),
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={ui.rowTop}>
-            <div style={ui.rowTitle} title={titulo}>
-              {titulo}
-            </div>
-
-            <div style={{ ...ui.estadoPill, ...pillStyle }}>
-              <span style={ui.estadoPillTxt}>{estado}</span>
-            </div>
-          </div>
-
-          <div style={ui.rowDesc} title={`Creado por: ${creadoPor}`}>
-            Creado por: {creadoPor}
-          </div>
-
-          <div style={ui.rowMeta} title={`${fecha} · Apertura: ${aperturaId}`}>
-            {fecha} · Apertura: {aperturaId}
-          </div>
-
-          <div style={ui.rowExtra} title={`Tipo: ${tipo} · Bultos: ${bultos} · Tiempo: ${dur}`}>
-            Tipo: {tipo} · Bultos: {bultos} · Tiempo: {dur}
-          </div>
-        </div>
-
-        <div style={ui.rowChevron}>›</div>
-      </div>
-    );
+  /* ===================== Dev: limpieza de datos ===================== */
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
+
+  const selectAllVisible = () => {
+    setSelectedIds(new Set(filteredItems.map((it) => it.id)));
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const enterSelectionMode = () => {
+    setSelectionMode(true);
+    setDevSheetOpen(false);
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    clearSelection();
+  };
+
+  // Acciones que caen dentro del rango de fecha configurado en el panel dev.
+  const dateRangeMatches = useMemo(() => {
+    const desde = parseYMD(devDesde);
+    const hasta = endOfDay(parseYMD(devHasta));
+    if (!desde && !hasta) return [];
+    return items.filter((it) => {
+      const d = toDateSafe(it?.creadoAt);
+      if (!d) return false;
+      if (desde && d < desde) return false;
+      if (hasta && d > hasta) return false;
+      return true;
+    });
+  }, [items, devDesde, devHasta]);
+
+  // Abre el modal de confirmación con contraseña para una lista de ids.
+  const requestDelete = (ids, label) => {
+    if (!ids || ids.length === 0) return;
+    setPwd("");
+    setPwdError("");
+    setPendingDelete({ ids, label });
+  };
+
+  const cancelDelete = () => {
+    if (deleting) return;
+    setPendingDelete(null);
+    setPwd("");
+    setPwdError("");
+  };
+
+  // Borra en lotes (máx. 400 por batch para no exceder el límite de Firestore).
+  const performDelete = async (ids) => {
+    const CHUNK = 400;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
+      const batch = writeBatch(db);
+      slice.forEach((id) => batch.delete(doc(db, "accion_descarga", id)));
+      await batch.commit();
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    if (!pwd) {
+      setPwdError("Ingresá tu contraseña.");
+      return;
+    }
+    const currentUser = auth.currentUser;
+    const email = currentUser?.email || authCtx?.user?.email;
+    if (!currentUser || !email) {
+      setPwdError("No se pudo verificar la sesión. Volvé a iniciar sesión.");
+      return;
+    }
+
+    setDeleting(true);
+    setPwdError("");
+    try {
+      // Reautenticación estricta con la contraseña del propio usuario dev.
+      const cred = EmailAuthProvider.credential(email, pwd);
+      await reauthenticateWithCredential(currentUser, cred);
+    } catch (e) {
+      console.warn("reauth error:", e?.code || e);
+      const code = e?.code || "";
+      if (
+        code === "auth/wrong-password" ||
+        code === "auth/invalid-credential" ||
+        code === "auth/invalid-login-credentials"
+      ) {
+        setPwdError("Contraseña incorrecta.");
+      } else if (code === "auth/too-many-requests") {
+        setPwdError("Demasiados intentos. Esperá unos minutos e intentá de nuevo.");
+      } else {
+        setPwdError("No se pudo verificar la contraseña.");
+      }
+      setDeleting(false);
+      return;
+    }
+
+    const ids = pendingDelete.ids;
+    try {
+      await performDelete(ids);
+      toast.success(
+        `${ids.length} ${ids.length === 1 ? "acción eliminada" : "acciones eliminadas"} correctamente.`
+      );
+      setPendingDelete(null);
+      setPwd("");
+      exitSelectionMode();
+      setDevDesde("");
+      setDevHasta("");
+      setDevSheetOpen(false);
+    } catch (e) {
+      console.error("delete accion_descarga error:", e);
+      const permission = e?.code === "permission-denied";
+      toast.error(
+        permission
+          ? "No tenés permisos para eliminar estas acciones."
+          : "No se pudieron eliminar algunas acciones."
+      );
+      setPwdError(
+        permission ? "Permiso denegado por las reglas de seguridad." : "Ocurrió un error al eliminar."
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  /* ===================== UI Parts ===================== */
+
+  // Píldoras de filtros activos (removibles individualmente)
+  const activeChips = [];
+  if (fProveedor)
+    activeChips.push({ key: "prov", label: `Proveedor: ${fProveedor}`, clear: () => setFProveedor("") });
+  if (fAnden)
+    activeChips.push({ key: "anden", label: `Andén ${fAnden}`, clear: () => setFAnden("") });
+  if (fDesde)
+    activeChips.push({ key: "desde", label: `Desde ${fDesde}`, clear: () => setFDesde("") });
+  if (fHasta)
+    activeChips.push({ key: "hasta", label: `Hasta ${fHasta}`, clear: () => setFHasta("") });
 
   /* ===================== Render ===================== */
   return (
@@ -394,6 +546,15 @@ export default function AccionDescarga() {
           onClick={() => nav("/recepcion")}
         />
         <Topbar.Right>
+          {isDev ? (
+            <GhostButton
+              icon={ShieldAlert}
+              onClick={() => setDevSheetOpen(true)}
+              style={{ borderColor: DANGER_BORDER, color: DANGER }}
+            >
+              Opciones dev
+            </GhostButton>
+          ) : null}
           <GhostButton icon={ArrowLeft} onClick={() => nav("/recepcion")}>
             Recepción
           </GhostButton>
@@ -403,19 +564,17 @@ export default function AccionDescarga() {
       <Main center>
         <Container style={ui.container}>
           {/* Mini-hero */}
-          <div style={ui.heroMini}>
-            <div style={ui.heroMedia} aria-hidden="true">
-              <div style={{ ...ui.heroMediaBg, backgroundImage: `url(${imgAccionDescarga})` }} />
-              <div style={ui.heroMediaOverlay} />
-              <div style={ui.heroMediaText}>
-                <div style={ui.kickerRow}>
-                  <span style={ui.kickerDot} />
-                  <div style={ui.kicker}>Recepción</div>
-                  <span style={ui.badge}>Acciones</span>
-                </div>
-                <div style={ui.titleMini}>Acciones de Descarga</div>
-                <div style={ui.subtitleMini}>Buscá, filtrá y abrí acciones en tiempo real.</div>
+          <div style={ui.heroMedia}>
+            <div style={{ ...ui.heroMediaBg, backgroundImage: `url(${imgAccionDescarga})` }} />
+            <div style={ui.heroMediaOverlay} />
+            <div style={ui.heroMediaText}>
+              <div style={ui.kickerRow}>
+                <span style={ui.kickerDot} />
+                <div style={ui.kicker}>Recepción</div>
+                <span style={ui.badge}>Acciones</span>
               </div>
+              <div style={ui.titleMini}>Acciones de Descarga</div>
+              <div style={ui.subtitleMini}>Buscá, filtrá y abrí acciones en tiempo real.</div>
             </div>
           </div>
 
@@ -427,14 +586,148 @@ export default function AccionDescarga() {
             </div>
           ) : (
             <div style={ui.listWrap}>
-              <TopStickyHeader />
+              <div style={ui.stickyWrap}>
+                {/* Barra de selección (modo dev) */}
+                {selectionMode ? (
+                  <div style={ui.selectionBar}>
+                    <span style={ui.selectionCount}>
+                      {selectedIds.size} de {filteredItems.length} seleccionadas
+                    </span>
+                    <div style={ui.selectionActions}>
+                      <button type="button" style={ui.selPlainBtn} onClick={selectAllVisible}>
+                        Seleccionar todo
+                      </button>
+                      <button
+                        type="button"
+                        style={ui.selPlainBtn}
+                        onClick={clearSelection}
+                        disabled={selectedIds.size === 0}
+                      >
+                        Quitar selección
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          ...ui.selDeleteBtn,
+                          ...(selectedIds.size === 0 ? ui.selDeleteBtnOff : {}),
+                        }}
+                        disabled={selectedIds.size === 0}
+                        onClick={() =>
+                          requestDelete(
+                            Array.from(selectedIds),
+                            `${selectedIds.size} acción(es) seleccionada(s)`
+                          )
+                        }
+                      >
+                        <Trash2 size={15} strokeWidth={2.4} />
+                        Eliminar ({selectedIds.size})
+                      </button>
+                      <button type="button" style={ui.selExitBtn} onClick={exitSelectionMode}>
+                        Salir
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Stat tiles (filtro por estado) */}
+                <div style={ui.statsRow}>
+                  {ESTADOS.map((e) => {
+                    const selected = fEstado === e.key;
+                    const n = estadoCounts?.[e.key] ?? 0;
+                    const Icon = e.icon;
+                    return (
+                      <button
+                        key={e.key}
+                        type="button"
+                        onClick={() => setFEstado(e.key)}
+                        style={{ ...ui.statTile, ...(selected ? ui.statTileOn : {}) }}
+                      >
+                        <span style={{ ...ui.statIcon, ...(selected ? ui.statIconOn : {}) }}>
+                          <Icon size={16} strokeWidth={2.4} />
+                        </span>
+                        <span style={ui.statText}>
+                          <span style={{ ...ui.statValue, ...(selected ? ui.statValueOn : {}) }}>
+                            {n}
+                          </span>
+                          <span style={{ ...ui.statLabel, ...(selected ? ui.statLabelOn : {}) }}>
+                            {e.label}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Toolbar (search + filtros) */}
+                <div style={ui.toolbar}>
+                  <div style={ui.searchWrap}>
+                    <SearchInput
+                      value={qText}
+                      onChange={setQText}
+                      placeholder="Buscar proveedor, andén o apertura…"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFiltersOpen(true)}
+                    style={{ ...ui.filterBtn, ...(advancedActive > 0 ? ui.filterBtnOn : {}) }}
+                    title="Filtros avanzados"
+                  >
+                    <SlidersHorizontal size={16} strokeWidth={2.4} />
+                    <span style={ui.filterBtnTxt}>Filtros</span>
+                    {advancedActive > 0 ? (
+                      <span style={ui.filterBadge}>{advancedActive}</span>
+                    ) : null}
+                  </button>
+                </div>
+
+                {/* Filtros activos */}
+                {activeChips.length === 0 && fEstado === "Todos" && !qText ? null : (
+                  <div style={ui.activeRow}>
+                    <span style={ui.resultCount}>
+                      {filteredItems.length}{" "}
+                      {filteredItems.length === 1 ? "resultado" : "resultados"}
+                    </span>
+                    {activeChips.map((c) => (
+                      <button key={c.key} type="button" style={ui.activeChip} onClick={c.clear}>
+                        <span style={ui.activeChipTxt}>{c.label}</span>
+                        <X size={13} strokeWidth={2.6} />
+                      </button>
+                    ))}
+                    {hasActiveFilters ? (
+                      <button type="button" style={ui.clearAllBtn} onClick={clearAll}>
+                        Limpiar todo
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              </div>
 
               {filteredItems.length === 0 ? (
-                <Empty />
+                <EmptyState
+                  center
+                  icon={Inbox}
+                  title="No hay acciones"
+                  description="Probá quitando filtros o revisá más tarde."
+                  action={
+                    hasActiveFilters ? (
+                      <SecondaryButton onClick={clearAll}>Limpiar filtros</SecondaryButton>
+                    ) : null
+                  }
+                />
               ) : (
-                <div style={{ display: "grid", gap: 10 }}>
+                <div style={ui.list}>
                   {filteredItems.map((it) => (
-                    <RowCard key={it.id} item={it} />
+                    <RowCard
+                      key={it.id}
+                      item={it}
+                      hovered={hovered}
+                      onHover={setHovered}
+                      onOpen={onCardOpen}
+                      selectable={selectionMode}
+                      selected={selectedIds.has(it.id)}
+                      onToggleSelect={toggleSelect}
+                    />
                   ))}
                 </div>
               )}
@@ -447,126 +740,197 @@ export default function AccionDescarga() {
         </Container>
       </Main>
 
-      {/* ===== Modal filtros ===== */}
-      {filtersOpen && (
-        <div style={ui.modalRoot} role="dialog" aria-modal="true">
-          <button type="button" style={ui.modalBackdrop} onClick={closeFilters} aria-label="Cerrar" />
+      {/* ===== Sheet filtros ===== */}
+      <Sheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtros avanzados">
+        <Sheet.Body>
+          <Field label="Proveedor">
+            <Field.Input
+              value={fProveedor}
+              onChange={(e) => setFProveedor(e.target.value)}
+              placeholder="Ej: Rimax"
+            />
+          </Field>
 
-          <div style={ui.sheet}>
-            <div style={ui.sheetHeader}>
-              <div style={ui.sheetTitle}>Filtros</div>
-              <button type="button" onClick={closeFilters} style={ui.sheetCloseBtn}>
-                Cerrar
+          <Field label="Andén">
+            <Field.Input
+              value={fAnden}
+              onChange={(e) => setFAnden(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="Ej: 3"
+              inputMode="numeric"
+            />
+          </Field>
+
+          <div style={ui.dateRow}>
+            <Field label="Desde">
+              <Field.Input type="date" value={fDesde} onChange={(e) => setFDesde(e.target.value)} />
+            </Field>
+            <Field label="Hasta">
+              <Field.Input type="date" value={fHasta} onChange={(e) => setFHasta(e.target.value)} />
+            </Field>
+          </div>
+
+          <Sheet.Hint>
+            Mostrando {filteredItems.length} de {items.length}
+          </Sheet.Hint>
+        </Sheet.Body>
+
+        <Sheet.Actions>
+          <SecondaryButton onClick={clearAll}>Limpiar</SecondaryButton>
+          <PrimaryButton onClick={() => setFiltersOpen(false)}>Aplicar</PrimaryButton>
+        </Sheet.Actions>
+      </Sheet>
+
+      {/* ===== Sheet opciones DEV (limpieza de datos) ===== */}
+      {isDev ? (
+        <Sheet
+          open={devSheetOpen}
+          onClose={() => setDevSheetOpen(false)}
+          title="Opciones de desarrollo"
+        >
+          <Sheet.Body>
+            <div style={ui.devWarn}>
+              <ShieldAlert size={18} strokeWidth={2.3} style={{ flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <div style={ui.devWarnTitle}>Función exclusiva para usuarios dev</div>
+                <div style={ui.devWarnTxt}>
+                  Estas herramientas eliminan acciones de descarga de forma permanente. Antes de
+                  borrar se pedirá tu contraseña para confirmar.
+                </div>
+              </div>
+            </div>
+
+            {/* Opción 1: modo selección */}
+            <div style={ui.devOption}>
+              <div style={ui.devOptionHead}>
+                <CheckSquare size={16} strokeWidth={2.3} color={ACCENT} />
+                <span style={ui.devOptionTitle}>Eliminar marcando acciones</span>
+              </div>
+              <div style={ui.devOptionTxt}>
+                Activá el modo selección para marcar acciones con casillas y usar “Seleccionar todo”.
+                Podés combinarlo con los filtros y la búsqueda para acotar el listado.
+              </div>
+              <SecondaryButton icon={CheckSquare} onClick={enterSelectionMode}>
+                {selectionMode ? "Modo selección activo" : "Activar modo selección"}
+              </SecondaryButton>
+            </div>
+
+            {/* Opción 2: eliminar por rango de fecha */}
+            <div style={ui.devOption}>
+              <div style={ui.devOptionHead}>
+                <Calendar size={16} strokeWidth={2.3} color={ACCENT} />
+                <span style={ui.devOptionTitle}>Eliminar por rango de fecha</span>
+              </div>
+              <div style={ui.devOptionTxt}>
+                Se eliminarán las acciones cuya fecha de creación esté dentro del rango.
+              </div>
+              <div style={ui.dateRow}>
+                <Field label="Desde">
+                  <Field.Input type="date" value={devDesde} onChange={(e) => setDevDesde(e.target.value)} />
+                </Field>
+                <Field label="Hasta">
+                  <Field.Input type="date" value={devHasta} onChange={(e) => setDevHasta(e.target.value)} />
+                </Field>
+              </div>
+              <div style={ui.devMatchHint}>
+                {devDesde || devHasta
+                  ? `${dateRangeMatches.length} acción(es) coinciden con el rango.`
+                  : "Seleccioná al menos una fecha."}
+              </div>
+              <button
+                type="button"
+                style={{
+                  ...ui.devDeleteBtn,
+                  ...(dateRangeMatches.length === 0 ? ui.devDeleteBtnOff : {}),
+                }}
+                disabled={dateRangeMatches.length === 0}
+                onClick={() =>
+                  requestDelete(
+                    dateRangeMatches.map((it) => it.id),
+                    `${dateRangeMatches.length} acción(es) en el rango ${devDesde || "…"} → ${devHasta || "…"}`
+                  )
+                }
+              >
+                <Trash2 size={16} strokeWidth={2.4} />
+                Eliminar {dateRangeMatches.length} acción(es)
               </button>
             </div>
+          </Sheet.Body>
+        </Sheet>
+      ) : null}
 
-            <div style={ui.sheetGrid}>
-              <div style={ui.field}>
-                <div style={ui.label}>Proveedor</div>
-                <input
-                  value={fProveedor}
-                  onChange={(e) => setFProveedor(e.target.value)}
-                  placeholder="Ej: Rimax"
-                  style={ui.input}
-                />
-              </div>
-
-              <div style={ui.field}>
-                <div style={ui.label}>Andén</div>
-                <input
-                  value={fAnden}
-                  onChange={(e) => setFAnden(e.target.value.replace(/[^0-9]/g, ""))}
-                  placeholder="Ej: 3"
-                  inputMode="numeric"
-                  style={ui.input}
-                />
-              </div>
-
-              <div style={ui.dateRow}>
-                <div style={ui.field}>
-                  <div style={ui.label}>Desde</div>
-                  <div style={ui.dateBtnWrap}>
-                    <input
-                      ref={desdeRef}
-                      type="date"
-                      value={fDesde}
-                      onChange={(e) => setFDesde(e.target.value)}
-                      style={ui.dateInput}
-                    />
-                    <button
-                      type="button"
-                      style={ui.dateBtn}
-                      onClick={() => desdeRef.current?.showPicker?.() || desdeRef.current?.click?.()}
-                      title="Seleccionar fecha"
-                    >
-                      {fDesde || "Seleccionar"}
-                    </button>
-                  </div>
+      {/* ===== Modal confirmación con contraseña (DEV) ===== */}
+      {isDev ? (
+        <Sheet
+          open={!!pendingDelete}
+          onClose={cancelDelete}
+          placement="center"
+          maxWidth={460}
+          title="Confirmar eliminación"
+        >
+          <Sheet.Body>
+            <div style={ui.dangerBanner}>
+              <AlertTriangle size={18} strokeWidth={2.4} style={{ flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <div style={ui.devWarnTitle}>Acción exclusiva para usuarios dev</div>
+                <div style={ui.devWarnTxt}>
+                  Vas a eliminar <strong>{pendingDelete?.label}</strong> de forma permanente. Esta
+                  operación no se puede deshacer.
                 </div>
-
-                <div style={ui.field}>
-                  <div style={ui.label}>Hasta</div>
-                  <div style={ui.dateBtnWrap}>
-                    <input
-                      ref={hastaRef}
-                      type="date"
-                      value={fHasta}
-                      onChange={(e) => setFHasta(e.target.value)}
-                      style={ui.dateInput}
-                    />
-                    <button
-                      type="button"
-                      style={ui.dateBtn}
-                      onClick={() => hastaRef.current?.showPicker?.() || hastaRef.current?.click?.()}
-                      title="Seleccionar fecha"
-                    >
-                      {fHasta || "Seleccionar"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div style={ui.sheetActions}>
-                <button type="button" style={ui.secondaryBtn} onClick={clearAll}>
-                  Limpiar
-                </button>
-
-                <button
-                  type="button"
-                  style={ui.primaryBtn}
-                  onClick={() => {
-                    closeFilters();
-                  }}
-                >
-                  Aplicar
-                </button>
-              </div>
-
-              <div style={ui.sheetHint}>
-                Mostrando {filteredItems.length} de {items.length}
               </div>
             </div>
-          </div>
-        </div>
-      )}
+
+            <Field label="Contraseña de tu usuario" error={pwdError || undefined}>
+              <Field.Input
+                type="password"
+                value={pwd}
+                autoComplete="current-password"
+                placeholder="Ingresá tu contraseña"
+                onChange={(e) => {
+                  setPwd(e.target.value);
+                  if (pwdError) setPwdError("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !deleting) confirmDelete();
+                }}
+              />
+            </Field>
+          </Sheet.Body>
+
+          <Sheet.Actions>
+            <SecondaryButton onClick={cancelDelete} disabled={deleting}>
+              Cancelar
+            </SecondaryButton>
+            <button
+              type="button"
+              style={{ ...ui.confirmDeleteBtn, ...(deleting ? ui.devDeleteBtnOff : {}) }}
+              onClick={confirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <Loader size={16} strokeWidth={2.4} style={{ animation: "spin 0.9s linear infinite" }} />
+              ) : (
+                <Lock size={16} strokeWidth={2.4} />
+              )}
+              {deleting ? "Eliminando…" : "Confirmar y eliminar"}
+            </button>
+          </Sheet.Actions>
+        </Sheet>
+      ) : null}
     </Shell>
   );
 }
 
 /* ===================== Styles (corporativo) ===================== */
 const ui = {
-  container: {
-    gap: 14,
-  },
+  container: { gap: 16 },
 
   /* Mini hero */
-  heroMini: { display: "grid" },
   heroMedia: {
     position: "relative",
     borderRadius: 20,
     overflow: "hidden",
-    border: "1px solid #E7E9F2",
-    boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
+    border: `1px solid ${BORDER}`,
+    boxShadow: SHADOW_HERO,
     minHeight: 150,
   },
   heroMediaBg: { position: "absolute", inset: 0, backgroundSize: "cover", backgroundPosition: "center" },
@@ -575,13 +939,7 @@ const ui = {
     inset: 0,
     background: "linear-gradient(180deg, rgba(15,23,42,0.10) 0%, rgba(15,23,42,0.70) 100%)",
   },
-  heroMediaText: {
-    position: "relative",
-    padding: 16,
-    display: "grid",
-    gap: 8,
-    color: "#fff",
-  },
+  heroMediaText: { position: "relative", padding: 16, display: "grid", gap: 8, color: "#fff" },
 
   kickerRow: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
   kickerDot: {
@@ -589,7 +947,7 @@ const ui = {
     height: 10,
     borderRadius: 999,
     background: ACCENT,
-    boxShadow: "0 0 0 4px rgba(8,159,138,0.14)",
+    boxShadow: `0 0 0 4px ${ACCENT_SOFT}`,
   },
   kicker: { fontSize: 12, fontWeight: 950, letterSpacing: 0.6, textTransform: "uppercase", color: "#E9FFFB" },
   badge: {
@@ -602,20 +960,10 @@ const ui = {
     color: "#fff",
     backdropFilter: "blur(6px)",
   },
-
   titleMini: { fontSize: 22, fontWeight: 980, letterSpacing: -0.2 },
   subtitleMini: { color: "rgba(255,255,255,0.84)", fontWeight: 850, lineHeight: 1.35 },
 
   center: { minHeight: 320, display: "grid", placeItems: "center", gap: 10 },
-  spinner: {
-    width: 30,
-    height: 30,
-    borderRadius: 999,
-    border: "3px solid rgba(15,23,42,0.12)",
-    borderTopColor: ACCENT,
-    animation: "spin 0.9s linear infinite",
-  },
-  loadingText: { color: "#64748B", fontWeight: 850 },
 
   listWrap: { display: "grid", gap: 12 },
 
@@ -624,99 +972,167 @@ const ui = {
     position: "sticky",
     top: 0,
     zIndex: 3,
-    background: "#F6F7FB",
+    background: BG,
     paddingBottom: 12,
+    display: "grid",
+    gap: 12,
   },
 
-  chipsRow: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 },
-
-  chip: {
-    borderRadius: 999,
-    border: "1px solid #E7E9F2",
-    background: "#fff",
-    padding: "8px 10px",
-    cursor: "pointer",
-    boxShadow: "0 10px 24px rgba(15,23,42,0.04)",
+  /* Stat tiles (filtro por estado) */
+  statsRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: 10,
   },
-  chipOn: { background: "#0F172A", borderColor: "#0F172A" },
-  chipTxt: { fontWeight: 950, fontSize: 12, color: "#0F172A" },
-  chipTxtOn: { color: "#fff" },
-
-  summaryBar: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    border: "1px solid #E7E9F2",
-    padding: 12,
+  statTile: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    marginBottom: 10,
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
-  },
-  summaryTxt: { flex: 1, color: "#64748B", fontWeight: 850, overflow: "hidden", textOverflow: "ellipsis" },
-
-  summaryBtn: {
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid #E7E9F2",
-    backgroundColor: "#F2F4FB",
+    padding: "12px 14px",
+    borderRadius: 16,
+    border: `1px solid ${BORDER}`,
+    background: SURFACE,
+    boxShadow: SHADOW_SOFT,
     cursor: "pointer",
+    textAlign: "left",
+    fontFamily: "inherit",
+    transition: "border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease",
   },
-  summaryBtnTxt: { fontWeight: 950, color: "#0F172A", fontSize: 12 },
+  statTileOn: {
+    borderColor: "rgba(8,159,138,0.45)",
+    boxShadow: `0 12px 28px rgba(8,159,138,0.16)`,
+    transform: "translateY(-1px)",
+  },
+  statIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    display: "grid",
+    placeItems: "center",
+    background: SURFACE_INSET,
+    border: `1px solid ${BORDER}`,
+    color: SLATE,
+    flexShrink: 0,
+  },
+  statIconOn: {
+    background: ACCENT_SOFT,
+    borderColor: "rgba(8,159,138,0.30)",
+    color: ACCENT,
+  },
+  statText: { display: "grid", lineHeight: 1.1, minWidth: 0 },
+  statValue: { fontSize: 22, fontWeight: 980, color: TEXT },
+  statValueOn: { color: ACCENT },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: 900,
+    color: SLATE,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  statLabelOn: { color: ACCENT },
 
-  searchRow: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    border: "1px solid #E7E9F2",
-    padding: "10px 10px",
-    display: "flex",
+  /* Toolbar (search + filtros) */
+  toolbar: { display: "flex", alignItems: "stretch", gap: 10 },
+  searchWrap: { flex: 1, minWidth: 0 },
+  filterBtn: {
+    display: "inline-flex",
     alignItems: "center",
     gap: 8,
-    boxShadow: "0 10px 24px rgba(15,23,42,0.05)",
-  },
-  searchIcon: { width: 22, textAlign: "center", color: "#94A3B8", fontWeight: 950 },
-  searchInput: {
-    flex: 1,
-    border: "none",
-    outline: "none",
-    fontWeight: 850,
-    color: "#0F172A",
-    background: "transparent",
-  },
-  searchClearBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    border: "1px solid #E7E9F2",
-    background: "#fff",
+    padding: "0 16px",
+    borderRadius: 14,
+    border: `1px solid ${BORDER}`,
+    background: SURFACE,
+    boxShadow: SHADOW_SOFT,
     cursor: "pointer",
+    fontFamily: "inherit",
+    color: TEXT,
     fontWeight: 950,
-    color: "#64748B",
+    whiteSpace: "nowrap",
+  },
+  filterBtnOn: { borderColor: "rgba(8,159,138,0.45)", color: ACCENT },
+  filterBtnTxt: { fontSize: 13, fontWeight: 950 },
+  filterBadge: {
+    minWidth: 20,
+    height: 20,
+    padding: "0 6px",
+    borderRadius: 999,
+    background: ACCENT,
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: 950,
+    display: "grid",
+    placeItems: "center",
+  },
+
+  /* Active filters */
+  activeRow: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 },
+  resultCount: { fontSize: 12, fontWeight: 900, color: SLATE, marginRight: 2 },
+  activeChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: `1px solid ${BORDER}`,
+    background: SURFACE_INSET,
+    color: TEXT,
+    fontWeight: 900,
+    fontSize: 12,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  activeChipTxt: { maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  clearAllBtn: {
+    marginLeft: "auto",
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: "none",
+    background: "transparent",
+    color: ACCENT,
+    fontWeight: 950,
+    fontSize: 12,
+    cursor: "pointer",
+    fontFamily: "inherit",
   },
 
   /* Cards list */
+  list: { display: "grid", gap: 10 },
   rowCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: SURFACE,
     borderRadius: 16,
     padding: 14,
-    border: "1px solid #E7E9F2",
+    border: `1px solid ${BORDER}`,
     display: "flex",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
     minHeight: 92,
-    boxShadow: "0 12px 26px rgba(15, 23, 42, 0.06)",
+    boxShadow: SHADOW_CARD,
     cursor: "pointer",
     userSelect: "none",
-    transition: "transform 120ms ease, box-shadow 120ms ease",
+    transition: "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease",
   },
   rowCardHover: {
     transform: "translateY(-2px)",
-    boxShadow: "0 16px 36px rgba(15, 23, 42, 0.12)",
+    boxShadow: SHADOW_CARD_HOVER,
+    borderColor: "rgba(8,159,138,0.30)",
+  },
+  rowAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    background: ACCENT_SOFT,
+    border: "1px solid rgba(8,159,138,0.20)",
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
   },
 
   rowTop: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 },
   rowTitle: {
-    color: "#0F172A",
+    color: TEXT,
     fontSize: 15,
     fontWeight: 980,
     flex: 1,
@@ -724,131 +1140,159 @@ const ui = {
     whiteSpace: "nowrap",
     textOverflow: "ellipsis",
   },
-  rowDesc: { color: "#64748B", marginTop: 4, fontSize: 12, fontWeight: 850, overflow: "hidden", textOverflow: "ellipsis" },
-  rowMeta: { color: "#94A3B8", marginTop: 6, fontSize: 12, fontWeight: 850 },
-  rowExtra: { color: "#64748B", marginTop: 6, fontSize: 12, fontWeight: 900 },
 
-  rowChevron: { fontSize: 26, fontWeight: 980, color: "#94A3B8", paddingLeft: 6 },
-
-  estadoPill: { padding: "6px 10px", borderRadius: 999, border: "1px solid #E7E9F2", background: "#F2F4FB" },
-  estadoPillNeutral: { backgroundColor: "#F2F4FB", borderColor: "#E7E9F2" },
-  estadoPillWarn: { backgroundColor: "#FFF4DF", borderColor: "#FFE1A8" },
-  estadoPillOk: { backgroundColor: "#EAF7EE", borderColor: "#C6EAD2" },
-  estadoPillTxt: { fontSize: 12, fontWeight: 950, color: "#334155" },
-
-  /* Empty */
-  emptyWrap: {
-    padding: 16,
-    borderRadius: 16,
-    border: "1px solid #E7E9F2",
-    backgroundColor: "#FBFCFF",
-    boxShadow: "0 12px 26px rgba(15, 23, 42, 0.06)",
+  rowMetaGrid: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "6px 14px",
+    marginTop: 8,
   },
-  emptyTitle: { color: "#0F172A", fontWeight: 980, fontSize: 14 },
-  emptyText: { color: "#64748B", marginTop: 6, fontWeight: 850, fontSize: 13, lineHeight: 1.35 },
-  emptyBtn: {
-    marginTop: 12,
+  metaItem: { display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0 },
+  metaTxt: {
+    color: SLATE,
+    fontSize: 12,
+    fontWeight: 850,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: 220,
+  },
+
+  listBottomHint: { color: MUTED, fontWeight: 850, fontSize: 12, paddingTop: 4, paddingBottom: 10, textAlign: "center" },
+
+  /* Sheet */
+  dateRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
+
+  /* Selección (dev) */
+  rowCheck: {
+    width: 44,
+    height: 44,
     borderRadius: 14,
-    padding: "12px 12px",
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+  },
+  rowCardSelected: {
+    borderColor: "rgba(8,159,138,0.45)",
+    boxShadow: `0 0 0 2px ${ACCENT_SOFT}, ${SHADOW_CARD}`,
+  },
+  selectionBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 10,
+    padding: "12px 14px",
+    borderRadius: 16,
+    border: `1px solid ${DANGER_BORDER}`,
+    background: DANGER_BG,
+    boxShadow: SHADOW_SOFT,
+  },
+  selectionCount: { fontWeight: 950, fontSize: 13, color: TEXT },
+  selectionActions: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 },
+  selPlainBtn: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: `1px solid ${BORDER}`,
+    background: SURFACE,
+    color: TEXT,
+    fontWeight: 900,
+    fontSize: 12,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  selDeleteBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 14px",
+    borderRadius: 999,
+    border: `1px solid ${DANGER}`,
+    background: DANGER,
+    color: "#fff",
+    fontWeight: 950,
+    fontSize: 12,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  selDeleteBtnOff: { opacity: 0.5, cursor: "not-allowed" },
+  selExitBtn: {
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "none",
+    background: "transparent",
+    color: SLATE,
+    fontWeight: 950,
+    fontSize: 12,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+
+  /* Panel dev */
+  devWarn: {
+    display: "flex",
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    border: `1px solid ${DANGER_BORDER}`,
+    background: DANGER_BG,
+    color: DANGER,
+  },
+  devWarnTitle: { fontWeight: 950, fontSize: 13, color: DANGER },
+  devWarnTxt: { fontWeight: 800, fontSize: 12.5, color: "#7F1D1D", lineHeight: 1.4, marginTop: 2 },
+
+  devOption: {
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 16,
+    border: `1px solid ${BORDER}`,
+    background: SURFACE_SOFT,
+  },
+  devOptionHead: { display: "flex", alignItems: "center", gap: 8 },
+  devOptionTitle: { fontWeight: 950, fontSize: 14, color: TEXT },
+  devOptionTxt: { fontWeight: 800, fontSize: 12.5, color: SLATE, lineHeight: 1.4 },
+  devMatchHint: { fontWeight: 900, fontSize: 12, color: SLATE },
+  devDeleteBtn: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    border: "1px solid #E7E9F2",
-    backgroundColor: "#ffffff",
-    cursor: "pointer",
-    fontWeight: 950,
-  },
-  emptyBtnTxt: { fontWeight: 950, color: "#0F172A" },
-
-  listBottomHint: { color: "#94A3B8", fontWeight: 850, fontSize: 12, paddingTop: 4, paddingBottom: 10 },
-
-  /* Modal / sheet */
-  modalRoot: { position: "fixed", inset: 0, zIndex: 50, display: "grid", placeItems: "end center" },
-  modalBackdrop: { position: "fixed", inset: 0, background: "rgba(15,23,42,0.35)", border: "none" },
-
-  sheet: {
-    width: "min(720px, 100%)",
-    background: "#fff",
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    border: "1px solid #E7E9F2",
-    boxShadow: "0 -18px 60px rgba(15,23,42,0.22)",
-    padding: 16,
-    margin: 12,
-  },
-
-  sheetHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 },
-  sheetTitle: { fontSize: 16, fontWeight: 980, color: "#0F172A" },
-  sheetCloseBtn: {
-    padding: "8px 12px",
-    borderRadius: 999,
-    border: "1px solid #E7E9F2",
-    backgroundColor: "#F2F4FB",
-    cursor: "pointer",
-    fontWeight: 950,
-    color: "#0F172A",
-  },
-
-  sheetGrid: { display: "grid", gap: 12 },
-
-  field: { display: "grid", gap: 6 },
-  label: { color: "#64748B", fontWeight: 950, fontSize: 12 },
-  input: {
+    gap: 8,
+    padding: "12px 14px",
     borderRadius: 14,
-    border: "1px solid #E7E9F2",
-    background: "#FBFCFF",
-    padding: "12px 12px",
-    outline: "none",
-    fontWeight: 850,
-    color: "#0F172A",
-  },
-
-  dateRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
-
-  dateBtnWrap: { position: "relative" },
-  dateInput: {
-    position: "absolute",
-    inset: 0,
-    opacity: 0,
-    pointerEvents: "none",
-  },
-  dateBtn: {
-    width: "100%",
-    borderRadius: 14,
-    border: "1px solid #E7E9F2",
-    background: "#FBFCFF",
-    padding: "12px 12px",
-    cursor: "pointer",
-    fontWeight: 900,
-    color: "#0F172A",
-    textAlign: "left",
-  },
-
-  sheetActions: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 6 },
-
-  secondaryBtn: {
-    borderRadius: 14,
-    padding: "12px 12px",
-    border: "1px solid #E7E9F2",
-    backgroundColor: "#F2F4FB",
-    cursor: "pointer",
-    fontWeight: 980,
-    color: "#0F172A",
-  },
-
-  primaryBtn: {
-    borderRadius: 14,
-    padding: "12px 12px",
-    border: "1px solid rgba(8,159,138,0.35)",
-    backgroundColor: ACCENT,
-    cursor: "pointer",
-    fontWeight: 980,
+    border: `1px solid ${DANGER}`,
+    background: DANGER,
     color: "#fff",
+    fontWeight: 950,
+    fontSize: 13,
+    cursor: "pointer",
+    fontFamily: "inherit",
   },
+  devDeleteBtnOff: { opacity: 0.5, cursor: "not-allowed" },
 
-  sheetHint: { marginTop: 10, color: "#64748B", fontWeight: 850, fontSize: 12 },
-
-  /* NOTE: animación spinner (CSS) */
-  // Si usás CSS global, podés mover esto. Acá lo dejamos como recordatorio:
-  // @keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+  /* Confirmación con contraseña */
+  dangerBanner: {
+    display: "flex",
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    border: `1px solid ${DANGER_BORDER}`,
+    background: DANGER_BG,
+    color: DANGER,
+  },
+  confirmDeleteBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: "12px 14px",
+    borderRadius: 14,
+    border: `1px solid ${DANGER}`,
+    background: DANGER,
+    color: "#fff",
+    fontWeight: 950,
+    fontSize: 13,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
 };

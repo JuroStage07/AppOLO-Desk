@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   BarChart3,
+  CalendarClock,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -1355,6 +1356,123 @@ function triggerCsvDownload(filename, csvText) {
   URL.revokeObjectURL(url);
 }
 
+/* ===================================================================
+   Reporte "Aperturas por día"
+   Matriz: filas = aperturas del rango filtrado, una columna por día del
+   rango y en la celda la hora en que se inició la apertura.
+   La hora sale de `aperturas.tiempoIniciada` (o `aperturasRecepcion`); si
+   ese campo no existe se cae al inicio de la primera descarga y se deja
+   constancia en la columna Observación.
+   =================================================================== */
+
+const WEEKDAY_SHORT_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+/** Encabezado de columna de día: "Lun 03/08". */
+function dayColumnLabel(dayKey) {
+  const d = parseYMD(dayKey);
+  if (!d) return String(dayKey || "");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${WEEKDAY_SHORT_ES[d.getDay()]} ${dd}/${mm}`;
+}
+
+function fmtHourHM(date) {
+  if (!date) return "";
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mi = String(date.getMinutes()).padStart(2, "0");
+  return `${hh}:${mi}`;
+}
+
+function fmtDateTimeFull(date) {
+  if (!date) return "";
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${date.getFullYear()} ${fmtHourHM(date)}`;
+}
+
+/**
+ * Agrupa las acciones del rango por apertura y arma la matriz apertura × día.
+ *
+ * @param acciones  filas de `accion_descarga` (ya acotadas por scope/contexto)
+ * @param dayKeys   días del período activo (buildDayKeysForFilter)
+ * @param aperturas Map(aperturaId -> { nombre, tipo, inicio: Date|null })
+ */
+function buildAperturasPorDiaMatrix({ acciones = [], dayKeys = [], aperturas = new Map() }) {
+  const allowed = new Set(dayKeys);
+
+  // Las aperturas del reporte se descubren desde las acciones creadas dentro
+  // del rango, igual que el resto del panel.
+  const byApertura = new Map();
+  for (const row of acciones) {
+    const apId = String(row?.aperturaId || "").trim();
+    if (!apId) continue;
+    const creado = toDateSafe(row?.creadoAt);
+    if (!creado || !allowed.has(ymd(creado))) continue;
+
+    let entry = byApertura.get(apId);
+    if (!entry) {
+      entry = { apId, acciones: 0, firstStarted: null, proveedor: "", anden: "" };
+      byApertura.set(apId, entry);
+    }
+    entry.acciones += 1;
+
+    const started = toDateSafe(row?.startedAt);
+    if (started && (!entry.firstStarted || started < entry.firstStarted)) {
+      entry.firstStarted = started;
+    }
+    // Gana el primer valor real: los helpers devuelven placeholders
+    // ("Sin proveedor" / "—") cuando el campo viene vacío.
+    if (!entry.proveedor) {
+      const prov = actionProveedorLabel(row);
+      if (prov && prov !== "Sin proveedor") entry.proveedor = prov;
+    }
+    if (!entry.anden) {
+      const anden = normalizeAndenId(row?.idAnden);
+      if (anden && anden !== "—") entry.anden = anden;
+    }
+  }
+
+  const rows = [];
+  for (const entry of byApertura.values()) {
+    const info = aperturas.get(entry.apId) || {};
+    const inicioApertura = info.inicio || null;
+    const usoFallback = !inicioApertura && !!entry.firstStarted;
+    const inicio = inicioApertura || entry.firstStarted || null;
+    const dayKey = inicio ? ymd(inicio) : "";
+    const enRango = !!dayKey && allowed.has(dayKey);
+
+    rows.push({
+      apId: entry.apId,
+      apertura: info.nombre || `Apertura ${entry.apId}`,
+      tipo: info.tipo || "",
+      proveedor: entry.proveedor || "",
+      anden: entry.anden || "",
+      acciones: entry.acciones,
+      // Solo se pinta en la matriz si el inicio cae dentro del rango.
+      dayKey: enRango ? dayKey : "",
+      hora: inicio ? fmtHourHM(inicio) : "",
+      inicioFull: inicio ? fmtDateTimeFull(inicio) : "",
+      observacion: !inicio
+        ? "Sin hora de inicio registrada"
+        : !enRango
+        ? `Inicio fuera del rango filtrado (${fmtDateTimeFull(inicio)})`
+        : usoFallback
+        ? "La apertura no tiene tiempoIniciada; se usó el inicio de su primera descarga"
+        : "",
+    });
+  }
+
+  rows.sort((a, b) => {
+    const byDay = String(a.dayKey || "9999").localeCompare(String(b.dayKey || "9999"));
+    if (byDay !== 0) return byDay;
+    const byHora = String(a.hora || "99:99").localeCompare(String(b.hora || "99:99"));
+    if (byHora !== 0) return byHora;
+    return String(a.apertura).localeCompare(String(b.apertura), "es");
+  });
+
+  return { dayKeys: [...dayKeys], rows };
+}
+
 function buildMetricaRecepcionExportRows({
   data,
   tenantId,
@@ -1579,6 +1697,8 @@ function FilterTabs({
   onChange,
   onExport,
   onExportExcel,
+  onExportAperturas,
+  exportingAperturas,
   exportDisabled,
 }) {
   const filters = [
@@ -1661,6 +1781,43 @@ function FilterTabs({
           <span style={ui.btnInlineIcon}>
             <FileSpreadsheet size={16} strokeWidth={2.2} />
             Excel
+          </span>
+        </button>
+        <button
+          type="button"
+          style={{
+            ...ui.exportBtnExcel,
+            ...(exportDisabled || exportingAperturas
+              ? { opacity: 0.5, cursor: "not-allowed" }
+              : {}),
+          }}
+          title={
+            exportDisabled
+              ? "Espera a que carguen las métricas o corrige el error"
+              : "Excel con las aperturas del rango y la hora en que se inició cada una, con una columna por día"
+          }
+          disabled={!!exportDisabled || !!exportingAperturas}
+          onClick={() => {
+            if (
+              !exportDisabled &&
+              !exportingAperturas &&
+              typeof onExportAperturas === "function"
+            ) {
+              onExportAperturas();
+            }
+          }}
+        >
+          <span style={ui.btnInlineIcon}>
+            {exportingAperturas ? (
+              <Loader2
+                size={16}
+                strokeWidth={2.2}
+                style={{ animation: "metricaRecepcionSpin 0.75s linear infinite" }}
+              />
+            ) : (
+              <CalendarClock size={16} strokeWidth={2.2} />
+            )}
+            {exportingAperturas ? "Generando…" : "Aperturas por día"}
           </span>
         </button>
       </div>
@@ -4229,6 +4386,7 @@ export default function MetricasDescarga() {
   const [customRangeModalOpen, setCustomRangeModalOpen] = useState(false);
   const [customRangeError, setCustomRangeError] = useState("");
   const [dashboardData, setDashboardData] = useState(null);
+  const [exportingAperturas, setExportingAperturas] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -4631,6 +4789,306 @@ export default function MetricasDescarga() {
     selectedDate,
     user?.email,
     user?.displayName,
+    toast,
+  ]);
+
+  /**
+   * Resuelve nombre/tipo/tiempoIniciada de cada apertura. Cada id puede vivir en
+   * `aperturas` o en `aperturasRecepcion`, así que se prueba en ese orden (mismo
+   * patrón que el backfill de tipo). Pool de lecturas en paralelo acotado.
+   */
+  const resolveAperturasInicio = useCallback(async (aperturaIds = []) => {
+    const ids = [
+      ...new Set(aperturaIds.map((v) => String(v || "").trim()).filter(Boolean)),
+    ];
+    const out = new Map();
+    if (ids.length === 0) return out;
+
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < ids.length) {
+        const id = ids[cursor];
+        cursor += 1;
+        try {
+          let snap = await getDoc(doc(db, "aperturas", id));
+          if (!snap.exists()) snap = await getDoc(doc(db, "aperturasRecepcion", id));
+          if (snap.exists()) {
+            const d = snap.data() || {};
+            out.set(id, {
+              nombre: String(d?.nombre || "").trim(),
+              tipo: String(d?.tipo || "").trim(),
+              inicio: toDateSafe(d?.tiempoIniciada),
+            });
+          }
+        } catch (e) {
+          console.error("resolveAperturasInicio:", id, e);
+        }
+      }
+    };
+    const pool = Math.min(12, ids.length);
+    await Promise.all(Array.from({ length: pool }, () => worker()));
+    return out;
+  }, []);
+
+  const handleExportAperturasPorDia = useCallback(async () => {
+    if (loadingData || loadError) return;
+    if (!tenantScope.tenantId || !tenantScope.company) {
+      toast.warning("No se pudo determinar el tenant para exportar.");
+      return;
+    }
+
+    setExportingAperturas(true);
+    try {
+      const dayKeys = buildDayKeysForFilter(activeFilter, selectedDate, customRange);
+      if (dayKeys.length === 0) {
+        toast.warning("El período seleccionado no tiene días válidos.");
+        return;
+      }
+
+      // Acciones crudas del tenant/bodega; el corte por día lo hace la matriz.
+      const aq = query(
+        collection(db, "accion_descarga"),
+        where("tenantId", "==", tenantScope.tenantId),
+        where("company", "==", tenantScope.company),
+        orderBy("creadoAt", "desc"),
+        limit(4000)
+      );
+      const accSnap = await getDocs(aq);
+      let accRows = filterByUserScope(
+        accSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        tenantScope.tenantId,
+        tenantScope.company,
+        tenantScope.bodegaId
+      );
+      // Respetar el chip de contexto activo (General / EPA / COFERSA).
+      if (activeContext === "EPA" || activeContext === "COFERSA") {
+        accRows = accRows.filter((row) => accionMatchesContext(row, activeContext));
+      }
+
+      const allowedDays = new Set(dayKeys);
+      const aperturaIds = [
+        ...new Set(
+          accRows
+            .filter((row) => {
+              const creado = toDateSafe(row?.creadoAt);
+              return creado && allowedDays.has(ymd(creado));
+            })
+            .map((row) => String(row?.aperturaId || "").trim())
+            .filter(Boolean)
+        ),
+      ];
+
+      if (aperturaIds.length === 0) {
+        toast.warning("No hay aperturas con acciones en el período seleccionado.");
+        return;
+      }
+
+      const aperturas = await resolveAperturasInicio(aperturaIds);
+      const matrix = buildAperturasPorDiaMatrix({
+        acciones: accRows,
+        dayKeys,
+        aperturas,
+      });
+
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "AppoloDesk";
+      wb.created = new Date();
+      wb.modified = new Date();
+      wb.subject = `Aperturas por día - ${currentData.label}`;
+
+      const ws = wb.addWorksheet("Aperturas por dia", {
+        properties: { tabColor: { argb: "FF089F8A" } },
+        views: [{ state: "frozen", xSplit: 1, ySplit: 4 }],
+      });
+
+      // Apertura | Tipo | Proveedor | Andén | …días… | Acciones | Observación
+      const FIXED_LEFT = 4;
+      const dayCount = matrix.dayKeys.length;
+      const totalCols = FIXED_LEFT + dayCount + 2;
+      const colAcciones = FIXED_LEFT + dayCount + 1;
+      const colObs = totalCols;
+
+      ws.columns = [
+        { width: 34 },
+        { width: 16 },
+        { width: 26 },
+        { width: 9 },
+        ...Array.from({ length: dayCount }, () => ({ width: 11 })),
+        { width: 10 },
+        { width: 52 },
+      ];
+
+      ws.mergeCells(1, 1, 1, totalCols);
+      const titleCell = ws.getCell(1, 1);
+      titleCell.value = "Aperturas por día — hora de inicio";
+      titleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+      titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF089F8A" } };
+      titleCell.alignment = { vertical: "middle", horizontal: "center" };
+      ws.getRow(1).height = 30;
+
+      ws.mergeCells(2, 1, 2, totalCols);
+      ws.getCell(2, 1).value =
+        `Período: ${currentData.label}` +
+        `  ·  Contexto: ${activeContext}` +
+        `  ·  ${matrix.rows.length} apertura(s) en ${dayCount} día(s)` +
+        `  ·  Generado: ${fmtDateTimeFull(new Date())}`;
+      ws.getCell(2, 1).font = { size: 11, color: { argb: "FF64748B" } };
+      ws.getRow(2).height = 18;
+
+      const headerRow = ws.getRow(4);
+      headerRow.values = [
+        "Apertura",
+        "Tipo",
+        "Proveedor",
+        "Andén",
+        ...matrix.dayKeys.map((dk) => dayColumnLabel(dk)),
+        "Acciones",
+        "Observación",
+      ];
+      headerRow.height = 24;
+      for (let c = 1; c <= totalCols; c++) {
+        const cell = headerRow.getCell(c);
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF089F8A" } };
+        cell.alignment = {
+          vertical: "middle",
+          horizontal: c === 1 || c === colObs ? "left" : "center",
+          wrapText: true,
+        };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FF089F8A" } },
+          left: { style: "thin", color: { argb: "FF089F8A" } },
+          bottom: { style: "thin", color: { argb: "FF067A6B" } },
+          right: { style: "thin", color: { argb: "FF089F8A" } },
+        };
+      }
+
+      let r = 5;
+      const perDayCount = new Map();
+      matrix.rows.forEach((row, idx) => {
+        const dataRow = ws.getRow(r);
+        dataRow.getCell(1).value = row.apertura;
+        dataRow.getCell(2).value = row.tipo || "—";
+        dataRow.getCell(3).value = row.proveedor || "—";
+        dataRow.getCell(4).value = row.anden || "—";
+
+        // Columna del día en que inició la apertura (si cae dentro del rango).
+        let horaCol = 0;
+        matrix.dayKeys.forEach((dk, i) => {
+          const cell = dataRow.getCell(FIXED_LEFT + 1 + i);
+          if (row.dayKey === dk && row.hora) {
+            cell.value = row.hora;
+            horaCol = FIXED_LEFT + 1 + i;
+            perDayCount.set(dk, (perDayCount.get(dk) || 0) + 1);
+          } else {
+            cell.value = null;
+          }
+        });
+
+        dataRow.getCell(colAcciones).value = row.acciones;
+        dataRow.getCell(colObs).value = row.observacion || "";
+
+        dataRow.height = 19;
+        const zebra = idx % 2 === 0 ? "FFFAFBFE" : "FFFFFFFF";
+        for (let c = 1; c <= totalCols; c++) {
+          const cell = dataRow.getCell(c);
+          const isHora = c === horaCol;
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: isHora ? "FFE7F6F3" : zebra },
+          };
+          cell.font = {
+            size: 11,
+            color: { argb: "FF0F172A" },
+            bold: c === 1 || isHora,
+          };
+          cell.border = {
+            top: { style: "hair", color: { argb: "FFE2E8F0" } },
+            left: { style: "hair", color: { argb: "FFE2E8F0" } },
+            bottom: { style: "hair", color: { argb: "FFE2E8F0" } },
+            right: { style: "hair", color: { argb: "FFE2E8F0" } },
+          };
+          cell.alignment = {
+            vertical: "middle",
+            horizontal: c === 1 || c === colObs ? "left" : "center",
+            wrapText: c === colObs,
+          };
+        }
+        r += 1;
+      });
+
+      // Fila de totales: cuántas aperturas iniciaron cada día.
+      const totalRow = ws.getRow(r);
+      totalRow.height = 22;
+      totalRow.getCell(1).value = `Total (${matrix.rows.length} aperturas)`;
+      matrix.dayKeys.forEach((dk, i) => {
+        totalRow.getCell(FIXED_LEFT + 1 + i).value = perDayCount.get(dk) || 0;
+      });
+      totalRow.getCell(colAcciones).value = matrix.rows.reduce(
+        (acc, row) => acc + Number(row.acciones || 0),
+        0
+      );
+      for (let c = 1; c <= totalCols; c++) {
+        const cell = totalRow.getCell(c);
+        cell.font = { bold: true, color: { argb: "FF0F172A" }, size: 12 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+        cell.alignment = {
+          vertical: "middle",
+          horizontal: c === 1 || c === colObs ? "left" : "center",
+        };
+        cell.border = {
+          top: { style: "medium", color: { argb: "FF94A3B8" } },
+          bottom: { style: "thin", color: { argb: "FF94A3B8" } },
+        };
+      }
+
+      if (matrix.rows.length > 0) {
+        ws.autoFilter = {
+          from: { row: 4, column: 1 },
+          to: { row: r - 1, column: totalCols },
+        };
+      }
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const safeFilter = String(activeFilter || "periodo").replace(/[^\w-]/g, "_");
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `aperturas-por-dia_${safeFilter}_${dayKeys[0]}_${
+        dayKeys[dayKeys.length - 1]
+      }.xlsx`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      const sinHora = matrix.rows.filter((row) => !row.dayKey).length;
+      toast.success(
+        `Reporte generado: ${matrix.rows.length} apertura(s)` +
+          (sinHora > 0 ? ` · ${sinHora} sin hora dentro del rango` : "")
+      );
+    } catch (e) {
+      console.error("handleExportAperturasPorDia:", e);
+      toast.error("No se pudo generar el reporte de aperturas. Revisa la consola.");
+    } finally {
+      setExportingAperturas(false);
+    }
+  }, [
+    loadingData,
+    loadError,
+    tenantScope,
+    activeFilter,
+    selectedDate,
+    customRange,
+    activeContext,
+    currentData.label,
+    resolveAperturasInicio,
     toast,
   ]);
 
@@ -6170,6 +6628,8 @@ export default function MetricasDescarga() {
                 onChange={handleFilterChange}
                 onExport={handleExportReport}
                 onExportExcel={handleExportExcel}
+                onExportAperturas={handleExportAperturasPorDia}
+                exportingAperturas={exportingAperturas}
                 exportDisabled={loadingData || !!loadError || !dashboardData}
               />
             </div>
