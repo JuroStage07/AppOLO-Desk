@@ -52,7 +52,9 @@ React 19 SPA backed by Firebase Auth, Firestore, Storage and Cloud Functions. MR
 
 `RequireRouteAccess` uses `src/config/routeAccess.js` and `src/config/permissions.js`. Keep route gates synchronized with work-area visibility.
 
-`profile.epaAdmin === true` restricts navigation to `/`, `/welcome`, `/areas`, `/epa/*`, `/config-region` and Seguridad/Salud aperture detail paths. `src/config/epaOnlyUids.js` adds the legacy restricted-user check.
+`profile.epaAdmin === true` restricts navigation to `/`, `/welcome`, `/areas`, `/epa/*`, `/config-region` and Seguridad/Salud aperture detail paths, plus the MRP Tarimas subset listed in `src/config/mrpAccess.js` (`MRP_RESTRICTED_PATHS`). `src/config/epaOnlyUids.js` adds the legacy restricted-user check.
+
+`src/config/mrpAccess.js` is the single source of truth for MRP Tarimas access: which sections a restricted profile may open, and whether the profile may register ajustes (`permisos.mrpAjustes`) or traslados (`permisos.mrpTraslados`). Read it through `useMrpAccess()` inside the module.
 
 ### Scope: tenant + company + bodega
 

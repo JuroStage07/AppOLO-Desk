@@ -20,6 +20,7 @@ import imgServiciosGenerales from "../assets/serviciosGenerales.png";
 import imgEpa from "../assets/epa.png";
 import imgDev from "../assets/dev.png";
 import { canAccessWorkItem } from "./permissions";
+import { canAccessMrpPath } from "./mrpAccess";
 
 /**
  * Single source of truth for the application "Áreas de trabajo".
@@ -174,7 +175,7 @@ const RAW_AREAS = [
     theme: AREA_THEMES["servicios-generales"],
     tag: "Servicios",
     icon: <Sparkles size={18} strokeWidth={2} />,
-    anyPerms: ["serviciosGenerales", "pesajeTarimas"],
+    anyPerms: ["serviciosGenerales", "pesajeTarimas", "boletasSalida"],
     modules: [
       {
         label: "Órdenes de trabajo",
@@ -186,6 +187,7 @@ const RAW_AREAS = [
         ],
       },
       { label: "Validar ingreso", path: "/servicios-generales/validar-ingreso", requiredPerm: "serviciosGenerales" },
+      { label: "Boletas de salida", path: "/servicios-generales/boletas-salida", requiredPerm: "boletasSalida" },
       {
         label: "Pesaje tarimas",
         path: "/servicios-generales/pesaje-tarimas",
@@ -263,6 +265,7 @@ const RAW_AREAS = [
     devOnly: true,
     modules: [
       { label: "Update AppOLO Supabase", path: "/dev/update-supabase" },
+      { label: "Supabase", path: "/dev/supabase" },
       { label: "Despachos Dev", path: "/dev/despachos-dev" },
       {
         label: "Configuración de módulos",
@@ -325,7 +328,9 @@ function filterModulesForAccess(modules = [], context = {}, parentGate = null) {
     .map((module) => {
       const accessModule = inheritAccessGate(module, parentGate);
       const features = filterModulesForAccess(module.features || [], context, accessModule);
-      const allowed = canAccessWorkItem(accessModule, context);
+      const allowed =
+        canAccessWorkItem(accessModule, context) &&
+        canAccessMrpPath(module.path, context);
 
       if (!allowed && features.length === 0) return null;
       return { ...module, features };
@@ -348,16 +353,24 @@ function filterAreaForAccess(area, context) {
 
 /**
  * Filter the areas a given user is allowed to see.
- *  - epaOnly users only see the EPA area.
+ *  - epaOnly users only see the EPA area, plus MRP Tarimas when they hold the
+ *    `mrpTarimas` permission (trimmed to the sections in config/mrpAccess.js).
  *  - devOnly areas require role "dev".
  *  - adminOnly areas require role "administrativo" or "dev".
  *  - requiredPerm / anyPerms gate operational users by profile.permisos.
  */
 export function getVisibleAreas({ epaOnly = false, role = null, permisos = {}, profile = null } = {}) {
-  if (epaOnly) {
-    return WORK_AREAS.filter((a) => a.key === "epa");
-  }
-
   const context = { role, permisos, profile };
+
+  if (epaOnly) {
+    // El área EPA se devuelve tal cual (su acceso lo concede la bandera
+    // epaAdmin, no un permiso). MRP Tarimas pasa por el filtro normal: aparece
+    // solo con permiso `mrpTarimas` y ya recortada a sus secciones permitidas.
+    const epa = WORK_AREAS.filter((a) => a.key === "epa");
+    const mrp = WORK_AREAS.filter((a) => a.key === "mrp-tarimas")
+      .map((area) => filterAreaForAccess(area, context))
+      .filter(Boolean);
+    return [...epa, ...mrp];
+  }
   return WORK_AREAS.map((area) => filterAreaForAccess(area, context)).filter(Boolean);
 }

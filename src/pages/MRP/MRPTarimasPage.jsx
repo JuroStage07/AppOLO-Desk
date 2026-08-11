@@ -3,7 +3,7 @@
 //
 // El almacén NO se elige a mano: se resuelve de la BODEGA activa (BodegaSwitcher
 // en el Topbar) según el vínculo configurado en /dev/config-modulos/mrp-tarimas.
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -23,7 +23,7 @@ import {
   Card,
   Spinner,
 } from "../../components/ui";
-import { useMrpWorkspace } from "../../hooks/mrp";
+import { useMrpWorkspace, useMrpAccess } from "../../hooks/mrp";
 import useIsMobile from "../../hooks/useIsMobile";
 import { NoWarehouse } from "./components/WorkspaceBar";
 import {
@@ -112,18 +112,34 @@ const subLinkBase = {
 };
 const subLinkActive = { background: ACCENT_SOFT, color: ACCENT };
 
+// Recorta el menú a las secciones que el perfil puede abrir. Los perfiles
+// restringidos (epaAdmin) solo ven Dashboard, Inventario (Artículos y En Cliente
+// / Tienda) e Historial de movimientos; ver config/mrpAccess.js.
+function visibleNav(canAccessPath) {
+  return NAV.map((item) => {
+    const children = (item.children || []).filter((c) => canAccessPath(c.to));
+    if (!canAccessPath(item.to) && children.length === 0) return null;
+    if (!item.children) return item;
+    // Un único hijo que apunta a la propia sección no aporta submenú.
+    const onlySelf = children.length === 1 && children[0].to === item.to;
+    return { ...item, children: onlySelf ? undefined : children };
+  }).filter(Boolean);
+}
+
 export default function MRPTarimasPage() {
   const isMobile = useIsMobile();
   const { pathname } = useLocation();
   const { warehouse, warehouseId, warehouseLoading, bodegaNombre } =
     useMrpWorkspace();
+  const { canAccessPath } = useMrpAccess();
+  const navItems = useMemo(() => visibleNav(canAccessPath), [canAccessPath]);
 
   // Acordeón: una sola sección abierta a la vez. `openKey` undefined ⇒ sigue la
   // sección activa; al hacer clic se fija (o se cierra) manualmente.
   const [openKey, setOpenKey] = useState(undefined);
   const activeParent =
     (
-      NAV.find(
+      navItems.find(
         (it) =>
           it.children &&
           (pathname.startsWith(it.to) ||
@@ -140,7 +156,7 @@ export default function MRPTarimasPage() {
         overflowX: isMobile ? "auto" : "visible",
       }}
     >
-      {NAV.map((item) => {
+      {navItems.map((item) => {
         const Icon = item.icon;
         // La sección está activa si la ruta actual cuelga de la ruta del ítem o
         // de cualquiera de sus hijos (p.ej. Historial, cuyos hijos son rutas

@@ -15,4 +15,5 @@ export { default as usePalletDiscards } from "./usePalletDiscards";
 export { default as useMrpUser } from "./useMrpUser";
 export { default as useMrpEventos } from "./useMrpEventos";
 export { default as useMrpWorkspace } from "./useMrpWorkspace";
+export { default as useMrpAccess } from "./useMrpAccess";
 export { bumpRefresh, onRefresh } from "./refreshBus";

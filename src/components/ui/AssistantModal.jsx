@@ -15,6 +15,7 @@ import useMrpWorkspace from "../../hooks/mrp/useMrpWorkspace";
 import usePalletArticulos from "../../hooks/mrp/usePalletArticulos";
 import usePalletInventory from "../../hooks/mrp/usePalletInventory";
 import usePalletTransfers from "../../hooks/mrp/usePalletTransfers";
+import useMrpAccess from "../../hooks/mrp/useMrpAccess";
 import {
   PALLET_LOCATIONS,
   PALLET_LOCATION_LABELS,
@@ -488,6 +489,7 @@ function MrpTransferCard({ action, onPatch, onCreated, onNavigate }) {
   const { warehouse, warehouseId } = useMrpWorkspace();
   const { articulos } = usePalletArticulos({ warehouseId });
   const { transfer } = usePalletTransfers();
+  const { canTraslados } = useMrpAccess();
 
   const draft = action?.draft && typeof action.draft === "object" ? action.draft : {};
   const articuloId = cleanOtValue(draft.articuloId);
@@ -591,6 +593,25 @@ function MrpTransferCard({ action, onPatch, onCreated, onNavigate }) {
       : baseStatus === "ready"
       ? "Listo para trasladar"
       : "Faltan datos";
+
+  // El traslado por chat es la misma operación que en Inventario: exige el
+  // permiso `mrpTraslados` (ver config/mrpAccess.js).
+  if (!canTraslados) {
+    return (
+      <div style={S.otCard}>
+        <div style={S.otCardHead}>
+          <span style={S.otCardTitle}>Borrador de traslado MRP</span>
+          <span style={{ ...S.otStatus, ...S.otStatusMissing }}>Sin permiso</span>
+        </div>
+        <div style={S.mrpWarn}>
+          <span>
+            Tu perfil no puede registrar traslados en MRP Tarimas. Solicitá el
+            permiso «MRP Traslados» a un administrador.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={S.otCard}>

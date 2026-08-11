@@ -24,6 +24,7 @@ import {
   usePalletTiendas,
   useMrpInsumos,
   useMrpWorkspace,
+  useMrpAccess,
 } from "../../hooks/mrp";
 import { PALLET_LOCATION_LABELS } from "../../services/mrp";
 import {
@@ -60,7 +61,16 @@ export default function MRPInventarioPage() {
   const { tab: tabParam } = useParams();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const tab = INV_TABS.some((t) => t.key === tabParam) ? tabParam : "articulos";
+  const { canAccessPath } = useMrpAccess();
+  // Las pestañas siguen el mismo recorte que el submenú lateral: un perfil
+  // restringido (epaAdmin) no ve Insumos.
+  const tabs = useMemo(
+    () => INV_TABS.filter((t) => canAccessPath(`${INV_BASE}/${t.key}`)),
+    [canAccessPath]
+  );
+  const tab = tabs.some((t) => t.key === tabParam)
+    ? tabParam
+    : tabs[0]?.key || "articulos";
 
   return (
     <>
@@ -68,7 +78,7 @@ export default function MRPInventarioPage() {
           en el submenú lateral (acordeón "Inventario"). */}
       {isMobile ? (
         <ChipsRow>
-          {INV_TABS.map((t) => (
+          {tabs.map((t) => (
             <Chip
               key={t.key}
               active={tab === t.key}
@@ -94,6 +104,8 @@ export default function MRPInventarioPage() {
 function ArticulosInventario() {
   const isMobile = useIsMobile();
   const { warehouseId } = useMrpWorkspace();
+  // Ajuste/Traslado dependen de los permisos `mrpAjustes` / `mrpTraslados`.
+  const { canAjustes, canTraslados } = useMrpAccess();
 
   const { articulos } = usePalletArticulos({ warehouseId });
   const { inventory, loading, error, refetch } = usePalletInventory({
@@ -137,8 +149,14 @@ function ArticulosInventario() {
   const [traslado, setTraslado] = useState({ open: false, prefill: null });
   const [historial, setHistorial] = useState(null);
   const [tiendaDist, setTiendaDist] = useState(null);
-  const openAjuste = (prefill = null) => setAjuste({ open: true, prefill });
-  const openTraslado = (prefill = null) => setTraslado({ open: true, prefill });
+  const openAjuste = (prefill = null) => {
+    if (!canAjustes) return;
+    setAjuste({ open: true, prefill });
+  };
+  const openTraslado = (prefill = null) => {
+    if (!canTraslados) return;
+    setTraslado({ open: true, prefill });
+  };
 
   const columns = [
     {
@@ -289,12 +307,16 @@ function ArticulosInventario() {
             justifyContent: isMobile ? "center" : "flex-end",
           }}
         >
-          <PrimaryButton icon={Plus} onClick={() => openAjuste()}>
-            Ajuste
-          </PrimaryButton>
-          <SecondaryButton icon={ArrowLeftRight} onClick={() => openTraslado()}>
-            Traslado
-          </SecondaryButton>
+          {canAjustes ? (
+            <PrimaryButton icon={Plus} onClick={() => openAjuste()}>
+              Ajuste
+            </PrimaryButton>
+          ) : null}
+          {canTraslados ? (
+            <SecondaryButton icon={ArrowLeftRight} onClick={() => openTraslado()}>
+              Traslado
+            </SecondaryButton>
+          ) : null}
         </div>
       </div>
 
@@ -308,9 +330,11 @@ function ArticulosInventario() {
           title="Sin artículos"
           description="Crea artículos en Catálogos › Artículos y registra ajustes."
           action={
-            <PrimaryButton icon={Plus} onClick={() => openAjuste()}>
-              Registrar ajuste
-            </PrimaryButton>
+            canAjustes ? (
+              <PrimaryButton icon={Plus} onClick={() => openAjuste()}>
+                Registrar ajuste
+              </PrimaryButton>
+            ) : undefined
           }
         />
       ) : (
@@ -325,28 +349,42 @@ function ArticulosInventario() {
             exportTitle="Inventario de artículos"
             exportFileName="inventario_articulos"
             actionsLabel="Acciones"
-            renderActions={(r) => (
-              <div
-                style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}
-              >
-                <GhostButton
-                  size="sm"
-                  icon={ArrowLeftRight}
-                  disabled={r.total === 0}
-                  title={r.total === 0 ? "Sin existencias para trasladar" : undefined}
-                  onClick={() => openTraslado({ articuloId: r.id })}
-                >
-                  Trasladar
-                </GhostButton>
-                <GhostButton
-                  size="sm"
-                  icon={Plus}
-                  onClick={() => openAjuste({ articuloId: r.id })}
-                >
-                  Ajustar
-                </GhostButton>
-              </div>
-            )}
+            renderActions={
+              canAjustes || canTraslados
+                ? (r) => (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        gap: 6,
+                        justifyContent: "flex-end",
+                      }}
+                    >
+                      {canTraslados ? (
+                        <GhostButton
+                          size="sm"
+                          icon={ArrowLeftRight}
+                          disabled={r.total === 0}
+                          title={
+                            r.total === 0 ? "Sin existencias para trasladar" : undefined
+                          }
+                          onClick={() => openTraslado({ articuloId: r.id })}
+                        >
+                          Trasladar
+                        </GhostButton>
+                      ) : null}
+                      {canAjustes ? (
+                        <GhostButton
+                          size="sm"
+                          icon={Plus}
+                          onClick={() => openAjuste({ articuloId: r.id })}
+                        >
+                          Ajustar
+                        </GhostButton>
+                      ) : null}
+                    </div>
+                  )
+                : undefined
+            }
           />
         </Card>
       )}
@@ -368,14 +406,22 @@ function ArticulosInventario() {
           codigo={historial.codigo}
           nombre={historial.nombre}
           onClose={() => setHistorial(null)}
-          onAjuste={(id) => {
-            setHistorial(null);
-            openAjuste({ articuloId: id });
-          }}
-          onTraslado={(id) => {
-            setHistorial(null);
-            openTraslado({ articuloId: id });
-          }}
+          onAjuste={
+            canAjustes
+              ? (id) => {
+                  setHistorial(null);
+                  openAjuste({ articuloId: id });
+                }
+              : undefined
+          }
+          onTraslado={
+            canTraslados
+              ? (id) => {
+                  setHistorial(null);
+                  openTraslado({ articuloId: id });
+                }
+              : undefined
+          }
         />
       )}
       {tiendaDist && (

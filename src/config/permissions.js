@@ -89,6 +89,12 @@ export const PERMISSION_OPTIONS = [
     description: "OTs y validacion de ingreso de Servicios Generales.",
   },
   {
+    key: "boletasSalida",
+    label: "Boletas de salida",
+    group: "Servicios",
+    description: "Generar, validar y consultar boletas de salida de vehiculos.",
+  },
+  {
     key: "pesajeTarimas",
     label: "Pesaje tarimas",
     group: "Servicios",
@@ -99,6 +105,18 @@ export const PERMISSION_OPTIONS = [
     label: "MRP Tarimas",
     group: "Servicios",
     description: "Dashboard, inventario, reparaciones y materiales de tarimas.",
+  },
+  {
+    key: "mrpAjustes",
+    label: "MRP Ajustes",
+    group: "Servicios",
+    description: "Registrar ajustes de inventario en MRP Tarimas. Sin este permiso el modulo es de solo lectura.",
+  },
+  {
+    key: "mrpTraslados",
+    label: "MRP Traslados",
+    group: "Servicios",
+    description: "Registrar traslados de articulos y entre almacenes en MRP Tarimas.",
   },
   {
     key: "horasExtra",

@@ -41,17 +41,25 @@ export default function ArticuloHistorialModal({
       <Sheet.Body>
         <Sheet.Hint>{nombre}</Sheet.Hint>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <PrimaryButton icon={Plus} onClick={() => onAjuste?.(articuloId)}>
-            Ajuste
-          </PrimaryButton>
-          <SecondaryButton
-            icon={ArrowLeftRight}
-            onClick={() => onTraslado?.(articuloId)}
-          >
-            Traslado
-          </SecondaryButton>
-        </div>
+        {/* Accesos rápidos: solo si quien abre el modal los habilita (permisos
+            `mrpAjustes` / `mrpTraslados`). */}
+        {onAjuste || onTraslado ? (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {onAjuste ? (
+              <PrimaryButton icon={Plus} onClick={() => onAjuste(articuloId)}>
+                Ajuste
+              </PrimaryButton>
+            ) : null}
+            {onTraslado ? (
+              <SecondaryButton
+                icon={ArrowLeftRight}
+                onClick={() => onTraslado(articuloId)}
+              >
+                Traslado
+              </SecondaryButton>
+            ) : null}
+          </div>
+        ) : null}
 
         {loading ? (
           <Spinner label="Cargando historial…" />

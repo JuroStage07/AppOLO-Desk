@@ -33,7 +33,7 @@ Single-page React 19 app on top of Firebase (Auth + Firestore + Storage + Functi
 Every protected route uses `PrivateRoute` = `RequireAuth` → `RequireTenant` → `EpaAdminRouteGuard`:
 - `RequireAuth` waits for `loading` then redirects to `/login` if no user/profile.
 - `RequireTenant` reads `localStorage["appolo_profile"]` (written at login in `pages/Login.jsx`) and redirects to `/config-region` if `tenantId` is missing. **The localStorage copy and the Firestore profile are two parallel sources — keep them in sync when editing login or profile flows.**
-- `EpaAdminRouteGuard` restricts users with `profile.epaAdmin === true` to a whitelisted path regex (`/`, `/epa/*`, `/config-region`, `/salud/aperturas/detalle/*`). Combined with `src/config/epaOnlyUids.js` (`isEpaRestrictedUser`), Home also hides every module except EPA for those UIDs.
+- `EpaAdminRouteGuard` restricts users with `profile.epaAdmin === true` to a whitelisted path regex (`/`, `/epa/*`, `/config-region`, `/salud/aperturas/detalle/*`) **plus a partial MRP Tarimas whitelist delegated to `src/config/mrpAccess.js`**. Combined with `src/config/epaOnlyUids.js` (`isEpaRestrictedUser`), Home hides every module except EPA (and MRP Tarimas, when permitted) for those UIDs.
 
 ### Multi-tenant scoping (tenantId + company)
 
@@ -50,6 +50,12 @@ Two orthogonal axes on `profiles/{uid}`:
 - `permisos`: a map of booleans keyed by module (e.g., `permisos.mantenimiento`, `permisos.saludOcupacional`, `permisos.canRecepcionCofersa`, `permisos.despachosEPA`). Rules use `hasPerm('key')`.
 
 `profile.epaAdmin` is a third flag layered on top (see above).
+
+**MRP Tarimas access** is defined in `src/config/mrpAccess.js` (the single source of truth, consumed by `EpaAdminRouteGuard`, `workAreas.jsx`, the module sidebar and `useMrpAccess`):
+- *Sections* — `epaAdmin` profiles are structurally limited to `MRP_RESTRICTED_PATHS` (Dashboard, Inventario › Artículos, Inventario › En Cliente / Tienda, Historial de movimientos). Insumos, Catálogos, Descartes, Registro de eventos and Registro de insumos are not reachable and cannot be granted by permission.
+- *Writes* — `permisos.mrpAjustes` / `permisos.mrpTraslados` gate the Ajuste and Traslado actions. `epaAdmin` profiles get no role override (read-only until granted); other users keep the pre-existing behaviour (admin role or `mrpTarimas` implies both).
+
+When adding a permission key, update `PERMISSION_OPTIONS` **and** `validPermisosMap` in `firestore.rules` — its `keys().hasOnly([...])` rejects unknown keys, and `normalizePermissionMap` writes every key on save.
 
 ### Routing & module layout
 

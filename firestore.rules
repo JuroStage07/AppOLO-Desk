@@ -51,6 +51,8 @@ service cloud.firestore {
           'pesajeTarimas',
           'documentacion',
           'mrpTarimas',
+          'mrpAjustes',
+          'mrpTraslados',
           'horasExtra',
           'gestionUsuarios',
           'zoneFranca',
@@ -68,6 +70,8 @@ service cloud.firestore {
         && (!('pesajeTarimas' in permisos) || permisos.pesajeTarimas is bool)
         && (!('documentacion' in permisos) || permisos.documentacion is bool)
         && (!('mrpTarimas' in permisos) || permisos.mrpTarimas is bool)
+        && (!('mrpAjustes' in permisos) || permisos.mrpAjustes is bool)
+        && (!('mrpTraslados' in permisos) || permisos.mrpTraslados is bool)
         && (!('horasExtra' in permisos) || permisos.horasExtra is bool)
         && (!('gestionUsuarios' in permisos) || permisos.gestionUsuarios is bool)
         && (!('zoneFranca' in permisos) || permisos.zoneFranca is bool)
