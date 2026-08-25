@@ -15,7 +15,7 @@ import SignaturePad from "./SignaturePad";
  * Validación de una boleta: checklist (todas "sí") + firma obligatoria.
  * Al confirmar sube la firma al bucket y llama a dd_validar_boleta.
  */
-export default function ValidarBoletaSheet({ open, onClose, boleta, scope, validatedBy, onDone }) {
+export default function ValidarBoletaSheet({ open, onClose, boleta, scope, onDone }) {
   const toast = useToast();
   const [respuestas, setRespuestas] = useState({});
   const [firmaBlob, setFirmaBlob] = useState(null);
@@ -49,11 +49,7 @@ export default function ValidarBoletaSheet({ open, onClose, boleta, scope, valid
         acc[item.key] = respuestas[item.key];
         return acc;
       }, {});
-      await validarBoleta(scope, validatedBy, {
-        boletaId: boleta.id,
-        checklist,
-        firmaPath,
-      });
+      await validarBoleta({ boletaId: boleta.id, checklist, firmaPath });
       toast.success(`Boleta ${boleta.numero_formateado} validada.`);
       setRespuestas({});
       setFirmaBlob(null);

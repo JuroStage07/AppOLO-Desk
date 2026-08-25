@@ -36,8 +36,7 @@ export default function DetalleBoletaSheet({
   open,
   onClose,
   boleta,
-  scope,
-  rejectedBy,
+  puedeValidar = false,
   onValidar,
   onQR,
   onChanged,
@@ -92,7 +91,7 @@ export default function DetalleBoletaSheet({
     }
     setSaving(true);
     try {
-      await rechazarBoleta(scope, rejectedBy, { boletaId: boleta.id, motivo });
+      await rechazarBoleta({ boletaId: boleta.id, motivo });
       toast.success(`Boleta ${boleta.numero_formateado} rechazada.`);
       setMotivo("");
       setMotivoOpen(false);
@@ -186,7 +185,7 @@ export default function DetalleBoletaSheet({
           Ver QR
         </SecondaryButton>
 
-        {esPendiente && !motivoOpen ? (
+        {esPendiente && !motivoOpen && puedeValidar ? (
           <PrimaryButton icon={ShieldCheck} onClick={() => onValidar?.(boleta)}>
             Validar
           </PrimaryButton>

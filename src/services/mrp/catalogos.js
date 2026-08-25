@@ -789,16 +789,32 @@ export async function getNextInsumoCode() {
   return "AI" + String(max + 1).padStart(3, "0");
 }
 
-// El código (AI###) se genera en la RPC; aquí solo se validan y envían campos.
-export async function createInsumo({ nombre, detalle, price, priceMode }) {
+// El código lo asigna la RPC: si `codigo` viene vacío genera el correlativo
+// AI###; si viene con valor lo usa tal cual (normalizado). Mismas reglas que el
+// código manual de artículos (ver `validateArticuloCode`).
+export async function createInsumo({
+  nombre,
+  detalle,
+  price,
+  priceMode,
+  codigo = null,
+}) {
   const clean = String(nombre || "").trim();
   if (!clean) throw new Error("El nombre del insumo es obligatorio.");
   const p = Number(price);
   if (!Number.isFinite(p) || p < 0) {
     throw new Error("El precio debe ser un número mayor o igual a 0.");
   }
+  const code = normalizeArticuloCode(codigo);
+  if (code) {
+    const codeErr = validateArticuloCode(code);
+    if (codeErr) throw new Error(codeErr);
+  }
   const mode = priceMode === "batch" ? "batch" : "unit";
   const { tenantId, company } = getMrpScope();
+  // `p_codigo` solo se manda cuando hay código manual: así el alta automática
+  // sigue funcionando aunque la migración 20260737 no esté aplicada todavía
+  // (con la firma vieja de 6 args, mandar p_codigo daría "function not found").
   const { data, error } = await supabase.rpc("mrp_create_insumo", {
     p_tenant_id: tenantId,
     p_company: company,
@@ -806,6 +822,7 @@ export async function createInsumo({ nombre, detalle, price, priceMode }) {
     p_detalle: String(detalle || "").trim() || null,
     p_price: p,
     p_price_mode: mode,
+    ...(code ? { p_codigo: code } : {}),
   });
   if (error) throw error;
 

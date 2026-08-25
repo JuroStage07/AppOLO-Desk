@@ -1,6 +1,14 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FileOutput, FilePlus2, Inbox, Lock, Truck } from "lucide-react";
+import {
+  ArrowLeft,
+  FileOutput,
+  FilePlus2,
+  Inbox,
+  KeyRound,
+  Lock,
+  Truck,
+} from "lucide-react";
 import {
   Shell,
   Topbar,
@@ -9,6 +17,7 @@ import {
   Container,
   Hero,
   Badge,
+  Card,
   GhostButton,
   PrimaryButton,
   SearchInput,
@@ -16,13 +25,16 @@ import {
   ChipsRow,
   RowCard,
   StatusPill,
+  SectionTitle,
   EmptyState,
   ErrorState,
   Skeleton,
+  Spinner,
   theme,
 } from "../../../components/ui";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { canAccessByRoleOrPermission } from "../../../config/permissions";
+import { useSupabaseAuth } from "../../../contexts/SupabaseAuthContext";
 import {
   ESTADO_BOLETA_LABELS,
   ESTADO_BOLETA_TONE,
@@ -41,23 +53,41 @@ const ESTADO_FILTERS = [
   { key: "rechazado", label: "Rechazadas" },
 ];
 
+// Cantidad de boletas en la vista de solo lectura (sin permiso de validar).
+const LECTURA_LIMIT = 20;
+
+function BoletaRow({ boleta, onClick }) {
+  return (
+    <RowCard
+      title={`${boleta.numero_formateado} · ${boleta.chofer_nombre || "Sin chofer"}`}
+      desc={`${TIPO_VEHICULO_LABELS[boleta.tipo_vehiculo] || boleta.tipo_vehiculo || ""} · ${
+        boleta.placa_camion || "—"
+      }${boleta.cargado ? ` · ${boleta.destino || "cargado"}` : " · sin carga"}`}
+      meta={boleta.created_at ? new Date(boleta.created_at).toLocaleString("es-CR") : ""}
+      extra={
+        <StatusPill tone={ESTADO_BOLETA_TONE[boleta.estado] || "neutral"} icon={null}>
+          {ESTADO_BOLETA_LABELS[boleta.estado] || boleta.estado}
+        </StatusPill>
+      }
+      onClick={onClick}
+    />
+  );
+}
+
 export default function BoletasSalidaHome() {
   const nav = useNavigate();
-  const { user, role, permisos, profile, tenantId, company, bodegaId, loading: authLoading } =
-    useContext(AuthCtx) || {};
+  const { role, permisos, profile } = useContext(AuthCtx) || {};
+  const { configurado, sessionReady, hasSession, scopeComplete, scope } =
+    useSupabaseAuth();
 
-  const scope = useMemo(
-    () => ({ tenantId, company, bodegaId }),
-    [tenantId, company, bodegaId]
-  );
-  const actor = user?.email || user?.uid || null;
+  const hasAccess = configurado && hasSession && scopeComplete;
 
-  const hasPermission = canAccessByRoleOrPermission(
+  // Permiso de validación (Firebase). Sin él: pantalla de solo lectura
+  // (crear + rechazar), sin filtros ni flujo de validar.
+  const puedeValidar = canAccessByRoleOrPermission(
     { role, permisos, profile },
-    { anyPerms: ["boletasSalida"] }
+    { anyPerms: ["boletasValidar"] }
   );
-  const hasScope = Boolean(tenantId && company && bodegaId);
-  const hasAccess = hasPermission && hasScope;
 
   const [boletas, setBoletas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,32 +108,33 @@ export default function BoletasSalidaHome() {
     setLoading(true);
     setError(null);
     try {
-      const rows = await listarBoletas(scope, { estado: estado || undefined, texto });
+      // Validadores: listado completo con filtros. Solo lectura: últimas N.
+      const filtros = puedeValidar
+        ? { estado: estado || undefined, texto }
+        : { limit: LECTURA_LIMIT };
+      const rows = await listarBoletas(filtros);
       setBoletas(rows);
     } catch (e) {
       setError(e instanceof Error ? e : new Error(String(e)));
     } finally {
       setLoading(false);
     }
-  }, [hasAccess, scope, estado, texto]);
+  }, [hasAccess, puedeValidar, estado, texto]);
 
   useEffect(() => {
-    if (authLoading) return;
+    if (!sessionReady) return;
     load();
-  }, [authLoading, load]);
+  }, [sessionReady, load]);
 
   const pendientes = useMemo(
     () => boletas.filter((b) => b.estado === "pendiente_validacion").length,
     [boletas]
   );
 
-  function handleCreated(res) {
+  function handleCreated(boleta) {
     setGenerarOpen(false);
     load();
-    if (res?.boletaId) {
-      // Mostrar el QR de la boleta recién generada.
-      setQr({ numero_formateado: res.numeroFormateado });
-    }
+    if (boleta?.numero_formateado) setQr(boleta);
   }
 
   function handleOpenValidar(boleta) {
@@ -121,33 +152,43 @@ export default function BoletasSalidaHome() {
     load();
   }
 
-  let body;
-  if (authLoading || (loading && boletas.length === 0 && !error)) {
-    body = (
-      <div style={styles.stack}>
-        <Skeleton height={44} radius={theme.RADIUS_MD} />
-        <Skeleton.Cards count={5} height={92} />
-      </div>
-    );
-  } else if (!hasAccess) {
-    body = (
+  // Gating por sesión de Supabase (autoridad real del scope).
+  function AccessNotice() {
+    let title = "Acceso no disponible";
+    let description = "No se pudo determinar el acceso a las boletas de salida.";
+    if (!configurado) {
+      title = "Supabase no está configurado";
+      description =
+        "Definí las variables de entorno de Supabase para habilitar el módulo.";
+    } else if (!hasSession) {
+      title = "Iniciá sesión en Supabase";
+      description =
+        "Las boletas de salida usan la sesión de Supabase del área de Desarrollo. Iniciá sesión para ver y generar boletas.";
+    } else if (!scopeComplete) {
+      title = "La sesión no trae scope";
+      description =
+        "Tu usuario de Supabase no tiene tenant/company/bodega asignados. Contactá al administrador.";
+    }
+    return (
       <EmptyState
         center
         icon={Lock}
-        title="Acceso no disponible"
-        description="No tenés el permiso de Boletas de salida o tu perfil no tiene una bodega activa asignada. Contactá al administrador."
+        title={title}
+        description={description}
+        action={
+          configurado && !hasSession ? (
+            <PrimaryButton icon={KeyRound} onClick={() => nav("/dev/supabase")}>
+              Ir al login de Supabase
+            </PrimaryButton>
+          ) : null
+        }
       />
     );
-  } else if (error) {
-    body = (
-      <ErrorState
-        title="No se pudieron cargar las boletas"
-        description="Revisá tu conexión e intentá nuevamente."
-        onRetry={load}
-      />
-    );
-  } else {
-    body = (
+  }
+
+  // Vista completa (con permiso de validar): filtros + listado filtrable.
+  function VistaValidador() {
+    return (
       <div style={styles.stack}>
         <div style={styles.toolbar}>
           <SearchInput
@@ -178,25 +219,84 @@ export default function BoletasSalidaHome() {
         ) : (
           <div style={styles.list}>
             {boletas.map((b) => (
-              <RowCard
-                key={b.id}
-                title={`${b.numero_formateado} · ${b.chofer_nombre || "Sin chofer"}`}
-                desc={`${TIPO_VEHICULO_LABELS[b.tipo_vehiculo] || b.tipo_vehiculo || ""} · ${
-                  b.placa_camion || "—"
-                }${b.cargado ? ` · ${b.destino || "cargado"}` : " · sin carga"}`}
-                meta={b.created_at ? new Date(b.created_at).toLocaleString("es-CR") : ""}
-                extra={
-                  <StatusPill tone={ESTADO_BOLETA_TONE[b.estado] || "neutral"} icon={null}>
-                    {ESTADO_BOLETA_LABELS[b.estado] || b.estado}
-                  </StatusPill>
-                }
-                onClick={() => setDetalle(b)}
-              />
+              <BoletaRow key={b.id} boleta={b} onClick={() => setDetalle(b)} />
             ))}
           </div>
         )}
       </div>
     );
+  }
+
+  // Vista de solo lectura (sin permiso de validar): aviso para crear + últimas
+  // boletas creadas. Sin filtros. Puede abrir el detalle para rechazar.
+  function VistaLectura() {
+    return (
+      <div style={styles.stack}>
+        <Card padding={theme.SPACE_5} style={styles.cta}>
+          <div style={styles.ctaIcon}>
+            <FileOutput size={22} strokeWidth={2.2} color={theme.ACCENT} aria-hidden="true" />
+          </div>
+          <div style={styles.ctaTitle}>Generá una boleta de salida</div>
+          <div style={styles.ctaText}>
+            Registrá la salida de un vehículo: chofer, placas, carga y destino. La
+            boleta queda pendiente de validación.
+          </div>
+          <PrimaryButton icon={FilePlus2} onClick={() => setGenerarOpen(true)}>
+            Generar boleta
+          </PrimaryButton>
+        </Card>
+
+        <SectionTitle
+          title="Últimas boletas"
+          hint="Boletas creadas recientemente en tu bodega."
+        />
+
+        {boletas.length === 0 ? (
+          <EmptyState
+            center
+            icon={Inbox}
+            title="Sin boletas"
+            description="Todavía no hay boletas. Generá la primera boleta de salida."
+          />
+        ) : (
+          <div style={styles.list}>
+            {boletas.map((b) => (
+              <BoletaRow key={b.id} boleta={b} onClick={() => setDetalle(b)} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  let body;
+  if (!sessionReady) {
+    body = (
+      <div style={styles.center}>
+        <Spinner />
+      </div>
+    );
+  } else if (!hasAccess) {
+    body = <AccessNotice />;
+  } else if (loading && boletas.length === 0 && !error) {
+    body = (
+      <div style={styles.stack}>
+        <Skeleton height={44} radius={theme.RADIUS_MD} />
+        <Skeleton.Cards count={5} height={92} />
+      </div>
+    );
+  } else if (error) {
+    body = (
+      <ErrorState
+        title="No se pudieron cargar las boletas"
+        description="Revisá tu conexión e intentá nuevamente."
+        onRetry={load}
+      />
+    );
+  } else if (puedeValidar) {
+    body = <VistaValidador />;
+  } else {
+    body = <VistaLectura />;
   }
 
   return (
@@ -225,9 +325,13 @@ export default function BoletasSalidaHome() {
           <Hero
             kicker="Registro de salida"
             title="Boletas de salida"
-            subtitle="Generá boletas de salida de vehículos, validalas con checklist y firma, y consultá su historial."
+            subtitle={
+              puedeValidar
+                ? "Generá boletas de salida de vehículos, validalas con checklist y firma, y consultá su historial."
+                : "Generá boletas de salida de vehículos y consultá las últimas registradas."
+            }
             badge={
-              hasAccess && pendientes > 0 ? (
+              hasAccess && puedeValidar && pendientes > 0 ? (
                 <Badge icon={Truck}>{pendientes} pendiente(s)</Badge>
               ) : (
                 <Badge icon={Lock}>Servicios Generales</Badge>
@@ -242,7 +346,6 @@ export default function BoletasSalidaHome() {
         open={generarOpen}
         onClose={() => setGenerarOpen(false)}
         scope={scope}
-        createdBy={actor}
         onCreated={handleCreated}
       />
 
@@ -250,21 +353,21 @@ export default function BoletasSalidaHome() {
         open={Boolean(detalle)}
         onClose={() => setDetalle(null)}
         boleta={detalle}
-        scope={scope}
-        rejectedBy={actor}
+        puedeValidar={puedeValidar}
         onValidar={handleOpenValidar}
         onQR={(b) => setQr(b)}
         onChanged={handleDetalleChanged}
       />
 
-      <ValidarBoletaSheet
-        open={Boolean(validar)}
-        onClose={() => setValidar(null)}
-        boleta={validar}
-        scope={scope}
-        validatedBy={actor}
-        onDone={handleValidado}
-      />
+      {puedeValidar ? (
+        <ValidarBoletaSheet
+          open={Boolean(validar)}
+          onClose={() => setValidar(null)}
+          boleta={validar}
+          scope={scope}
+          onDone={handleValidado}
+        />
+      ) : null}
 
       <BoletaQRModal open={Boolean(qr)} onClose={() => setQr(null)} boleta={qr} />
     </Shell>
@@ -275,4 +378,28 @@ const styles = {
   stack: { display: "grid", gap: theme.SPACE_4 },
   toolbar: { display: "grid", gap: theme.SPACE_3 },
   list: { display: "grid", gap: theme.SPACE_3 },
+  center: { display: "grid", placeItems: "center", padding: 40 },
+  cta: {
+    display: "grid",
+    justifyItems: "center",
+    textAlign: "center",
+    gap: theme.SPACE_3,
+  },
+  ctaIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: theme.RADIUS,
+    background: theme.ACCENT_SOFT,
+    border: `1px solid ${theme.ACCENT_BORDER}`,
+    display: "grid",
+    placeItems: "center",
+  },
+  ctaTitle: { color: theme.TEXT, fontWeight: theme.FW_EXTRABOLD, fontSize: theme.FS_LG },
+  ctaText: {
+    color: theme.SLATE,
+    fontWeight: theme.FW_MEDIUM,
+    fontSize: theme.FS_SM,
+    lineHeight: theme.LH_NORMAL,
+    maxWidth: 460,
+  },
 };

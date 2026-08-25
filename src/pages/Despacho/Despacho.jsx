@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Lock, Package, Truck } from "lucide-react";
+import { ArrowLeft, Lock, Package, Truck } from "lucide-react";
 import {
   Badge,
   Brand,
@@ -27,18 +27,10 @@ export default function Despacho() {
       {
         key: "in-progress",
         title: "Despachos en progreso",
-        desc: "Vista en tiempo real de despachos abiertos, ocupación de espacios y avance de carga.",
+        desc: "Vista en tiempo real de despachos por estado, ocupación de espacios y avance de carga.",
         path: "/despacho/in-progress",
         icon: Package,
         tag: "Operación",
-      },
-      {
-        key: "finalized",
-        title: "Despachos finalizados",
-        desc: "Historial de despachos cerrados o completados para consulta y seguimiento.",
-        path: "/despacho/finalizados",
-        icon: CheckCircle2,
-        tag: "Historial",
       },
     ],
     []

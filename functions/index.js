@@ -29,6 +29,20 @@ function safe(v) {
   return String(v ?? "").trim();
 }
 
+/**
+ * Normaliza la fecha de un movimiento enviada por una app externa a ISO 8601.
+ * Devuelve `null` si viene vacía o no es una fecha válida, para que la RPC caiga
+ * en su comportamiento por defecto (`now()`).
+ *
+ * @param {string|number|Date|null|undefined} v
+ * @returns {string|null}
+ */
+function safeMovementDate(v) {
+  if (v === null || v === undefined || v === "") return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 function parseScheduleRange(scheduleRange) {
   if (!scheduleRange) return null;
   const match = String(scheduleRange).match(/(\d{2}:\d{2}).*(\d{2}:\d{2})/);
@@ -424,11 +438,17 @@ exports.sendEquipoQrLabel = onCall({ region: "us-central1" }, async (req) => {
  *   bodegaId: string,
  *   articuloCodigo: string,
  *   cantidad: number,
- *   reason?: string
+ *   reason?: string,
+ *   createdAt?: string   // ISO 8601; fecha REAL del movimiento
  * }
  *
  * Mueve tarimas desde la ubicacion "almacen" hacia "tienda" en el MRP.
  * La idempotencia vive en Supabase por externalEventId.
+ *
+ * `createdAt` es opcional y existe para que un REINTENTO no fecha el movimiento
+ * con la hora del reintento: la app externa manda la hora real en que se hizo el
+ * traslado (la del intento que fallo). Si no viene, la RPC usa `now()` como
+ * siempre (consumo en vivo).
  */
 exports.consumeTarimasFromExternalApp = onCall(
   { region: "us-central1" },
@@ -447,6 +467,8 @@ exports.consumeTarimasFromExternalApp = onCall(
       reason,
       tienda,
       tiendaExterna,
+      createdAt,
+      fechaTraslado,
     } = req.data || {};
 
     const cleanExternalEventId = safe(externalEventId);
@@ -455,6 +477,8 @@ exports.consumeTarimasFromExternalApp = onCall(
     // Código externo de la tienda destino (p. ej. "T2"). Opcional: si no viene,
     // el consumo queda como "Sin asignar" en el inventario por tienda.
     const cleanTiendaExterna = safe(tiendaExterna ?? tienda) || null;
+    // Fecha real del movimiento (ver doc del callable). `null` => la RPC usa now().
+    const cleanCreatedAt = safeMovementDate(createdAt ?? fechaTraslado);
     const qty = Number(cantidad ?? quantity);
 
     if (!cleanExternalEventId) {
@@ -512,6 +536,10 @@ exports.consumeTarimasFromExternalApp = onCall(
         p_user_id: caller.uid,
         p_user_email: callerEmail || null,
         p_tienda_externa: cleanTiendaExterna,
+        // Solo se manda cuando hay fecha real: asi el consumo en vivo sigue
+        // resolviendo la firma de 10 args aunque la migracion 20260736 (que
+        // agrega `p_created_at`) todavia no este aplicada.
+        ...(cleanCreatedAt ? { p_created_at: cleanCreatedAt } : {}),
       });
 
       return {
@@ -527,6 +555,7 @@ exports.consumeTarimasFromExternalApp = onCall(
         externalEventId: cleanExternalEventId,
         bodegaId: cleanBodegaId,
         articuloCodigo: cleanArticuloCodigo,
+        createdAt: cleanCreatedAt,
       });
 
       const msg = error?.message || "No se pudo consumir tarimas.";

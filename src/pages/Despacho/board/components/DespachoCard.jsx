@@ -100,6 +100,9 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: theme.SPACE_2,
+    // Dentro de una columna con scroll, la tarjeta conserva su alto natural y
+    // nunca se comprime (evita que el contenido se recorte/encime).
+    flexShrink: 0,
   },
   header: {
     display: "flex",

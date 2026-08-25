@@ -111,7 +111,7 @@ const h = vi.hoisted(() => {
 vi.mock("../../../../supabase", () => ({ supabase: h.supabase }));
 
 // Importa el hook DESPUÉS de declarar el mock.
-import { useDespachosDevData } from "./useDespachosDevData";
+import { useDespachoData } from "./useDespachoData";
 import { useDespachoDetail } from "./useDespachoDetail";
 
 const SCOPE = { tenantId: "t1", company: "c1", bodegaId: "b1" };
@@ -138,14 +138,14 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("useDespachosDevData — realtime e integración", () => {
+describe("useDespachoData — realtime e integración", () => {
   it("abre el canal 'despachos-dev-list' al montar y lo libera al desmontar (7.1, 7.5)", async () => {
     h.state.resultsByTable["despacho_dev_estados"] = {
       data: [{ codigo: "creado", nombre: "Creado", orden: 1 }],
       error: null,
     };
 
-    const { result, unmount } = renderHook(() => useDespachosDevData(SCOPE));
+    const { result, unmount } = renderHook(() => useDespachoData(SCOPE));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -176,7 +176,7 @@ describe("useDespachosDevData — realtime e integración", () => {
       error: null,
     };
 
-    const { result } = renderHook(() => useDespachosDevData(SCOPE));
+    const { result } = renderHook(() => useDespachoData(SCOPE));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     // Solo debe existir una consulta de despachos (el estado `eliminado` se excluye).
@@ -224,7 +224,7 @@ describe("useDespachosDevData — realtime e integración", () => {
     let result;
     let unmount;
     act(() => {
-      ({ result, unmount } = renderHook(() => useDespachosDevData(SCOPE)));
+      ({ result, unmount } = renderHook(() => useDespachoData(SCOPE)));
     });
     await flushMicrotasks();
 

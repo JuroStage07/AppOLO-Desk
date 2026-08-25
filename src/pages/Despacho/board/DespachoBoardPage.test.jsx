@@ -1,4 +1,4 @@
-// Feature: despachos-dev — pruebas de estados de UI de `DespachosDevPage`.
+// Feature: despachos-dev — pruebas de estados de UI de `DespachoBoardPage`.
 //
 // Pruebas de ejemplo (no property tests) con React Testing Library + jsdom que
 // cubren los estados de interfaz de la página contenedora (Requirement 8):
@@ -11,7 +11,7 @@
 //  - 8.6: mensaje sin-permiso/sin-scope que no renderiza el listado ni datos y
 //    no expone detalles técnicos.
 //
-// La página consume los datos vía los hooks `useDespachosDevData` y
+// La página consume los datos vía los hooks `useDespachoData` y
 // `useDespachoDetail`; se mockean para dirigir cada estado sin depender de
 // Supabase. El scope/rol se provee mediante el contexto real `AuthCtx`.
 // `useIsMobile` se mockea a `false` para renderizar el `KanbanBoard` de forma
@@ -30,8 +30,8 @@ import { buildMapaEstados } from "./lib/mapaEstados.js";
 // --- Mocks de módulos --------------------------------------------------------
 
 // Hook del listado: se controla su retorno por test con `mockReturnValue`.
-vi.mock("./hooks/useDespachosDevData", () => ({
-  useDespachosDevData: vi.fn(),
+vi.mock("./hooks/useDespachoData", () => ({
+  useDespachoData: vi.fn(),
 }));
 
 // Hook del detalle: retorno neutro (el detalle no es el objeto de estas pruebas).
@@ -69,8 +69,8 @@ vi.mock("recharts", async () => {
   };
 });
 
-import DespachosDevPage from "./DespachosDevPage.jsx";
-import { useDespachosDevData } from "./hooks/useDespachosDevData";
+import DespachoBoardPage from "./DespachoBoardPage.jsx";
+import { useDespachoData } from "./hooks/useDespachoData";
 
 // --- Datos de apoyo ----------------------------------------------------------
 
@@ -126,7 +126,7 @@ function renderPage(authValue = authConAcceso) {
   return render(
     <MemoryRouter>
       <AuthCtx.Provider value={authValue}>
-        <DespachosDevPage />
+        <DespachoBoardPage />
       </AuthCtx.Provider>
     </MemoryRouter>,
   );
@@ -138,9 +138,9 @@ beforeEach(() => {
 
 // --- Pruebas -----------------------------------------------------------------
 
-describe("DespachosDevPage — Requirement 8.1 (estado de carga)", () => {
+describe("DespachoBoardPage — Requirement 8.1 (estado de carga)", () => {
   it("muestra los esqueletos de carga mientras la consulta inicial está en curso", () => {
-    useDespachosDevData.mockReturnValue(
+    useDespachoData.mockReturnValue(
       hookState({ loading: true, despachos: [] }),
     );
 
@@ -159,11 +159,11 @@ describe("DespachosDevPage — Requirement 8.1 (estado de carga)", () => {
   });
 });
 
-describe("DespachosDevPage — Requirement 8.3 (estado de error + reintento)", () => {
+describe("DespachoBoardPage — Requirement 8.3 (estado de error + reintento)", () => {
   it("muestra un mensaje de error en español y el botón de reintento invoca reload", async () => {
     const user = userEvent.setup();
     const reload = vi.fn();
-    useDespachosDevData.mockReturnValue(
+    useDespachoData.mockReturnValue(
       hookState({
         loading: false,
         error: new Error("timeout técnico interno"),
@@ -187,9 +187,9 @@ describe("DespachosDevPage — Requirement 8.3 (estado de error + reintento)", (
   });
 });
 
-describe("DespachosDevPage — Requirement 8.4 (estado vacío)", () => {
+describe("DespachoBoardPage — Requirement 8.4 (estado vacío)", () => {
   it("muestra el EmptyState cuando no hay despachos activos en el scope", () => {
-    useDespachosDevData.mockReturnValue(
+    useDespachoData.mockReturnValue(
       hookState({ loading: false, error: null, despachos: [] }),
     );
 
@@ -205,10 +205,10 @@ describe("DespachosDevPage — Requirement 8.4 (estado vacío)", () => {
   });
 });
 
-describe("DespachosDevPage — Requirement 8.5 (sin resultados por filtro)", () => {
+describe("DespachoBoardPage — Requirement 8.5 (sin resultados por filtro)", () => {
   it("muestra el mensaje de 'sin resultados' distinto del vacío al filtrar todo fuera", async () => {
     const user = userEvent.setup();
-    useDespachosDevData.mockReturnValue(
+    useDespachoData.mockReturnValue(
       hookState({
         loading: false,
         error: null,
@@ -242,9 +242,9 @@ describe("DespachosDevPage — Requirement 8.5 (sin resultados por filtro)", () 
   });
 });
 
-describe("DespachosDevPage — Requirement 8.6 (sin permiso/scope)", () => {
+describe("DespachoBoardPage — Requirement 8.6 (sin permiso/scope)", () => {
   it("muestra el mensaje de acceso no disponible cuando el rol no es dev", () => {
-    useDespachosDevData.mockReturnValue(
+    useDespachoData.mockReturnValue(
       hookState({ loading: false, error: null, despachos: [despachoActivo] }),
     );
 
@@ -262,7 +262,7 @@ describe("DespachosDevPage — Requirement 8.6 (sin permiso/scope)", () => {
   });
 
   it("muestra el mensaje de acceso no disponible cuando falta la bodega activa (scope)", () => {
-    useDespachosDevData.mockReturnValue(
+    useDespachoData.mockReturnValue(
       hookState({ loading: false, error: null, despachos: [despachoActivo] }),
     );
 

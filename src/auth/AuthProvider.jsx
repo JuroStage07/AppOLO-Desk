@@ -1,6 +1,6 @@
 import React, { createContext, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
 export const AuthCtx = createContext(null);
@@ -17,43 +17,64 @@ export default function AuthProvider({ children }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    // Suscripción al documento de perfil del usuario activo. Se rehace en cada
+    // cambio de sesión y se limpia al cerrar sesión o desmontar.
+    let unsubProfile = null;
+
+    const clearProfileSub = () => {
+      if (unsubProfile) {
+        unsubProfile();
+        unsubProfile = null;
+      }
+    };
+
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
       setError("");
       setUser(u ?? null);
       setProfile(null);
       setLoadingAuth(false);
 
+      clearProfileSub();
+
       if (!u) return;
 
-      // ✅ cargar profile por docId = uid
+      // ✅ escuchar profiles/{uid} EN TIEMPO REAL: así los cambios de permisos,
+      // rol, tenant o bodega se reflejan sin necesidad de re-login.
       setLoadingProfile(true);
-      try {
-        const ref = doc(db, "profiles", u.uid);
-        const snap = await getDoc(ref);
-
-        if (!snap.exists()) {
-          // si no hay perfil, lo sacamos y mandamos a login
-          await signOut(auth);
+      const ref = doc(db, "profiles", u.uid);
+      unsubProfile = onSnapshot(
+        ref,
+        async (snap) => {
+          if (!snap.exists()) {
+            // si no hay perfil, lo sacamos y mandamos a login
+            clearProfileSub();
+            try { await signOut(auth); } catch { /* ignore */ }
+            setUser(null);
+            setProfile(null);
+            setError("NO_PROFILE");
+            setLoadingProfile(false);
+            return;
+          }
+          setProfile({ id: snap.id, ...snap.data() });
+          setLoadingProfile(false);
+        },
+        async (e) => {
+          console.log("AuthProvider profile error:", e);
+          // si falla Firestore, mejor cerrar sesión para no quedar en limbo
+          clearProfileSub();
+          try { await signOut(auth); } catch { /* ignore */ }
           setUser(null);
           setProfile(null);
-          setError("NO_PROFILE");
-          return;
+          setError("PROFILE_READ_ERROR");
+          setLoadingProfile(false);
         }
-
-        setProfile({ id: snap.id, ...snap.data() });
-      } catch (e) {
-        console.log("AuthProvider profile error:", e);
-        // si falla Firestore, mejor cerrar sesión para no quedar en limbo
-        try { await signOut(auth); } catch {}
-        setUser(null);
-        setProfile(null);
-        setError("PROFILE_READ_ERROR");
-      } finally {
-        setLoadingProfile(false);
-      }
+      );
     });
 
-    return () => unsub();
+    return () => {
+      clearProfileSub();
+      unsubAuth();
+    };
   }, []);
 
   const loading = loadingAuth || loadingProfile;

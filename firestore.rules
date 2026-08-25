@@ -50,7 +50,10 @@ service cloud.firestore {
           'serviciosGenerales',
           'pesajeTarimas',
           'documentacion',
+          'boletasSalida',
+          'boletasValidar',
           'mrpTarimas',
+          'mrpInsumos',
           'mrpAjustes',
           'mrpTraslados',
           'horasExtra',
@@ -69,7 +72,10 @@ service cloud.firestore {
         && (!('serviciosGenerales' in permisos) || permisos.serviciosGenerales is bool)
         && (!('pesajeTarimas' in permisos) || permisos.pesajeTarimas is bool)
         && (!('documentacion' in permisos) || permisos.documentacion is bool)
+        && (!('boletasSalida' in permisos) || permisos.boletasSalida is bool)
+        && (!('boletasValidar' in permisos) || permisos.boletasValidar is bool)
         && (!('mrpTarimas' in permisos) || permisos.mrpTarimas is bool)
+        && (!('mrpInsumos' in permisos) || permisos.mrpInsumos is bool)
         && (!('mrpAjustes' in permisos) || permisos.mrpAjustes is bool)
         && (!('mrpTraslados' in permisos) || permisos.mrpTraslados is bool)
         && (!('horasExtra' in permisos) || permisos.horasExtra is bool)

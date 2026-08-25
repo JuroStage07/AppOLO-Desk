@@ -52,7 +52,8 @@ Two orthogonal axes on `profiles/{uid}`:
 `profile.epaAdmin` is a third flag layered on top (see above).
 
 **MRP Tarimas access** is defined in `src/config/mrpAccess.js` (the single source of truth, consumed by `EpaAdminRouteGuard`, `workAreas.jsx`, the module sidebar and `useMrpAccess`):
-- *Sections* — `epaAdmin` profiles are structurally limited to `MRP_RESTRICTED_PATHS` (Dashboard, Inventario › Artículos, Inventario › En Cliente / Tienda, Historial de movimientos). Insumos, Catálogos, Descartes, Registro de eventos and Registro de insumos are not reachable and cannot be granted by permission.
+- *Sections* — `epaAdmin` profiles are structurally limited to `MRP_RESTRICTED_PATHS` (Dashboard, the whole Inventario — Artículos, Insumos, En Cliente / Tienda — and Historial de movimientos). Catálogos, Descartes, Registro de eventos and Registro de insumos are not reachable and cannot be granted by permission.
+- *Per-section permissions* — `MRP_PATH_PERMISSIONS` maps a section path to a permission required of **every** profile: today `/mrp-tarimas/inventario/insumos` requires `permisos.mrpInsumos` (admin role overrides; `epaAdmin` gets no role override, so it needs the explicit permission). The tab, the sidebar entry and the route are all gated by `canAccessMrpPath`.
 - *Writes* — `permisos.mrpAjustes` / `permisos.mrpTraslados` gate the Ajuste and Traslado actions. `epaAdmin` profiles get no role override (read-only until granted); other users keep the pre-existing behaviour (admin role or `mrpTarimas` implies both).
 
 When adding a permission key, update `PERMISSION_OPTIONS` **and** `validPermisosMap` in `firestore.rules` — its `keys().hasOnly([...])` rejects unknown keys, and `normalizePermissionMap` writes every key on save.

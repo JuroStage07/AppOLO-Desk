@@ -1354,6 +1354,11 @@ function InsumosSection() {
   const [porLote, setPorLote] = useState(false);
   const [nextCode, setNextCode] = useState("");
   const [errs, setErrs] = useState({});
+  // Código: "manual" = el que se escriba (opción por defecto); "auto" =
+  // correlativo AI### que asigna la RPC.
+  const [codeMode, setCodeMode] = useState("manual");
+  const [codigo, setCodigo] = useState("");
+  const manualCode = codeMode === "manual";
 
   const openCreate = async () => {
     setEditing(null);
@@ -1361,6 +1366,8 @@ function InsumosSection() {
     setPorLote(false);
     setErrs({});
     setNextCode("");
+    setCodeMode("manual");
+    setCodigo("");
     setOpen(true);
     try {
       setNextCode(await peekNextCode());
@@ -1380,12 +1387,18 @@ function InsumosSection() {
     setPorLote(i.price_mode === "batch");
     setErrs({});
     setNextCode("");
+    setCodeMode("manual");
+    setCodigo("");
     setOpen(true);
   };
 
   const onSubmit = async () => {
     const e = {};
     if (!form.nombre.trim()) e.nombre = "El nombre es obligatorio.";
+    if (!editing && manualCode) {
+      const codeErr = validateArticuloCode(codigo);
+      if (codeErr) e.codigo = codeErr;
+    }
     const p = Number(form.price);
     if (form.price === "" || !Number.isFinite(p) || p < 0) {
       e.price = "Ingrese un precio mayor o igual a 0.";
@@ -1411,6 +1424,7 @@ function InsumosSection() {
           detalle: form.detalle,
           price: p,
           priceMode: porLote ? "batch" : "unit",
+          codigo: manualCode ? codigo : null,
         });
       }
       setOpen(false);
@@ -1548,17 +1562,51 @@ function InsumosSection() {
         <Sheet.Body>
           <Field
             label="Código"
+            required={!editing && manualCode}
+            error={errs.codigo}
             hint={
               editing
                 ? "El código no se puede editar."
+                : manualCode
+                ? "Letras, números y . _ / - (se guarda en mayúsculas). Debe ser único."
                 : "Se asigna automáticamente al guardar."
             }
           >
-            <Field.Input
-              value={editing ? editing.codigo : nextCode || "Calculando…"}
-              disabled
-              readOnly
-            />
+            {editing ? (
+              <Field.Input value={editing.codigo || ""} disabled readOnly />
+            ) : (
+              <>
+                <ChipsRow style={{ marginBottom: 8 }}>
+                  <Chip active={manualCode} onClick={() => setCodeMode("manual")}>
+                    Manual
+                  </Chip>
+                  <Chip
+                    active={!manualCode}
+                    onClick={() => {
+                      setCodeMode("auto");
+                      setErrs((p) => ({ ...p, codigo: undefined }));
+                    }}
+                  >
+                    Automático
+                  </Chip>
+                </ChipsRow>
+                {manualCode ? (
+                  <Field.Input
+                    value={codigo}
+                    onChange={(e) => setCodigo(e.target.value.toUpperCase())}
+                    placeholder="Ej: BOL-001"
+                    maxLength={24}
+                    autoFocus
+                  />
+                ) : (
+                  <Field.Input
+                    value={nextCode || "Calculando…"}
+                    disabled
+                    readOnly
+                  />
+                )}
+              </>
+            )}
           </Field>
           <Field label="Nombre" required error={errs.nombre}>
             <Field.Input
@@ -1567,7 +1615,8 @@ function InsumosSection() {
                 setForm((f) => ({ ...f, nombre: e.target.value }))
               }
               placeholder="Ej: Bolsa plástica"
-              autoFocus
+              // Con código manual el foco arranca en el campo de código.
+              autoFocus={!!editing || !manualCode}
             />
           </Field>
           <Field label="Detalle (opcional)">

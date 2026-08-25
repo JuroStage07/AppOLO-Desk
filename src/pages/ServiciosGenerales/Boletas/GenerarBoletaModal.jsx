@@ -18,7 +18,7 @@ import {
   upsertChoferPorCedula,
   subirFotoCedula,
 } from "../../../services/despachoDev/choferesDev";
-import { generarBoletaManual } from "../../../services/despachoDev/boletasDev";
+import { generarBoletaManual, obtenerBoleta } from "../../../services/despachoDev/boletasDev";
 
 const EMPTY = {
   choferId: null,
@@ -41,7 +41,7 @@ const EMPTY = {
  *  2) subir foto de cédula (opcional) al bucket privado,
  *  3) generar boleta vía RPC (queda en pendiente_validacion).
  */
-export default function GenerarBoletaModal({ open, onClose, scope, createdBy, onCreated }) {
+export default function GenerarBoletaModal({ open, onClose, scope, onCreated }) {
   const toast = useToast();
   const [form, setForm] = useState(EMPTY);
   const [fotoFile, setFotoFile] = useState(null);
@@ -73,7 +73,7 @@ export default function GenerarBoletaModal({ open, onClose, scope, createdBy, on
     }
     setBuscando(true);
     try {
-      const chofer = await buscarChoferPorCedula(scope, cedula);
+      const chofer = await buscarChoferPorCedula(cedula);
       if (!chofer) {
         toast.info("Chofer no encontrado. Se creará uno nuevo al generar la boleta.");
         set("choferId", null);
@@ -87,8 +87,8 @@ export default function GenerarBoletaModal({ open, onClose, scope, createdBy, on
         celular: chofer.celular || "",
         cedulaFotoPath: chofer.cedula_foto_path || null,
         tipoVehiculo: chofer.tipo_vehiculo || f.tipoVehiculo,
+        // El chofer guarda `placa_camion`; el contenedor es dato de la boleta.
         placaCamion: chofer.placa_camion || f.placaCamion,
-        placaContenedor: chofer.placa_contenedor || f.placaContenedor,
       }));
       toast.success(`Chofer ${chofer.nombre} cargado.`);
     } catch (e) {
@@ -133,8 +133,8 @@ export default function GenerarBoletaModal({ open, onClose, scope, createdBy, on
         cedulaFotoPath,
       });
 
-      // 3) Boleta.
-      const res = await generarBoletaManual(scope, createdBy, {
+      // 3) Boleta (la RPC devuelve el boletaId; el scope/autor los toma del JWT).
+      const boletaId = await generarBoletaManual({
         choferId: chofer?.id || form.choferId || null,
         choferNombre: form.nombre,
         choferCedula: form.cedula,
@@ -148,9 +148,11 @@ export default function GenerarBoletaModal({ open, onClose, scope, createdBy, on
         destino: form.cargado ? form.destino : "",
       });
 
-      toast.success(`Boleta ${res?.numeroFormateado || ""} generada.`);
+      // Traemos la boleta creada para mostrar número/QR.
+      const boleta = await obtenerBoleta(boletaId).catch(() => null);
+      toast.success(`Boleta ${boleta?.numero_formateado || ""} generada.`);
       resetAll();
-      onCreated?.(res);
+      onCreated?.(boleta || { id: boletaId });
     } catch (e) {
       toast.error(e?.message || "No se pudo generar la boleta.");
     } finally {

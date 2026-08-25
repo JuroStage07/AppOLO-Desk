@@ -191,5 +191,9 @@ const styles = {
     gap: theme.SPACE_3,
     padding: theme.SPACE_3,
     background: theme.SURFACE,
+    // Muestra ~2 tarjetas por grupo y desplaza el resto (evita listas infinitas).
+    maxHeight: 440,
+    overflowY: "auto",
+    minHeight: 0,
   },
 };

@@ -6,6 +6,7 @@ import { AuthCtx } from "../../auth/AuthProvider";
 import {
   canAccessMrpPath,
   canMrpAjustes,
+  canMrpInsumos,
   canMrpTraslados,
   isMrpRestrictedProfile,
 } from "../../config/mrpAccess";
@@ -19,6 +20,7 @@ export default function useMrpAccess() {
       restricted: isMrpRestrictedProfile(ctx),
       canAjustes: canMrpAjustes(ctx),
       canTraslados: canMrpTraslados(ctx),
+      canInsumos: canMrpInsumos(ctx),
       canAccessPath: (path) => canAccessMrpPath(path, ctx),
     };
   }, [profile, permisos, role]);

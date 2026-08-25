@@ -92,7 +92,13 @@ export const PERMISSION_OPTIONS = [
     key: "boletasSalida",
     label: "Boletas de salida",
     group: "Servicios",
-    description: "Generar, validar y consultar boletas de salida de vehiculos.",
+    description: "Crear, consultar y rechazar boletas de salida de vehiculos.",
+  },
+  {
+    key: "boletasValidar",
+    label: "Validar boletas de salida",
+    group: "Servicios",
+    description: "Validar boletas con checklist y firma. Sin este permiso la pantalla es de solo lectura (crear y rechazar).",
   },
   {
     key: "pesajeTarimas",
@@ -105,6 +111,13 @@ export const PERMISSION_OPTIONS = [
     label: "MRP Tarimas",
     group: "Servicios",
     description: "Dashboard, inventario, reparaciones y materiales de tarimas.",
+  },
+  {
+    key: "mrpInsumos",
+    label: "MRP Inventario de insumos",
+    group: "Servicios",
+    description:
+      "Ver el inventario de insumos en MRP Tarimas. Sin este permiso la seccion no aparece.",
   },
   {
     key: "mrpAjustes",

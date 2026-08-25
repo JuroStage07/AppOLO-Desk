@@ -70,7 +70,6 @@ const RAW_AREAS = [
     blockedDesc: "Acceso al módulo deshabilitado temporalmente.",
     modules: [
       { label: "En progreso", path: "/despacho/in-progress" },
-      { label: "Finalizados", path: "/despacho/finalizados" },
     ],
   },
   {
@@ -175,7 +174,7 @@ const RAW_AREAS = [
     theme: AREA_THEMES["servicios-generales"],
     tag: "Servicios",
     icon: <Sparkles size={18} strokeWidth={2} />,
-    anyPerms: ["serviciosGenerales", "pesajeTarimas", "boletasSalida"],
+    anyPerms: ["serviciosGenerales", "pesajeTarimas", "boletasSalida", "boletasValidar"],
     modules: [
       {
         label: "Órdenes de trabajo",
@@ -187,7 +186,7 @@ const RAW_AREAS = [
         ],
       },
       { label: "Validar ingreso", path: "/servicios-generales/validar-ingreso", requiredPerm: "serviciosGenerales" },
-      { label: "Boletas de salida", path: "/servicios-generales/boletas-salida", requiredPerm: "boletasSalida" },
+      { label: "Boletas de salida", path: "/servicios-generales/boletas-salida", anyPerms: ["boletasSalida", "boletasValidar"] },
       {
         label: "Pesaje tarimas",
         path: "/servicios-generales/pesaje-tarimas",
@@ -266,7 +265,6 @@ const RAW_AREAS = [
     modules: [
       { label: "Update AppOLO Supabase", path: "/dev/update-supabase" },
       { label: "Supabase", path: "/dev/supabase" },
-      { label: "Despachos Dev", path: "/dev/despachos-dev" },
       {
         label: "Configuración de módulos",
         path: "/dev/config-modulos",

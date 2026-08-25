@@ -21,8 +21,7 @@ import DocumentacionPage from "./pages/Documentacion/DocumentacionPage";
 
 //Despacho
 import Despacho from "./pages/Despacho/Despacho";
-import DespachoInProgressPage from "./pages/Despacho/DespachoInProgressPage";
-import DespachoFinalizadosPage from "./pages/Despacho/DespachoFinalizadosPage";
+import DespachoBoardPage from "./pages/Despacho/board/DespachoBoardPage";
 
 //SaludOcupacional
 import SSOHub from "./pages/SSO/Seguridad/S.S.OHub";
@@ -63,7 +62,6 @@ import AperturasFinalizadasEPA from "./pages/EPA/AperturasFinalizadasEPA";
 import DevHub from "./pages/Dev/DevHub";
 import UpdateSupabasePage from "./pages/Dev/UpdateSupabasePage";
 import ModulesConfigHub from "./pages/Dev/ModulesConfigHub";
-import DespachosDevPage from "./pages/Dev/DespachosDev/DespachosDevPage";
 import SupabaseAuthPage from "./pages/Dev/Supabase/SupabaseAuthPage";
 import SupabaseAuthProvider from "./contexts/SupabaseAuthContext";
 import OvertimeSettingsHub from "./pages/Administracion/Overtime/OvertimeSettingsHub";
@@ -219,15 +217,7 @@ export default function App() {
             path="/despacho/in-progress"
             element={
               <PrivateRoute>
-                <DespachoInProgressPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/despacho/finalizados"
-            element={
-              <PrivateRoute>
-                <DespachoFinalizadosPage />
+                <DespachoBoardPage />
               </PrivateRoute>
             }
           />
@@ -447,14 +437,6 @@ export default function App() {
             element={
               <PrivateRoute>
                 <SupabaseAuthPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/dev/despachos-dev"
-            element={
-              <PrivateRoute>
-                <DespachosDevPage />
               </PrivateRoute>
             }
           />

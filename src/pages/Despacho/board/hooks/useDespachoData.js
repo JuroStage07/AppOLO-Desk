@@ -61,7 +61,7 @@ function withTimeout(query, ms, message) {
  * }}
  * _Requirements: 1.1, 1.2, 2.1, 7.1, 7.2, 7.3, 7.5, 7.6, 7.7, 9.5, 9.6, 9.7_
  */
-export function useDespachosDevData({ tenantId, company, bodegaId } = {}) {
+export function useDespachoData({ tenantId, company, bodegaId } = {}) {
   const [catalogo, setCatalogo] = useState([]);
   const [despachos, setDespachos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -249,4 +249,4 @@ export function useDespachosDevData({ tenantId, company, bodegaId } = {}) {
   };
 }
 
-export default useDespachosDevData;
+export default useDespachoData;

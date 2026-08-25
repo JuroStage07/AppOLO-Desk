@@ -1,10 +1,13 @@
 // MRP Tarimas — acceso por perfil. Dos ejes independientes:
 //
 //  • SECCIONES (estructural): los perfiles restringidos — `profile.epaAdmin ===
-//    true` — solo ven un subconjunto fijo del módulo: Dashboard, Inventario ›
-//    Artículos, Inventario › En Cliente / Tienda e Historial › Historial de
-//    movimientos. Insumos, Catálogos, Descartes, Registro de eventos y Registro
-//    de insumos quedan fuera y NO se habilitan con permisos.
+//    true` — solo ven un subconjunto fijo del módulo: Dashboard, todo Inventario
+//    (Artículos, Insumos y En Cliente / Tienda) e Historial › Historial de
+//    movimientos. Catálogos, Descartes, Registro de eventos y Registro de
+//    insumos quedan fuera y NO se habilitan con permisos.
+//    Además, algunas secciones exigen su propio permiso a cualquier perfil
+//    (MRP_PATH_PERMISSIONS): hoy Inventario › Insumos requiere `mrpInsumos`,
+//    también para los perfiles restringidos.
 //
 //  • ESCRITURA (por permiso): registrar ajustes o traslados exige los permisos
 //    `mrpAjustes` / `mrpTraslados`. Los perfiles restringidos no tienen override
@@ -25,9 +28,20 @@ export const MRP_RESTRICTED_PATHS = [
   "/mrp-tarimas/dashboard",
   "/mrp-tarimas/inventario",
   "/mrp-tarimas/inventario/articulos",
+  // Insumos queda además sujeto al permiso `mrpInsumos` (MRP_PATH_PERMISSIONS).
+  "/mrp-tarimas/inventario/insumos",
   "/mrp-tarimas/inventario/tiendas",
   "/mrp-tarimas/movimientos",
 ];
+
+/**
+ * Secciones del módulo que exigen un permiso propio, además del `mrpTarimas`
+ * que da entrada al módulo. Aplica a todos los perfiles (el rol admin sigue
+ * siendo override, como en el resto de la app).
+ */
+export const MRP_PATH_PERMISSIONS = {
+  "/mrp-tarimas/inventario/insumos": "mrpInsumos",
+};
 
 const normalizePath = (path) => String(path || "").replace(/\/+$/, "") || "/";
 
@@ -50,14 +64,34 @@ export function isMrpPath(pathname) {
 }
 
 /**
- * Gate de sección. Solo recorta a los perfiles restringidos: para el resto de
- * usuarios el acceso al módulo lo decide el permiso `mrpTarimas` (routeAccess /
- * workAreas), no esta función.
+ * ¿La sección exige un permiso propio (MRP_PATH_PERMISSIONS) y el perfil lo
+ * tiene? Rol admin es override; el resto necesita el permiso explícito.
+ */
+function hasSectionPermission(path, ctx = {}) {
+  const permKey = MRP_PATH_PERMISSIONS[path];
+  if (!permKey) return true;
+  if (hasExplicitPermission(permisosOf(ctx), permKey)) return true;
+  if (isMrpRestrictedProfile(ctx)) return false;
+  return isAdminRole(ctx.role);
+}
+
+/**
+ * Gate de sección. Dos recortes: los perfiles restringidos solo ven
+ * MRP_RESTRICTED_PATHS, y cualquier perfil necesita el permiso de la sección
+ * cuando esta lo exige (MRP_PATH_PERMISSIONS). Fuera de eso, el acceso al
+ * módulo lo decide el permiso `mrpTarimas` (routeAccess / workAreas).
  */
 export function canAccessMrpPath(pathname, ctx = {}) {
   if (!isMrpPath(pathname)) return true;
+  const path = normalizePath(pathname);
+  if (!hasSectionPermission(path, ctx)) return false;
   if (!isMrpRestrictedProfile(ctx)) return true;
-  return MRP_RESTRICTED_PATHS.includes(normalizePath(pathname));
+  return MRP_RESTRICTED_PATHS.includes(path);
+}
+
+/** Puede ver el inventario de insumos (permiso `mrpInsumos`). */
+export function canMrpInsumos(ctx = {}) {
+  return canAccessMrpPath("/mrp-tarimas/inventario/insumos", ctx);
 }
 
 /**

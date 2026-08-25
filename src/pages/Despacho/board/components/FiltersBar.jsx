@@ -23,8 +23,6 @@ import React, { useMemo, Suspense } from "react";
 import { RotateCcw } from "lucide-react";
 import {
   SearchInput,
-  Chip,
-  ChipsRow,
   Field,
   SecondaryButton,
   theme,
@@ -119,7 +117,7 @@ export default function FiltersBar({
   showResumen = false,
 }) {
   const safeFiltros = filtros || {};
-  const { texto = "", estados = [], desde = null, hasta = null } = safeFiltros;
+  const { texto = "", desde = null, hasta = null } = safeFiltros;
 
   const rangeInvalid = !isValidDateRange(desde, hasta);
 
@@ -128,21 +126,6 @@ export default function FiltersBar({
     mapaEstados ? mapaEstados.label(codigo) : labelFor(codigo, catalogo);
   const colorOf = (codigo) =>
     mapaEstados ? mapaEstados.color(codigo) : colorFor(codigo);
-
-  // Opciones del selector de estados: estados del catálogo excluyendo
-  // 'eliminado', ordenados por `orden` y luego por nombre. (Requirement 4.2)
-  const estadoOptions = useMemo(() => {
-    if (!Array.isArray(catalogo)) return [];
-    return catalogo
-      .filter((e) => e && e.codigo && e.codigo !== "eliminado")
-      .map((e) => ({ codigo: e.codigo, orden: e.orden, nombre: e.nombre }))
-      .sort((a, b) => {
-        const oa = typeof a.orden === "number" ? a.orden : Number.MAX_SAFE_INTEGER;
-        const ob = typeof b.orden === "number" ? b.orden : Number.MAX_SAFE_INTEGER;
-        if (oa !== ob) return oa - ob;
-        return String(a.nombre ?? a.codigo).localeCompare(String(b.nombre ?? b.codigo));
-      });
-  }, [catalogo]);
 
   // Datos del mini-resumen: conteo por estado sobre los despachos visibles.
   // (Requirement 4.9)
@@ -165,17 +148,8 @@ export default function FiltersBar({
     [resumenData],
   );
 
-  const estadosSel = Array.isArray(estados) ? estados : [];
-
   function emit(patch) {
     onChange?.({ ...safeFiltros, ...patch });
-  }
-
-  function toggleEstado(codigo) {
-    const next = estadosSel.includes(codigo)
-      ? estadosSel.filter((c) => c !== codigo)
-      : [...estadosSel, codigo];
-    emit({ estados: next });
   }
 
   const count = typeof visibleCount === "number" ? visibleCount : 0;
@@ -191,33 +165,6 @@ export default function FiltersBar({
         onChange={(t) => emit({ texto: t })}
         placeholder="Buscar por referencia, tienda o placa..."
       />
-
-      {/* Selector de estados múltiple (Requirement 4.2) */}
-      {estadoOptions.length > 0 ? (
-        <div style={styles.section}>
-          <span style={styles.sectionLabel}>Estados</span>
-          <ChipsRow>
-            {estadoOptions.map((opt) => {
-              const active = estadosSel.includes(opt.codigo);
-              const color = colorOf(opt.codigo);
-              return (
-                <Chip
-                  key={opt.codigo}
-                  active={active}
-                  onClick={() => toggleEstado(opt.codigo)}
-                  style={
-                    active
-                      ? { background: color, borderColor: color }
-                      : { borderColor: theme.withAlpha(color, 0.45) }
-                  }
-                >
-                  {labelOf(opt.codigo)}
-                </Chip>
-              );
-            })}
-          </ChipsRow>
-        </div>
-      ) : null}
 
       {/* Rango de fechas (Requirements 4.3, 4.4) */}
       <div style={styles.dateRow}>

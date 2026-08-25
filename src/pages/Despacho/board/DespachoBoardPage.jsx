@@ -1,6 +1,6 @@
-// Feature: despachos-dev — Página contenedora "Despachos Dev" (solo lectura).
+// Página contenedora "Despachos en progreso" (módulo Despacho).
 //
-// Orquesta los hooks de datos (`useDespachosDevData`) y de detalle
+// Orquesta los hooks de datos (`useDespachoData`) y de detalle
 // (`useDespachoDetail`), la responsividad kanban ↔ acordeón (`useIsMobile(1023)`)
 // y los estados de interfaz en español. Cablea `FiltersBar`,
 // `KanbanBoard`/`AccordionGroups`, `DespachoDetailSheet` y `RealtimeIndicator`.
@@ -29,7 +29,7 @@
 
 import React, { useContext, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Boxes, Inbox, Lock, SearchX, Truck } from "lucide-react";
+import { ArrowLeft, Boxes, Inbox, LayoutGrid, Lock, SearchX, SlidersHorizontal, Truck } from "lucide-react";
 import {
   Shell,
   Topbar,
@@ -39,7 +39,11 @@ import {
   Main,
   Container,
   Hero,
+  SectionTitle,
   Badge,
+  Card,
+  KpiCard,
+  KpiGrid,
   Skeleton,
   EmptyState,
   ErrorState,
@@ -47,8 +51,9 @@ import {
   theme,
 } from "../../../components/ui";
 import { AuthCtx } from "../../../auth/AuthProvider";
+import { canAccessByRoleOrPermission } from "../../../config/permissions";
 import useIsMobile from "../../../hooks/useIsMobile";
-import { useDespachosDevData } from "./hooks/useDespachosDevData";
+import { useDespachoData } from "./hooks/useDespachoData";
 import { useDespachoDetail } from "./hooks/useDespachoDetail";
 import { filterDespachos, clearFilters } from "./lib/despachoFilters";
 import FiltersBar from "./components/FiltersBar.jsx";
@@ -115,18 +120,23 @@ function NoResults({ onClear }) {
  * Página "Despachos Dev": listado de solo lectura agrupado por estado, con
  * filtros, detalle y actualización en tiempo real.
  */
-export default function DespachosDevPage() {
+export default function DespachoBoardPage() {
   const {
     role,
+    permisos,
+    profile,
     tenantId,
     company,
     bodegaId,
     loading: authLoading,
   } = useContext(AuthCtx) || {};
 
-  // Permiso/scope: la ruta /dev ya está gateada a rol 'dev'; aquí se maneja de
-  // forma robusta la ausencia de permiso o de scope (bodega activa). (8.6)
-  const hasPermission = role === "dev";
+  // Permiso/scope del módulo Despacho: acceso por permiso `despacho` (o rol
+  // admin), más presencia de scope (tenant + bodega activa). (8.6)
+  const hasPermission = canAccessByRoleOrPermission(
+    { role, permisos, profile },
+    { anyPerms: ["despacho"] }
+  );
   const hasScope = Boolean(tenantId && bodegaId);
   const hasAccess = hasPermission && hasScope;
 
@@ -155,7 +165,7 @@ export default function DespachosDevPage() {
     error,
     realtimeStatus,
     reload,
-  } = useDespachosDevData({ tenantId, company, bodegaId });
+  } = useDespachoData({ tenantId, company, bodegaId });
 
   // Datos del Detalle del despacho seleccionado (no consulta si no hay id).
   const detail = useDespachoDetail({
@@ -175,6 +185,28 @@ export default function DespachosDevPage() {
   // Hay al menos un despacho activo en scope (para distinguir vacío de
   // sin-resultados: 8.4 vs 8.5).
   const hasActive = despachos.length > 0;
+
+  // Resumen compacto por estado (para la tira de KPIs). Conteo sobre el scope
+  // completo, ordenado según el catálogo y con etiqueta/color del mapa de estados.
+  const resumenEstados = useMemo(() => {
+    const counts = {};
+    for (const d of despachos) {
+      const code = d?.estado;
+      if (!code || code === "eliminado") continue;
+      counts[code] = (counts[code] || 0) + 1;
+    }
+    const orden = Array.isArray(catalogo)
+      ? catalogo.filter((e) => e?.codigo && e.codigo !== "eliminado")
+      : [];
+    return orden
+      .filter((e) => counts[e.codigo])
+      .map((e) => ({
+        codigo: e.codigo,
+        label: mapaEstados ? mapaEstados.label(e.codigo) : e.nombre || e.codigo,
+        color: mapaEstados ? mapaEstados.color(e.codigo) : theme.SLATE,
+        count: counts[e.codigo],
+      }));
+  }, [despachos, catalogo, mapaEstados]);
 
   function handleClearFilters() {
     setFiltros(clearFilters());
@@ -214,17 +246,58 @@ export default function DespachosDevPage() {
       />
     );
   } else {
-    // Contenido: filtros + listado (kanban/acordeón) o mensaje sin-resultados.
+    // Contenido: KPIs + filtros (en panel) + listado (kanban/acordeón).
     body = (
       <div style={styles.stack}>
-        <FiltersBar
-          filtros={filtros}
-          onChange={setFiltros}
-          catalogo={catalogo}
-          mapaEstados={mapaEstados}
-          visibleCount={visibleCount}
-          visibleDespachos={visibleDespachos}
-          showResumen
+        {/* Tira de KPIs: total + conteo por estado (tokens del tema). */}
+        <KpiGrid min={180}>
+          <KpiCard
+            label="Despachos"
+            value={despachos.length}
+            hint="En tu bodega"
+            icon={Boxes}
+            accent
+          />
+          {resumenEstados.map((r) => (
+            <KpiCard
+              key={r.codigo}
+              label={r.label}
+              value={r.count}
+              icon={Truck}
+              style={{ ...styles.kpiState, borderLeft: `4px solid ${r.color}` }}
+            />
+          ))}
+        </KpiGrid>
+
+        {/* Panel de filtros. */}
+        <Card padding={theme.SPACE_4} style={styles.panel}>
+          <div style={styles.panelHead}>
+            <SlidersHorizontal size={16} strokeWidth={2.2} color={theme.SLATE} aria-hidden="true" />
+            <span style={styles.panelTitle}>Filtros</span>
+          </div>
+          <FiltersBar
+            filtros={filtros}
+            onChange={setFiltros}
+            catalogo={catalogo}
+            mapaEstados={mapaEstados}
+            visibleCount={visibleCount}
+            visibleDespachos={visibleDespachos}
+          />
+        </Card>
+
+        {/* Encabezado del tablero. */}
+        <SectionTitle
+          title="Despachos por estado"
+          hint={
+            isMobile
+              ? "Tocá una tarjeta para ver el detalle."
+              : "Cada columna se desplaza de forma independiente."
+          }
+          action={
+            <Badge icon={LayoutGrid}>
+              {visibleCount} visible{visibleCount === 1 ? "" : "s"}
+            </Badge>
+          }
         />
 
         {visibleCount === 0 ? (
@@ -256,9 +329,9 @@ export default function DespachosDevPage() {
       <Topbar>
         <Brand
           icon={Truck}
-          title="Despachos Dev"
-          subtitle="Vista de solo lectura"
-          onClick={() => nav("/dev")}
+          title="Despachos en progreso"
+          subtitle="Vista en tiempo real"
+          onClick={() => nav("/despacho")}
         />
         <Topbar.Right>
           {hasAccess ? (
@@ -266,7 +339,7 @@ export default function DespachosDevPage() {
               Carga realtime
             </PrimaryButton>
           ) : null}
-          <GhostButton icon={ArrowLeft} onClick={() => nav("/dev")}>
+          <GhostButton icon={ArrowLeft} onClick={() => nav("/despacho")}>
             Volver
           </GhostButton>
         </Topbar.Right>
@@ -275,9 +348,9 @@ export default function DespachosDevPage() {
       <Main>
         <Container>
           <Hero
-            kicker="Dev"
-            title="Despachos Dev"
-            subtitle="Vista de solo lectura de los despachos de tu bodega, agrupados por estado."
+            kicker="Operación"
+            title="Despachos en progreso"
+            subtitle="Vista en tiempo real de los despachos de tu bodega, agrupados por estado."
             badge={
               showRealtime ? (
                 <RealtimeIndicator status={realtimeStatus} />
@@ -325,6 +398,27 @@ const styles = {
   stack: {
     display: "grid",
     gap: theme.SPACE_4,
+  },
+  kpiState: {
+    minHeight: 104,
+  },
+  panel: {
+    display: "grid",
+    gap: theme.SPACE_3,
+  },
+  panelHead: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.SPACE_2,
+    paddingBottom: theme.SPACE_2,
+    borderBottom: `1px solid ${theme.BORDER_SOFT}`,
+  },
+  panelTitle: {
+    color: theme.TEXT,
+    fontWeight: theme.FW_EXTRABOLD,
+    fontSize: theme.FS_SM,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
   noResults: {
     display: "grid",

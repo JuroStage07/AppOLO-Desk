@@ -66,7 +66,7 @@ export default function ServiciosGenerales() {
         title: "Boletas de salida",
         desc: "Generá boletas de salida de vehículos, validalas con checklist y firma, y consultá su historial.",
         path: "/servicios-generales/boletas-salida",
-        anyPerms: ["boletasSalida"],
+        anyPerms: ["boletasSalida", "boletasValidar"],
         icon: FileOutput,
         tag: "Salida",
       },

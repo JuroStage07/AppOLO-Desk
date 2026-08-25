@@ -129,5 +129,12 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: theme.SPACE_3,
+    // Muestra ~2 tarjetas y desplaza el resto, para que la columna (y la
+    // página) no crezcan de forma indefinida con muchos despachos.
+    maxHeight: 440,
+    overflowY: "auto",
+    // Aire para que el scrollbar no tape el borde de las tarjetas.
+    paddingRight: theme.SPACE_1,
+    minHeight: 0,
   },
 };

@@ -1,5 +1,6 @@
-// MRP Tarimas — hook de artículos insumo: listar + crear (código autogenerado)
-// + activar/desactivar. Se fija solo por tenant/company (no usa almacén).
+// MRP Tarimas — hook de artículos insumo: listar + crear (código manual o
+// autogenerado) + activar/desactivar. Se fija solo por tenant/company (no usa
+// almacén).
 import { useCallback, useState } from "react";
 import { useToast } from "../../components/ui";
 import {
@@ -27,10 +28,16 @@ export default function useMrpInsumos({ includeInactive = false } = {}) {
   const [removing, setRemoving] = useState(false);
 
   const create = useCallback(
-    async ({ nombre, detalle, price, priceMode }) => {
+    async ({ nombre, detalle, price, priceMode, codigo = null }) => {
       setCreating(true);
       try {
-        const insumo = await createInsumo({ nombre, detalle, price, priceMode });
+        const insumo = await createInsumo({
+          nombre,
+          detalle,
+          price,
+          priceMode,
+          codigo,
+        });
         bumpRefresh("insumos");
         toast.success(`Insumo ${insumo?.codigo || ""} creado.`);
         return insumo;
