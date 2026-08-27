@@ -113,11 +113,26 @@ Finalizar una apertura genera una acción de descarga en Recepción. Visados y t
 - `/mantenimiento/equipos` y detalle `/:id`: registro, edición, familias, revisión, fallas y envío de etiqueta QR por correo.
 - `/mantenimiento/ots`: hub.
 - `/mantenimiento/OTsPage`: tablero de gestión.
+- `/mantenimiento/ots/programado`: mantenimiento programado (OTs preventivas con deadline).
 - `/mantenimiento/ots/finalizadas`.
 - `/mantenimiento/ots/dashboard`: métricas de OTs.
 - `/mantenimiento/ots-solicitud/:id`: detalle y subtareas.
 
 Las OTs avanzan normalmente por `Solicitada → En proceso → En revisión → Finalizada`. Las subtareas pueden registrar tiempo. `tiempoRespuesta` se calcula al finalizar, excluyendo fines de semana.
+
+#### Mantenimiento programado
+
+Una OT de mantenimiento programado es una OT normal de `solicitudesOT` con `scheduledMaintenance: true` y `scheduledDate` (`YYYY-MM-DD`, el deadline). Al crearla son obligatorios el o los responsables, la fecha programada y la lista de subtareas; la OT y sus subtareas se escriben en un único batch, así que no puede quedar una OT programada sin subtareas.
+
+Nace con estado `Solicitada`, es decir en la columna «Tareas Pendientes». La Cloud Function diaria `scheduledMaintenanceDailyCheck` la pasa a `En proceso` cuando llega el deadline y desde ahí sigue el flujo normal. No hay un flujo paralelo. El tablero `/mantenimiento/OTsPage` incluye un chip «OTs programadas» que filtra solo estas; el resto del tablero (columnas, filtros, permisos, arrastre) es el mismo. La fecha se puede reprogramar mientras la OT siga en `Solicitada`.
+
+El mismo proceso diario genera notificaciones: avisos a 15, 7 y 1 día del deadline y un resumen mensual con la cantidad y los nombres de los mantenimientos del mes. Cada aviso se emite una sola vez por OT, usuario y ventana (ID de documento determinístico), y lo reciben el creador, los responsables y el personal con permiso de mantenimiento del mismo alcance, sin duplicados si una persona pertenece a varios grupos. Si la OT se crea con menos días que una ventana, esa ventana no se emite: no hay avisos retroactivos.
+
+Las fechas se resuelven con una zona horaria de negocio fija (UTC−6) para que el runtime UTC de las Cloud Functions no adelante el día.
+
+### Centro de Notificaciones
+
+La campana de la barra superior del inicio (`/areas`) lista las notificaciones del usuario, muestra el contador de no leídas, permite marcar una o todas como leídas y navegar a la entidad relacionada (por ejemplo el detalle de una OT). Se guardan en la colección `notifications`, por lo que sobreviven a un refresh y se generan aunque la app esté cerrada. Cada usuario ve solo las propias (`targetUserId`) y únicamente puede cambiar el estado de lectura: la creación y el borrado son exclusivos del backend. El componente es genérico (`src/components/notifications/`), pensado para que cualquier módulo emita sus propias notificaciones; hoy las emite mantenimiento programado.
 
 ### Servicios Generales y Zona Franca
 
@@ -199,7 +214,7 @@ No usar este action para traslados entre almacenes. Nunca afirmar que una OT o u
 
 ## 8. Datos y seguridad
 
-Firestore relevante incluye `profiles`, `usernames`, `despachos`, `equipos`, `checklists_diarias`, `solicitudesOT` y subtareas, `accion_descarga`, `accion_recepcion`, `aperturas`, `aperturasRecepcion`, `recepcionCofersa_lotes`, `tareas_apertura`, marcas, terceros, visados, documentación, colecciones, chats, dashboards, pesajes y colecciones `overtime*`.
+Firestore relevante incluye `profiles`, `usernames`, `despachos`, `equipos`, `checklists_diarias`, `solicitudesOT` y subtareas, `notifications`, `accion_descarga`, `accion_recepcion`, `aperturas`, `aperturasRecepcion`, `recepcionCofersa_lotes`, `tareas_apertura`, marcas, terceros, visados, documentación, colecciones, chats, dashboards, pesajes y colecciones `overtime*`.
 
 Supabase MRP incluye `pallet_warehouses`, `pallet_articulos`, `pallet_inventory_articulo`, `pallet_movimientos_articulo`, `pallet_descartes_articulo`, `pallet_motivos`, `pallet_external_consumptions`, `mrp_insumos`, `mrp_boms` y `mrp_bom_insumos`.
 

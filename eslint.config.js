@@ -27,6 +27,16 @@ export default defineConfig([
     },
   },
   {
+    // Cloud Functions: CommonJS sobre Node 20 (require/module/exports/process),
+    // no navegador ni ESM. Sin esto, cada `require` daba un falso `no-undef`.
+    files: ['functions/**/*.js'],
+    ignores: ['functions/**/*.{test,spec}.js'],
+    languageOptions: {
+      globals: globals.node,
+      sourceType: 'commonjs',
+    },
+  },
+  {
     // Archivos de prueba: exponer los globals de Vitest (describe, it, expect, vi, ...)
     files: ['**/*.{test,spec}.{js,jsx}', 'src/test/**/*.{js,jsx}'],
     languageOptions: {

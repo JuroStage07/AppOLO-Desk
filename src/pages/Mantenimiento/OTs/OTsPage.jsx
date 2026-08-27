@@ -33,6 +33,7 @@ import {
   Play,
   Timer,
   Lock,
+  CalendarClock,
 } from "lucide-react";
 
 import { auth, db } from "../../../firebase";
@@ -40,9 +41,20 @@ import { AuthCtx } from "../../../auth/AuthProvider";
 import { NewOTModal } from "./NewOTModal";
 import { isSolicitudOtInScope } from "../../../utils/dataScope";
 import { businessElapsedMs } from "../../../utils/workTime";
+import {
+  fetchMantenimientoResponsables,
+  fetchProfilesMantenimientoPermiso,
+} from "../../../services/otCatalogs";
+import {
+  deadlineLabel,
+  isScheduledMaintenanceOt,
+} from "../../../utils/scheduledMaintenance";
 import useIsMobile from "../../../hooks/useIsMobile";
 import {
   Brand,
+  Chip,
+  ChipsRow,
+  EmptyState,
   ErrorState,
   GhostButton,
   Topbar,
@@ -62,7 +74,7 @@ import {
   deleteField,
   writeBatch,
 } from "firebase/firestore";
-import { ACCENT, ACCENT_SOFT } from "../../../styles/theme";
+import { ACCENT, ACCENT_BORDER, ACCENT_SOFT } from "../../../styles/theme";
 
 const BLUE = "#2563EB";
 const AMBER = "#F59E0B";
@@ -133,6 +145,10 @@ const OT_STATE_FINALIZADA = "Finalizada";
 
 /** Subcolección solicitudesOT/.../subtareas (campo `status`) */
 const SUBTASK_STATUS_COMPLETADA = "Completada";
+
+/** Vistas del tablero (mismo tablero, distinto subconjunto de OTs). */
+const VIEW_TODAS = "todas";
+const VIEW_PROGRAMADAS = "programadas";
 
 const DRAG_MIME_SOLICITUD = "application/x-appolodesk-solicitud-id";
 const DRAG_MIME_PROCESO_REVISION =
@@ -406,6 +422,8 @@ function mapSnapshotToPendingItem(
     prioridadOT: normalizeOtPriority(data.prioridadOT || data.prioridad || ""),
     responsableNombre: "",
     assigneeUids: Array.isArray(assigneeUids) ? assigneeUids : [],
+    scheduledMaintenance: isScheduledMaintenanceOt(data),
+    scheduledDate: data.scheduledDate || "",
   };
 }
 
@@ -448,6 +466,8 @@ function mapSnapshotToSolicitudCardItem(
     prioridadOT: normalizeOtPriority(data.prioridadOT || data.prioridad || ""),
     responsableNombre: responsablesDisplayFromFirestoreData(data),
     assigneeUids: Array.isArray(assigneeUids) ? assigneeUids : [],
+    scheduledMaintenance: isScheduledMaintenanceOt(data),
+    scheduledDate: data.scheduledDate || "",
   };
 }
 
@@ -471,74 +491,6 @@ function pendingItemToProcesoSolicitudItem(item, responsables) {
     assigneeUids: uids,
     nroSolicitud: nroSolicitudParaOtEnTablero(item.nroSolicitud || ""),
   };
-}
-
-function profileIsMantenimientoStaff(data) {
-  if (!data || typeof data !== "object") return false;
-  if (data.active === false) return false;
-  const role = data.role;
-  if (role === "administrativo" || role === "dev") return true;
-  return data.permisos != null && data.permisos.mantenimiento === true;
-}
-
-/** Solo permiso explícito de mantenimiento (p. ej. filtro «En proceso»). */
-function profileHasMantenimientoPermiso(data) {
-  if (!data || typeof data !== "object") return false;
-  if (data.active === false) return false;
-  return data.permisos != null && data.permisos.mantenimiento === true;
-}
-
-function displayNameFromProfile(uid, data) {
-  const d = data || {};
-  const s =
-    (d.displayName && String(d.displayName).trim()) ||
-    (d.username && String(d.username).trim()) ||
-    (d.email && String(d.email).trim()) ||
-    "";
-  return s || uid;
-}
-
-async function fetchMantenimientoResponsables(tenantId, company) {
-  const snap = await getDocs(collection(db, "profiles"));
-  const rows = [];
-  snap.forEach((docSnap) => {
-    const data = docSnap.data();
-    if (!profileIsMantenimientoStaff(data)) return;
-    if (tenantId && data.tenantId && data.tenantId !== tenantId) return;
-    if (company && data.company && data.company !== company) return;
-    rows.push({
-      uid: docSnap.id,
-      displayName: displayNameFromProfile(docSnap.id, data),
-      numeroFicha: (data.numeroFicha && String(data.numeroFicha)) || "",
-      role: data.role || "",
-    });
-  });
-  rows.sort((a, b) =>
-    a.displayName.localeCompare(b.displayName, "es", { sensitivity: "base" })
-  );
-  return rows;
-}
-
-/** Listado para filtro de columna En proceso: únicamente perfiles con permiso mantenimiento. */
-async function fetchProfilesMantenimientoPermiso(tenantId, company) {
-  const snap = await getDocs(collection(db, "profiles"));
-  const rows = [];
-  snap.forEach((docSnap) => {
-    const data = docSnap.data();
-    if (!profileHasMantenimientoPermiso(data)) return;
-    if (tenantId && data.tenantId && data.tenantId !== tenantId) return;
-    if (company && data.company && data.company !== company) return;
-    rows.push({
-      uid: docSnap.id,
-      displayName: displayNameFromProfile(docSnap.id, data),
-      numeroFicha: (data.numeroFicha && String(data.numeroFicha)) || "",
-      role: data.role || "",
-    });
-  });
-  rows.sort((a, b) =>
-    a.displayName.localeCompare(b.displayName, "es", { sensitivity: "base" })
-  );
-  return rows;
 }
 
 const initialColumns = [
@@ -607,6 +559,24 @@ function SubtasksChip({ count, onOpenList }) {
     <div style={ui.subtasksMetaChip} title="Subtareas asignadas">
       <ListChecks size={12} strokeWidth={2.5} />
       <span>{label}</span>
+    </div>
+  );
+}
+
+/**
+ * Distintivo de mantenimiento programado en la tarjeta. Deja ver de un vistazo
+ * qué OTs del tablero son preventivas y cuándo vence su deadline.
+ */
+function ScheduledChip({ scheduledDate }) {
+  const label = deadlineLabel(scheduledDate);
+  return (
+    <div style={ui.scheduledChip} title={
+      scheduledDate
+        ? `Mantenimiento programado para el ${scheduledDate}`
+        : "Mantenimiento programado"
+    }>
+      <CalendarClock size={12} strokeWidth={2.6} />
+      <span>Programado{label ? ` · ${label}` : ""}</span>
     </div>
   );
 }
@@ -781,6 +751,9 @@ function PendingCard({
             tone={item.priorityTone || "solicitada"}
           />
           <PriorityLevelChip text={item.prioridadOT} />
+          {item.scheduledMaintenance ? (
+            <ScheduledChip scheduledDate={item.scheduledDate} />
+          ) : null}
           <SubtasksChip
             count={item.subtaskCount}
             onOpenList={
@@ -2390,6 +2363,8 @@ export default function OTsPage() {
 
   const [openMenuId, setOpenMenuId] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  /** Vista del tablero: todas las OTs o solo los mantenimientos programados. */
+  const [viewMode, setViewMode] = useState(VIEW_TODAS);
   const [loadingPendientes, setLoadingPendientes] = useState(false);
   const [boardError, setBoardError] = useState("");
   const [pendingDragActive, setPendingDragActive] = useState(false);
@@ -2840,8 +2815,32 @@ export default function OTsPage() {
     }
   }, [solicitanteFilterListPendientes, filterAssigneeByColumnId.pendientes]);
 
+  /**
+   * Vista activa del tablero. `programadas` deja únicamente las OTs con
+   * `scheduledMaintenance === true`; el resto del tablero (columnas, filtros,
+   * drag & drop, permisos y acciones) es exactamente el mismo, así que no hay
+   * una segunda página que mantener.
+   */
+  const viewColumns = useMemo(() => {
+    if (viewMode !== VIEW_PROGRAMADAS) return columns;
+    return columns.map((col) => ({
+      ...col,
+      items: col.items.filter((item) => item.scheduledMaintenance === true),
+    }));
+  }, [columns, viewMode]);
+
+  const scheduledTotal = useMemo(
+    () =>
+      columns.reduce(
+        (acc, col) =>
+          acc + col.items.filter((item) => item.scheduledMaintenance === true).length,
+        0
+      ),
+    [columns]
+  );
+
   const displayColumns = useMemo(() => {
-    return columns.map((col) => {
+    return viewColumns.map((col) => {
       const uid = (filterAssigneeByColumnId[col.id] ?? "").trim();
       // Pendientes: filtro por solicitante
       if (col.id === "pendientes") {
@@ -2906,7 +2905,7 @@ export default function OTsPage() {
         }),
       };
     });
-  }, [columns, filterAssigneeByColumnId, filterSolicitanteByColumnId, assigneeFilterListProceso]);
+  }, [viewColumns, filterAssigneeByColumnId, filterSolicitanteByColumnId]);
 
   const selectedCount = useMemo(() => {
     return columns.reduce(
@@ -3362,6 +3361,39 @@ export default function OTsPage() {
             </div>
           </div>
 
+          <ChipsRow style={ui.viewChipsRow}>
+            <Chip
+              active={viewMode === VIEW_TODAS}
+              onClick={() => setViewMode(VIEW_TODAS)}
+            >
+              Todas las OTs ({totalCards})
+            </Chip>
+            <Chip
+              active={viewMode === VIEW_PROGRAMADAS}
+              onClick={() => setViewMode(VIEW_PROGRAMADAS)}
+            >
+              OTs programadas ({scheduledTotal})
+            </Chip>
+            {viewMode === VIEW_PROGRAMADAS ? (
+              <GhostButton
+                icon={CalendarClock}
+                onClick={() => nav("/mantenimiento/ots/programado")}
+              >
+                Crear programado
+              </GhostButton>
+            ) : null}
+          </ChipsRow>
+
+          {viewMode === VIEW_PROGRAMADAS && scheduledTotal === 0 && !loadingPendientes ? (
+            <EmptyState
+              icon={CalendarClock}
+              center
+              title="Sin mantenimientos programados en el tablero"
+              description="Los mantenimientos programados aparecen acá en «Tareas Pendientes» hasta su fecha, y el sistema los pasa a «En Proceso» al llegar el deadline."
+              style={{ marginBottom: 14 }}
+            />
+          ) : null}
+
           {boardError ? (
             <ErrorState
               description={boardError}
@@ -3443,7 +3475,7 @@ export default function OTsPage() {
                       [column.id]: v,
                     }))
                   }
-                  unfilteredCount={columns[index].items.length}
+                  unfilteredCount={viewColumns[index].items.length}
                   isMobile={isMobile}
                   onRefreshBoard={refetchSolicitudesOnce}
                   filterUsesResponsableNombre={column.id === "proceso"}
@@ -3967,6 +3999,25 @@ const ui = {
     letterSpacing: 0.15,
     border: "1px solid #E2E8F0",
     whiteSpace: "nowrap",
+  },
+  scheduledChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    background: ACCENT_SOFT,
+    color: ACCENT,
+    borderRadius: 10,
+    padding: "6px 9px",
+    fontSize: 10,
+    fontWeight: 900,
+    letterSpacing: 0.15,
+    border: `1px solid ${ACCENT_BORDER}`,
+    whiteSpace: "nowrap",
+  },
+  viewChipsRow: {
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 14,
   },
   checkbox: {
     width: 22,

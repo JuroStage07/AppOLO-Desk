@@ -31,7 +31,6 @@ import {
   serverTimestamp,
   updateDoc,
   deleteDoc,
-  limit,
 } from "firebase/firestore";
 
 import { db, auth } from "../../../firebase";
@@ -40,6 +39,10 @@ import { canAccessByRoleOrPermission } from "../../../config/permissions";
 import { OT_STATE_FINALIZADA } from "./OTsFinalizadasPage";
 import { isSolicitudOtInScope } from "../../../utils/dataScope";
 import { businessElapsedMs } from "../../../utils/workTime";
+import {
+  fetchActiveSubtaskCatalog,
+  subtaskCatalogItemLabel,
+} from "../../../services/otCatalogs";
 import { Brand, Topbar, useToast, useConfirm } from "../../../components/ui";
 import { ACCENT } from "../../../styles/theme";
 
@@ -128,8 +131,7 @@ function formatChronoMs(ms) {
 }
 
 function catalogItemLabel(item) {
-  if (!item || typeof item !== "object") return "";
-  return String(item.name ?? item.title ?? "").trim();
+  return subtaskCatalogItemLabel(item);
 }
 
 /** Alineado a subtareas en Firestore (misma lógica que el tablero). */
@@ -405,18 +407,7 @@ export default function OTsDetallePage() {
   const loadCatalogSubtasks = async () => {
     try {
       setCatalogLoading(true);
-
-      const ref = collection(db, "subtaskList");
-      const snap = await getDocs(query(ref, orderBy("name"), limit(100)));
-
-      const rows = snap.docs
-        .map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }))
-        .filter((item) => item.active !== false);
-
-      setCatalogSubtasks(rows);
+      setCatalogSubtasks(await fetchActiveSubtaskCatalog());
     } catch (err) {
       console.error(err);
       toast.error("No se pudo cargar la lista global de subtareas.");

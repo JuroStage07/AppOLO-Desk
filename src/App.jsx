@@ -42,6 +42,7 @@ import EquipoInfoPage from "./pages/Mantenimiento/Equipos/EquipoInfoPage";
 import Mantenimiento from "./pages/Mantenimiento/Mantenimiento";
 import OTsPage from "./pages/Mantenimiento/OTs/OTsPage";
 import OTsHubMantenimiento from "./pages/Mantenimiento/OTs/OTsHubMantenimiento";
+import ScheduledMaintenancePage from "./pages/Mantenimiento/OTs/ScheduledMaintenancePage";
 import OTsFinalizadasPage from "./pages/Mantenimiento/OTs/OTsFinalizadasPage";
 import OTsDashboardPage from "./pages/Mantenimiento/OTs/OTsDashboardPage";
 import OTsSolDetallePage from "./pages/Mantenimiento/OTs/OTsSolDetallePage";
@@ -611,6 +612,15 @@ export default function App() {
             element={
               <PrivateRoute>
                 <OTsFinalizadasPage />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/mantenimiento/ots/programado"
+            element={
+              <PrivateRoute>
+                <ScheduledMaintenancePage />
               </PrivateRoute>
             }
           />

@@ -36,6 +36,9 @@ import {
 } from "../config/otOptions";
 import { getVisibleAreas } from "../config/workAreas";
 import { AreasSidebar, SidebarAreaIcon, TopbarAccount, BodegaSwitcher, ThemeToggle, openCommandPalette, useConfirm, useToast } from "../components/ui";
+// Centro de notificaciones: componente autónomo y genérico (lee la colección
+// `notifications`). Acá solo se monta; la lógica vive en components/notifications.
+import { NotificationCenter } from "../components/notifications";
 import {
   ACCENT,
   ACCENT_SHADOW,
@@ -1437,6 +1440,7 @@ export default function AreasTrabajoHubPage() {
           </div>
 
           <div style={styles.headerActions}>
+            <NotificationCenter />
             <ThemeToggle />
             <div style={styles.userPill}>
               <div style={styles.userPillAvatar}>

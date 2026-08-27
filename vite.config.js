@@ -15,7 +15,12 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.js'],
     css: false,
-    include: ['src/**/*.{test,spec}.{js,jsx}'],
+    // `functions/` entra para poder testear la lógica pura de las Cloud
+    // Functions (p. ej. scheduledMaintenanceCore.js) sin desplegar.
+    include: [
+      'src/**/*.{test,spec}.{js,jsx}',
+      'functions/*.{test,spec}.js',
+    ],
     // No usar modo watch dentro de automatizaciones: el script `test` usa `vitest run`.
     watch: false,
   },

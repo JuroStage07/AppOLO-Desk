@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   BarChart3,
+  CalendarClock,
   ClipboardList,
   Lock,
   CheckSquare,
@@ -61,6 +62,14 @@ export default function OTsHubMantenimiento() {
         desc: "Tablero: pendientes, en proceso y en revisión. Arrastrá y asigná responsables.",
         path: "/mantenimiento/OTsPage",
         icon: ClipboardList,
+        tag: "OT",
+      },
+      {
+        key: "programado",
+        title: "Mantenimiento programado",
+        desc: "OTs preventivas con fecha, responsable y subtareas. Se activan solas al llegar el deadline.",
+        path: "/mantenimiento/ots/programado",
+        icon: CalendarClock,
         tag: "OT",
       },
       {

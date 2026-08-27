@@ -366,11 +366,6 @@
           "label": "En progreso",
           "path": "/despacho/in-progress",
           "features": []
-        },
-        {
-          "label": "Finalizados",
-          "path": "/despacho/finalizados",
-          "features": []
         }
       ],
       "sampleQuestions": [
@@ -558,6 +553,10 @@
               "path": "/mantenimiento/OTsPage"
             },
             {
+              "label": "Mantenimiento programado",
+              "path": "/mantenimiento/ots/programado"
+            },
+            {
               "label": "Finalizadas",
               "path": "/mantenimiento/ots/finalizadas"
             },
@@ -586,7 +585,9 @@
       },
       "anyPerms": [
         "serviciosGenerales",
-        "pesajeTarimas"
+        "pesajeTarimas",
+        "boletasSalida",
+        "boletasValidar"
       ],
       "modules": [
         {
@@ -610,6 +611,15 @@
           "label": "Validar ingreso",
           "path": "/servicios-generales/validar-ingreso",
           "requiredPerm": "serviciosGenerales",
+          "features": []
+        },
+        {
+          "label": "Boletas de salida",
+          "path": "/servicios-generales/boletas-salida",
+          "anyPerms": [
+            "boletasSalida",
+            "boletasValidar"
+          ],
           "features": []
         },
         {
@@ -675,8 +685,14 @@
       "requiredPerm": "mrpTarimas",
       "modules": [
         {
-          "label": "Resumen",
+          "label": "Dashboard",
           "path": "/mrp-tarimas/dashboard",
+          "requiredPerm": "mrpTarimas",
+          "features": []
+        },
+        {
+          "label": "Catálogos",
+          "path": "/mrp-tarimas/catalogos",
           "requiredPerm": "mrpTarimas",
           "features": []
         },
@@ -695,12 +711,6 @@
         {
           "label": "Descartes",
           "path": "/mrp-tarimas/descartes",
-          "requiredPerm": "mrpTarimas",
-          "features": []
-        },
-        {
-          "label": "Catálogos",
-          "path": "/mrp-tarimas/catalogos",
           "requiredPerm": "mrpTarimas",
           "features": []
         }
@@ -788,6 +798,11 @@
           "features": []
         },
         {
+          "label": "Supabase",
+          "path": "/dev/supabase",
+          "features": []
+        },
+        {
           "label": "Configuración de módulos",
           "path": "/dev/config-modulos",
           "features": [
@@ -856,11 +871,6 @@
       "path": "/despacho/in-progress",
       "access": "private",
       "screen": "Despacho: En progreso"
-    },
-    {
-      "path": "/despacho/finalizados",
-      "access": "private",
-      "screen": "Despacho: Finalizados"
     },
     {
       "path": "/seguridad",
@@ -988,6 +998,11 @@
       "screen": "dev / config modulos / mrp tarimas / motivos"
     },
     {
+      "path": "/dev/supabase",
+      "access": "private (dev)",
+      "screen": "Dev: Supabase"
+    },
+    {
       "path": "/servicios-generales",
       "access": "private",
       "screen": "Servicios Generales"
@@ -1011,6 +1026,11 @@
       "path": "/servicios-generales/validar-ingreso",
       "access": "private",
       "screen": "Servicios Generales: Validar ingreso"
+    },
+    {
+      "path": "/servicios-generales/boletas-salida",
+      "access": "private",
+      "screen": "Servicios Generales: Boletas de salida"
     },
     {
       "path": "/servicios-generales/pesaje-tarimas",
@@ -1078,6 +1098,11 @@
       "screen": "Mantenimiento: Finalizadas"
     },
     {
+      "path": "/mantenimiento/ots/programado",
+      "access": "private",
+      "screen": "Mantenimiento: Mantenimiento programado"
+    },
+    {
       "path": "/mantenimiento/OTsPage",
       "access": "private",
       "screen": "Mantenimiento: Tablero / Gestión"
@@ -1128,6 +1153,11 @@
       "screen": "MRP Tarimas: Resumen"
     },
     {
+      "path": "/mrp-tarimas/catalogos",
+      "access": "private",
+      "screen": "MRP Tarimas: Catálogos"
+    },
+    {
       "path": "/mrp-tarimas/inventario",
       "access": "private",
       "screen": "MRP Tarimas: Inventario"
@@ -1141,11 +1171,6 @@
       "path": "/mrp-tarimas/descartes",
       "access": "private",
       "screen": "MRP Tarimas: Descartes"
-    },
-    {
-      "path": "/mrp-tarimas/catalogos",
-      "access": "private",
-      "screen": "MRP Tarimas: Catálogos"
     }
   ],
   "firestoreCollections": [
@@ -1331,7 +1356,7 @@
     "Solo puede proponer create_ot_draft y mrp_transfer_draft. n8n prepara el borrador; la app valida, solicita confirmación y escribe. Nunca afirma que la acción terminó antes de recibir estado created.",
     "Respeta rol y permisos: no sugiere rutas/áreas a las que el usuario no tiene acceso (p. ej. Administración/Horas Extra solo admin/dev, Dev solo dev, y los usuarios epaAdmin solo ven EPA)."
   ],
-  "generatedAt": "2026-07-21T17:07:23.284Z",
+  "generatedAt": "2026-08-27T15:46:01.998Z",
   "generatedFrom": [
     "src/config/workAreas.jsx",
     "src/App.jsx",
@@ -1363,19 +1388,6 @@
         "Despacho",
         "En progreso",
         "/despacho/in-progress"
-      ]
-    },
-    {
-      "type": "module",
-      "areaKey": "despacho",
-      "areaTitle": "Despacho",
-      "label": "Finalizados",
-      "path": "/despacho/finalizados",
-      "keywords": [
-        "despacho",
-        "Despacho",
-        "Finalizados",
-        "/despacho/finalizados"
       ]
     },
     {
@@ -1655,6 +1667,21 @@
       "areaKey": "mantenimiento",
       "areaTitle": "Mantenimiento",
       "moduleLabel": "Órdenes de trabajo",
+      "label": "Mantenimiento programado",
+      "path": "/mantenimiento/ots/programado",
+      "keywords": [
+        "mantenimiento",
+        "Mantenimiento",
+        "Órdenes de trabajo",
+        "Mantenimiento programado",
+        "/mantenimiento/ots/programado"
+      ]
+    },
+    {
+      "type": "feature",
+      "areaKey": "mantenimiento",
+      "areaTitle": "Mantenimiento",
+      "moduleLabel": "Órdenes de trabajo",
       "label": "Finalizadas",
       "path": "/mantenimiento/ots/finalizadas",
       "keywords": [
@@ -1753,6 +1780,19 @@
       "type": "module",
       "areaKey": "servicios-generales",
       "areaTitle": "Servicios Generales",
+      "label": "Boletas de salida",
+      "path": "/servicios-generales/boletas-salida",
+      "keywords": [
+        "servicios-generales",
+        "Servicios Generales",
+        "Boletas de salida",
+        "/servicios-generales/boletas-salida"
+      ]
+    },
+    {
+      "type": "module",
+      "areaKey": "servicios-generales",
+      "areaTitle": "Servicios Generales",
       "label": "Pesaje tarimas",
       "path": "/servicios-generales/pesaje-tarimas",
       "keywords": [
@@ -1835,13 +1875,26 @@
       "type": "module",
       "areaKey": "mrp-tarimas",
       "areaTitle": "MRP Tarimas",
-      "label": "Resumen",
+      "label": "Dashboard",
       "path": "/mrp-tarimas/dashboard",
       "keywords": [
         "mrp-tarimas",
         "MRP Tarimas",
-        "Resumen",
+        "Dashboard",
         "/mrp-tarimas/dashboard"
+      ]
+    },
+    {
+      "type": "module",
+      "areaKey": "mrp-tarimas",
+      "areaTitle": "MRP Tarimas",
+      "label": "Catálogos",
+      "path": "/mrp-tarimas/catalogos",
+      "keywords": [
+        "mrp-tarimas",
+        "MRP Tarimas",
+        "Catálogos",
+        "/mrp-tarimas/catalogos"
       ]
     },
     {
@@ -1881,19 +1934,6 @@
         "MRP Tarimas",
         "Descartes",
         "/mrp-tarimas/descartes"
-      ]
-    },
-    {
-      "type": "module",
-      "areaKey": "mrp-tarimas",
-      "areaTitle": "MRP Tarimas",
-      "label": "Catálogos",
-      "path": "/mrp-tarimas/catalogos",
-      "keywords": [
-        "mrp-tarimas",
-        "MRP Tarimas",
-        "Catálogos",
-        "/mrp-tarimas/catalogos"
       ]
     },
     {
@@ -1989,6 +2029,19 @@
         "Dev",
         "Update AppOLO Supabase",
         "/dev/update-supabase"
+      ]
+    },
+    {
+      "type": "module",
+      "areaKey": "dev",
+      "areaTitle": "Dev",
+      "label": "Supabase",
+      "path": "/dev/supabase",
+      "keywords": [
+        "dev",
+        "Dev",
+        "Supabase",
+        "/dev/supabase"
       ]
     },
     {
@@ -2442,6 +2495,10 @@
           "path": "/mantenimiento/OTsPage"
         },
         {
+          "label": "Mantenimiento programado",
+          "path": "/mantenimiento/ots/programado"
+        },
+        {
           "label": "OTs finalizadas",
           "path": "/mantenimiento/ots/finalizadas"
         },
@@ -2481,6 +2538,88 @@
       ],
       "assistantShouldAnswer": "Explicá que en Mantenimiento › Órdenes de trabajo se crean OTs y se gestionan en el tablero por estados (/mantenimiento/OTsPage), con subtareas y cronómetro; las finalizadas están en /mantenimiento/ots/finalizadas y el dashboard de métricas en /mantenimiento/ots/dashboard (KPIs como % Resueltas y Tiempo Respuesta promedio). Requiere permiso de mantenimiento o ser admin/dev. Si te piden crear una OT por chat, podés ofrecer el borrador de OT (acción create_ot_draft).",
       "limitations": "Requiere permisos.mantenimiento (o admin/dev). El campo tiempoRespuesta se fija al finalizar la OT; el promedio del dashboard se calcula sobre las OTs que lo tienen. No inventar el estado de OTs concretas."
+    },
+    {
+      "id": "mantenimiento-programado",
+      "areaKey": "mantenimiento",
+      "areaTitle": "Mantenimiento",
+      "title": "Mantenimiento programado (OTs preventivas con deadline)",
+      "summary": "Permite crear OTs preventivas con una fecha programada (deadline), responsable(s) y lista de subtareas definidos desde el inicio. Son OTs normales de la colección solicitudesOT marcadas con scheduledMaintenance: true y un campo scheduledDate ('YYYY-MM-DD'): nacen en estado 'Solicitada', por lo que aparecen en la columna «Tareas Pendientes» del tablero, y un proceso diario de backend (Cloud Function scheduledMaintenanceDailyCheck) las pasa automáticamente a 'En proceso' cuando llega el deadline. Desde ese punto siguen el flujo normal de OTs (En revisión → Finalizada). El tablero (/mantenimiento/OTsPage) tiene un chip para ver solo las OTs programadas. El mismo proceso genera notificaciones automáticas: avisos a 15, 7 y 1 día del deadline y un resumen mensual con la cantidad y los nombres de los mantenimientos del mes.",
+      "primaryRoute": "/mantenimiento/ots/programado",
+      "routes": [
+        {
+          "label": "Mantenimiento programado",
+          "path": "/mantenimiento/ots/programado"
+        },
+        {
+          "label": "Tablero (chip «OTs programadas»)",
+          "path": "/mantenimiento/OTsPage"
+        },
+        {
+          "label": "Detalle de la OT programada",
+          "path": "/mantenimiento/ots-solicitud/:id"
+        }
+      ],
+      "permissions": "Requiere permisos.mantenimiento o rol administrativo/dev (helper canMantenimientoOT), igual que el resto de las OTs. Las reglas de Firestore exigen que una OT con scheduledMaintenance: true traiga scheduledDate válido y al menos un responsable. La fecha se puede reprogramar mientras la OT siga en 'Solicitada'.",
+      "keywords": [
+        "mantenimiento programado",
+        "preventivo",
+        "programado",
+        "deadline",
+        "fecha programada",
+        "ot programada",
+        "ots programadas",
+        "recordatorio",
+        "aviso",
+        "15 dias",
+        "7 dias",
+        "una semana",
+        "resumen mensual",
+        "scheduledMaintenance",
+        "automatico"
+      ],
+      "userCanAskExamples": [
+        "¿Cómo creo un mantenimiento programado?",
+        "¿Cuándo pasa sola una OT programada a En proceso?",
+        "¿Qué avisos manda un mantenimiento programado y a quién?",
+        "¿Dónde veo solo las OTs programadas?",
+        "¿Puedo cambiar la fecha de un mantenimiento programado?"
+      ],
+      "assistantShouldAnswer": "Explicá que en Mantenimiento › Órdenes de trabajo › Mantenimiento programado (/mantenimiento/ots/programado) se crea la OT preventiva indicando obligatoriamente fecha programada, responsable(s) y subtareas. Queda en «Tareas Pendientes» hasta su fecha y el sistema la pasa sola a «OTs en Proceso» al llegar el deadline, siguiendo después el flujo normal. En el tablero /mantenimiento/OTsPage el chip «OTs programadas» filtra solo estas. Los avisos (15, 7 y 1 día antes, más el resumen mensual) llegan al Centro de Notificaciones del inicio y los reciben el creador, los responsables y el personal con permiso de mantenimiento, una sola vez cada uno. La fecha se puede reprogramar mientras la OT no se haya activado.",
+      "limitations": "Requiere permisos.mantenimiento (o admin/dev). Si la OT se crea con menos días que una ventana de aviso (por ejemplo faltando 5 días), esa ventana no se emite: no hay avisos retroactivos. La activación y los avisos los ejecuta el proceso diario de backend, no el navegador. No inventar fechas ni estados de mantenimientos concretos."
+    },
+    {
+      "id": "notificaciones",
+      "areaKey": "global",
+      "areaTitle": "AppoloDesk",
+      "title": "Centro de Notificaciones",
+      "summary": "Campana en la barra superior de la pantalla de inicio (/areas) que lista las notificaciones del usuario con contador de no leídas, permite marcarlas como leídas (una o todas) y navegar a la entidad relacionada, por ejemplo el detalle de una OT. Las notificaciones se guardan en la colección notifications de Firestore, así que sobreviven a un refresh y se generan aunque la app esté cerrada. Cada notificación indica su tipo/origen y puede agrupar varias entidades (el resumen mensual de mantenimientos muestra los nombres de las OTs involucradas). Es genérico: está pensado para que cualquier módulo pueda emitir sus propias notificaciones.",
+      "primaryRoute": "/areas",
+      "routes": [
+        {
+          "label": "Inicio (campana de notificaciones)",
+          "path": "/areas"
+        }
+      ],
+      "permissions": "Cada usuario ve únicamente sus propias notificaciones (targetUserId). Solo puede cambiar el estado de lectura; la creación y el borrado son exclusivos del backend (Cloud Functions).",
+      "keywords": [
+        "notificaciones",
+        "centro de notificaciones",
+        "campana",
+        "avisos",
+        "alertas",
+        "no leidas",
+        "marcar como leida",
+        "pendientes"
+      ],
+      "userCanAskExamples": [
+        "¿Dónde veo mis notificaciones?",
+        "¿Cómo marco las notificaciones como leídas?",
+        "¿Por qué me llegó un aviso de mantenimiento programado?",
+        "¿Las notificaciones se pierden si cierro la app?"
+      ],
+      "assistantShouldAnswer": "Indicá que el Centro de Notificaciones es la campana de la barra superior del inicio (/areas): muestra el contador de no leídas, permite marcar una o todas como leídas y llevar al detalle de la entidad relacionada. Las notificaciones quedan guardadas en el servidor, no se pierden al refrescar ni al cerrar la app, y hoy las emite el módulo de mantenimiento programado (avisos de deadline y resumen mensual).",
+      "limitations": "El usuario solo ve sus propias notificaciones y no puede crearlas ni borrarlas desde la app. No inventar notificaciones concretas ni sus contenidos."
     },
     {
       "id": "servicios-generales-ots",

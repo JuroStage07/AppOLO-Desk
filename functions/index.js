@@ -1,10 +1,14 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 require("dotenv").config();
 const nodemailer = require("nodemailer");
 const QRCode = require("qrcode");
 const sql = require("mssql");
+const {
+  runScheduledMaintenanceCycle,
+} = require("./scheduledMaintenance");
 
 initializeApp();
 
@@ -956,3 +960,59 @@ exports.saveCoordinatorEmails = onCall(async (request) => {
 
   return { ok: true, count: clean.length };
 });
+
+/**
+ * Mantenimiento programado — ciclo diario.
+ *
+ * Hace tres cosas, todas idempotentes (ver functions/scheduledMaintenance.js):
+ *   1. Activa las OTs programadas cuyo deadline llegó: «Solicitada» → «En proceso».
+ *   2. Emite avisos de proximidad al deadline (15, 7 y 1 día).
+ *   3. Emite el resumen mensual de mantenimientos programados.
+ *
+ * Corre en el backend, no en el frontend: las notificaciones y la transición de
+ * estado ocurren aunque nadie tenga la app abierta.
+ *
+ * Requisitos de despliegue: plan Blaze + API de Cloud Scheduler habilitada.
+ * La hora es 06:00 en America/Costa_Rica, la misma zona de negocio que usa el
+ * cálculo de fechas, para que el "hoy" del job coincida con el del usuario.
+ */
+exports.scheduledMaintenanceDailyCheck = onSchedule(
+  {
+    schedule: "0 6 * * *",
+    timeZone: "America/Costa_Rica",
+    region: "us-central1",
+  },
+  async () => {
+    const summary = await runScheduledMaintenanceCycle();
+    console.log("scheduledMaintenanceDailyCheck", JSON.stringify(summary));
+    return null;
+  }
+);
+
+/**
+ * Disparo manual del mismo ciclo, para validar sin esperar al cron.
+ * Solo admin/dev; recarga el perfil server-side y no confía en el cliente.
+ *
+ * data: { } (sin parámetros)
+ */
+exports.runScheduledMaintenanceNow = onCall(
+  { region: "us-central1" },
+  async (req) => {
+    const caller = req.auth;
+    if (!caller) throw new HttpsError("unauthenticated", "Debes estar autenticado.");
+
+    const db = getFirestore();
+    const profile = await getProfileOrThrow(db, caller.uid);
+    const role = safe(profile.role);
+    if (role !== "administrativo" && role !== "dev") {
+      throw new HttpsError(
+        "permission-denied",
+        "Solo un usuario administrativo o dev puede ejecutar este proceso."
+      );
+    }
+
+    const summary = await runScheduledMaintenanceCycle({ db });
+    console.log("runScheduledMaintenanceNow", caller.uid, JSON.stringify(summary));
+    return { ok: true, ...summary };
+  }
+);

@@ -188,6 +188,32 @@ function canMantenimientoOT() {
         && s in ['Solicitada', 'En proceso', 'En revisión', 'Finalizada'];
     }
 
+    function validOtPrioridad(p) {
+      return p is string && p in ['Alta', 'Media', 'Baja', ''];
+    }
+
+    // Fecha de negocio en formato ISO 'YYYY-MM-DD' (orden lexicográfico = cronológico).
+    function validIsoDateString(s) {
+      return s is string && s.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    // Mantenimiento programado: si el flag viene en true, deadline y responsables
+    // son obligatorios (no debe existir una OT programada sin ellos).
+    function validScheduledOtCreateData(data) {
+      return !('scheduledMaintenance' in data)
+        || data.scheduledMaintenance == false
+        || (
+          data.scheduledMaintenance == true
+          && validIsoDateString(data.scheduledDate)
+          && data.responsablesUids is list
+          && data.responsablesUids.size() > 0
+          && data.responsablesNombres is list
+          && data.responsablesUids.size() == data.responsablesNombres.size()
+          && data.responsableUid is string
+          && data.responsableNombre is string
+        );
+    }
+
 function solicitudOtCreateTenantCompanyOk() {
       return !('tenantId' in request.resource.data)
         || !('company' in request.resource.data)
@@ -1329,7 +1355,16 @@ match /solicitudesOT/{solicitudId} {
       'company',
       'bodegaId',
       'bodegaNombre',
-      'subtasks'
+      'subtasks',
+      // Mantenimiento programado: la OT nace como 'Solicitada' («Tareas Pendientes»)
+      // con responsable(s) y deadline ya definidos; el job la activa al vencer.
+      'scheduledMaintenance',
+      'scheduledDate',
+      'prioridadOT',
+      'responsableUid',
+      'responsableNombre',
+      'responsablesUids',
+      'responsablesNombres'
     ])
     && request.resource.data.solicitanteNombre is string
     && request.resource.data.solicitanteFicha is string
@@ -1355,6 +1390,10 @@ match /solicitudesOT/{solicitudId} {
     && request.resource.data.createdByName is string
     && (!('createdArea' in request.resource.data) || request.resource.data.createdArea is string)
     && (!('subtasks' in request.resource.data) || request.resource.data.subtasks is list)
+    && (!('scheduledMaintenance' in request.resource.data) || request.resource.data.scheduledMaintenance is bool)
+    && (!('scheduledDate' in request.resource.data) || validIsoDateString(request.resource.data.scheduledDate))
+    && (!('prioridadOT' in request.resource.data) || validOtPrioridad(request.resource.data.prioridadOT))
+    && validScheduledOtCreateData(request.resource.data)
     && validBodegaData(request.resource.data)
     && request.resource.data.nombreOT.trim().size() > 0
     && request.resource.data.activoReferencia.trim().size() > 0
@@ -1373,8 +1412,25 @@ match /solicitudesOT/{solicitudId} {
       'responsableUid',
       'responsableNombre',
       'responsablesUids',
-      'responsablesNombres'
+      'responsablesNombres',
+      // `prioridadOT` ya se escribía al mover una OT a «En proceso» (OTsPage:
+      // executeMovePendingToProceso) pero faltaba en esta allowlist.
+      'prioridadOT',
+      // Reprogramación del deadline de un mantenimiento programado. El flag
+      // `scheduledMaintenance` es inmutable desde el cliente: se fija al crear.
+      'scheduledDate'
     ])
+    && (
+      !request.resource.data.diff(resource.data).changedKeys().hasAny(['prioridadOT']) ||
+      validOtPrioridad(request.resource.data.prioridadOT)
+    )
+    && (
+      !request.resource.data.diff(resource.data).changedKeys().hasAny(['scheduledDate']) ||
+      (
+        resource.data.scheduledMaintenance == true &&
+        validIsoDateString(request.resource.data.scheduledDate)
+      )
+    )
     && (
       !request.resource.data.diff(resource.data).changedKeys().hasAny(['OTState']) ||
       validOTState(request.resource.data.OTState)
@@ -1478,6 +1534,40 @@ match /solicitudesOT/{solicitudId} {
   }
 }
 
+// =========================
+//  Notificaciones (genéricas, multi-módulo)
+//  Colección: notifications/{notificationId}
+//
+//  Las notificaciones las genera SIEMPRE el backend (Cloud Functions, Admin SDK),
+//  nunca el cliente: así se generan aunque el usuario no tenga la app abierta y
+//  no se pueden falsificar destinatarios. El cliente solo lee las propias y
+//  marca leído/no leído.
+//
+//  Idempotencia: el ID del documento es determinístico (ver
+//  functions/scheduledMaintenance.js), por lo que reejecutar el job no duplica.
+// =========================
+match /notifications/{notificationId} {
+
+  function isMyNotification(data) {
+    return authed() && data.targetUserId == request.auth.uid;
+  }
+
+  allow get, list: if isMyNotification(resource.data);
+
+  // Solo el estado de lectura es editable, y solo por el destinatario.
+  allow update: if isMyNotification(resource.data)
+    && request.resource.data.targetUserId == resource.data.targetUserId
+    && request.resource.data.diff(resource.data).changedKeys().hasOnly(['read', 'readAt'])
+    && request.resource.data.read is bool
+    && (
+      !request.resource.data.diff(resource.data).changedKeys().hasAny(['readAt']) ||
+      request.resource.data.readAt == null ||
+      request.resource.data.readAt is timestamp
+    );
+
+  // Alta y baja: exclusivamente server-side (Admin SDK ignora estas reglas).
+  allow create, delete: if false;
+}
 
     // =========================
 //  Usuarios Terceros

@@ -159,6 +159,7 @@ const RAW_AREAS = [
         path: "/mantenimiento/ots",
         features: [
           { label: "Tablero / Gestión", path: "/mantenimiento/OTsPage" },
+          { label: "Mantenimiento programado", path: "/mantenimiento/ots/programado" },
           { label: "Finalizadas", path: "/mantenimiento/ots/finalizadas" },
           { label: "Dashboard", path: "/mantenimiento/ots/dashboard" },
         ],
