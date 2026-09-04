@@ -1356,7 +1356,7 @@
     "Solo puede proponer create_ot_draft y mrp_transfer_draft. n8n prepara el borrador; la app valida, solicita confirmación y escribe. Nunca afirma que la acción terminó antes de recibir estado created.",
     "Respeta rol y permisos: no sugiere rutas/áreas a las que el usuario no tiene acceso (p. ej. Administración/Horas Extra solo admin/dev, Dev solo dev, y los usuarios epaAdmin solo ven EPA)."
   ],
-  "generatedAt": "2026-08-27T15:46:01.998Z",
+  "generatedAt": "2026-09-02T16:21:40.787Z",
   "generatedFrom": [
     "src/config/workAreas.jsx",
     "src/App.jsx",
@@ -2214,7 +2214,7 @@
       "areaKey": "seguridad",
       "areaTitle": "Seguridad",
       "title": "Control de marcas (entrada/salida)",
-      "summary": "Permite registrar marcas de entrada/salida de terceros escaneando o digitando la cédula (el tipo entrada/salida se alterna automáticamente según la última marca del día), ver las personas activas en sitio y consultar el historial de marcas.",
+      "summary": "Permite registrar marcas de entrada/salida de terceros escaneando o digitando la cédula (el tipo entrada/salida se alterna automáticamente según la última marca del día), ver las personas activas en sitio y consultar el historial de marcas. El historial filtra por Día o Rango de fechas y por Usuario, Todos los usuarios o Por compañía (las compañías salen de usuariosTerceros.empresa), y exporta a Excel exactamente lo filtrado, organizado por usuario.",
       "primaryRoute": "/seguridad/control-marcas",
       "routes": [
         {
@@ -2236,16 +2236,22 @@
         "cedula",
         "activos en sitio",
         "historial marcas",
-        "ingreso de personas"
+        "ingreso de personas",
+        "reporte de marcas",
+        "exportar marcas",
+        "marcas por compañía",
+        "marcas por rango de fechas"
       ],
       "userCanAskExamples": [
         "¿Cómo registro una entrada o salida en control de marcas?",
         "¿Cómo veo quién está activo en sitio?",
         "¿Dónde consulto el historial de marcas?",
+        "¿Cómo veo las marcas de un rango de fechas o de una compañía?",
+        "¿Cómo exporto el reporte de marcas a Excel?",
         "¿Qué pasa si una persona está bloqueada?"
       ],
-      "assistantShouldAnswer": "Explicá que en Control de marcas (/seguridad/control-marcas) se registra entrada/salida por cédula (el sistema alterna el tipo automáticamente), se ven los activos en sitio y el historial está en /seguridad/control-marcas/historial. La persona debe existir como tercero y no estar bloqueada.",
-      "limitations": "Depende de que el tercero exista en usuariosTerceros. No inventar quién está en sitio ni marcas concretas."
+      "assistantShouldAnswer": "Explicá que en Control de marcas (/seguridad/control-marcas) se registra entrada/salida por cédula (el sistema alterna el tipo automáticamente), se ven los activos en sitio y el historial está en /seguridad/control-marcas/historial. En el historial se elige Día o Rango de fechas y luego el alcance: Usuario, Todos los usuarios o Por compañía; con Exportar se descarga en Excel exactamente lo filtrado, organizado por usuario (con hoja índice y enlaces cuando hay varios). La persona debe existir como tercero y no estar bloqueada.",
+      "limitations": "Depende de que el tercero exista en usuariosTerceros. No inventar quién está en sitio ni marcas concretas. El rango del historial no puede superar 370 días y la fecha final no puede ser anterior a la inicial."
     },
     {
       "id": "seguridad-control-terceros",

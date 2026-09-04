@@ -91,7 +91,7 @@ El centro `/reportes` agrupa Reportes Seguridad, Reportes Recepción/Descarga, D
 
 ### Seguridad
 
-- `/seguridad/control-marcas` y `/seguridad/control-marcas/historial`.
+- `/seguridad/control-marcas` y `/seguridad/control-marcas/historial`. El historial filtra por Día o Rango de fechas y por Usuario, Todos los usuarios o Por compañía (catálogo tomado de `usuariosTerceros.empresa`), y exporta a Excel lo filtrado, organizado por usuario (hoja índice con enlaces cuando hay más de uno).
 - `/seguridad/aperturas`, finalizadas, rechazadas y detalle `/:id`.
 - `/seguridad/visado/generar` y `/seguridad/visados`.
 - `/documentacion`.
