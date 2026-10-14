@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  AlertTriangle,
   ArrowLeft,
   Briefcase,
   Clock,
+  FileDown,
   FileSpreadsheet,
   RefreshCw,
   User,
@@ -28,12 +30,57 @@ import {
   ACCENT,
   ACCENT_SOFT,
   BORDER,
+  DANGER,
   SHADOW_CARD,
   SLATE,
   SURFACE,
   SURFACE_INSET,
   TEXT,
 } from "../../../styles/theme";
+import { useOvertimeCutoff } from "../../../hooks/useOvertimeCutoff";
+import OvertimeCutoffFilter from "../../../components/OvertimeCutoffFilter";
+import {
+  CURRENT_PERIOD,
+  cutoffPeriodFor,
+  isInPeriod,
+  isoDate,
+  listCutoffPeriods,
+  resolvePeriodSelection,
+  toLocalDate,
+} from "../../../utils/overtimeCutoffs";
+import { downloadOvertimeXlsx, minutesToHours } from "../../../utils/overtimeExcel";
+
+// Fecha de la hora extra: `date` (YYYY-MM-DD) o, si falta, el dayKey (DD-MM-YY).
+function recordDate(record) {
+  return record.date || record.dayKey || "";
+}
+
+const SUMMARY_COLUMNS = [
+  { header: "Empleado", key: "employeeName", width: 30 },
+  { header: "Código", key: "codeEmployee", width: 10 },
+  { header: "Puesto", key: "nameJobPosition", width: 24 },
+  { header: "Coordinador", key: "coordinatorName", width: 24 },
+  { header: "Corte", key: "cutoff", width: 22 },
+  { header: "Tipo MB", key: "mbType", width: 9, align: "center" },
+  { header: "Registros", key: "count", width: 10, align: "right" },
+  { header: "Total horas", key: "hours", width: 12, align: "right", numFmt: "0.00" },
+  { header: "Validadas fuera de corte", key: "lateCount", width: 14, align: "right" },
+];
+
+const DETAIL_COLUMNS = [
+  { header: "Empleado", key: "employeeName", width: 30 },
+  { header: "Código", key: "codeEmployee", width: 10 },
+  { header: "Coordinador", key: "coordinatorName", width: 24 },
+  { header: "Fecha", key: "date", width: 12 },
+  { header: "Corte", key: "cutoff", width: 22 },
+  { header: "Entrada", key: "startEnroll", width: 9, align: "center" },
+  { header: "Salida", key: "endEnroll", width: 9, align: "center" },
+  { header: "Tipo MB", key: "mbType", width: 9, align: "center" },
+  { header: "Horas (decimal)", key: "hours", width: 13, align: "right", numFmt: "0.00" },
+  { header: "Validada por", key: "validatedByEmail", width: 28 },
+  { header: "Fecha validación", key: "validatedAt", width: 18 },
+  { header: "Fuera de corte", key: "late", width: 12, align: "center" },
+];
 
 const OT_TYPES = {
   MB02: { code: "MB02", label: "Extra ×1.5", color: "#0D9488", bg: "rgba(13,148,136,0.12)", border: "rgba(13,148,136,0.30)" },
@@ -46,13 +93,15 @@ function formatHours(minutes) {
   return `${(total / 60).toFixed(1)} h`;
 }
 
+// Una fila por colaborador + tipo MB + corte.
 function groupByEmployeeAndMB(records) {
   const map = new Map();
 
   records.forEach((record) => {
     const employeeName = (record.employeeName || "Sin nombre").trim();
     const mbType = record.mbType || "MB02";
-    const key = `${record.employeeDocId || record.codeEmployee || employeeName}__${mbType}`;
+    const periodKey = record._period?.key || "sin-corte";
+    const key = `${record.employeeDocId || record.codeEmployee || employeeName}__${mbType}__${periodKey}`;
     const minutes = Number(record.minutes) || 0;
 
     if (!map.has(key)) {
@@ -63,19 +112,24 @@ function groupByEmployeeAndMB(records) {
         nameJobPosition: record.nameJobPosition || "",
         coordinatorName: record.coordinatorName || "",
         mbType,
+        period: record._period || null,
         totalMinutes: 0,
         count: 0,
+        lateCount: 0,
       });
     }
 
     const group = map.get(key);
     group.totalMinutes += minutes;
     group.count += 1;
+    if (record._late) group.lateCount += 1;
   });
 
   return Array.from(map.values()).sort((a, b) => {
     const nameCompare = a.employeeName.localeCompare(b.employeeName);
     if (nameCompare !== 0) return nameCompare;
+    const periodCompare = (b.period?.key || "").localeCompare(a.period?.key || "");
+    if (periodCompare !== 0) return periodCompare;
     return a.mbType.localeCompare(b.mbType);
   });
 }
@@ -108,8 +162,101 @@ export default function OvertimeMonthlyReport() {
     loadValidated();
   }, [loadValidated]);
 
-  const rows = useMemo(() => groupByEmployeeAndMB(records), [records]);
+  const { config: cutoffConfig } = useOvertimeCutoff();
+  const periods = useMemo(() => listCutoffPeriods(cutoffConfig), [cutoffConfig]);
+  const [periodSel, setPeriodSel] = useState(CURRENT_PERIOD);
+  const [onlyLate, setOnlyLate] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const { period: selectedPeriod, range } = useMemo(
+    () => resolvePeriodSelection(periodSel, periods),
+    [periodSel, periods]
+  );
+
+  // Corte de cada hora extra; "fuera de corte" = validada después del cierre de su corte.
+  const periodRecords = useMemo(
+    () =>
+      records
+        .filter((r) => !range || isInPeriod(recordDate(r), range))
+        .map((r) => {
+          const period = cutoffPeriodFor(recordDate(r), cutoffConfig);
+          const validated = toLocalDate(r.validatedAt ? new Date(r.validatedAt) : null);
+          const late = !!(period && validated && validated > period.end);
+          return { ...r, _period: period, _late: late };
+        }),
+    [records, range, cutoffConfig]
+  );
+  const lateCount = useMemo(() => periodRecords.filter((r) => r._late).length, [periodRecords]);
+  const visibleRecords = useMemo(
+    () => (onlyLate ? periodRecords.filter((r) => r._late) : periodRecords),
+    [periodRecords, onlyLate]
+  );
+
+  const rows = useMemo(() => groupByEmployeeAndMB(visibleRecords), [visibleRecords]);
   const totalMinutes = useMemo(() => rows.reduce((s, r) => s + r.totalMinutes, 0), [rows]);
+
+  const periodTitle = selectedPeriod
+    ? `Corte ${selectedPeriod.label}`
+    : range
+      ? `Todos los cortes (${isoDate(range.start)} a ${isoDate(range.end)})`
+      : "Todos";
+
+  const handleExport = async () => {
+    setExporting(true);
+    setError("");
+    try {
+      const meta = [
+        ["Corte", periodTitle],
+        ["Solo fuera de corte", onlyLate ? "Sí" : "No"],
+        ["Generado", new Date().toLocaleString("es-CR")],
+      ];
+      await downloadOvertimeXlsx({
+        fileName: `horas-extra-reporte-${selectedPeriod?.key || "todos"}`,
+        sheets: [
+          {
+            name: "Consolidado",
+            title: "Reporte de horas extra · Consolidado",
+            meta,
+            columns: SUMMARY_COLUMNS,
+            rows: rows.map((r) => ({
+              ...r,
+              cutoff: r.period?.label || "",
+              hours: minutesToHours(r.totalMinutes),
+            })),
+          },
+          {
+            name: "Detalle",
+            title: "Reporte de horas extra · Detalle",
+            meta,
+            columns: DETAIL_COLUMNS,
+            rows: [...visibleRecords]
+              .sort(
+                (a, b) =>
+                  (a.employeeName || "").localeCompare(b.employeeName || "") ||
+                  String(recordDate(a)).localeCompare(String(recordDate(b)))
+              )
+              .map((r) => ({
+                employeeName: r.employeeName || "Sin nombre",
+                codeEmployee: r.codeEmployee || "",
+                coordinatorName: r.coordinatorName || "",
+                date: recordDate(r),
+                cutoff: r._period?.label || "",
+                startEnroll: r.startEnroll || "",
+                endEnroll: r.endEnroll || "",
+                mbType: r.mbType || "",
+                hours: minutesToHours(r.minutes),
+                validatedByEmail: r.validatedByEmail || "",
+                validatedAt: r.validatedAt ? new Date(r.validatedAt).toLocaleString("es-CR") : "",
+                late: r._late ? "Sí" : "No",
+              })),
+          },
+        ],
+      });
+    } catch (e) {
+      setError(e.message || "No se pudo generar el Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <Shell>
@@ -147,6 +294,28 @@ export default function OvertimeMonthlyReport() {
             }
           />
 
+          <div style={styles.cutoffBar}>
+            <OvertimeCutoffFilter
+              periods={periods}
+              value={periodSel}
+              onChange={setPeriodSel}
+              onlyLate={onlyLate}
+              onOnlyLateChange={setOnlyLate}
+              lateCount={lateCount}
+              lateLabel="Solo validadas fuera de corte"
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={FileDown}
+              loading={exporting}
+              disabled={exporting || loading || rows.length === 0}
+              onClick={handleExport}
+            >
+              Descargar Excel
+            </Button>
+          </div>
+
           {!!error && <div style={styles.errorBanner}>{error}</div>}
 
           {loading ? (
@@ -155,7 +324,7 @@ export default function OvertimeMonthlyReport() {
             <EmptyState
               icon={Clock}
               title="Sin registros validados"
-              description="No hay horas extra validadas por gerencia aún."
+              description="No hay horas extra validadas por gerencia para el corte y filtros seleccionados."
               action={
                 <Button variant="primary" icon={RefreshCw} onClick={loadValidated}>
                   Recargar
@@ -167,7 +336,7 @@ export default function OvertimeMonthlyReport() {
               <div style={styles.tableHeader}>
                 <div>
                   <div style={styles.tableTitle}>Reporte consolidado</div>
-                  <div style={styles.tableSubtitle}>Una fila por colaborador y tipo MB</div>
+                  <div style={styles.tableSubtitle}>Una fila por colaborador, tipo MB y corte · {periodTitle}</div>
                 </div>
                 <Badge icon={Clock}>{formatHours(totalMinutes)}</Badge>
               </div>
@@ -180,6 +349,7 @@ export default function OvertimeMonthlyReport() {
                       <th style={styles.th}>Empleado</th>
                       <th style={styles.th}>Puesto</th>
                       <th style={styles.th}>Coordinador</th>
+                      <th style={styles.th}>Corte</th>
                       <th style={styles.thCenter}>Tipo MB</th>
                       <th style={styles.thRight}>Registros</th>
                       <th style={styles.thRight}>Total horas</th>
@@ -205,6 +375,15 @@ export default function OvertimeMonthlyReport() {
                             </span>
                           </td>
                           <td style={styles.td}>{row.coordinatorName || "—"}</td>
+                          <td style={styles.td}>
+                            <span style={styles.cutoffCell}>{row.period?.label || "—"}</span>
+                            {row.lateCount > 0 && (
+                              <span style={styles.lateMini}>
+                                <AlertTriangle size={11} strokeWidth={2.5} />
+                                {row.lateCount} fuera de corte
+                              </span>
+                            )}
+                          </td>
                           <td style={styles.tdCenter}>
                             <span style={{ ...styles.mbBadge, color: t.color, background: t.bg, border: `1px solid ${t.border}` }}>
                               {t.code}
@@ -230,6 +409,24 @@ export default function OvertimeMonthlyReport() {
 }
 
 const styles = {
+  cutoffBar: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  cutoffCell: { whiteSpace: "nowrap", color: SLATE, fontWeight: 850, fontSize: 12.5 },
+  lateMini: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 3,
+    color: DANGER,
+    fontSize: 11,
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+  },
   errorBanner: {
     background: "rgba(185,28,28,0.08)",
     border: "1px solid rgba(185,28,28,0.25)",

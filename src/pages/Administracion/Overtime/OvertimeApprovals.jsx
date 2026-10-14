@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -6,7 +6,10 @@ import {
   CalendarDays,
   Check,
   Clock,
+  FileDown,
+  LayoutGrid,
   RefreshCw,
+  Table2,
   TimerReset,
   User,
   X,
@@ -50,6 +53,18 @@ import {
 } from "../../../styles/theme";
 import { useOvertimeCutoff } from "../../../hooks/useOvertimeCutoff";
 import OvertimeCutoffBanner from "../../../components/OvertimeCutoffBanner";
+import OvertimeCutoffFilter, { CutoffTag } from "../../../components/OvertimeCutoffFilter";
+import OvertimeSheetTable from "../../../components/OvertimeSheetTable";
+import {
+  CURRENT_PERIOD,
+  cutoffPeriodFor,
+  isInPeriod,
+  isoDate,
+  listCutoffPeriods,
+  periodStatus,
+  resolvePeriodSelection,
+} from "../../../utils/overtimeCutoffs";
+import { downloadOvertimeXlsx, minutesToHours } from "../../../utils/overtimeExcel";
 
 const STATUS_TONE = {
   approved: "ok",
@@ -69,6 +84,32 @@ const STATUS_FILTERS = [
   { key: "approved", label: "Aprobadas" },
   { key: "rejected", label: "Rechazadas" },
 ];
+
+// Columnas de la vista de tabla y del Excel (width en caracteres de Excel).
+const SHEET_COLUMNS = [
+  { header: "Empleado", key: "employee", width: 30 },
+  { header: "Código", key: "code", width: 10 },
+  { header: "Puesto", key: "job", width: 24 },
+  { header: "Coordinador", key: "coordinator", width: 24 },
+  { header: "Fecha", key: "date", width: 12 },
+  { header: "Día", key: "dayName", width: 11 },
+  { header: "Feriado", key: "holiday", width: 16 },
+  { header: "Corte", key: "cutoff", width: 22 },
+  { header: "Atrasada", key: "late", width: 10, align: "center" },
+  { header: "Entrada", key: "startEnroll", width: 9, align: "center" },
+  { header: "Salida", key: "endEnroll", width: 9, align: "center" },
+  { header: "Turno", key: "schedule", width: 18 },
+  { header: "Horario", key: "scheduleRange", width: 16 },
+  { header: "Extra empresa", key: "companyOvertime", width: 13, align: "center" },
+  { header: "Horas (decimal)", key: "companyHours", width: 13, align: "right", numFmt: "0.00" },
+  { header: "Extra sistema", key: "systemOvertime", width: 13, align: "center" },
+  { header: "Tipo MB", key: "mb", width: 9, align: "center" },
+  { header: "Estado", key: "status", width: 12 },
+  { header: "Decidido por", key: "decidedBy", width: 28 },
+  { header: "Nota", key: "note", width: 32 },
+];
+
+const TABLE_COLUMNS = SHEET_COLUMNS.map((c) => ({ ...c, width: c.width * 7 }));
 
 const OVERTIME_CONTROL_COLLECTION = "overtime_control";
 const DECISION_COLLECTIONS = {
@@ -310,22 +351,6 @@ function classifyOvertime(record, feriadoDates) {
   return OT_TYPES.MB02;
 }
 
-// Convierte la fecha de un registro (YYYY-MM-DD o DD/MM/YYYY) a un Date a medianoche.
-function recordToDate(rawDate) {
-  const ds = safeText(rawDate);
-  if (!ds) return null;
-  let d;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(ds)) {
-    d = new Date(`${ds}T00:00:00`);
-  } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(ds)) {
-    const [dd, mm, yyyy] = ds.split("/");
-    d = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
-  } else {
-    d = new Date(ds);
-  }
-  if (Number.isNaN(d.getTime())) return null;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
 
 function statusInfo(raw) {
   const key = String(raw || "pending").toLowerCase();
@@ -551,6 +576,8 @@ function OvertimeCard({ record, savingId, onDecide, feriadoDates, feriadosMap })
         <StatusPill tone={tone}>{label}</StatusPill>
       </div>
 
+      <CutoffTag period={record._period} late={record._late} />
+
       {record.isWeekend && (
         <div style={styles.weekendBadge}>
           <CalendarDays size={12} strokeWidth={2.4} />
@@ -696,7 +723,9 @@ export default function OvertimeApprovals() {
   const [error, setError] = useState("");
   const [feriadoDates, setFeriadoDates] = useState([]);
   const [feriadosMap, setFeriadosMap] = useState({});
-  const { next: cutoff, loading: cutoffLoading } = useOvertimeCutoff();
+  const { config: cutoffConfig, next: cutoff, loading: cutoffLoading } = useOvertimeCutoff();
+  const periods = useMemo(() => listCutoffPeriods(cutoffConfig), [cutoffConfig]);
+  const currentPeriod = periods[0] || null;
 
   // Modal state
   const [reasonModal, setReasonModal] = useState({ open: false, record: null, action: null });
@@ -730,13 +759,24 @@ export default function OvertimeApprovals() {
   const [statusFilter, setStatusFilter] = useState("pending");
   const [coordinatorFilter, setCoordinatorFilter] = useState("all");
   const [onlyCompanyOvertime, setOnlyCompanyOvertime] = useState(true);
-  const [ignoreCutoffRange, setIgnoreCutoffRange] = useState(false); // solo dev: ver todo sin rango
+  const [periodSel, setPeriodSel] = useState(CURRENT_PERIOD);
+  const [onlyLate, setOnlyLate] = useState(false);
+  const [view, setView] = useState("cards"); // "cards" | "table"
+  const [exporting, setExporting] = useState(false);
 
-  const loadRecords = async () => {
+  // Rango del corte elegido: se pide a la API para traer ese corte completo.
+  const { period: selectedPeriod, range } = useMemo(
+    () => resolvePeriodSelection(periodSel, periods),
+    [periodSel, periods]
+  );
+  const rangeFrom = range ? isoDate(range.start) : "";
+  const rangeTo = range ? isoDate(range.end) : "";
+
+  const loadRecords = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await getOvertimeRecords();
+      const res = await getOvertimeRecords({ from: rangeFrom, to: rangeTo });
       setRecords(res.records || []);
     } catch (e) {
       console.error("Error cargando horas extra:", e);
@@ -744,15 +784,18 @@ export default function OvertimeApprovals() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [rangeFrom, rangeTo]);
 
   const decideRecord = async (record, status) => {
     setReasonModal({ open: true, record, action: status });
   };
 
   const handleReasonConfirm = async (note) => {
-    const { record, action } = reasonModal;
+    const { record: uiRecord, action } = reasonModal;
     setReasonModal({ open: false, record: null, action: null });
+
+    // Quitar campos solo de UI (corte calculado) antes de persistir.
+    const { _period, _late, ...record } = uiRecord;
 
     setSavingId(record.attendanceId);
     try {
@@ -785,41 +828,125 @@ export default function OvertimeApprovals() {
     }
   };
 
+  // Esperar la config de cortes antes de la primera carga (define el rango).
   useEffect(() => {
+    if (cutoffLoading) return;
     loadRecords();
-  }, []);
+  }, [cutoffLoading, loadRecords]);
+
+  // Corte de cada registro y si está atrasado (pendiente en un corte ya cerrado).
+  const enrichedRecords = useMemo(
+    () =>
+      records.map((r) => {
+        const period = cutoffPeriodFor(r.date, cutoffConfig);
+        const late =
+          statusInfo(r.status).key === "pending" &&
+          periodStatus(period, currentPeriod) === "closed";
+        return { ...r, _period: period, _late: late };
+      }),
+    [records, cutoffConfig, currentPeriod]
+  );
+
+  // Registros del corte elegido (la API ya filtra; esto cubre APIs sin rango).
+  const periodRecords = useMemo(
+    () => (range ? enrichedRecords.filter((r) => isInPeriod(r.date, range)) : enrichedRecords),
+    [enrichedRecords, range]
+  );
 
   const coordinators = useMemo(() => {
     const set = new Set();
-    records.forEach((r) => {
+    periodRecords.forEach((r) => {
       if (r.coordinatorName) set.add(r.coordinatorName);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [records]);
+  }, [periodRecords]);
 
   const pendingCount = useMemo(
-    () => records.filter((r) => statusInfo(r.status).key === "pending").length,
-    [records]
+    () => periodRecords.filter((r) => statusInfo(r.status).key === "pending").length,
+    [periodRecords]
   );
-
-  // Rango del corte activo (Fecha inicio → Fecha final). El dev puede ignorarlo.
-  const range = cutoff?.range || null;
-  const applyRange = !(isDev && ignoreCutoffRange) && !!range;
+  const lateCount = useMemo(() => periodRecords.filter((r) => r._late).length, [periodRecords]);
 
   const filteredRecords = useMemo(() => {
-    return records.filter((r) => {
+    return periodRecords.filter((r) => {
       const key = statusInfo(r.status).key;
       const statusOk = statusFilter === "all" || key === statusFilter;
       const coordinatorOk =
         coordinatorFilter === "all" || r.coordinatorName === coordinatorFilter;
       if (onlyCompanyOvertime && !r.hasCompanyOvertime) return false;
-      if (applyRange) {
-        const d = recordToDate(r.date);
-        if (!d || d < range.start || d > range.end) return false;
-      }
+      if (onlyLate && !r._late) return false;
       return statusOk && coordinatorOk;
     });
-  }, [records, statusFilter, coordinatorFilter, onlyCompanyOvertime, applyRange, range]);
+  }, [periodRecords, statusFilter, coordinatorFilter, onlyCompanyOvertime, onlyLate]);
+
+  // Filas planas para la vista de tabla y el Excel.
+  const sheetRows = useMemo(
+    () =>
+      filteredRecords.map((r) => {
+        const ot = classifyOvertime(r, feriadoDates);
+        const isoD = r.date ? String(r.date).slice(0, 10) : "";
+        return {
+          id: r.attendanceId,
+          employee: r.fullName || "Sin nombre",
+          code: r.codeEmployee || "",
+          job: r.nameJobPosition || "",
+          coordinator: r.coordinatorName || "",
+          date: r.date || "",
+          dayName: r.dayName || "",
+          holiday: feriadosMap[isoD] || "",
+          cutoff: r._period?.label || "",
+          late: r._late ? "Sí" : "No",
+          startEnroll: r.startEnroll || "",
+          endEnroll: r.endEnroll || "",
+          schedule: r.scheduleName || "",
+          scheduleRange: r.scheduleRange || "",
+          companyOvertime: r.companyOvertime || r.overtime || "00:00",
+          companyHours: minutesToHours(r.companyOvertimeMinutes),
+          systemOvertime: r.systemOvertime || "",
+          mb: ot?.code || "",
+          status: statusInfo(r.status).label,
+          decidedBy: r.decidedByEmail || "",
+          note: r.note || "",
+          _late: r._late,
+        };
+      }),
+    [filteredRecords, feriadoDates, feriadosMap]
+  );
+
+  const periodTitle = selectedPeriod
+    ? `Corte ${selectedPeriod.label}`
+    : range
+      ? `Todos los cortes (${isoDate(range.start)} a ${isoDate(range.end)})`
+      : "Registros recientes";
+
+  const handleExport = async () => {
+    setExporting(true);
+    setError("");
+    try {
+      await downloadOvertimeXlsx({
+        fileName: `horas-extra-aprobacion-${selectedPeriod?.key || "todos"}`,
+        sheets: [
+          {
+            name: "Aprobación",
+            title: "Aprobación de horas extra",
+            meta: [
+              ["Corte", periodTitle],
+              ["Estado", STATUS_FILTERS.find((f) => f.key === statusFilter)?.label || "Todas"],
+              ["Coordinador", coordinatorFilter === "all" ? "Todos" : coordinatorFilter],
+              ["Solo atrasadas", onlyLate ? "Sí" : "No"],
+              ["Generado", new Date().toLocaleString("es-CR")],
+            ],
+            columns: SHEET_COLUMNS,
+            rows: sheetRows,
+          },
+        ],
+      });
+    } catch (e) {
+      setError(e.message || "No se pudo generar el Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <Shell>
@@ -864,6 +991,47 @@ export default function OvertimeApprovals() {
           <OvertimeCutoffBanner next={cutoff} loading={cutoffLoading} />
 
           <div style={styles.filters}>
+            <OvertimeCutoffFilter
+              periods={periods}
+              value={periodSel}
+              onChange={setPeriodSel}
+              onlyLate={onlyLate}
+              onOnlyLateChange={setOnlyLate}
+              lateCount={lateCount}
+            />
+            <div style={styles.viewActions}>
+              <div style={styles.segmented} role="group" aria-label="Vista">
+                <button
+                  type="button"
+                  onClick={() => setView("cards")}
+                  style={view === "cards" ? styles.segActive : styles.seg}
+                  aria-pressed={view === "cards"}
+                >
+                  <LayoutGrid size={14} strokeWidth={2.3} /> Tarjetas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("table")}
+                  style={view === "table" ? styles.segActive : styles.seg}
+                  aria-pressed={view === "table"}
+                >
+                  <Table2 size={14} strokeWidth={2.3} /> Tabla
+                </button>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={FileDown}
+                loading={exporting}
+                disabled={exporting || loading || sheetRows.length === 0}
+                onClick={handleExport}
+              >
+                Descargar Excel
+              </Button>
+            </div>
+          </div>
+
+          <div style={styles.filters}>
             <div style={styles.filterChips}>
               {STATUS_FILTERS.map((f) => {
                 const active = statusFilter === f.key;
@@ -906,17 +1074,6 @@ export default function OvertimeApprovals() {
               />
               Solo con extra empresa
             </label>
-
-            {isDev && (
-              <label style={{ ...styles.toggle, color: ACCENT }}>
-                <input
-                  type="checkbox"
-                  checked={ignoreCutoffRange}
-                  onChange={(e) => setIgnoreCutoffRange(e.target.checked)}
-                />
-                Ver todas (sin rango de corte) · dev
-              </label>
-            )}
           </div>
 
           {!!error && <div style={styles.errorBanner}>{error}</div>}
@@ -933,6 +1090,13 @@ export default function OvertimeApprovals() {
                   Recargar
                 </Button>
               }
+            />
+          ) : view === "table" ? (
+            <OvertimeSheetTable
+              columns={TABLE_COLUMNS}
+              rows={sheetRows}
+              rowKey={(row) => row.id}
+              rowStyle={(row) => (row._late ? styles.lateRow : undefined)}
             />
           ) : (
             <div style={styles.list}>
@@ -971,6 +1135,39 @@ const styles = {
     gap: 12,
   },
   filterChips: { display: "flex", flexWrap: "wrap", gap: 8 },
+  viewActions: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 },
+  segmented: {
+    display: "inline-flex",
+    border: `1px solid ${BORDER}`,
+    borderRadius: 12,
+    overflow: "hidden",
+    background: SURFACE,
+  },
+  seg: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    border: "none",
+    background: "transparent",
+    color: SLATE,
+    padding: "8px 12px",
+    fontSize: 12.5,
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+  segActive: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    border: "none",
+    background: "rgba(8,159,138,0.12)",
+    color: ACCENT,
+    padding: "8px 12px",
+    fontSize: 12.5,
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+  lateRow: { background: "rgba(220,38,38,0.06)" },
   chip: {
     display: "inline-flex",
     alignItems: "center",

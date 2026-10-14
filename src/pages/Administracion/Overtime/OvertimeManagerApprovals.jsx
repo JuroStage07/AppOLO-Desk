@@ -7,6 +7,7 @@ import {
   Check,
   CheckCheck,
   Clock,
+  FileDown,
   Filter,
   LogIn,
   LogOut,
@@ -54,6 +55,40 @@ import {
 } from "../../../styles/theme";
 import { useOvertimeCutoff } from "../../../hooks/useOvertimeCutoff";
 import OvertimeCutoffBanner from "../../../components/OvertimeCutoffBanner";
+import OvertimeCutoffFilter, { CutoffTag } from "../../../components/OvertimeCutoffFilter";
+import {
+  CURRENT_PERIOD,
+  cutoffPeriodFor,
+  isInPeriod,
+  isoDate,
+  listCutoffPeriods,
+  periodStatus,
+  resolvePeriodSelection,
+} from "../../../utils/overtimeCutoffs";
+import { downloadOvertimeXlsx, minutesToHours } from "../../../utils/overtimeExcel";
+
+// Fecha del registro: `date` (YYYY-MM-DD) o, si falta, el dayKey (DD-MM-YY).
+function recordDate(record) {
+  return record.date || record.dayKey || "";
+}
+
+const EXPORT_COLUMNS = [
+  { header: "Empleado", key: "employee", width: 30 },
+  { header: "Código", key: "code", width: 10 },
+  { header: "Puesto", key: "job", width: 24 },
+  { header: "Coordinador", key: "coordinator", width: 24 },
+  { header: "Gerente", key: "manager", width: 28 },
+  { header: "Fecha", key: "date", width: 16 },
+  { header: "Corte", key: "cutoff", width: 22 },
+  { header: "Atrasada", key: "late", width: 10, align: "center" },
+  { header: "Entrada", key: "startEnroll", width: 9, align: "center" },
+  { header: "Salida", key: "endEnroll", width: 9, align: "center" },
+  { header: "Feriado", key: "holiday", width: 16 },
+  { header: "Horas (decimal)", key: "hours", width: 13, align: "right", numFmt: "0.00" },
+  { header: "Tipo MB", key: "mb", width: 9, align: "center" },
+  { header: "Estado gerencia", key: "state", width: 16 },
+  { header: "Aprobada por (coordinación)", key: "decidedBy", width: 28 },
+];
 
 function safeText(value) {
   return String(value ?? "").trim();
@@ -288,7 +323,16 @@ export default function OvertimeManagerApprovals() {
   const [coordinatorFilter, setCoordinatorFilter] = useState("all");
   const [savingIds, setSavingIds] = useState(new Set());
   const [processed, setProcessed] = useState({}); // { [itemId]: "approved" | "rejected" }
-  const { next: cutoff, loading: cutoffLoading } = useOvertimeCutoff();
+  const { config: cutoffConfig, next: cutoff, loading: cutoffLoading } = useOvertimeCutoff();
+  const periods = useMemo(() => listCutoffPeriods(cutoffConfig), [cutoffConfig]);
+  const currentPeriod = periods[0] || null;
+  const [periodSel, setPeriodSel] = useState(CURRENT_PERIOD);
+  const [onlyLate, setOnlyLate] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const { period: selectedPeriod, range } = useMemo(
+    () => resolvePeriodSelection(periodSel, periods),
+    [periodSel, periods]
+  );
 
   const itemKey = (item) => item.id || item.path;
 
@@ -335,7 +379,18 @@ export default function OvertimeManagerApprovals() {
         .filter((record) => record.status === "approved" || record.statusCollection === "approved")
         .filter((record) => isDev || normalizeEmail(record.managerEmail) === userEmail);
 
+      // Lo ya validado por gerencia queda marcado como procesado (sobrevive a recargas).
+      const validatedSnap = await getDocs(collection(db, "overtime_manager_validated"));
+      const validatedPaths = new Set(
+        validatedSnap.docs.map((d) => d.data()?.sourcePath).filter(Boolean)
+      );
+      const alreadyValidated = {};
+      list.forEach((record) => {
+        if (validatedPaths.has(record.path)) alreadyValidated[record.id || record.path] = "approved";
+      });
+
       setRecords(list);
+      setProcessed(alreadyValidated);
     } catch (e) {
       console.error("Error cargando aprobaciones de horas extra:", e);
       setError(e.message || "No se pudieron cargar las horas extra aprobadas.");
@@ -348,18 +403,99 @@ export default function OvertimeManagerApprovals() {
     loadApprovedOvertimes();
   }, [loadApprovedOvertimes]);
 
+  // Corte de cada registro; atrasado = sin validar por gerencia y de un corte ya cerrado.
+  const periodRecords = useMemo(
+    () =>
+      records
+        .filter((r) => !range || isInPeriod(recordDate(r), range))
+        .map((r) => {
+          const period = cutoffPeriodFor(recordDate(r), cutoffConfig);
+          const late =
+            !processed[r.id || r.path] && periodStatus(period, currentPeriod) === "closed";
+          return { ...r, _period: period, _late: late };
+        }),
+    [records, range, cutoffConfig, currentPeriod, processed]
+  );
+  const lateCount = useMemo(() => periodRecords.filter((r) => r._late).length, [periodRecords]);
+
   const coordinators = useMemo(() => {
     const set = new Set();
-    records.forEach((r) => {
+    periodRecords.forEach((r) => {
       if (r.coordinatorName) set.add(r.coordinatorName);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [records]);
+  }, [periodRecords]);
 
-  const filteredRecords = useMemo(() => {
-    if (coordinatorFilter === "all") return records;
-    return records.filter((r) => r.coordinatorName === coordinatorFilter);
-  }, [records, coordinatorFilter]);
+  const filteredRecords = useMemo(
+    () =>
+      periodRecords.filter(
+        (r) =>
+          (coordinatorFilter === "all" || r.coordinatorName === coordinatorFilter) &&
+          (!onlyLate || r._late)
+      ),
+    [periodRecords, coordinatorFilter, onlyLate]
+  );
+
+  const periodTitle = selectedPeriod
+    ? `Corte ${selectedPeriod.label}`
+    : range
+      ? `Todos los cortes (${isoDate(range.start)} a ${isoDate(range.end)})`
+      : "Todos";
+
+  const handleExport = async () => {
+    setExporting(true);
+    setError("");
+    try {
+      const rows = [...filteredRecords]
+        .sort(
+          (a, b) =>
+            safeText(a.employeeName || a.fullName).localeCompare(safeText(b.employeeName || b.fullName)) ||
+            dateSortValue(a) - dateSortValue(b)
+        )
+        .map((r) => {
+          const isoD = resolveIsoDate(r);
+          const proc = processed[itemKey(r)];
+          return {
+            employee: safeText(r.employeeName || r.fullName) || "Sin nombre",
+            code: r.codeEmployee || "",
+            job: r.nameJobPosition || "",
+            coordinator: r.coordinatorName || "",
+            manager: r.managerName || r.managerEmail || "",
+            date: formatDate(r),
+            cutoff: r._period?.label || "",
+            late: r._late ? "Sí" : "No",
+            startEnroll: r.startEnroll || "",
+            endEnroll: r.endEnroll || "",
+            holiday: (isoD && feriadosMap[isoD]) || "",
+            hours: minutesToHours(overtimeMinutes(r)),
+            mb: classifyOvertime(r, feriadoDates)?.code || "",
+            state: proc === "approved" ? "Validada" : proc === "rejected" ? "Rechazada" : "Pendiente",
+            decidedBy: r.decidedByEmail || "",
+          };
+        });
+      await downloadOvertimeXlsx({
+        fileName: `horas-extra-gerencia-${selectedPeriod?.key || "todos"}`,
+        sheets: [
+          {
+            name: "Gerencia",
+            title: "Validación de horas extra · Gerencia",
+            meta: [
+              ["Corte", periodTitle],
+              ["Coordinador", coordinatorFilter === "all" ? "Todos" : coordinatorFilter],
+              ["Solo atrasadas", onlyLate ? "Sí" : "No"],
+              ["Generado", new Date().toLocaleString("es-CR")],
+            ],
+            columns: EXPORT_COLUMNS,
+            rows,
+          },
+        ],
+      });
+    } catch (e) {
+      setError(e.message || "No se pudo generar el Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const groups = useMemo(() => groupByEmployee(filteredRecords), [filteredRecords]);
   const totalHours = useMemo(
@@ -491,12 +627,40 @@ export default function OvertimeManagerApprovals() {
             </div>
             <div style={styles.summaryItem}>
               <span style={styles.summaryLabel}>Registros aprobados</span>
-              <strong style={styles.summaryValue}>{records.length}</strong>
+              <strong style={styles.summaryValue}>{filteredRecords.length}</strong>
+            </div>
+            <div style={styles.summaryItem}>
+              <span style={styles.summaryLabel}>Atrasadas</span>
+              <strong style={{ ...styles.summaryValue, ...(lateCount > 0 ? { color: DANGER } : null) }}>
+                {lateCount}
+              </strong>
             </div>
             <div style={styles.summaryItem}>
               <span style={styles.summaryLabel}>Total horas</span>
               <strong style={styles.summaryValue}>{formatHours(totalHours)}</strong>
             </div>
+          </div>
+
+          <div style={styles.cutoffBar}>
+            <OvertimeCutoffFilter
+              periods={periods}
+              value={periodSel}
+              onChange={setPeriodSel}
+              onlyLate={onlyLate}
+              onOnlyLateChange={setOnlyLate}
+              lateCount={lateCount}
+              lateLabel="Solo atrasadas (sin validar)"
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={FileDown}
+              loading={exporting}
+              disabled={exporting || loading || filteredRecords.length === 0}
+              onClick={handleExport}
+            >
+              Descargar Excel
+            </Button>
           </div>
 
           {/* Filter bar */}
@@ -595,7 +759,14 @@ export default function OvertimeManagerApprovals() {
                               </div>
                             </td>
                             <td style={styles.td}>{group.coordinatorName}</td>
-                            <td style={styles.tdRight}>{group.items.length}</td>
+                            <td style={styles.tdRight}>
+                              {group.items.length}
+                              {group.items.some((it) => it._late) && (
+                                <span style={styles.lateMini}>
+                                  {group.items.filter((it) => it._late).length} atrasadas
+                                </span>
+                              )}
+                            </td>
                             <td style={styles.tdRight}>
                               <strong style={styles.hoursTotal}>{formatHours(group.totalMinutes)}</strong>
                             </td>
@@ -649,11 +820,12 @@ export default function OvertimeManagerApprovals() {
                             <tr>
                               <td style={styles.detailCell} colSpan={7}>
                                 <div style={styles.detailPanel}>
-                                  <TableScroll minWidth={720} bordered={false}>
+                                  <TableScroll minWidth={900} bordered={false}>
                                   <table style={styles.detailTable}>
                                     <thead>
                                       <tr>
                                         <th style={styles.detailTh}>Fecha</th>
+                                        <th style={styles.detailTh}>Corte</th>
                                         <th style={styles.detailTh}>Entrada</th>
                                         <th style={styles.detailTh}>Salida</th>
                                         <th style={styles.detailThCenter}>Feriado</th>
@@ -680,6 +852,9 @@ export default function OvertimeManagerApprovals() {
                                                 <CalendarDays size={13} strokeWidth={2.2} />
                                                 {formatDate(item)}
                                               </span>
+                                            </td>
+                                            <td style={styles.detailTd}>
+                                              <CutoffTag period={item._period} late={item._late} />
                                             </td>
                                             <td style={styles.detailTd}>
                                               <span style={styles.detailTime}>
@@ -782,6 +957,21 @@ export default function OvertimeManagerApprovals() {
 }
 
 const styles = {
+  cutoffBar: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  lateMini: {
+    display: "block",
+    marginTop: 3,
+    color: DANGER,
+    fontSize: 11,
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+  },
   summaryStrip: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",

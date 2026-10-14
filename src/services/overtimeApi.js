@@ -44,8 +44,14 @@ async function authedFetch(path, { method = "GET", body } = {}) {
   return data;
 }
 
-export function getOvertimeRecords() {
-  return authedFetch("/overtime");
+// Sin rango la API devuelve los registros más recientes; con `from`/`to`
+// (YYYY-MM-DD, inclusive) devuelve los del corte pedido.
+export function getOvertimeRecords({ from, to } = {}) {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  const qs = params.toString();
+  return authedFetch(`/overtime${qs ? `?${qs}` : ""}`);
 }
 
 // Marcas diarias crudas (startEnroll + horario esperado) para reglas de tardanza.
