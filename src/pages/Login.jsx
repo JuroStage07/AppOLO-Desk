@@ -15,6 +15,7 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import useIsMobile from "../hooks/useIsMobile";
 import { ACCENT } from "../styles/theme";
+import { Eye, EyeOff } from "lucide-react";
 
 /** Provider Google (único) */
 const googleProvider = new GoogleAuthProvider();
@@ -41,6 +42,7 @@ export default function Login() {
   // email/pass normal
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
+  const [showPass, setShowPass] = useState(false);
 
   // estado general
   const [busy, setBusy] = useState(false);
@@ -50,6 +52,7 @@ export default function Login() {
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [linkEmail, setLinkEmail] = useState("");
   const [linkPass, setLinkPass] = useState("");
+  const [showLinkPass, setShowLinkPass] = useState(false);
 
   // modal olvido contraseña
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -281,17 +284,28 @@ export default function Login() {
 
           <div style={styles.field}>
             <label style={styles.label}>Contraseña</label>
-            <input
-              value={pass}
-              onChange={(e) => setPass(e.target.value)}
-              placeholder="••••••••"
-              type="password"
-              style={styles.input}
-              disabled={busy}
-              autoComplete="current-password"
-              onFocus={onFocusInput}
-              onBlur={onBlurInput}
-            />
+            <div style={styles.passWrap}>
+              <input
+                value={pass}
+                onChange={(e) => setPass(e.target.value)}
+                placeholder="••••••••"
+                type={showPass ? "text" : "password"}
+                style={{ ...styles.input, ...styles.passInput }}
+                disabled={busy}
+                autoComplete="current-password"
+                onFocus={onFocusInput}
+                onBlur={onBlurInput}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass((v) => !v)}
+                style={styles.eyeBtn}
+                aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+                title={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+              >
+                {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           <button
@@ -352,14 +366,25 @@ export default function Login() {
               Ingresala para vincular Google.
             </div>
 
-            <input
-              type="password"
-              placeholder="Contraseña"
-              value={linkPass}
-              onChange={(e) => setLinkPass(e.target.value)}
-              style={modal.input}
-              disabled={busy}
-            />
+            <div style={styles.passWrap}>
+              <input
+                type={showLinkPass ? "text" : "password"}
+                placeholder="Contraseña"
+                value={linkPass}
+                onChange={(e) => setLinkPass(e.target.value)}
+                style={{ ...modal.input, ...styles.passInput }}
+                disabled={busy}
+              />
+              <button
+                type="button"
+                onClick={() => setShowLinkPass((v) => !v)}
+                style={styles.eyeBtn}
+                aria-label={showLinkPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+                title={showLinkPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+              >
+                {showLinkPass ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
 
             <div style={modal.actions}>
               <button style={modal.btnGhost} onClick={closeLinkModal} disabled={busy}>
@@ -498,6 +523,24 @@ const styles = {
     color: "#0F172A",
     outline: "none",
     transition: "box-shadow 120ms ease, border-color 120ms ease",
+  },
+
+  passWrap: { position: "relative" },
+
+  passInput: { width: "100%", boxSizing: "border-box", paddingRight: 44 },
+
+  eyeBtn: {
+    position: "absolute",
+    top: "50%",
+    right: 8,
+    transform: "translateY(-50%)",
+    border: "none",
+    background: "transparent",
+    color: "#64748B",
+    cursor: "pointer",
+    padding: 6,
+    display: "flex",
+    alignItems: "center",
   },
 
   btn: {
