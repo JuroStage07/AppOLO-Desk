@@ -861,11 +861,35 @@ export default function OvertimeApprovals() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [periodRecords]);
 
-  const pendingCount = useMemo(
-    () => periodRecords.filter((r) => statusInfo(r.status).key === "pending").length,
-    [periodRecords]
+  // Los contadores respetan coordinador y "solo con extra empresa", para que
+  // cuadren con lo que se ve en la lista.
+  const countableRecords = useMemo(
+    () =>
+      periodRecords.filter(
+        (r) =>
+          (coordinatorFilter === "all" || r.coordinatorName === coordinatorFilter) &&
+          (!onlyCompanyOvertime || r.hasCompanyOvertime)
+      ),
+    [periodRecords, coordinatorFilter, onlyCompanyOvertime]
   );
-  const lateCount = useMemo(() => periodRecords.filter((r) => r._late).length, [periodRecords]);
+  const pendingCount = useMemo(
+    () => countableRecords.filter((r) => statusInfo(r.status).key === "pending").length,
+    [countableRecords]
+  );
+  const lateCount = useMemo(() => countableRecords.filter((r) => r._late).length, [countableRecords]);
+  // Pendientes que el filtro "solo con extra empresa" está ocultando.
+  const hiddenPendingCount = useMemo(
+    () =>
+      onlyCompanyOvertime
+        ? periodRecords.filter(
+            (r) =>
+              statusInfo(r.status).key === "pending" &&
+              !r.hasCompanyOvertime &&
+              (coordinatorFilter === "all" || r.coordinatorName === coordinatorFilter)
+          ).length
+        : 0,
+    [periodRecords, onlyCompanyOvertime, coordinatorFilter]
+  );
 
   const filteredRecords = useMemo(() => {
     return periodRecords.filter((r) => {
@@ -1076,6 +1100,21 @@ export default function OvertimeApprovals() {
             </label>
           </div>
 
+          {hiddenPendingCount > 0 && (
+            <div style={styles.hiddenHint}>
+              {hiddenPendingCount} pendiente{hiddenPendingCount === 1 ? "" : "s"} sin extra empresa
+              {hiddenPendingCount === 1 ? " está oculta" : " están ocultas"} por el filtro
+              «Solo con extra empresa».{" "}
+              <button
+                type="button"
+                style={styles.hiddenHintBtn}
+                onClick={() => setOnlyCompanyOvertime(false)}
+              >
+                Mostrarlas
+              </button>
+            </div>
+          )}
+
           {!!error && <div style={styles.errorBanner}>{error}</div>}
 
           {loading ? (
@@ -1168,6 +1207,25 @@ const styles = {
     cursor: "pointer",
   },
   lateRow: { background: "rgba(220,38,38,0.06)" },
+  hiddenHint: {
+    background: "rgba(245,158,11,0.10)",
+    border: "1px solid rgba(245,158,11,0.30)",
+    color: "#92400E",
+    borderRadius: 12,
+    padding: "10px 14px",
+    fontSize: 12.5,
+    fontWeight: 800,
+  },
+  hiddenHintBtn: {
+    border: "none",
+    background: "transparent",
+    color: ACCENT,
+    fontWeight: 950,
+    fontSize: 12.5,
+    cursor: "pointer",
+    padding: 0,
+    textDecoration: "underline",
+  },
   chip: {
     display: "inline-flex",
     alignItems: "center",
