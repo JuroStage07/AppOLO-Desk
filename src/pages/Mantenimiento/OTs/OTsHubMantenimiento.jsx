@@ -25,15 +25,18 @@ import {
   useToast,
 } from "../../../components/ui";
 import usePinnedModules from "../../../hooks/usePinnedModules";
+import useOtAccess from "../../../hooks/useOtAccess";
+import { OT_ANY_PERMS } from "../../../config/otAccess";
 
 export default function OTsHubMantenimiento() {
   const nav = useNavigate();
   const toast = useToast();
   const { permisos, loading, role, profile } = useContext(AuthCtx);
   const { isPinned, togglePin } = usePinnedModules("mantenimiento");
+  const ot = useOtAccess();
   const canAccess = canAccessByRoleOrPermission(
     { role, permisos, profile },
-    { anyPerms: ["mantenimiento"] }
+    { anyPerms: OT_ANY_PERMS }
   );
 
   useEffect(() => {
@@ -80,8 +83,8 @@ export default function OTsHubMantenimiento() {
         icon: CheckSquare,
         tag: "OT",
       },
-    ],
-    []
+    ].filter((m) => (m.key === "programado" ? ot.programado : ot.ver)),
+    [ot.programado, ot.ver]
   );
 
   if (!canAccess) return null;

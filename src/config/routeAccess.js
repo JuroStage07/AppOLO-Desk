@@ -1,3 +1,5 @@
+import { OT_ANY_PERMS } from "./otAccess";
+
 export const ROUTE_ACCESS_RULES = [
   {
     path: "/seguridad/aperturas/detalle",
@@ -33,7 +35,11 @@ export const ROUTE_ACCESS_RULES = [
   { path: "/recepcion/accion-descarga", anyPerms: ["recepcion", "canRecepcionCofersa", "despachosEPA"] },
   { path: "/recepcion/metricas", exact: true, anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"] },
   { path: "/recepcion", exact: true, anyPerms: ["recepcion", "recepcionReportes", "canRecepcionCofersa", "despachosEPA"] },
-  { path: "/mantenimiento", anyPerms: ["mantenimiento"] },
+  // Equipos: solo el permiso de acceso total. OTs: cualquier permiso por acción
+  // (las acciones concretas las controla cada pantalla con useOtAccess).
+  { path: "/mantenimiento/equipos", anyPerms: ["mantenimiento"] },
+  { path: "/mantenimiento/ots/programado", exact: true, anyPerms: ["mantenimiento", "otsProgramado"] },
+  { path: "/mantenimiento", anyPerms: OT_ANY_PERMS },
   { path: "/mrp-tarimas", anyPerms: ["mrpTarimas"] },
   { path: "/horas-extra", allowedRoles: ["administrativo", "dev"], anyPerms: ["horasExtra"] },
 ];

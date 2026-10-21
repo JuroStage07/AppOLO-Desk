@@ -24,6 +24,7 @@ import {
 import { db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { canAccessByRoleOrPermission } from "../../../config/permissions";
+import { OT_ANY_PERMS } from "../../../config/otAccess";
 import { filterSolicitudesOtByScope } from "../../../utils/dataScope";
 import {
   Brand,
@@ -56,7 +57,7 @@ export default function OTsFinalizadasPage() {
   const { permisos, loading, profile, role } = useContext(AuthCtx);
   const canAccess = canAccessByRoleOrPermission(
     { role, permisos, profile },
-    { anyPerms: ["mantenimiento"] }
+    { anyPerms: OT_ANY_PERMS }
   );
 
   const [items, setItems] = useState([]);

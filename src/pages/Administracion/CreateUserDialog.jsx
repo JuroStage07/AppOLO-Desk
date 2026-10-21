@@ -2,8 +2,9 @@ import React, { useMemo, useState } from "react";
 import { Check, Copy, UserPlus } from "lucide-react";
 import { Button, Field, Sheet } from "../../components/ui";
 import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE, TEXT, WARN_BG } from "../../styles/theme";
-import { PERMISSION_GROUPS, PERMISSION_OPTIONS, ROLE_OPTIONS } from "../../config/permissions";
+import { MATRIX_PERMISSION_KEYS, PERMISSION_GROUPS, PERMISSION_OPTIONS, ROLE_OPTIONS } from "../../config/permissions";
 import UserBodegasEditor from "./UserBodegasEditor";
+import PermissionMatrix from "./PermissionMatrix";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -162,9 +163,17 @@ export default function CreateUserDialog({ open, catalog, onClose, onCreate, onC
             </div>
 
             <div style={styles.section}>
-              <div style={styles.sectionTitle}>Permisos</div>
+              <div style={styles.sectionTitle}>Permisos por acción</div>
+              <PermissionMatrix
+                permisos={form.permisos}
+                onToggle={(key) => set("permisos", { ...form.permisos, [key]: !form.permisos[key] })}
+              />
+            </div>
+
+            <div style={styles.section}>
+              <div style={styles.sectionTitle}>Otros permisos</div>
               {PERMISSION_GROUPS.map((group) => {
-                const opts = PERMISSION_OPTIONS.filter((p) => p.group === group);
+                const opts = PERMISSION_OPTIONS.filter((p) => p.group === group && !MATRIX_PERMISSION_KEYS.has(p.key));
                 if (!opts.length) return null;
                 return (
                   <div key={group} style={styles.permGroup}>

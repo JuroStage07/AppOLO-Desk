@@ -78,9 +78,46 @@ export const PERMISSION_OPTIONS = [
   },
   {
     key: "mantenimiento",
-    label: "Mantenimiento",
+    label: "Mantenimiento (acceso total)",
     group: "Mantenimiento",
-    description: "Equipos, solicitudes OT, tablero, dashboard y finalizadas.",
+    description:
+      "Equipos y TODAS las acciones de OTs (tablero, dashboard, finalizadas, programado). Para dar solo algunas acciones de OTs, usá los permisos por acción.",
+  },
+  {
+    key: "otsVer",
+    label: "OTs: ver",
+    group: "Mantenimiento",
+    description: "Consultar OTs: tablero, detalle, dashboard y finalizadas, sin modificar nada.",
+  },
+  {
+    key: "otsCrear",
+    label: "OTs: crear",
+    group: "Mantenimiento",
+    description: "Crear solicitudes de OT.",
+  },
+  {
+    key: "otsGestionar",
+    label: "OTs: gestionar",
+    group: "Mantenimiento",
+    description: "Mover OTs de estado, asignar responsables y prioridad, notas, subtareas y cronómetros.",
+  },
+  {
+    key: "otsFinalizar",
+    label: "OTs: finalizar",
+    group: "Mantenimiento",
+    description: "Cerrar OTs que están en revisión.",
+  },
+  {
+    key: "otsEliminar",
+    label: "OTs: eliminar",
+    group: "Mantenimiento",
+    description: "Eliminar solicitudes de OT.",
+  },
+  {
+    key: "otsProgramado",
+    label: "OTs: mantenimiento programado",
+    group: "Mantenimiento",
+    description: "Crear y reprogramar mantenimientos programados.",
   },
   {
     key: "serviciosGenerales",
@@ -146,6 +183,53 @@ export const PERMISSION_OPTIONS = [
 ];
 
 export const PERMISSION_KEYS = PERMISSION_OPTIONS.map((perm) => perm.key);
+
+/**
+ * Matriz de permisos por acción (lo que muestra Administración → Usuarios).
+ * - fullKey: permiso que da TODAS las acciones del módulo (compatibilidad: quien ya
+ *   lo tenía conserva todo).
+ * - actions: permisos por acción; cualquier acción implica poder ver el módulo.
+ * Los permisos que no están en la matriz se muestran como interruptores simples.
+ */
+export const PERMISSION_MATRIX = [
+  {
+    key: "ots",
+    label: "Órdenes de trabajo (Mantenimiento)",
+    fullKey: "mantenimiento",
+    actions: [
+      { key: "otsVer", label: "Ver" },
+      { key: "otsCrear", label: "Crear" },
+      { key: "otsGestionar", label: "Gestionar" },
+      { key: "otsFinalizar", label: "Finalizar" },
+      { key: "otsEliminar", label: "Eliminar" },
+      { key: "otsProgramado", label: "Programado" },
+    ],
+  },
+  {
+    key: "mrp",
+    label: "MRP Tarimas",
+    fullKey: null,
+    actions: [
+      { key: "mrpTarimas", label: "Ver" },
+      { key: "mrpInsumos", label: "Insumos" },
+      { key: "mrpAjustes", label: "Ajustes" },
+      { key: "mrpTraslados", label: "Traslados" },
+    ],
+  },
+  {
+    key: "boletas",
+    label: "Boletas de salida",
+    fullKey: null,
+    actions: [
+      { key: "boletasSalida", label: "Crear / consultar" },
+      { key: "boletasValidar", label: "Validar" },
+    ],
+  },
+];
+
+export const MATRIX_PERMISSION_KEYS = new Set(
+  PERMISSION_MATRIX.flatMap((m) => [m.fullKey, ...m.actions.map((a) => a.key)]).filter(Boolean)
+);
 export const PERMISSION_LABELS = Object.fromEntries(
   PERMISSION_OPTIONS.map((perm) => [perm.key, perm.label])
 );

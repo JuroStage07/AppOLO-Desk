@@ -108,7 +108,7 @@ export default function ScheduledMaintenancePage() {
 
   const canAccess = canAccessByRoleOrPermission(
     { role, permisos, profile },
-    { anyPerms: ["mantenimiento"] }
+    { anyPerms: ["mantenimiento", "otsProgramado"] }
   );
 
   const [snapshot, setSnapshot] = useState({ status: "idle", rows: [], error: "" });

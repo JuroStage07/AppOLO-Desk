@@ -20,6 +20,7 @@ import imgServiciosGenerales from "../assets/serviciosGenerales.png";
 import imgEpa from "../assets/epa.png";
 import imgDev from "../assets/dev.png";
 import { canAccessWorkItem } from "./permissions";
+import { OT_ANY_PERMS } from "./otAccess";
 import { canAccessMrpPath } from "./mrpAccess";
 
 /**
@@ -151,17 +152,19 @@ const RAW_AREAS = [
     theme: AREA_THEMES.mantenimiento,
     tag: "Mantenimiento",
     icon: <Clock size={18} strokeWidth={2} />,
-    requiredPerm: "mantenimiento",
+    // Visible con acceso total o con cualquier permiso por acción de OTs.
+    anyPerms: OT_ANY_PERMS,
     modules: [
-      { label: "Equipos", path: "/mantenimiento/equipos" },
+      { label: "Equipos", path: "/mantenimiento/equipos", requiredPerm: "mantenimiento" },
       {
         label: "Órdenes de trabajo",
         path: "/mantenimiento/ots",
+        anyPerms: OT_ANY_PERMS,
         features: [
-          { label: "Tablero / Gestión", path: "/mantenimiento/OTsPage" },
-          { label: "Mantenimiento programado", path: "/mantenimiento/ots/programado" },
-          { label: "Finalizadas", path: "/mantenimiento/ots/finalizadas" },
-          { label: "Dashboard", path: "/mantenimiento/ots/dashboard" },
+          { label: "Tablero / Gestión", path: "/mantenimiento/OTsPage", anyPerms: OT_ANY_PERMS },
+          { label: "Mantenimiento programado", path: "/mantenimiento/ots/programado", anyPerms: ["mantenimiento", "otsProgramado"] },
+          { label: "Finalizadas", path: "/mantenimiento/ots/finalizadas", anyPerms: OT_ANY_PERMS },
+          { label: "Dashboard", path: "/mantenimiento/ots/dashboard", anyPerms: OT_ANY_PERMS },
         ],
       },
     ],

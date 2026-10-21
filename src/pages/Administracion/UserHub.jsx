@@ -65,11 +65,13 @@ import {
   TEXT,
 } from "../../styles/theme";
 import {
+  MATRIX_PERMISSION_KEYS,
   PERMISSION_GROUPS,
   PERMISSION_OPTIONS,
   ROLE_OPTIONS,
   normalizePermissionMap,
 } from "../../config/permissions";
+import PermissionMatrix from "./PermissionMatrix";
 import { AuthCtx } from "../../auth/AuthProvider";
 import useOrgCatalog from "../../hooks/useOrgCatalog";
 import {
@@ -593,11 +595,15 @@ export default function UserHub() {
     if (!data) return;
     setSaving(uid);
     try {
-      const patch = {
-        role: data.role || "",
-        epaAdmin: data.epaAdmin === true,
-        permisos: normalizePermissionMap(data.permisos || {}),
-      };
+      // Rol, EPA admin y permisos: solo un dev los cambia (un rol o permiso mal dado
+      // abre acceso a datos de toda la plataforma).
+      const patch = canAssignScope
+        ? {
+            role: data.role || "",
+            epaAdmin: data.epaAdmin === true,
+            permisos: normalizePermissionMap(data.permisos || {}),
+          }
+        : {};
       // Almacenes asignados + activo (país y compañía se derivan del activo). Solo dev.
       if (canAssignScope && data.scope) {
         Object.assign(
@@ -1073,6 +1079,8 @@ function EditForm({
             value={data.role}
             onChange={(e) => onUpdate(uid, "role", e.target.value)}
             style={s.fieldSelect}
+            disabled={!canAssignScope}
+            title={canAssignScope ? undefined : "Solo un usuario dev puede cambiar el rol"}
           >
             <option value="">— Sin rol —</option>
             {ROLE_OPTIONS.map((r) => (
@@ -1086,7 +1094,8 @@ function EditForm({
           <label style={s.fieldLabel}>EPA Admin</label>
           <button
             type="button"
-            onClick={() => onUpdate(uid, "epaAdmin", !data.epaAdmin)}
+            onClick={() => canAssignScope && onUpdate(uid, "epaAdmin", !data.epaAdmin)}
+            disabled={!canAssignScope}
             style={{
               ...s.epaToggle,
               ...(data.epaAdmin ? s.epaToggleActive : {}),
@@ -1118,11 +1127,23 @@ function EditForm({
         />
       </div>
 
-      {/* Permisos */}
+      {/* Permisos: matriz por acción + el resto como interruptores. Solo dev edita. */}
+      <div style={{ marginTop: 16, display: "grid", gap: 8 }}>
+        <span style={s.fieldLabel}>
+          Permisos por acción{canAssignScope ? "" : " · solo un usuario dev puede cambiarlos"}
+        </span>
+        <PermissionMatrix
+          permisos={data.permisos || {}}
+          onToggle={(key) => canAssignScope && onTogglePermiso(uid, key)}
+          readOnly={!canAssignScope}
+        />
+      </div>
       <div style={{ marginTop: 16 }}>
-        <span style={s.fieldLabel}>Permisos</span>
+        <span style={s.fieldLabel}>Otros permisos</span>
         {PERMISSION_GROUPS.map((group) => {
-          const groupOptions = PERMISSION_OPTIONS.filter((perm) => perm.group === group);
+          const groupOptions = PERMISSION_OPTIONS.filter(
+            (perm) => perm.group === group && !MATRIX_PERMISSION_KEYS.has(perm.key)
+          );
           if (groupOptions.length === 0) return null;
 
           return (
@@ -1135,10 +1156,12 @@ function EditForm({
                     <button
                       key={perm.key}
                       type="button"
-                      onClick={() => onTogglePermiso(uid, perm.key)}
+                      onClick={() => canAssignScope && onTogglePermiso(uid, perm.key)}
+                      disabled={!canAssignScope}
                       style={{
                         ...s.permisoItem,
                         ...(active ? s.permisoItemActive : {}),
+                        ...(canAssignScope ? {} : { cursor: "default" }),
                       }}
                     >
                       <div

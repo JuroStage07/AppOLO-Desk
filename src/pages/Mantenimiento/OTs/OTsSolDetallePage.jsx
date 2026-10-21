@@ -36,6 +36,8 @@ import {
 import { db, auth } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { canAccessByRoleOrPermission } from "../../../config/permissions";
+import { OT_ANY_PERMS } from "../../../config/otAccess";
+import useOtAccess from "../../../hooks/useOtAccess";
 import { OT_STATE_FINALIZADA } from "./OTsFinalizadasPage";
 import { isSolicitudOtInScope } from "../../../utils/dataScope";
 import { businessElapsedMs } from "../../../utils/workTime";
@@ -55,7 +57,7 @@ const HOUR_MS = 60 * 60 * 1000;
 function canAccessOtDetalle({ permisos, role, profile }) {
   return canAccessByRoleOrPermission(
     { role, permisos, profile },
-    { anyPerms: ["mantenimiento"] }
+    { anyPerms: OT_ANY_PERMS }
   );
 }
 
@@ -309,6 +311,7 @@ export default function OTsDetallePage() {
   const authLoading = !!authCtx?.loading;
   const profile = authCtx?.profile || {};
   const canAccess = canAccessOtDetalle({ permisos, role, profile });
+  const otPerm = useOtAccess();
 
   //subtareas
   const [detailView, setDetailView] = useState("tarea");
@@ -469,9 +472,12 @@ export default function OTsDetallePage() {
     }
   };
 
-  const readOnlyOt = ot?.estado === OT_STATE_FINALIZADA;
+  // Solo lectura si la OT ya cerró o si el usuario no tiene «OTs: gestionar».
+  // Finalizar va aparte: lo controla «OTs: finalizar».
+  const otCerrada = ot?.estado === OT_STATE_FINALIZADA;
+  const readOnlyOt = otCerrada || !otPerm.gestionar;
   const canAddSubtasks = ot?.estado === OT_STATE_EN_PROCESO;
-  const canFinalizeOt = ot?.estado === OT_STATE_REVISION;
+  const canFinalizeOt = ot?.estado === OT_STATE_REVISION && otPerm.finalizar;
 
   const openFinalizeOtModal = () => {
     if (ot?.estado !== OT_STATE_REVISION) {
@@ -491,6 +497,10 @@ export default function OTsDetallePage() {
 
   const handleFinalizeOt = async () => {
     if (!id?.trim()) return;
+    if (!otPerm.finalizar) {
+      toast.warning("No tenés permiso para finalizar OTs (OTs: finalizar).");
+      return;
+    }
     if (ot?.estado !== OT_STATE_REVISION) {
       toast.warning(
         "Solo podés finalizar la OT cuando está en revisión. Tiene que pasar por revisión antes de cerrarse."
@@ -1244,11 +1254,11 @@ export default function OTsDetallePage() {
                 type="button"
                 style={{
                   ...ui.btnFinalizeOt,
-                  ...(canFinalizeOt && !readOnlyOt ? {} : ui.btnFinalizeOtMuted),
+                  ...(canFinalizeOt && !otCerrada ? {} : ui.btnFinalizeOtMuted),
                 }}
-                disabled={finalizingOt || readOnlyOt}
+                disabled={finalizingOt || otCerrada || !otPerm.finalizar}
                 onClick={() => {
-                  if (finalizingOt || readOnlyOt) return;
+                  if (finalizingOt || otCerrada || !otPerm.finalizar) return;
                   if (!canFinalizeOt) {
                     toast.warning(
                       "Solo podés finalizar la OT cuando está en revisión."
@@ -1258,11 +1268,13 @@ export default function OTsDetallePage() {
                   openFinalizeOtModal();
                 }}
                 title={
-                  readOnlyOt
+                  otCerrada
                     ? "OT ya finalizada"
-                    : canFinalizeOt
-                      ? "Cerrar la OT (solo lectura después)"
-                      : "Disponible cuando la OT esté en revisión"
+                    : !otPerm.finalizar
+                      ? "No tenés permiso para finalizar OTs"
+                      : canFinalizeOt
+                        ? "Cerrar la OT (solo lectura después)"
+                        : "Disponible cuando la OT esté en revisión"
                 }
               >
                 <CircleCheck size={18} strokeWidth={2.25} />

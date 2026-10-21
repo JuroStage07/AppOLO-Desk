@@ -39,6 +39,7 @@ import {
 import { auth, db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { NewOTModal } from "./NewOTModal";
+import useOtAccess from "../../../hooks/useOtAccess";
 import { isSolicitudOtInScope } from "../../../utils/dataScope";
 import { businessElapsedMs } from "../../../utils/workTime";
 import {
@@ -641,7 +642,7 @@ function TaskStatusIcon({ type }) {
   return <AlertTriangle size={15} color={RED} />;
 }
 
-function CardMenu({ onClose, onDelete, onMove, canMove }) {
+function CardMenu({ onClose, onDelete, onMove, canMove, canDelete = true }) {
   return (
     <div style={ui.menu}>
       <button onClick={onClose} style={ui.menuItem}>
@@ -656,10 +657,16 @@ function CardMenu({ onClose, onDelete, onMove, canMove }) {
         </button>
       )}
 
-      <button onClick={onDelete} style={{ ...ui.menuItem, color: "#B42318" }}>
-        <Trash2 size={15} />
-        Eliminar
-      </button>
+      {canDelete && (
+        <button onClick={onDelete} style={{ ...ui.menuItem, color: "#B42318" }}>
+          <Trash2 size={15} />
+          Eliminar
+        </button>
+      )}
+
+      {!canMove && !canDelete && (
+        <div style={{ ...ui.menuItem, cursor: "default", color: "#64748B" }}>Solo lectura</div>
+      )}
     </div>
   );
 }
@@ -899,7 +906,8 @@ function PendingCard({
                   onMoveNext(item.id, columnIndex);
                   setOpenMenuId(null);
                 }}
-                canMove={canMoveToNextColumn}
+                canMove={canMoveToNextColumn && !!onMoveNext}
+                canDelete={!!onDelete}
               />
             )}
           </div>
@@ -1000,7 +1008,8 @@ function OTCard({
                 onMoveNext(item.id, columnIndex);
                 setOpenMenuId(null);
               }}
-              canMove={columnIndex < totalColumns - 1}
+              canMove={columnIndex < totalColumns - 1 && !!onMoveNext}
+              canDelete={!!onDelete}
             />
           )}
         </div>
@@ -1248,11 +1257,13 @@ function Column({
                 openMenuId={openMenuId}
                 setOpenMenuId={setOpenMenuId}
                 dragEnabled={
-                  column.id === "pendientes" ||
-                  (column.id === "proceso" &&
-                    item.type === "solicitud" &&
-                    isProcesoOtSubtasksComplete(item)) ||
-                  (column.id === "revision" && item.type === "solicitud")
+                  // Mover entre columnas = gestionar (sin permiso, onMoveNext viene null).
+                  !!onMoveNext &&
+                  (column.id === "pendientes" ||
+                    (column.id === "proceso" &&
+                      item.type === "solicitud" &&
+                      isProcesoOtSubtasksComplete(item)) ||
+                    (column.id === "revision" && item.type === "solicitud"))
                 }
                 dragVariant={
                   column.id === "proceso" &&
@@ -1291,6 +1302,7 @@ function SubtasksListModal({
   solicitudId,
   nroLabel,
   nombreOT,
+  canManage = true,
 }) {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
@@ -1366,6 +1378,10 @@ function SubtasksListModal({
     doc(db, "solicitudesOT", solicitudId, "subtareas", subId);
 
   const handleStartWorkChrono = async (row) => {
+    if (!canManage) {
+      toast.warning("No tenés permiso para gestionar OTs (OTs: gestionar).");
+      return;
+    }
     if (!solicitudId?.trim() || !row?.id || chronoBusyId) return;
     if (otStateLive === OT_STATE_FINALIZADA) return;
     if (!otStateLive) return;
@@ -1389,6 +1405,10 @@ function SubtasksListModal({
   };
 
   const handleCompleteSubtask = async (row) => {
+    if (!canManage) {
+      toast.warning("No tenés permiso para gestionar OTs (OTs: gestionar).");
+      return;
+    }
     if (!solicitudId?.trim() || !row?.id || chronoBusyId) return;
     if (!otStateLive) return;
     if (otStateLive === OT_STATE_FINALIZADA) {
@@ -2356,6 +2376,8 @@ export default function OTsPage() {
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile;
   const loading = authCtx?.loading;
+  // Permisos por acción de OTs (ver config/otAccess.js).
+  const ot = useOtAccess();
 
   const [columns, setColumns] = useState(initialColumns);
   const columnsRef = useRef(columns);
@@ -3310,14 +3332,16 @@ export default function OTsPage() {
           <GhostButton icon={RotateCcw} onClick={refetchSolicitudesOnce}>
             Actualizar
           </GhostButton>
-          <button
-            type="button"
-            onClick={() => setModalOpen(true)}
-            style={{ ...ui.btnPrimary, ...(isMobile ? ui.mBtnPrimary : {}) }}
-          >
-            <Plus size={16} />
-            Nueva OT
-          </button>
+          {ot.crear && (
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              style={{ ...ui.btnPrimary, ...(isMobile ? ui.mBtnPrimary : {}) }}
+            >
+              <Plus size={16} />
+              Nueva OT
+            </button>
+          )}
         </Topbar.Right>
       </Topbar>
 
@@ -3374,7 +3398,7 @@ export default function OTsPage() {
             >
               OTs programadas ({scheduledTotal})
             </Chip>
-            {viewMode === VIEW_PROGRAMADAS ? (
+            {viewMode === VIEW_PROGRAMADAS && ot.programado ? (
               <GhostButton
                 icon={CalendarClock}
                 onClick={() => nav("/mantenimiento/ots/programado")}
@@ -3410,8 +3434,8 @@ export default function OTsPage() {
                   column={column}
                   columnIndex={index}
                   totalColumns={columns.length}
-                  onDelete={deleteCard}
-                  onMoveNext={moveCardToNextColumn}
+                  onDelete={ot.eliminar ? deleteCard : null}
+                  onMoveNext={ot.gestionar ? moveCardToNextColumn : null}
                   onOpenDetail={openSolicitudDetalle}
                   onOpenSubtasksList={openSubtasksListModal}
                   openMenuId={openMenuId}
@@ -3419,10 +3443,11 @@ export default function OTsPage() {
                   loading={loadingPendientes}
                   onDropPendingToProceso={(id) => {
                     setPendingDragActive(false);
+                    if (!ot.gestionar) return;
                     requestMovePendingToProceso(id);
                   }}
-                  onDropProcesoToRevision={requestMoveProcesoToRevision}
-                  onDropRevisionToProceso={handleDropRevisionToProceso}
+                  onDropProcesoToRevision={(...a) => ot.gestionar && requestMoveProcesoToRevision(...a)}
+                  onDropRevisionToProceso={(...a) => ot.gestionar && handleDropRevisionToProceso(...a)}
                   highlightProcesoDrop={
                     pendingDragActive || revisionToProcesoDragActive
                   }
@@ -3589,6 +3614,7 @@ export default function OTsPage() {
         solicitudId={subtasksListModal.solicitudId}
         nroLabel={subtasksListModal.nroLabel}
         nombreOT={subtasksListModal.nombreOT}
+        canManage={ot.gestionar}
       />
     </div>
   );

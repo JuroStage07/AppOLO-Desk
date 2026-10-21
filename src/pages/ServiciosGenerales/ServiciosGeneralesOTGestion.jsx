@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { AuthCtx } from "../../auth/AuthProvider";
 import { canAccessByRoleOrPermission } from "../../config/permissions";
+import { OT_ANY_PERMS } from "../../config/otAccess";
 import { auth, db } from "../../firebase";
 import { filterSolicitudesOtByScope } from "../../utils/dataScope";
 import {
@@ -96,7 +97,7 @@ export default function ServiciosGeneralesOTGestion() {
   const authLoading = authCtx?.loading;
   const canOpenMantenimientoDetail = canAccessByRoleOrPermission(
     { role, permisos, profile },
-    { anyPerms: ["mantenimiento"] }
+    { anyPerms: OT_ANY_PERMS }
   );
   const user = auth.currentUser;
   const toast = useToast();

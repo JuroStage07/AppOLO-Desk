@@ -19,6 +19,7 @@ import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { canAccessByRoleOrPermission } from "../../../config/permissions";
+import { OT_ANY_PERMS } from "../../../config/otAccess";
 import { isSolicitudOtInScope } from "../../../utils/dataScope";
 import { PERIOD, formatYMD } from "./dashboard/periodUtils";
 import { useOTsDashboardMetrics } from "./dashboard/useOTsDashboardMetrics";
@@ -50,7 +51,7 @@ export default function OTsDashboardPage() {
   const authLoading = authCtx?.loading;
   const canAccess = canAccessByRoleOrPermission(
     { role, permisos, profile },
-    { anyPerms: ["mantenimiento"] }
+    { anyPerms: OT_ANY_PERMS }
   );
 
   useEffect(() => {

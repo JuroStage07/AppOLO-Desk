@@ -19,15 +19,18 @@ import {
   useToast,
 } from "../../components/ui";
 import usePinnedModules from "../../hooks/usePinnedModules";
+import useOtAccess from "../../hooks/useOtAccess";
+import { OT_ANY_PERMS } from "../../config/otAccess";
 
 export default function Mantenimiento() {
   const nav = useNavigate();
   const { permisos, loading, role, profile } = useContext(AuthCtx);
   const { isPinned, togglePin } = usePinnedModules("mantenimiento");
   const toast = useToast();
+  const ot = useOtAccess();
   const canAccess = canAccessByRoleOrPermission(
     { role, permisos, profile },
-    { anyPerms: ["mantenimiento"] }
+    { anyPerms: OT_ANY_PERMS }
   );
 
   useEffect(() => {
@@ -58,8 +61,8 @@ export default function Mantenimiento() {
         icon: ClipboardList,
         tag: "OT",
       },
-    ],
-    []
+    ].filter((m) => (m.key === "equipos" ? ot.full : ot.ver)),
+    [ot.full, ot.ver]
   );
 
   if (!canAccess) return null;
