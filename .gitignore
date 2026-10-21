@@ -17,6 +17,9 @@ saldos/
 serviceAccountKey.json
 *serviceAccount*.json
 
+# Secretos de Cloud Functions (SMTP, SQL, Supabase). Usar functions/.env.example como plantilla.
+functions/.env
+
 node_modules
 dist
 dist-ssr
