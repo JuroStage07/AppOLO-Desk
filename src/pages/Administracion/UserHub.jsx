@@ -12,6 +12,7 @@ import {
   Search,
   Shield,
   Trash2,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
@@ -79,7 +80,8 @@ import {
 } from "../../utils/userScope";
 import UserBodegasEditor from "./UserBodegasEditor";
 import DeleteUserDialog from "./DeleteUserDialog";
-import { deleteUserAccount } from "../../services/userAdmin";
+import CreateUserDialog from "./CreateUserDialog";
+import { createUserAccount, deleteUserAccount } from "../../services/userAdmin";
 
 /* ─── Constants ─── */
 const ROLE_LABELS = Object.fromEntries(ROLE_OPTIONS.map((role) => [role.key, role.label]));
@@ -439,6 +441,7 @@ export default function UserHub() {
   const canDeleteUser = (u) => myRole === "dev" && u.id !== me?.uid;
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const handleDelete = async (user, email) => {
     setDeleting(true);
@@ -660,6 +663,29 @@ export default function UserHub() {
                   </div>
                 </div>
               </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {canAssignScope && (
+                <button
+                  type="button"
+                  onClick={() => setCreating(true)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "10px 18px",
+                    border: `1px solid ${ACCENT}`,
+                    borderRadius: RADIUS_PILL,
+                    background: SURFACE,
+                    color: ACCENT,
+                    fontSize: FS_SM,
+                    fontWeight: FW_EXTRABOLD,
+                    cursor: "pointer",
+                  }}
+                >
+                  <UserPlus size={15} strokeWidth={2.4} />
+                  Crear usuario
+                </button>
+              )}
               <button
                 type="button"
                 onClick={fetchUsers}
@@ -686,6 +712,7 @@ export default function UserHub() {
                 />
                 Recargar
               </button>
+              </div>
             </div>
 
             {/* Filters */}
@@ -915,6 +942,14 @@ export default function UserHub() {
           </div>
         </Container>
       </Main>
+
+      <CreateUserDialog
+        open={creating}
+        catalog={catalog}
+        onClose={() => setCreating(false)}
+        onCreate={createUserAccount}
+        onCreated={() => fetchUsers()}
+      />
 
       <DeleteUserDialog
         key={deleteTarget?.id || "none"}

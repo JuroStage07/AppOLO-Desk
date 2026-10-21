@@ -19,6 +19,11 @@ const {
   parseDespachoEventId,
   validateDespachoConsumption,
 } = require("./mrpDespachoConsumption");
+const {
+  UserInputError,
+  generateTempPassword,
+  normalizeCreateUserInput,
+} = require("./userCreateCore");
 
 initializeApp();
 
@@ -1252,5 +1257,137 @@ exports.adminDeleteUser = onCall({ region: "us-central1" }, async (req) => {
       usernames: usernames.size,
       pushTokens: tokens?.size || 0,
     },
+  };
+});
+
+function buildWelcomeEmailHtml({ displayName, email, link }) {
+  const name = safe(displayName) || "Hola";
+  return `
+  <div style="font-family:Arial,Helvetica,sans-serif;color:#0F172A;max-width:520px;margin:0 auto;">
+    <h2 style="margin:0 0 12px 0;">Bienvenido a AppOLO</h2>
+    <p style="font-size:14px;line-height:1.5;">${name}, se creó tu usuario <strong>${email}</strong>.</p>
+    <p style="font-size:14px;line-height:1.5;">Para empezar, definí tu contraseña con este enlace:</p>
+    <p style="margin:20px 0;">
+      <a href="${link}" style="background:#089F8A;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:bold;">Crear mi contraseña</a>
+    </p>
+    <p style="font-size:12px;color:#64748B;line-height:1.5;">Después entrá a https://oloos-bd.web.app con tu correo. Si no esperabas este correo, ignoralo.</p>
+  </div>`;
+}
+
+/**
+ * Callable: adminCreateUser
+ * data: { email, displayName, username?, numeroFicha?, role, permisos?, epaAdmin?,
+ *         bodegaIds: string[], activeBodegaId?, sendWelcomeEmail? }
+ *
+ * Alta de un usuario desde Desk. Solo role = "dev", verificado server-side.
+ *  - Crea la cuenta de Firebase Authentication con una contraseña temporal (se
+ *    devuelve UNA vez para que el dev la comparta).
+ *  - Crea profiles/{uid} con rol, permisos, almacenes asignados (bodegaIds) y el
+ *    almacén activo; país y compañía se derivan del almacén (catálogo org_bodegas
+ *    de Supabase). Crea usernames/{username} para la app móvil.
+ *  - Opcional: envía un correo de bienvenida con un enlace para definir contraseña.
+ * Si falla la creación del perfil, borra la cuenta recién creada (no queda a medias).
+ */
+exports.adminCreateUser = onCall({ region: "us-central1" }, async (req) => {
+  const caller = req.auth;
+  if (!caller) throw new HttpsError("unauthenticated", "Debes estar autenticado.");
+
+  const db = getFirestore();
+  const me = await getProfileOrThrow(db, caller.uid);
+  if (safe(me.role) !== "dev") {
+    throw new HttpsError("permission-denied", "Solo un usuario dev puede crear usuarios.");
+  }
+
+  const catalog = await supabaseSelect("org_bodegas", "select=id,tenant_id,company_id,name,active");
+  let input;
+  try {
+    input = normalizeCreateUserInput(req.data || {}, catalog);
+  } catch (err) {
+    if (err instanceof UserInputError) throw new HttpsError("invalid-argument", err.message);
+    throw err;
+  }
+
+  const auth = getAuth();
+  try {
+    await auth.getUserByEmail(input.email);
+    throw new HttpsError("already-exists", `Ya existe una cuenta con el correo ${input.email}.`);
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    if (e?.code !== "auth/user-not-found") throw e;
+  }
+  const usernameRef = db.doc(`usernames/${input.username}`);
+  if ((await usernameRef.get()).exists) {
+    throw new HttpsError("already-exists", `El usuario "${input.username}" ya está en uso. Elegí otro.`);
+  }
+
+  const tempPassword = generateTempPassword();
+  const created = await auth.createUser({
+    email: input.email,
+    password: tempPassword,
+    displayName: input.displayName,
+    emailVerified: false,
+  });
+  const createdBy = safe(caller.token?.email || me.email) || caller.uid;
+
+  try {
+    const batch = db.batch();
+    batch.set(db.doc(`profiles/${created.uid}`), {
+      uid: created.uid,
+      email: input.email,
+      username: input.username,
+      displayName: input.displayName,
+      nameComplete: input.displayName,
+      ...(input.numeroFicha ? { numeroFicha: input.numeroFicha } : {}),
+      role: input.role,
+      active: true,
+      epaAdmin: input.epaAdmin,
+      permisos: input.permisos,
+      bodegaIds: input.bodegaIds,
+      tenantId: input.tenantId,
+      company: input.company,
+      bodegaId: input.bodegaId,
+      bodegaNombre: input.bodegaNombre,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      createdByUid: caller.uid,
+      createdByEmail: createdBy,
+      source: "Desk:adminCreateUser",
+    });
+    batch.set(usernameRef, { uid: created.uid, username: input.username, createdAt: FieldValue.serverTimestamp() });
+    await batch.commit();
+  } catch (err) {
+    console.error("adminCreateUser: fallo el perfil, borro la cuenta", created.uid, err?.message);
+    await auth.deleteUser(created.uid).catch(() => {});
+    throw new HttpsError("internal", "No se pudo crear el perfil del usuario; no se creó nada.");
+  }
+
+  let emailSent = false;
+  let emailError = null;
+  if (input.sendWelcomeEmail) {
+    try {
+      const link = await auth.generatePasswordResetLink(input.email);
+      await makeTransporter().sendMail({
+        from: `"AppOLO" <${safe(process.env.SMTP_USER)}>`,
+        to: input.email,
+        subject: "Bienvenido a AppOLO: creá tu contraseña",
+        html: buildWelcomeEmailHtml({ displayName: input.displayName, email: input.email, link }),
+      });
+      emailSent = true;
+    } catch (err) {
+      emailError = err?.message || "No se pudo enviar el correo.";
+      console.error("adminCreateUser: correo de bienvenida falló", input.email, emailError);
+    }
+  }
+
+  console.log("adminCreateUser", { by: caller.uid, uid: created.uid, email: input.email, role: input.role, bodegas: input.bodegaIds });
+  return {
+    ok: true,
+    uid: created.uid,
+    email: input.email,
+    username: input.username,
+    tempPassword,
+    bodegaId: input.bodegaId,
+    emailSent,
+    emailError,
   };
 });
