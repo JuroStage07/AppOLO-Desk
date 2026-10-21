@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -68,6 +68,15 @@ import {
   ROLE_OPTIONS,
   normalizePermissionMap,
 } from "../../config/permissions";
+import { AuthCtx } from "../../auth/AuthProvider";
+import useOrgCatalog from "../../hooks/useOrgCatalog";
+import {
+  assignedBodegaIds,
+  buildAssignmentPatch,
+  resolveBodegas,
+  scopeLabel,
+} from "../../utils/userScope";
+import UserBodegasEditor from "./UserBodegasEditor";
 
 /* ─── Constants ─── */
 const ROLE_LABELS = Object.fromEntries(ROLE_OPTIONS.map((role) => [role.key, role.label]));
@@ -421,6 +430,10 @@ function roleLabel(role) {
 export default function UserHub() {
   const nav = useNavigate();
   const toast = useToast();
+  const { role: myRole } = useContext(AuthCtx) || {};
+  // Solo un dev asigna almacenes (y con ellos país y compañía).
+  const canAssignScope = myRole === "dev";
+  const { catalog } = useOrgCatalog();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -456,22 +469,31 @@ export default function UserHub() {
     fetchUsers();
   }, [fetchUsers]);
 
-  /* ─── Derive filter options from data ─── */
+  /* ─── Filter options: catálogo + lo que exista en los perfiles ─── */
   const tenants = useMemo(() => {
-    const set = new Set();
+    const set = new Set(catalog.tenants.map((t) => t.id));
     users.forEach((u) => {
       if (u.tenantId) set.add(u.tenantId);
     });
     return Array.from(set).sort();
-  }, [users]);
+  }, [users, catalog]);
 
   const companies = useMemo(() => {
-    const set = new Set();
+    const set = new Set(catalog.companies.map((c) => c.id));
     users.forEach((u) => {
       if (u.company) set.add(u.company);
     });
     return Array.from(set).sort();
-  }, [users]);
+  }, [users, catalog]);
+
+  // Almacenes de cada usuario (asignados + activo), resueltos contra el catálogo.
+  const scopesByUser = useMemo(() => {
+    const map = {};
+    users.forEach((u) => {
+      map[u.id] = resolveBodegas(assignedBodegaIds(u), catalog);
+    });
+    return map;
+  }, [users, catalog]);
 
   /* ─── Filtered list ─── */
   const filtered = useMemo(() => {
@@ -485,17 +507,22 @@ export default function UserHub() {
           (u.id || "").toLowerCase().includes(q)
       );
     }
+    // País/compañía: coincide con el activo o con cualquiera de sus almacenes asignados.
     if (filterTenant) {
-      list = list.filter((u) => u.tenantId === filterTenant);
+      list = list.filter(
+        (u) => u.tenantId === filterTenant || (scopesByUser[u.id] || []).some((b) => b.tenantId === filterTenant)
+      );
     }
     if (filterCompany) {
-      list = list.filter((u) => u.company === filterCompany);
+      list = list.filter(
+        (u) => u.company === filterCompany || (scopesByUser[u.id] || []).some((b) => b.companyId === filterCompany)
+      );
     }
     if (filterRole) {
       list = list.filter((u) => u.role === filterRole);
     }
     return list;
-  }, [users, searchText, filterTenant, filterCompany, filterRole]);
+  }, [users, searchText, filterTenant, filterCompany, filterRole, scopesByUser]);
 
   /* ─── Editing helpers ─── */
   const startEdit = (user) => {
@@ -503,10 +530,9 @@ export default function UserHub() {
       ...prev,
       [user.id]: {
         role: user.role || "",
-        tenantId: user.tenantId || "",
-        company: user.company || "",
         epaAdmin: user.epaAdmin === true,
         permisos: normalizePermissionMap(user.permisos || {}),
+        scope: { bodegaIds: assignedBodegaIds(user), activeBodegaId: user.bodegaId || "" },
       },
     }));
   };
@@ -546,11 +572,16 @@ export default function UserHub() {
     try {
       const patch = {
         role: data.role || "",
-        tenantId: data.tenantId || "",
-        company: data.company || "",
         epaAdmin: data.epaAdmin === true,
         permisos: normalizePermissionMap(data.permisos || {}),
       };
+      // Almacenes asignados + activo (país y compañía se derivan del activo). Solo dev.
+      if (canAssignScope && data.scope) {
+        Object.assign(
+          patch,
+          buildAssignmentPatch(data.scope.bodegaIds, data.scope.activeBodegaId, catalog)
+        );
+      }
       await updateDoc(doc(db, "profiles", uid), patch);
       // Update local state
       setUsers((prev) =>
@@ -560,7 +591,7 @@ export default function UserHub() {
       toast.success("Usuario actualizado correctamente.");
     } catch (err) {
       console.error("Error updating profile:", err);
-      toast.error("No se pudo actualizar el usuario.");
+      toast.error(err?.message ? `No se pudo actualizar el usuario: ${err.message}` : "No se pudo actualizar el usuario.");
     } finally {
       setSaving(null);
     }
@@ -587,7 +618,7 @@ export default function UserHub() {
           <Hero
             kicker="Administración"
             title="Usuarios"
-            subtitle="Gestioná usuarios, roles, permisos, tenant y company de toda la plataforma."
+            subtitle="Gestioná usuarios, roles, permisos y los almacenes (país y compañía) a los que tiene acceso cada uno."
             badge={<Badge icon={Shield} />}
           />
 
@@ -654,7 +685,7 @@ export default function UserHub() {
                 onChange={(e) => setFilterTenant(e.target.value)}
                 style={s.selectFilter}
               >
-                <option value="">Todos los tenants</option>
+                <option value="">Todos los países</option>
                 {tenants.map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -666,7 +697,7 @@ export default function UserHub() {
                 onChange={(e) => setFilterCompany(e.target.value)}
                 style={s.selectFilter}
               >
-                <option value="">Todas las companies</option>
+                <option value="">Todas las compañías</option>
                 {companies.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -733,8 +764,8 @@ export default function UserHub() {
                       <th style={s.th}>Nombre</th>
                       <th style={s.th}>Email</th>
                       <th style={s.th}>Role</th>
-                      <th style={s.th}>Tenant</th>
-                      <th style={s.th}>Company</th>
+                      <th style={s.th}>Almacén activo</th>
+                      <th style={s.th}>Asignados</th>
                       <th style={{ ...s.th, textAlign: "center" }}>Acciones</th>
                     </tr>
                   </thead>
@@ -771,8 +802,30 @@ export default function UserHub() {
                                 {roleLabel(u.role)}
                               </span>
                             </td>
-                            <td style={s.td}>{u.tenantId || "—"}</td>
-                            <td style={s.td}>{u.company || "—"}</td>
+                            <td style={s.td}>
+                              <span style={{ fontSize: FS_XS, fontWeight: FW_BOLD }}>
+                                {u.bodegaId
+                                  ? scopeLabel(
+                                      (scopesByUser[u.id] || []).find((b) => b.id === u.bodegaId),
+                                      catalog
+                                    )
+                                  : u.tenantId
+                                    ? `${u.tenantId} · ${u.company || "—"} · sin almacén`
+                                    : "—"}
+                              </span>
+                            </td>
+                            <td style={s.td}>
+                              {(() => {
+                                const list = scopesByUser[u.id] || [];
+                                if (list.length === 0) return <span style={{ color: SLATE }}>Ninguno</span>;
+                                const tenantsOf = [...new Set(list.map((b) => b.tenantId))].join(", ");
+                                return (
+                                  <span style={{ fontSize: FS_XS, fontWeight: FW_BOLD }} title={list.map((b) => b.id).join("\n")}>
+                                    {list.length} {list.length === 1 ? "almacén" : "almacenes"} · {tenantsOf}
+                                  </span>
+                                );
+                              })()}
+                            </td>
                             <td style={{ ...s.td, textAlign: "center" }}>
                               {!isEditing ? (
                                 <button
@@ -814,15 +867,15 @@ export default function UserHub() {
                                     uid={u.id}
                                     data={editing[u.id]}
                                     saving={saving === u.id}
-                                    tenants={tenants}
-                                    companies={companies}
+                                    catalog={catalog}
+                                    canAssignScope={canAssignScope}
                                     onUpdate={updateField}
                                     onTogglePermiso={togglePermiso}
                                     onSave={() => handleSave(u.id)}
                                     onCancel={() => cancelEdit(u.id)}
                                   />
                                 ) : (
-                                  <ReadOnlyDetail user={u} onEdit={() => startEdit(u)} />
+                                  <ReadOnlyDetail user={u} catalog={catalog} onEdit={() => startEdit(u)} />
                                 )}
                               </td>
                             </tr>
@@ -842,7 +895,7 @@ export default function UserHub() {
 }
 
 /* ─── Read-only detail (when not editing) ─── */
-function ReadOnlyDetail({ user, onEdit }) {
+function ReadOnlyDetail({ user, catalog, onEdit }) {
   const permisos = normalizePermissionMap(user.permisos || {});
   const activePermisos = PERMISSION_OPTIONS.filter((perm) => permisos[perm.key]);
 
@@ -862,15 +915,9 @@ function ReadOnlyDetail({ user, onEdit }) {
           </span>
         </div>
         <div style={s.fieldGroup}>
-          <span style={s.fieldLabel}>Tenant ID</span>
+          <span style={s.fieldLabel}>País · Compañía activos</span>
           <span style={{ fontSize: FS_SM, color: TEXT, fontWeight: FW_BOLD }}>
-            {user.tenantId || "—"}
-          </span>
-        </div>
-        <div style={s.fieldGroup}>
-          <span style={s.fieldLabel}>Company</span>
-          <span style={{ fontSize: FS_SM, color: TEXT, fontWeight: FW_BOLD }}>
-            {user.company || "—"}
+            {user.tenantId || "—"} · {user.company || "—"}
           </span>
         </div>
         <div style={s.fieldGroup}>
@@ -879,6 +926,15 @@ function ReadOnlyDetail({ user, onEdit }) {
             {user.epaAdmin ? "Sí" : "No"}
           </span>
         </div>
+      </div>
+
+      <div style={{ marginTop: 14, display: "grid", gap: 6 }}>
+        <span style={s.fieldLabel}>Almacenes asignados</span>
+        <UserBodegasEditor
+          catalog={catalog}
+          value={{ bodegaIds: assignedBodegaIds(user), activeBodegaId: user.bodegaId || "" }}
+          readOnly
+        />
       </div>
 
       <div style={{ marginTop: 14 }}>
@@ -926,8 +982,8 @@ function EditForm({
   uid,
   data,
   saving,
-  tenants,
-  companies,
+  catalog,
+  canAssignScope,
   onUpdate,
   onTogglePermiso,
   onSave,
@@ -952,38 +1008,6 @@ function EditForm({
           </select>
         </div>
         <div style={s.fieldGroup}>
-          <label style={s.fieldLabel}>Tenant ID</label>
-          <input
-            type="text"
-            value={data.tenantId}
-            onChange={(e) => onUpdate(uid, "tenantId", e.target.value)}
-            style={s.fieldInput}
-            placeholder="Ej: VNZ"
-            list={`tenants-${uid}`}
-          />
-          <datalist id={`tenants-${uid}`}>
-            {tenants.map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
-        </div>
-        <div style={s.fieldGroup}>
-          <label style={s.fieldLabel}>Company</label>
-          <input
-            type="text"
-            value={data.company}
-            onChange={(e) => onUpdate(uid, "company", e.target.value)}
-            style={s.fieldInput}
-            placeholder="Ej: OLO"
-            list={`companies-${uid}`}
-          />
-          <datalist id={`companies-${uid}`}>
-            {companies.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-        </div>
-        <div style={s.fieldGroup}>
           <label style={s.fieldLabel}>EPA Admin</label>
           <button
             type="button"
@@ -1004,6 +1028,19 @@ function EditForm({
             {data.epaAdmin ? "Activo" : "Inactivo"}
           </button>
         </div>
+      </div>
+
+      {/* Almacenes asignados (país y compañía se derivan del almacén) */}
+      <div style={{ marginTop: 16, display: "grid", gap: 6 }}>
+        <span style={s.fieldLabel}>
+          Almacenes asignados{canAssignScope ? "" : " · solo un usuario dev puede cambiarlos"}
+        </span>
+        <UserBodegasEditor
+          catalog={catalog}
+          value={data.scope}
+          onChange={(scope) => onUpdate(uid, "scope", scope)}
+          readOnly={!canAssignScope}
+        />
       </div>
 
       {/* Permisos */}

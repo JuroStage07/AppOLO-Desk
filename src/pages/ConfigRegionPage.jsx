@@ -1,52 +1,60 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
-import { ACCENT } from "../styles/theme";
-import { getBodegasForScope, getBodegaById } from "../config/bodegas";
+import { AuthCtx } from "../auth/AuthProvider";
+import useOrgCatalog from "../hooks/useOrgCatalog";
+import { assignedBodegaIds, groupBodegasByScope, resolveBodegas, scopePatchFor } from "../utils/userScope";
 
 function persistSession(profile) {
   localStorage.setItem("appolo_profile", JSON.stringify(profile));
   window.dispatchEvent(new Event("appolo_profile_updated"));
 }
 
+/**
+ * Elegir el almacén activo entre los ASIGNADOS al usuario (profiles/{uid}.bodegaIds).
+ * País y compañía se derivan del almacén. Los almacenes los asigna un usuario dev
+ * en Administración → Usuarios; acá el usuario no puede elegir un país libremente.
+ */
 export default function ConfigRegionPage() {
   const nav = useNavigate();
-  const [tenantId, setTenantId] = useState("");
-  const [company, setCompany] = useState("OLO");
+  const { profile: liveProfile, loading: authLoading } = useContext(AuthCtx) || {};
+  const { catalog, loading: catalogLoading } = useOrgCatalog();
   const [bodegaId, setBodegaId] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  useEffect(() => {
-    const raw = localStorage.getItem("appolo_profile");
-    const profile = raw ? JSON.parse(raw) : null;
+  // Perfil vivo de Firestore; si aún no cargó, la copia de localStorage del login.
+  const profile = useMemo(() => {
+    if (liveProfile) return liveProfile;
+    try {
+      const raw = localStorage.getItem("appolo_profile");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, [liveProfile]);
 
-    // Ya configurado por completo (país + bodega) → al home.
+  useEffect(() => {
+    // Ya configurado por completo (país + almacén) → al home.
     if (profile?.tenantId && profile?.bodegaId) {
       nav("/", { replace: true });
       return;
     }
-
-    // Prefill de lo que ya tenga (p. ej. tenant fijado pero falta bodega).
-    if (profile?.tenantId) setTenantId(profile.tenantId);
-    if (profile?.company) setCompany(profile.company);
     if (profile?.bodegaId) setBodegaId(profile.bodegaId);
-  }, [nav]);
+  }, [nav, profile]);
 
-  // Bodegas disponibles para el país/compañía seleccionados.
-  const bodegaOptions = useMemo(
-    () => (tenantId ? getBodegasForScope(tenantId, company) : []),
-    [tenantId, company]
+  const options = useMemo(
+    () => resolveBodegas(assignedBodegaIds(profile), catalog).filter((b) => b.active),
+    [profile, catalog]
   );
+  const groups = useMemo(() => groupBodegasByScope(options, catalog), [options, catalog]);
 
-  // Si cambia el país y la bodega elegida ya no pertenece al scope, la limpiamos.
+  // Con un solo almacén asignado, queda preseleccionado.
   useEffect(() => {
-    if (!bodegaId) return;
-    const stillValid = bodegaOptions.some((b) => b.id === bodegaId);
-    if (!stillValid) setBodegaId("");
-  }, [bodegaOptions, bodegaId]);
+    if (!bodegaId && options.length === 1) setBodegaId(options[0].id);
+  }, [options, bodegaId]);
 
   const handleSave = async () => {
     setErr("");
@@ -56,49 +64,22 @@ export default function ConfigRegionPage() {
       return;
     }
 
-    if (!tenantId) {
-      setErr("Debes seleccionar un país.");
-      return;
-    }
-
-    if (!bodegaId) {
-      setErr("Debes seleccionar una bodega.");
-      return;
-    }
-
-    const bodega = getBodegaById(bodegaId);
+    const bodega = options.find((b) => b.id === bodegaId);
     if (!bodega) {
-      setErr("Bodega inválida.");
+      setErr("Elegí uno de tus almacenes asignados.");
       return;
     }
 
     try {
       setLoading(true);
-
-      const uid = auth.currentUser.uid;
-      const ref = doc(db, "profiles", uid);
-
-      await updateDoc(ref, {
-        tenantId,
-        company,
-        bodegaId: bodega.id,
-        bodegaNombre: bodega.label,
-      });
+      const patch = scopePatchFor(bodega);
+      await updateDoc(doc(db, "profiles", auth.currentUser.uid), patch);
 
       const currentRaw = localStorage.getItem("appolo_profile");
       const currentProfile = currentRaw ? JSON.parse(currentRaw) : {};
+      persistSession({ ...currentProfile, ...patch });
 
-      const updatedProfile = {
-        ...currentProfile,
-        tenantId,
-        company,
-        bodegaId: bodega.id,
-        bodegaNombre: bodega.label,
-      };
-
-      persistSession(updatedProfile);
-
-      // Recarga completa para que AuthProvider vuelva a leer el perfil (con bodega)
+      // Recarga completa para que AuthProvider vuelva a leer el perfil (con almacén)
       // desde Firestore; el scope se usa tanto en escrituras como en filtros en memoria.
       window.location.assign("/");
     } catch (e) {
@@ -123,14 +104,17 @@ export default function ConfigRegionPage() {
     }
   };
 
+  const waiting = (authLoading && !profile) || catalogLoading;
+
   return (
     <div style={styles.page}>
       <div style={styles.card}>
         <div style={styles.headerRow}>
           <div>
-            <h2 style={styles.title}>Configurar región</h2>
+            <h2 style={styles.title}>Elegí tu almacén</h2>
             <p style={styles.sub}>
-              Antes de continuar, selecciona tu país y compañía.
+              Vas a ver y registrar solo los datos del almacén que elijas. Lo podés cambiar después
+              desde la barra superior.
             </p>
           </div>
 
@@ -139,92 +123,58 @@ export default function ConfigRegionPage() {
           </button>
         </div>
 
-        <div style={styles.block}>
-          <div style={styles.label}>País</div>
-
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => setTenantId("CR")}
-            style={{
-              ...styles.option,
-              ...(tenantId === "CR" ? styles.optionActive : {}),
-              ...(loading ? styles.disabled : {}),
-            }}
-          >
-            Costa Rica
-          </button>
-
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => setTenantId("VNZ")}
-            style={{
-              ...styles.option,
-              ...(tenantId === "VNZ" ? styles.optionActive : {}),
-              ...(loading ? styles.disabled : {}),
-            }}
-          >
-            Venezuela
-          </button>
-        </div>
-
-        <div style={styles.block}>
-          <div style={styles.label}>Compañía</div>
-
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => setCompany("OLO")}
-            style={{
-              ...styles.option,
-              ...(company === "OLO" ? styles.optionActive : {}),
-              ...(loading ? styles.disabled : {}),
-            }}
-          >
-            OLO
-          </button>
-        </div>
-
-        <div style={styles.block}>
-          <div style={styles.label}>Bodega</div>
-
-          {!tenantId ? (
-            <div style={styles.hint}>Selecciona primero un país.</div>
-          ) : bodegaOptions.length === 0 ? (
-            <div style={styles.hint}>No hay bodegas configuradas para este país.</div>
-          ) : (
-            bodegaOptions.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                disabled={loading}
-                onClick={() => setBodegaId(b.id)}
-                style={{
-                  ...styles.option,
-                  ...(bodegaId === b.id ? styles.optionActive : {}),
-                  ...(loading ? styles.disabled : {}),
-                }}
-              >
-                {b.label}
-              </button>
-            ))
-          )}
-        </div>
+        {waiting ? (
+          <div style={styles.hint}>Cargando tus almacenes…</div>
+        ) : options.length === 0 ? (
+          <div style={styles.noAccess}>
+            <strong>No tenés almacenes asignados.</strong>
+            <span>
+              Pedile a un administrador que te asigne al menos un almacén en Administración →
+              Usuarios. Después volvé a entrar.
+            </span>
+          </div>
+        ) : (
+          groups.map((g) => (
+            <div key={g.key} style={styles.block}>
+              <div style={styles.label}>
+                {g.tenantName} · {g.companyName}
+              </div>
+              {g.bodegas.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setBodegaId(b.id)}
+                  aria-pressed={bodegaId === b.id}
+                  style={{
+                    ...styles.option,
+                    ...(bodegaId === b.id ? styles.optionActive : {}),
+                    ...(loading ? styles.disabled : {}),
+                  }}
+                >
+                  {b.name}
+                  <span style={styles.optionId}>{b.id}</span>
+                </button>
+              ))}
+            </div>
+          ))
+        )}
 
         {err ? <div style={styles.errBox}>{err}</div> : null}
 
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={!tenantId || !bodegaId || loading}
-          style={{
-            ...styles.saveBtn,
-            ...((!tenantId || !bodegaId || loading) ? styles.disabled : {}),
-          }}
-        >
-          {loading ? "Guardando..." : "Guardar y continuar"}
-        </button>
+        {options.length > 0 && (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!bodegaId || loading}
+            style={{
+              ...styles.saveBtn,
+              ...((!bodegaId || loading) ? styles.disabled : {}),
+            }}
+          >
+            {loading ? "Guardando..." : "Guardar y continuar"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -292,7 +242,23 @@ const styles = {
     color: "#8a90a2",
     padding: "4px 2px",
   },
+  noAccess: {
+    display: "grid",
+    gap: 6,
+    borderRadius: 14,
+    border: "1px solid #FFE1A8",
+    background: "#FFF8EB",
+    padding: 14,
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#7A4E00",
+    lineHeight: 1.4,
+  },
   option: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
     borderRadius: 14,
     border: "1px solid #E7E9F2",
     background: "#FBFBFE",
@@ -301,6 +267,11 @@ const styles = {
     fontWeight: 800,
     color: "#394055",
     cursor: "pointer",
+  },
+  optionId: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#8a90a2",
   },
   optionActive: {
     background: "#E9FFFB",

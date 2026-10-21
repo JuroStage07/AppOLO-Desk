@@ -4,19 +4,29 @@ import { Warehouse, ChevronDown, Check, X, Loader2 } from "lucide-react";
 import { doc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../../firebase";
 import { AuthCtx } from "../../auth/AuthProvider";
-import { getBodegasForScope, getBodegaLabel } from "../../config/bodegas";
+import useOrgCatalog from "../../hooks/useOrgCatalog";
+import {
+  assignedBodegaIds,
+  groupBodegasByScope,
+  resolveBodegas,
+  scopeLabel,
+  scopePatchFor,
+} from "../../utils/userScope";
 import { ACCENT, ACCENT_SOFT, BORDER, SLATE, SURFACE, SURFACE_SOFT, TEXT } from "../../styles/theme";
 
 /**
- * Chip en la sub-barra (junto a "CR · OLO") que abre un modal para cambiar la
- * bodega activa. La bodega vive en profiles/{uid}.bodegaId y gobierna todo el
- * scope de lectura/escritura (reglas + filtros en memoria + payloads).
+ * Chip en la sub-barra (junto a "CR · OLO") que abre un modal para cambiar el
+ * almacén activo entre los ASIGNADOS al usuario (profiles/{uid}.bodegaIds), que
+ * pueden ser de distintos países y compañías. El almacén activo define el scope
+ * completo (tenantId + company + bodegaId): los datos de cada país/compañía son
+ * propios y nunca se mezclan.
  *
- * Al cambiarla escribimos Firestore + localStorage y recargamos, para que
- * AuthProvider relea el perfil y TODA la app use la nueva bodega.
+ * Al cambiarlo escribimos Firestore + localStorage y recargamos, para que
+ * AuthProvider relea el perfil y TODA la app use el nuevo scope.
  */
 export default function BodegaSwitcher() {
   const { profile } = useContext(AuthCtx) || {};
+  const { catalog } = useOrgCatalog();
   const tenantId = String(profile?.tenantId || "").trim();
   const company = String(profile?.company || "").trim();
   const bodegaId = String(profile?.bodegaId || "").trim();
@@ -26,15 +36,19 @@ export default function BodegaSwitcher() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
+  // Asignados: activos en el catálogo, más el actual aunque esté desactivado.
   const options = useMemo(
-    () => (tenantId ? getBodegasForScope(tenantId, company) : []),
-    [tenantId, company]
+    () =>
+      resolveBodegas(assignedBodegaIds(profile), catalog).filter((b) => b.active || b.id === bodegaId),
+    [profile, catalog, bodegaId]
   );
+  const groups = useMemo(() => groupBodegasByScope(options, catalog), [options, catalog]);
 
-  // Sin scope de tenant/company aún → no mostramos el chip (ver /config-region).
-  if (!tenantId || !company) return null;
+  // Sin scope ni asignaciones aún → no mostramos el chip (ver /config-region).
+  if ((!tenantId || !company) && options.length === 0) return null;
 
-  const currentLabel = bodegaId ? getBodegaLabel(bodegaId) : "Sin bodega";
+  const current = options.find((b) => b.id === bodegaId) || null;
+  const currentLabel = current?.name || (bodegaId ? bodegaId : "Sin almacén");
 
   const openModal = () => {
     setSelected(bodegaId);
@@ -55,7 +69,7 @@ export default function BodegaSwitcher() {
     }
     const bodega = options.find((b) => b.id === selected);
     if (!bodega) {
-      setErr("Bodega inválida.");
+      setErr("Ese almacén no está asignado a tu usuario.");
       return;
     }
     if (!auth.currentUser) {
@@ -65,17 +79,13 @@ export default function BodegaSwitcher() {
     try {
       setSaving(true);
       const uid = auth.currentUser.uid;
-      await updateDoc(doc(db, "profiles", uid), {
-        bodegaId: bodega.id,
-        bodegaNombre: bodega.label,
-      });
+      // País y compañía siguen al almacén: el scope cambia completo, nunca a medias.
+      const patch = scopePatchFor(bodega);
+      await updateDoc(doc(db, "profiles", uid), patch);
 
       const raw = localStorage.getItem("appolo_profile");
-      const current = raw ? JSON.parse(raw) : {};
-      localStorage.setItem(
-        "appolo_profile",
-        JSON.stringify({ ...current, bodegaId: bodega.id, bodegaNombre: bodega.label })
-      );
+      const stored = raw ? JSON.parse(raw) : {};
+      localStorage.setItem("appolo_profile", JSON.stringify({ ...stored, ...patch }));
       window.dispatchEvent(new Event("appolo_profile_updated"));
 
       // Recarga completa: garantiza que AuthProvider relea el perfil y que todas
@@ -83,7 +93,7 @@ export default function BodegaSwitcher() {
       window.location.reload();
     } catch (e) {
       console.error("BodegaSwitcher save error:", e);
-      setErr(e?.message || "No se pudo cambiar la bodega.");
+      setErr(e?.message || "No se pudo cambiar el almacén.");
       setSaving(false);
     }
   };
@@ -94,8 +104,8 @@ export default function BodegaSwitcher() {
         type="button"
         onClick={openModal}
         style={chip}
-        title="Cambiar bodega"
-        aria-label={`Bodega actual: ${currentLabel}. Cambiar bodega`}
+        title={`${scopeLabel(current, catalog)} · Cambiar almacén`}
+        aria-label={`Almacén actual: ${scopeLabel(current, catalog)}. Cambiar almacén`}
       >
         <Warehouse size={13} strokeWidth={2.3} style={{ color: ACCENT, flexShrink: 0 }} />
         <span style={chipLabel}>{currentLabel}</span>
@@ -110,7 +120,7 @@ export default function BodegaSwitcher() {
               onMouseDown={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
-              aria-label="Cambiar bodega"
+              aria-label="Cambiar almacén"
             >
               <div style={header}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -118,9 +128,9 @@ export default function BodegaSwitcher() {
                     <Warehouse size={18} strokeWidth={2.2} style={{ color: ACCENT }} />
                   </div>
                   <div>
-                    <div style={title}>Cambiar bodega</div>
+                    <div style={title}>Cambiar almacén</div>
                     <div style={subtitle}>
-                      {tenantId} · {company}
+                      Vas a ver y registrar solo los datos del almacén que elijas.
                     </div>
                   </div>
                 </div>
@@ -138,32 +148,41 @@ export default function BodegaSwitcher() {
               <div style={body}>
                 {options.length === 0 ? (
                   <div style={emptyHint}>
-                    No hay bodegas configuradas para {tenantId} · {company}.
+                    No tenés almacenes asignados. Pedile a un administrador que te asigne uno.
                   </div>
                 ) : (
                   <div style={list}>
-                    {options.map((b) => {
-                      const isSel = selected === b.id;
-                      const isCurrent = bodegaId === b.id;
-                      return (
-                        <button
-                          key={b.id}
-                          type="button"
-                          disabled={saving}
-                          onClick={() => setSelected(b.id)}
-                          style={{ ...row, ...(isSel ? rowActive : {}) }}
-                        >
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", minWidth: 0 }}>
-                            <span style={rowLabel}>{b.label}</span>
-                            <span style={rowId}>{b.id}</span>
-                          </div>
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                            {isCurrent && <span style={currentTag}>Actual</span>}
-                            {isSel && <Check size={17} strokeWidth={2.6} style={{ color: ACCENT }} />}
-                          </div>
-                        </button>
-                      );
-                    })}
+                    {groups.map((g) => (
+                      <div key={g.key} style={groupBox}>
+                        <div style={groupTitle}>
+                          {g.tenantName} · {g.companyName}
+                        </div>
+                        {g.bodegas.map((b) => {
+                          const isSel = selected === b.id;
+                          const isCurrent = bodegaId === b.id;
+                          return (
+                            <button
+                              key={b.id}
+                              type="button"
+                              disabled={saving}
+                              onClick={() => setSelected(b.id)}
+                              style={{ ...row, ...(isSel ? rowActive : {}) }}
+                              aria-pressed={isSel}
+                            >
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", minWidth: 0 }}>
+                                <span style={rowLabel}>{b.name}</span>
+                                <span style={rowId}>{b.id}</span>
+                              </div>
+                              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                                {!b.active && <span style={inactiveTag}>Inactivo</span>}
+                                {isCurrent && <span style={currentTag}>Actual</span>}
+                                {isSel && <Check size={17} strokeWidth={2.6} style={{ color: ACCENT }} />}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
                   </div>
                 )}
 
@@ -191,7 +210,7 @@ export default function BodegaSwitcher() {
                       Cambiando…
                     </>
                   ) : (
-                    "Cambiar bodega"
+                    "Cambiar almacén"
                   )}
                 </button>
               </div>
@@ -274,8 +293,25 @@ const closeBtn = {
   borderRadius: 8,
   lineHeight: 0,
 };
-const body = { padding: 14 };
-const list = { display: "grid", gap: 8 };
+const body = { padding: 14, maxHeight: "60vh", overflowY: "auto" };
+const list = { display: "grid", gap: 14 };
+const groupBox = { display: "grid", gap: 8 };
+const groupTitle = {
+  fontSize: 11,
+  fontWeight: 900,
+  color: SLATE,
+  textTransform: "uppercase",
+  letterSpacing: 0.4,
+};
+const inactiveTag = {
+  fontSize: 10,
+  fontWeight: 800,
+  color: SLATE,
+  background: SURFACE,
+  border: `1px solid ${BORDER}`,
+  borderRadius: 999,
+  padding: "1px 7px",
+};
 const row = {
   display: "flex",
   alignItems: "center",

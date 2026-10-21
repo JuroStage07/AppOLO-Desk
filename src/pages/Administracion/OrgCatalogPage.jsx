@@ -22,6 +22,7 @@ import {
 } from "../../components/ui";
 import { BORDER, DANGER, SHADOW_CARD, SLATE, SURFACE, SURFACE_INSET, TEXT } from "../../styles/theme";
 import { fetchOrgCatalog, saveOrgCatalog } from "../../services/orgCatalog";
+import { invalidateOrgCatalogCache } from "../../hooks/useOrgCatalog";
 
 const ENTITY_LABEL = { tenant: "país", company: "compañía", bodega: "almacén" };
 
@@ -60,6 +61,8 @@ export default function OrgCatalogPage() {
     setError("");
     try {
       setCatalog(await fetchOrgCatalog());
+      // El selector de almacén y UserHub releen el catálogo actualizado.
+      invalidateOrgCatalogCache();
     } catch (e) {
       setError(e.message);
     } finally {

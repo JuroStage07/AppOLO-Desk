@@ -8,6 +8,7 @@
     "build": "vite build",
     "assistant:knowledge": "node scripts/sync-assistant-knowledge.mjs",
     "backfill:profiles-area": "node scripts/backfill-profiles-area-trabajo.mjs",
+    "backfill:profiles-bodegaids": "node scripts/backfill-profiles-bodegaids.mjs",
     "backfill:solicitudes-created-area": "node scripts/backfill-solicitudes-created-area.mjs",
     "backfill:solicitudes-bodega": "node scripts/backfill-solicitudes-bodega.mjs",
     "backfill:tiempo-respuesta": "node scripts/backfill-tiempo-respuesta.mjs",
