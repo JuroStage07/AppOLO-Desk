@@ -15,6 +15,10 @@ const {
   buildCatalogOperation,
   describeSupabaseError,
 } = require("./orgCatalogCore");
+const {
+  parseDespachoEventId,
+  validateDespachoConsumption,
+} = require("./mrpDespachoConsumption");
 
 initializeApp();
 
@@ -272,6 +276,19 @@ function getSupabaseConfigOrThrow() {
   return { url, key };
 }
 
+/** SELECT vía PostgREST con la clave de servidor. Devuelve un array de filas. */
+async function supabaseSelect(table, query) {
+  const { url, key } = getSupabaseConfigOrThrow();
+  const res = await fetch(`${url}/rest/v1/${table}?${query}`, {
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new HttpsError("internal", `No se pudo leer ${table} en Supabase (HTTP ${res.status}): ${text.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
 async function callSupabaseRpc(functionName, payload) {
   const { url, key } = getSupabaseConfigOrThrow();
   const res = await fetch(`${url}/rest/v1/rpc/${functionName}`, {
@@ -509,9 +526,6 @@ exports.consumeTarimasFromExternalApp = onCall(
 
     const db = getFirestore();
     const me = await getProfileOrThrow(db, caller.uid);
-    if (!canConsumeTarimasFromProfile(me)) {
-      throw new HttpsError("permission-denied", "No tienes permisos de MRP Tarimas.");
-    }
 
     const tenantId = safe(me.tenantId);
     const company = safe(me.company);
@@ -522,12 +536,54 @@ exports.consumeTarimasFromExternalApp = onCall(
       );
     }
 
-    const profileBodegaId = safe(me.bodegaId);
-    if (!canCrossBodegaFromProfile(me) && profileBodegaId !== cleanBodegaId) {
-      throw new HttpsError(
-        "permission-denied",
-        "No puedes consumir tarimas fuera de tu bodega activa."
+    // Lo que finalmente se consume. Con permiso MRP: lo que manda el cliente (como
+    // siempre). Sin permiso MRP pero con permiso de Despacho: solo el consumo exacto de
+    // un despacho finalizado de su bodega, con cantidades/artículo/tienda tomados del
+    // despacho guardado en Supabase (así quien finaliza despachos no necesita acceso
+    // al módulo MRP y el consumo queda registrado en el momento).
+    let consume = {
+      bodegaId: cleanBodegaId,
+      articuloCodigo: cleanArticuloCodigo,
+      cantidad: qty,
+      tiendaExterna: cleanTiendaExterna,
+    };
+    let viaDespacho = false;
+
+    if (!canConsumeTarimasFromProfile(me)) {
+      const parsed = me?.permisos?.despacho === true ? parseDespachoEventId(cleanExternalEventId) : null;
+      if (!parsed) {
+        throw new HttpsError("permission-denied", "No tienes permisos de MRP Tarimas.");
+      }
+      const [despacho] = await supabaseSelect(
+        "despacho_dev_despachos",
+        `id=eq.${parsed.despachoId}&select=id,tenant_id,company,bodega_id,tienda,tarimas_s,tarimas_d,finalized_at,deleted_at`
       );
+      const [config] = await supabaseSelect(
+        "despacho_dev_mrp_tarimas_config",
+        `tenant_id=eq.${encodeURIComponent(tenantId)}&company=eq.${encodeURIComponent(company)}&select=articulo_s,articulo_d`
+      );
+      const check = validateDespachoConsumption({
+        request: { externalEventId: cleanExternalEventId, cantidad: qty },
+        profile: me,
+        despacho,
+        config,
+      });
+      if (!check.ok) throw new HttpsError(check.code, check.message);
+      consume = {
+        bodegaId: check.item.bodegaId,
+        articuloCodigo: check.item.articuloCodigo,
+        cantidad: check.item.cantidad,
+        tiendaExterna: check.item.tiendaExterna || cleanTiendaExterna,
+      };
+      viaDespacho = true;
+    } else {
+      const profileBodegaId = safe(me.bodegaId);
+      if (!canCrossBodegaFromProfile(me) && profileBodegaId !== cleanBodegaId) {
+        throw new HttpsError(
+          "permission-denied",
+          "No puedes consumir tarimas fuera de tu bodega activa."
+        );
+      }
     }
 
     const callerEmail = safe(caller.token?.email || me.email);
@@ -539,19 +595,22 @@ exports.consumeTarimasFromExternalApp = onCall(
         p_tenant_id: tenantId,
         p_company: company,
         p_external_event_id: cleanExternalEventId,
-        p_bodega_id: cleanBodegaId,
-        p_articulo_codigo: cleanArticuloCodigo,
-        p_quantity: qty,
+        p_bodega_id: consume.bodegaId,
+        p_articulo_codigo: consume.articuloCodigo,
+        p_quantity: consume.cantidad,
         p_reason: cleanReason,
         p_user_id: caller.uid,
         p_user_email: callerEmail || null,
-        p_tienda_externa: cleanTiendaExterna,
+        p_tienda_externa: consume.tiendaExterna,
         // Solo se manda cuando hay fecha real: asi el consumo en vivo sigue
         // resolviendo la firma de 10 args aunque la migracion 20260736 (que
         // agrega `p_created_at`) todavia no este aplicada.
         ...(cleanCreatedAt ? { p_created_at: cleanCreatedAt } : {}),
       });
 
+      if (viaDespacho) {
+        console.log("consumeTarimasFromExternalApp via despacho", caller.uid, cleanExternalEventId, consume.cantidad);
+      }
       return {
         ok: true,
         idempotent: result?.idempotent === true,
