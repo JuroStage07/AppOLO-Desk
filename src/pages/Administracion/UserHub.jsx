@@ -11,6 +11,7 @@ import {
   Save,
   Search,
   Shield,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -77,6 +78,8 @@ import {
   scopeLabel,
 } from "../../utils/userScope";
 import UserBodegasEditor from "./UserBodegasEditor";
+import DeleteUserDialog from "./DeleteUserDialog";
+import { deleteUserAccount } from "../../services/userAdmin";
 
 /* ─── Constants ─── */
 const ROLE_LABELS = Object.fromEntries(ROLE_OPTIONS.map((role) => [role.key, role.label]));
@@ -430,9 +433,26 @@ function roleLabel(role) {
 export default function UserHub() {
   const nav = useNavigate();
   const toast = useToast();
-  const { role: myRole } = useContext(AuthCtx) || {};
-  // Solo un dev asigna almacenes (y con ellos país y compañía).
+  const { role: myRole, user: me } = useContext(AuthCtx) || {};
+  // Solo un dev asigna almacenes (y con ellos país y compañía) y elimina usuarios.
   const canAssignScope = myRole === "dev";
+  const canDeleteUser = (u) => myRole === "dev" && u.id !== me?.uid;
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async (user, email) => {
+    setDeleting(true);
+    try {
+      await deleteUserAccount(user.id, email);
+      setUsers((prev) => prev.filter((u) => u.id !== user.id));
+      setDeleteTarget(null);
+      toast.success(`Se eliminó el usuario ${email || user.id}. Sus registros se conservan.`);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
   const { catalog } = useOrgCatalog();
 
   const [users, setUsers] = useState([]);
@@ -875,7 +895,12 @@ export default function UserHub() {
                                     onCancel={() => cancelEdit(u.id)}
                                   />
                                 ) : (
-                                  <ReadOnlyDetail user={u} catalog={catalog} onEdit={() => startEdit(u)} />
+                                  <ReadOnlyDetail
+                                    user={u}
+                                    catalog={catalog}
+                                    onEdit={() => startEdit(u)}
+                                    onDelete={canDeleteUser(u) ? () => setDeleteTarget(u) : null}
+                                  />
                                 )}
                               </td>
                             </tr>
@@ -890,12 +915,21 @@ export default function UserHub() {
           </div>
         </Container>
       </Main>
+
+      <DeleteUserDialog
+        key={deleteTarget?.id || "none"}
+        user={deleteTarget}
+        open={!!deleteTarget}
+        deleting={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      />
     </Shell>
   );
 }
 
 /* ─── Read-only detail (when not editing) ─── */
-function ReadOnlyDetail({ user, catalog, onEdit }) {
+function ReadOnlyDetail({ user, catalog, onEdit, onDelete }) {
   const permisos = normalizePermissionMap(user.permisos || {});
   const activePermisos = PERMISSION_OPTIONS.filter((perm) => permisos[perm.key]);
 
@@ -968,6 +1002,12 @@ function ReadOnlyDetail({ user, catalog, onEdit }) {
       </div>
 
       <div style={s.actionsRow}>
+        {onDelete && (
+          <button type="button" style={{ ...s.cancelBtn, color: DANGER, border: `1px solid ${DANGER}` }} onClick={onDelete}>
+            <Trash2 size={13} strokeWidth={2.4} />
+            Eliminar usuario
+          </button>
+        )}
         <button type="button" style={s.saveBtn} onClick={onEdit}>
           <Edit3 size={13} strokeWidth={2.4} />
           Editar usuario

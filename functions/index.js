@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
 require("dotenv").config();
 const nodemailer = require("nodemailer");
 const QRCode = require("qrcode");
@@ -1091,4 +1092,106 @@ exports.orgCatalogAdmin = onCall({ region: "us-central1" }, async (req) => {
 
   console.log("orgCatalogAdmin", caller.uid, op.table, op.action, op.id);
   return { ok: true, record: Array.isArray(body) ? body[0] : body };
+});
+
+/**
+ * Callable: adminDeleteUser
+ * data: { uid: string, confirmEmail: string }
+ *
+ * Elimina un USUARIO (no sus registros). Solo role = "dev", verificado server-side.
+ *  1. Archiva el perfil completo en profiles_deleted/{uid} (deletedAt/deletedBy) para
+ *     poder restaurarlo si fue un error.
+ *  2. Borra profiles/{uid} con sus subcolecciones (prefs, pushTokens), los alias de
+ *     usernames que apuntan a él y sus pushTokens de la colección raíz.
+ *  3. Borra la cuenta de Firebase Authentication: deja de poder entrar a Desk y a la
+ *     app móvil (son la misma cuenta).
+ * NO toca documentos de negocio (OTs, horas extra, aperturas, marcas…): conservan el
+ * nombre y el UID de quien los creó.
+ * `confirmEmail` debe coincidir con el correo del usuario, como doble confirmación.
+ */
+exports.adminDeleteUser = onCall({ region: "us-central1" }, async (req) => {
+  const caller = req.auth;
+  if (!caller) throw new HttpsError("unauthenticated", "Debes estar autenticado.");
+
+  const db = getFirestore();
+  const me = await getProfileOrThrow(db, caller.uid);
+  if (safe(me.role) !== "dev") {
+    throw new HttpsError("permission-denied", "Solo un usuario dev puede eliminar usuarios.");
+  }
+
+  const uid = safe(req.data?.uid);
+  if (!uid) throw new HttpsError("invalid-argument", "Falta el usuario a eliminar.");
+  if (uid === caller.uid) throw new HttpsError("failed-precondition", "No podés eliminar tu propio usuario.");
+
+  const auth = getAuth();
+  const profileRef = db.doc(`profiles/${uid}`);
+  const profileSnap = await profileRef.get();
+  let authUser = null;
+  try {
+    authUser = await auth.getUser(uid);
+  } catch (e) {
+    if (e?.code !== "auth/user-not-found") throw e;
+  }
+  if (!profileSnap.exists && !authUser) {
+    throw new HttpsError("not-found", "Ese usuario no existe.");
+  }
+
+  const profile = profileSnap.exists ? profileSnap.data() || {} : {};
+  const email = safe(profile.email || authUser?.email).toLowerCase();
+  const confirmEmail = safe(req.data?.confirmEmail).toLowerCase();
+  if (email && confirmEmail !== email) {
+    throw new HttpsError("invalid-argument", "El correo de confirmación no coincide con el del usuario.");
+  }
+  if (safe(profile.role) === "dev") {
+    // Evita dejar la plataforma sin administradores por error.
+    const devs = await db.collection("profiles").where("role", "==", "dev").get();
+    if (devs.size <= 1) throw new HttpsError("failed-precondition", "No se puede eliminar al último usuario dev.");
+  }
+
+  const deletedBy = safe(caller.token?.email || me.email) || caller.uid;
+
+  // 1) Archivo (antes de borrar nada)
+  await db.doc(`profiles_deleted/${uid}`).set({
+    profile,
+    hadProfile: profileSnap.exists,
+    auth: authUser
+      ? {
+          email: authUser.email || null,
+          displayName: authUser.displayName || null,
+          providers: authUser.providerData.map((p) => p.providerId),
+          createdAt: authUser.metadata?.creationTime || null,
+          lastSignInAt: authUser.metadata?.lastSignInTime || null,
+        }
+      : null,
+    deletedAt: FieldValue.serverTimestamp(),
+    deletedByUid: caller.uid,
+    deletedByEmail: deletedBy,
+  });
+
+  // 2) Datos de acceso (no de negocio)
+  const usernames = await db.collection("usernames").where("uid", "==", uid).get();
+  const tokens = await db.collection("pushTokens").where("uid", "==", uid).get().catch(() => null);
+  const tokenById = await db.doc(`pushTokens/${uid}`).get();
+  const batch = db.batch();
+  usernames.forEach((d) => batch.delete(d.ref));
+  tokens?.forEach((d) => batch.delete(d.ref));
+  if (tokenById.exists) batch.delete(tokenById.ref);
+  await batch.commit();
+  if (profileSnap.exists) await db.recursiveDelete(profileRef);
+
+  // 3) Cuenta de acceso
+  if (authUser) await auth.deleteUser(uid);
+
+  console.log("adminDeleteUser", { by: caller.uid, uid, email, usernames: usernames.size, tokens: tokens?.size || 0 });
+  return {
+    ok: true,
+    uid,
+    email: email || null,
+    removed: {
+      profile: profileSnap.exists,
+      authAccount: Boolean(authUser),
+      usernames: usernames.size,
+      pushTokens: tokens?.size || 0,
+    },
+  };
 });
