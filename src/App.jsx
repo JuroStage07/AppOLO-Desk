@@ -73,6 +73,7 @@ import AdministracionHub from "./pages/Administracion/AdministracionHub";
 import OvertimeUsersAdmin from "./pages/Administracion/Overtime/OvertimeUsersAdmin";
 import AttendanceMarks from "./pages/Administracion/AttendanceMarks";
 import UserHub from "./pages/Administracion/UserHub";
+import OrgCatalogPage from "./pages/Administracion/OrgCatalogPage";
 import ServiciosGenerales from "./pages/ServiciosGenerales/ServiciosGenerales";
 import ServiciosGeneralesOrdenesTrabajo from "./pages/ServiciosGenerales/ServiciosGeneralesOrdenesTrabajo";
 import ServiciosGeneralesOTCrear from "./pages/ServiciosGenerales/ServiciosGeneralesOTCrear";
@@ -372,6 +373,18 @@ export default function App() {
             element={
               <PrivateRoute>
                 <UserHub />
+              </PrivateRoute>
+            }
+          />
+
+          {/* ================= Administración: Países, compañías y almacenes (solo dev) ================= */}
+          <Route
+            path="/administracion/paises-almacenes"
+            element={
+              <PrivateRoute>
+                <RequireRole roles={["dev"]}>
+                  <OrgCatalogPage />
+                </RequireRole>
               </PrivateRoute>
             }
           />

@@ -9,6 +9,11 @@ const sql = require("mssql");
 const {
   runScheduledMaintenanceCycle,
 } = require("./scheduledMaintenance");
+const {
+  CatalogInputError,
+  buildCatalogOperation,
+  describeSupabaseError,
+} = require("./orgCatalogCore");
 
 initializeApp();
 
@@ -1016,3 +1021,74 @@ exports.runScheduledMaintenanceNow = onCall(
     return { ok: true, ...summary };
   }
 );
+
+/**
+ * Callable: orgCatalogAdmin
+ * data: { entity: "tenant"|"company"|"bodega", action: "create"|"update", data: {...} }
+ *
+ * Alta/edición del catálogo de países, compañías y almacenes (tablas org_* en
+ * Supabase). Solo role = "dev", verificado server-side contra profiles/{uid}.
+ * Escribe con la service role: exige SUPABASE_SERVICE_ROLE_KEY (sin caer a la
+ * anon key), porque las tablas no tienen políticas de escritura para clientes.
+ */
+exports.orgCatalogAdmin = onCall({ region: "us-central1" }, async (req) => {
+  const caller = req.auth;
+  if (!caller) throw new HttpsError("unauthenticated", "Debes estar autenticado.");
+
+  const db = getFirestore();
+  const profile = await getProfileOrThrow(db, caller.uid);
+  if (safe(profile.role) !== "dev") {
+    throw new HttpsError("permission-denied", "Solo un usuario dev puede administrar el catálogo.");
+  }
+
+  let op;
+  try {
+    op = buildCatalogOperation(req.data || {});
+  } catch (err) {
+    if (err instanceof CatalogInputError) throw new HttpsError("invalid-argument", err.message);
+    throw err;
+  }
+
+  const url = safe(process.env.SUPABASE_URL).replace(/\/+$/, "");
+  const key = safe(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!url || !key) {
+    throw new HttpsError("failed-precondition", "Falta SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en Functions.");
+  }
+
+  const updatedBy = safe(caller.token?.email || profile.email) || caller.uid;
+  const row = { ...op.row, updated_by: updatedBy };
+  const endpoint =
+    op.action === "create"
+      ? `${url}/rest/v1/${op.table}`
+      : `${url}/rest/v1/${op.table}?id=eq.${encodeURIComponent(op.id)}`;
+
+  const res = await fetch(endpoint, {
+    method: op.action === "create" ? "POST" : "PATCH",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify(row),
+  });
+
+  const raw = await res.text();
+  let body = null;
+  try {
+    body = raw ? JSON.parse(raw) : null;
+  } catch {
+    body = { message: raw };
+  }
+
+  if (!res.ok) {
+    console.error("orgCatalogAdmin error:", { status: res.status, body, entity: req.data?.entity, id: op.id });
+    throw new HttpsError(res.status === 409 ? "already-exists" : "internal", describeSupabaseError(res.status, body));
+  }
+  if (op.action === "update" && Array.isArray(body) && body.length === 0) {
+    throw new HttpsError("not-found", "No existe un registro con ese código.");
+  }
+
+  console.log("orgCatalogAdmin", caller.uid, op.table, op.action, op.id);
+  return { ok: true, record: Array.isArray(body) ? body[0] : body };
+});
