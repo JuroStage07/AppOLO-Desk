@@ -126,6 +126,14 @@ export const PERMISSION_CATALOG = [
       { key: "segVisadosFirmar", label: "Firmar visados", apps: MOVIL },
       { key: "segVisadosPdf", label: "Generar PDF de visado", apps: DESK },
       { key: "segExportar", label: "Descargar fotos / historial", apps: DESK },
+    ],
+  },
+  {
+    key: "revisionEquipos",
+    label: "Revisión de equipos",
+    group: "Seguridad",
+    fullKey: null,
+    actions: [
       { key: "segEquiposChecklist", label: "Checklist y fallas de equipos", apps: MOVIL, impliedBy: ["saludOcupacional", "mantenimiento"] },
     ],
   },
@@ -141,6 +149,9 @@ export const PERMISSION_CATALOG = [
     label: "Órdenes de trabajo",
     group: "Mantenimiento",
     fullKey: "mantenimiento",
+    // `mantenimiento` también abre Equipos: las acciones de OT no deben abrirlo.
+    // El acceso a OTs por acción lo resuelve otAccess (OT_ANY_PERMS).
+    abreConAccion: false,
     actions: [
       { key: "otsVer", label: "Ver OTs", apps: AMBAS },
       { key: "otsCrear", label: "Crear OT", apps: AMBAS },
@@ -172,7 +183,7 @@ export const PERMISSION_CATALOG = [
     actions: [
       { key: "boletasSalida", label: "Generar / consultar boletas", apps: AMBAS, impliedBy: [] },
       { key: "boletasValidar", label: "Validar boleta (firma)", apps: AMBAS, impliedBy: [] },
-      { key: "boletasRechazar", label: "Rechazar boleta", apps: DESK, impliedBy: ["boletasSalida", "boletasValidar"] },
+      { key: "boletasRechazar", label: "Rechazar boleta", apps: AMBAS, impliedBy: ["boletasSalida", "boletasValidar"] },
     ],
   },
   {
@@ -195,6 +206,7 @@ export const PERMISSION_CATALOG = [
       { key: "mrpTraslados", label: "Traslados", apps: DESK, impliedBy: [] },
       { key: "mrpCatalogos", label: "Crear / editar / eliminar catálogos", apps: DESK, impliedBy: ["mrpTarimas"] },
       { key: "mrpExportar", label: "Exportar Excel", apps: DESK, impliedBy: ["mrpTarimas"] },
+      { key: "mrpMovil", label: "Registrar consumo / BOM (móvil)", apps: MOVIL, impliedBy: ["mrpTarimas", "mrpInsumos"] },
     ],
   },
 
@@ -243,6 +255,31 @@ export const CATALOG_LABELS = Object.fromEntries(
     ...m.actions.map((a) => [a.key, `${m.label} · ${a.label}`]),
   ])
 );
+
+/**
+ * Permiso de módulo → claves de sus acciones. Tener una acción suelta abre el
+ * módulo (para llegar al botón), salvo en módulos con `abreConAccion: false`.
+ */
+export const MODULE_ACTION_KEYS = Object.fromEntries(
+  PERMISSION_CATALOG.filter((m) => m.fullKey && m.abreConAccion !== false && m.actions.length).map((m) => [
+    m.fullKey,
+    m.actions.map((a) => a.key),
+  ])
+);
+
+/** Claves que abren un módulo del catálogo (por `key` del módulo): acceso total + acciones. */
+export function moduleAccessKeys(moduleKey) {
+  const m = PERMISSION_CATALOG.find((x) => x.key === moduleKey);
+  if (!m) return [];
+  return [m.fullKey, ...m.actions.map((a) => a.key)].filter(Boolean);
+}
+
+/** ¿Tiene `key` (permiso de módulo) directo o por alguna de sus acciones? */
+export function hasModulePermission(permisos, key) {
+  const perms = permisos || {};
+  if (perms[key] === true) return true;
+  return (MODULE_ACTION_KEYS[key] || []).some((k) => perms[k] === true);
+}
 
 /**
  * ¿Puede el usuario usar esta acción/botón?

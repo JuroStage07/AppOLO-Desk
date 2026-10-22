@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { ACTION_INDEX, CATALOG_KEYS, PERMISSION_CATALOG, canDo } from "./permissionCatalog";
-import { PERMISSION_KEYS } from "./permissions";
+import { ACTION_INDEX, CATALOG_KEYS, PERMISSION_CATALOG, canDo, hasModulePermission } from "./permissionCatalog";
+import { PERMISSION_KEYS, canAccessByRoleOrPermission } from "./permissions";
 
 describe("permissionCatalog", () => {
   it("no repite claves", () => {
@@ -44,5 +44,18 @@ describe("permissionCatalog", () => {
 
   it("cada acción declara dónde se aplica", () => {
     for (const { action } of Object.values(ACTION_INDEX)) expect(action.apps?.length).toBeGreaterThan(0);
+  });
+
+  it("una acción suelta abre su módulo (caso «solo Fotos de despacho»)", () => {
+    const ctx = { role: "operativo", permisos: { despachoFotos: true } };
+    expect(canAccessByRoleOrPermission(ctx, { anyPerms: ["despacho"] })).toBe(true);
+    expect(canDo(ctx, "despachoFotos")).toBe(true);
+    expect(canDo(ctx, "despachoFinalizar")).toBe(false);
+    expect(canAccessByRoleOrPermission(ctx, { anyPerms: ["saludOcupacional"] })).toBe(false);
+  });
+
+  it("una acción de OT no abre Equipos (mantenimiento)", () => {
+    expect(hasModulePermission({ otsVer: true }, "mantenimiento")).toBe(false);
+    expect(canAccessByRoleOrPermission({ role: "operativo", permisos: { otsVer: true } }, { anyPerms: ["mantenimiento"] })).toBe(false);
   });
 });

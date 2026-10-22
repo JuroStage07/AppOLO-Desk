@@ -1,4 +1,4 @@
-import { PERMISSION_CATALOG } from "./permissionCatalog";
+import { MODULE_ACTION_KEYS, PERMISSION_CATALOG } from "./permissionCatalog";
 
 export const ROLE_OPTIONS = [
   {
@@ -274,7 +274,12 @@ export function canAccessByRoleOrPermission(
   const anyList = Array.isArray(anyPerms) ? anyPerms.filter(Boolean) : [];
   const allList = Array.isArray(allPerms) ? allPerms.filter(Boolean) : [];
 
-  if (anyList.length > 0 && !anyList.some((key) => hasExplicitPermission(effectivePermisos, key))) {
+  // Un permiso de módulo también se cumple con cualquiera de sus acciones
+  // (matriz de permisos: dar solo «Despacho · Fotos» debe dejar entrar al módulo).
+  const hasModuleOrAction = (key) =>
+    hasExplicitPermission(effectivePermisos, key) ||
+    (MODULE_ACTION_KEYS[key] || []).some((k) => effectivePermisos?.[k] === true);
+  if (anyList.length > 0 && !anyList.some(hasModuleOrAction)) {
     return false;
   }
 
