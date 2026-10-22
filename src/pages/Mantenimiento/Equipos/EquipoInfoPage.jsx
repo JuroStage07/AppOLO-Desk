@@ -1,4 +1,5 @@
 // EquipoInfoPage.jsx
+import useCan from "../../../hooks/useCan";
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -113,6 +114,7 @@ export default function EquipoInfoPage() {
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
   const toast = useToast();
+  const can = useCan();
   const confirm = useConfirm();
 
   const [equipo, setEquipo] = useState(null);
@@ -283,6 +285,10 @@ export default function EquipoInfoPage() {
   }, [equipo, modalKey]);
 
   const setEstadoEquipo = async (nextEstado) => {
+    if (!can("equiposEditar")) {
+      toast.warning("No tenés permiso: Equipos · Editar / estado / fallas.");
+      return;
+    }
     if (!id) return;
     try {
       await updateDoc(doc(db, "equipos", id), {
@@ -298,6 +304,10 @@ export default function EquipoInfoPage() {
   };
 
   const toggleFalla = async () => {
+    if (!can("equiposEditar")) {
+      toast.warning("No tenés permiso: Equipos · Editar / estado / fallas.");
+      return;
+    }
     if (!id) return;
     const activa = equipo?.fallaActiva === true;
     const next = !activa;
@@ -452,6 +462,10 @@ export default function EquipoInfoPage() {
   };
 
   const sendQrEmail = async () => {
+    if (!can("equiposQr")) {
+      toast.warning("No tenés permiso: Equipos · Enviar QR.");
+      return;
+    }
     const to = safe(qrEmail);
     if (!isValidEmail(to)) {
       setQrError("Ingresá un correo válido.");
@@ -485,6 +499,10 @@ export default function EquipoInfoPage() {
   };
 
   const saveEdit = async () => {
+    if (!can("equiposEditar")) {
+      toast.warning("No tenés permiso: Equipos · Editar / estado / fallas.");
+      return;
+    }
     if (!id) return;
 
     const nombre = safe(editNombre);

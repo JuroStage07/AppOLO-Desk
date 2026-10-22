@@ -3,6 +3,7 @@
 // Insumos y BOM se fijan solo por tenant/company (no dependen del almacén de
 // trabajo). Un BOM (Bill of Materials) consume artículos insumo del catálogo
 // `Insumos`. Los almacenes se crean con el tenant/company del usuario logeado.
+import useCan from "../../hooks/useCan";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
@@ -259,6 +260,8 @@ function ClienteCell({ cliente }) {
 }
 
 function ArticulosTab() {
+  // «MRP · Crear / editar / eliminar catálogos».
+  const canEdit = useCan()("mrpCatalogos");
   const { warehouseId } = useMrpWorkspace();
   const { profile } = useMrpUser();
   const isDev = String(profile?.role || "").toLowerCase() === "dev";
@@ -424,7 +427,7 @@ function ArticulosTab() {
       <SectionTitle
         title="Artículos del almacén"
         action={
-          <PrimaryButton icon={Plus} onClick={openCreate}>
+          <PrimaryButton icon={Plus} onClick={openCreate} disabled={!canEdit} title={canEdit ? undefined : "Sin permiso: MRP · Crear / editar / eliminar catálogos"}>
             Nuevo artículo
           </PrimaryButton>
         }
@@ -497,7 +500,7 @@ function ArticulosTab() {
             storageKey="appolo_mrp_cat_articulos_cols"
             pageSize={5}
             minWidth={720}
-            renderActions={(a) => (
+            renderActions={(a) => !canEdit ? null : (
               <RowActionsMenu
                 open={openMenuId === a.id}
                 onToggle={() =>
@@ -712,6 +715,8 @@ function ArticulosTab() {
 // tenant/company. El código (CL####) se autogenera.
 // (Capa de datos legada: pallet_clientes / usePalletClientes.)
 function CompaniasTab() {
+  // «MRP · Crear / editar / eliminar catálogos».
+  const canEdit = useCan()("mrpCatalogos");
   const confirm = useConfirm();
   const {
     clientes,
@@ -794,7 +799,7 @@ function CompaniasTab() {
       <SectionTitle
         title="Compañías"
         action={
-          <PrimaryButton icon={Plus} onClick={openCreate}>
+          <PrimaryButton icon={Plus} onClick={openCreate} disabled={!canEdit} title={canEdit ? undefined : "Sin permiso: MRP · Crear / editar / eliminar catálogos"}>
             Nueva compañía
           </PrimaryButton>
         }
@@ -842,7 +847,7 @@ function CompaniasTab() {
             storageKey="appolo_mrp_cat_companias_cols"
             pageSize={5}
             minWidth={480}
-            renderActions={(c) => (
+            renderActions={(c) => !canEdit ? null : (
               <RowActionsMenu
                 open={openMenuId === c.id}
                 onToggle={() =>
@@ -924,6 +929,8 @@ function CompaniasTab() {
 // asigna la compañía a los clientes antiguos que no la tengan.
 // (Capa de datos legada: pallet_tiendas / usePalletTiendas; compania = pallet_clientes.)
 function ClientesTab() {
+  // «MRP · Crear / editar / eliminar catálogos».
+  const canEdit = useCan()("mrpCatalogos");
   const { profile } = useMrpUser();
   const isDev = String(profile?.role || "").toLowerCase() === "dev";
   const confirm = useConfirm();
@@ -1059,7 +1066,7 @@ function ClientesTab() {
       <SectionTitle
         title="Clientes"
         action={
-          <PrimaryButton icon={Plus} onClick={openCreate}>
+          <PrimaryButton icon={Plus} onClick={openCreate} disabled={!canEdit} title={canEdit ? undefined : "Sin permiso: MRP · Crear / editar / eliminar catálogos"}>
             Nuevo cliente
           </PrimaryButton>
         }
@@ -1133,7 +1140,7 @@ function ClientesTab() {
             pageSize={5}
             minWidth={640}
             actionsLabel={isDev ? "Acciones" : "Acción"}
-            renderActions={(t) =>
+            renderActions={(t) => !canEdit ? null :
               isDev ? (
                 <RowActionsMenu
                   open={openMenuId === t.id}
@@ -1328,6 +1335,8 @@ function BomTab() {
 
 /* ------------------------------------------------- Insumos › Artículos insumo */
 function InsumosSection() {
+  // «MRP · Crear / editar / eliminar catálogos».
+  const canEdit = useCan()("mrpCatalogos");
   const {
     insumos,
     loading,
@@ -1453,7 +1462,7 @@ function InsumosSection() {
       <SectionTitle
         title="Artículos insumo"
         action={
-          <PrimaryButton icon={Plus} onClick={openCreate}>
+          <PrimaryButton icon={Plus} onClick={openCreate} disabled={!canEdit} title={canEdit ? undefined : "Sin permiso: MRP · Crear / editar / eliminar catálogos"}>
             Nuevo insumo
           </PrimaryButton>
         }
@@ -1526,7 +1535,7 @@ function InsumosSection() {
             storageKey="appolo_mrp_cat_insumos_cols"
             pageSize={5}
             minWidth={760}
-            renderActions={(i) => (
+            renderActions={(i) => !canEdit ? null : (
               <RowActionsMenu
                 open={openMenuId === i.id}
                 onToggle={() =>
@@ -1688,6 +1697,8 @@ function InsumosSection() {
 
 /* ------------------------------------------------------------------- BOM */
 function BomSection() {
+  // «MRP · Crear / editar / eliminar catálogos».
+  const canEdit = useCan()("mrpCatalogos");
   const {
     boms,
     loading,
@@ -1815,7 +1826,7 @@ function BomSection() {
       <SectionTitle
         title="BOM"
         action={
-          <PrimaryButton icon={Plus} onClick={openCreate}>
+          <PrimaryButton icon={Plus} onClick={openCreate} disabled={!canEdit} title={canEdit ? undefined : "Sin permiso: MRP · Crear / editar / eliminar catálogos"}>
             Nuevo BOM
           </PrimaryButton>
         }
@@ -1894,7 +1905,7 @@ function BomSection() {
             storageKey="appolo_mrp_cat_bom_cols"
             pageSize={5}
             minWidth={700}
-            renderActions={(r) => (
+            renderActions={(r) => !canEdit ? null : (
               <RowActionsMenu
                 open={openMenuId === r.id}
                 onToggle={() =>
@@ -2118,6 +2129,8 @@ const selectedRow = {
 
 /* ------------------------------------------------------------ Almacenes */
 function AlmacenesTab() {
+  // «MRP · Crear / editar / eliminar catálogos».
+  const canEdit = useCan()("mrpCatalogos");
   const confirm = useConfirm();
   const {
     warehouses,
@@ -2191,7 +2204,7 @@ function AlmacenesTab() {
       <SectionTitle
         title="Almacenes"
         action={
-          <PrimaryButton icon={Plus} onClick={openCreate}>
+          <PrimaryButton icon={Plus} onClick={openCreate} disabled={!canEdit} title={canEdit ? undefined : "Sin permiso: MRP · Crear / editar / eliminar catálogos"}>
             Nuevo almacén
           </PrimaryButton>
         }
@@ -2237,7 +2250,7 @@ function AlmacenesTab() {
             storageKey="appolo_mrp_cat_almacenes_cols"
             pageSize={5}
             minWidth={520}
-            renderActions={(w) => (
+            renderActions={(w) => !canEdit ? null : (
               <RowActionsMenu
                 open={openMenuId === w.id}
                 onToggle={() =>

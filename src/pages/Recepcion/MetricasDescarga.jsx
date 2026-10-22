@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import useCan from "../../hooks/useCan";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../../firebase";
 import {
@@ -3858,6 +3859,7 @@ const volStyles = {
  */
 function ProviderTimeShareCard({ data = [], periodLabel = "" }) {
   const toast = useToast();
+  const canExport = useCan()("recepcionExportar");
   const PAGE_SIZE = 10;
   const [page, setPage] = React.useState(0);
   const [search, setSearch] = React.useState("");
@@ -3929,6 +3931,10 @@ function ProviderTimeShareCard({ data = [], periodLabel = "" }) {
   }, [data, search]);
 
   const handleExportExcel = async () => {
+    if (!canExport) {
+      toast.warning("No tenés permiso para exportar (Reportes de recepción · Exportar).");
+      return;
+    }
     if (exporting || filteredList.length === 0) return;
     try {
       setExporting(true);
@@ -4377,6 +4383,8 @@ const shareStyles = {
 export default function MetricasDescarga() {
   const nav = useNavigate();
   const toast = useToast();
+  // «Reportes de recepción · Exportar»: oculta/desactiva todas las descargas.
+  const canExport = useCan()("recepcionExportar");
   const user = auth.currentUser;
   const isMobile = useIsMobile();
   const [activeFilter, setActiveFilter] = useState("hoy");
@@ -6630,7 +6638,7 @@ export default function MetricasDescarga() {
                 onExportExcel={handleExportExcel}
                 onExportAperturas={handleExportAperturasPorDia}
                 exportingAperturas={exportingAperturas}
-                exportDisabled={loadingData || !!loadError || !dashboardData}
+                exportDisabled={!canExport || loadingData || !!loadError || !dashboardData}
               />
             </div>
           </div>
@@ -6894,7 +6902,7 @@ export default function MetricasDescarga() {
             periodLabel={currentData.label}
             onOpenSettings={() => setSettingsModalOpen(true)}
             onOpenUserDetail={openUserTimeDetail}
-            onExportExcel={handleExportTeamExcel}
+            onExportExcel={canExport ? handleExportTeamExcel : undefined}
           />
             </>
           )}
@@ -7591,6 +7599,10 @@ export default function MetricasDescarga() {
                 <button
                   type="button"
                   onClick={async () => {
+                    if (!canExport) {
+                      toast.warning("No tenés permiso para exportar (Reportes de recepción · Exportar).");
+                      return;
+                    }
                     if (tendenciasCofersaModal.loading || tendenciasCofersaModal.providers.length === 0) return;
                     
                     try {
@@ -8363,6 +8375,10 @@ export default function MetricasDescarga() {
                 <button
                   type="button"
                   onClick={async () => {
+                    if (!canExport) {
+                      toast.warning("No tenés permiso para exportar (Reportes de recepción · Exportar).");
+                      return;
+                    }
                     if (tendenciasEpaModal.loading || tendenciasEpaModal.providers.length === 0) return;
                     
                     try {

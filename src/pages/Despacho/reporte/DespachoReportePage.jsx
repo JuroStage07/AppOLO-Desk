@@ -35,7 +35,7 @@ import {
   useToast,
 } from "../../../components/ui";
 import { AuthCtx } from "../../../auth/AuthProvider";
-import { canAccessByRoleOrPermission } from "../../../config/permissions";
+import useCan from "../../../hooks/useCan";
 import { buildMapaEstados, labelFor } from "../board/lib/mapaEstados";
 import {
   fetchReporteDespachos,
@@ -71,9 +71,11 @@ function fmtFechaHora(v) {
 export default function DespachoReportePage() {
   const nav = useNavigate();
   const toast = useToast();
-  const { role, permisos, profile, tenantId, company, bodegaId, loading: authLoading } = useContext(AuthCtx) || {};
+  const { profile, tenantId, company, bodegaId, loading: authLoading } = useContext(AuthCtx) || {};
 
-  const hasPermission = canAccessByRoleOrPermission({ role, permisos, profile }, { anyPerms: ["despacho"] });
+  const can = useCan();
+  const hasPermission = can("despachoReporte");
+  const canExport = can("despachoExportar");
   const hasScope = Boolean(tenantId && bodegaId);
   const hasAccess = hasPermission && hasScope;
 
@@ -189,7 +191,7 @@ export default function DespachoReportePage() {
         description={
           hasPermission
             ? "Elegí una bodega activa para ver el reporte de despachos."
-            : "Necesitás el permiso de Despacho para ver este reporte."
+            : "Necesitás el permiso «Despacho · Reporte de despachos» para ver este reporte."
         }
       />
     );
@@ -423,7 +425,7 @@ export default function DespachoReportePage() {
       <Topbar>
         <Brand icon={Truck} title="Reporte de despachos" subtitle="Tarimas por despacho y tienda" onClick={() => nav("/despacho")} />
         <Topbar.Right>
-          {hasAccess ? (
+          {hasAccess && canExport ? (
             <PrimaryButton
               icon={Download}
               onClick={handleExport}

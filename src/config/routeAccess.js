@@ -26,6 +26,7 @@ export const ROUTE_ACCESS_RULES = [
     adminOverride: false,
   },
   { path: "/administracion/paises-almacenes", exact: true, roles: ["dev"], adminOverride: false },
+  { path: "/administracion/permisos", exact: true, roles: ["dev"], adminOverride: false },
   { path: "/servicios-generales/ordenes-trabajo", anyPerms: ["serviciosGenerales"] },
   { path: "/servicios-generales/validar-ingreso", exact: true, anyPerms: ["serviciosGenerales"] },
   { path: "/servicios-generales/boletas-salida", anyPerms: ["boletasSalida", "boletasValidar"] },

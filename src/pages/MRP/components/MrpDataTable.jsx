@@ -7,6 +7,7 @@
 // Config de columna: { key, title, align?, filterable?, get(row)->{value,label},
 //   render(row) }. Columnas de acciones: pásalas por `renderActions(row)` (van
 //   fijas al final, sin filtro ni arrastre).
+import useCan from "../../../hooks/useCan";
 import React, { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, GripVertical, FileSpreadsheet } from "lucide-react";
 import { GhostButton, TableScroll, useToast } from "../../../components/ui";
@@ -70,6 +71,7 @@ export default function MrpDataTable({
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
   const toast = useToast();
+  const canExport = useCan()("mrpExportar");
   const { company, bodegaNombre, warehouse } = useMrpWorkspace();
 
   // Persiste el orden (localStorage es un sistema externo, no estado de React).
@@ -134,6 +136,10 @@ export default function MrpDataTable({
   // (`filtered`), usando el orden de columnas actual. Documenta los filtros
   // aplicados en el encabezado del reporte.
   const handleExport = async () => {
+    if (!canExport) {
+      toast.warning("No tenés permiso para exportar (MRP · Exportar Excel).");
+      return;
+    }
     if (exporting) return;
     setExporting(true);
     try {
@@ -215,7 +221,7 @@ export default function MrpDataTable({
 
   return (
     <>
-      {exportTitle ? (
+      {exportTitle && canExport ? (
         <div
           style={{
             display: "flex",

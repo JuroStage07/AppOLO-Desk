@@ -23,6 +23,7 @@ import DocumentacionPage from "./pages/Documentacion/DocumentacionPage";
 import Despacho from "./pages/Despacho/Despacho";
 import DespachoBoardPage from "./pages/Despacho/board/DespachoBoardPage";
 import DespachoReportePage from "./pages/Despacho/reporte/DespachoReportePage";
+import PermisosMatrizPage from "./pages/Administracion/Permisos/PermisosMatrizPage";
 
 //SaludOcupacional
 import SSOHub from "./pages/SSO/Seguridad/S.S.OHub";
@@ -382,6 +383,18 @@ export default function App() {
             element={
               <PrivateRoute>
                 <UserHub />
+              </PrivateRoute>
+            }
+          />
+
+          {/* ================= Administración: Matriz de permisos por roles (solo dev) ================= */}
+          <Route
+            path="/administracion/permisos"
+            element={
+              <PrivateRoute>
+                <RequireRole roles={["dev"]}>
+                  <PermisosMatrizPage />
+                </RequireRole>
               </PrivateRoute>
             }
           />

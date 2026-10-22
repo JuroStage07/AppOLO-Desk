@@ -3,6 +3,7 @@
 // Cada acción se genera al finalizar una "acción de descarga" y luego se
 // inicia/completa desde la app de recepción. Esta página agrega KPIs y
 // desgloses (por tipo, andén, proveedor y usuario) acotados por tenant+company.
+import useCan from "../../hooks/useCan";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../../firebase";
@@ -49,6 +50,7 @@ import {
   Spinner,
   TableScroll,
   Topbar,
+  useToast,
 } from "../../components/ui";
 import {
   ACCENT,
@@ -324,6 +326,8 @@ function topBreakdown(rows, keyFn, labelFn, topN = 8) {
 /* ───────────────────────── component ───────────────────────── */
 
 export default function MetricasRecepcion() {
+  const canExport = useCan()("recepcionExportar");
+  const toast = useToast();
   const nav = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -551,6 +555,10 @@ export default function MetricasRecepcion() {
   );
 
   const handleExportExcel = async () => {
+    if (!canExport) {
+      toast.warning("No tenés permiso para exportar (Reportes de recepción · Exportar).");
+      return;
+    }
     if (!tableRows.length) return;
     try {
       const ExcelJS = (await import("exceljs")).default;

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import useCan from "../../../hooks/useCan";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Briefcase, Building2, CalendarClock, Check, ChevronDown, ChevronRight, Clock, RefreshCw, RotateCcw, Settings, UserCheck, UserCog, UserMinus, Users, UserX } from "lucide-react";
 import { collection, deleteField, doc, getDocs, orderBy, query, updateDoc, writeBatch, serverTimestamp } from "firebase/firestore";
@@ -415,6 +416,8 @@ function stripScheduleOverride(u) {
 export default function OvertimeUsersAdmin() {
   const nav = useNavigate();
   const toast = useToast();
+  // «Horas extra · Sincronizar / excluir / horarios».
+  const canUsers = useCan()("heUsuarios");
   const confirm = useConfirm();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -589,6 +592,10 @@ export default function OvertimeUsersAdmin() {
   );
 
   const handleSync = async () => {
+    if (!canUsers) {
+      toast.warning("No tenés permiso: Horas extra · Sincronizar / excluir / horarios.");
+      return;
+    }
     setSyncing(true);
     setStatus(null);
     setError(null);
@@ -725,7 +732,7 @@ export default function OvertimeUsersAdmin() {
                     ...(syncing ? styles.syncBtnDisabled : {}),
                   }}
                   onClick={handleSync}
-                  disabled={syncing}
+                  disabled={!canUsers || syncing}
                 >
                   <RefreshCw
                     size={15}
@@ -827,7 +834,7 @@ export default function OvertimeUsersAdmin() {
                                 type="button"
                                 style={styles.rowBtn}
                                 onClick={() => handleExclude(u)}
-                                disabled={updatingId === u.id}
+                                disabled={!canUsers || updatingId === u.id}
                                 title="Excluir de horas extra"
                               >
                                 <UserMinus size={13} strokeWidth={2.4} />
@@ -899,7 +906,7 @@ export default function OvertimeUsersAdmin() {
                                       type="button"
                                       style={styles.assignBtn}
                                       onClick={() => handleAssignSchedule(u)}
-                                      disabled={updatingId === u.id || selValue === "" || selValue === eff.id}
+                                      disabled={!canUsers || updatingId === u.id || selValue === "" || selValue === eff.id}
                                       title="Asignar horario seleccionado"
                                     >
                                       <Check size={13} strokeWidth={2.6} />
@@ -910,7 +917,7 @@ export default function OvertimeUsersAdmin() {
                                         type="button"
                                         style={styles.revertBtn}
                                         onClick={() => handleClearOverride(u)}
-                                        disabled={updatingId === u.id}
+                                        disabled={!canUsers || updatingId === u.id}
                                         title="Quitar override y volver al horario de Bit2"
                                       >
                                         <RotateCcw size={13} strokeWidth={2.6} />
@@ -969,7 +976,7 @@ export default function OvertimeUsersAdmin() {
                           type="button"
                           style={styles.rowBtnReinclude}
                           onClick={() => setExcluded(u, false)}
-                          disabled={updatingId === u.id}
+                          disabled={!canUsers || updatingId === u.id}
                           title="Reincluir en horas extra"
                         >
                           <UserCheck size={13} strokeWidth={2.4} />

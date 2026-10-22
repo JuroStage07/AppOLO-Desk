@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
+import useCan from "../../../../hooks/useCan";
 import { useNavigate } from "react-router-dom";
 import {
   collection,
@@ -525,6 +526,7 @@ function safe(v) {
 export default function AdministrarVisados() {
   const nav = useNavigate();
   const toast = useToast();
+  const can = useCan();
   const confirm = useConfirm();
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
@@ -624,6 +626,10 @@ export default function AdministrarVisados() {
 
   // ✅ Generar PDF firmado: solo si ya hay 2 firmas (y no existe pdfUrl)
   const generarPDF = async (vis) => {
+    if (!can("segVisadosPdf")) {
+      toast.warning("No tenés permiso para generar PDF de visados (Seguridad · Generar PDF).");
+      return;
+    }
     try {
       setBusy(true);
       setErr("");

@@ -1,4 +1,5 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import useCan from "../../../hooks/useCan";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -687,6 +688,7 @@ function OvertimeCard({ record, savingId, onDecide, feriadoDates, feriadosMap })
         </div>
       )}
 
+      {onDecide ? (
       <div style={styles.cardActions}>
         <Button
           variant="primary"
@@ -709,11 +711,15 @@ function OvertimeCard({ record, savingId, onDecide, feriadoDates, feriadosMap })
           Rechazar
         </Button>
       </div>
+      ) : null}
     </div>
   );
 }
 
 export default function OvertimeApprovals() {
+  const can = useCan();
+  const canDecide = can("heAprobar");
+  const canExport = can("heExportar");
   const nav = useNavigate();
   const { role } = useContext(AuthCtx);
 
@@ -787,6 +793,7 @@ export default function OvertimeApprovals() {
   }, [rangeFrom, rangeTo]);
 
   const decideRecord = async (record, status) => {
+    if (!canDecide) return;
     setReasonModal({ open: true, record, action: status });
   };
 
@@ -944,6 +951,7 @@ export default function OvertimeApprovals() {
       : "Registros recientes";
 
   const handleExport = async () => {
+    if (!canExport) return;
     setExporting(true);
     setError("");
     try {
@@ -1047,7 +1055,7 @@ export default function OvertimeApprovals() {
                 size="sm"
                 icon={FileDown}
                 loading={exporting}
-                disabled={exporting || loading || sheetRows.length === 0}
+                disabled={!canExport || exporting || loading || sheetRows.length === 0}
                 onClick={handleExport}
               >
                 Descargar Excel
@@ -1144,7 +1152,7 @@ export default function OvertimeApprovals() {
                   key={record.attendanceId}
                   record={record}
                   savingId={savingId}
-                  onDecide={decideRecord}
+                  onDecide={canDecide ? decideRecord : null}
                   feriadoDates={feriadoDates}
                   feriadosMap={feriadosMap}
                 />

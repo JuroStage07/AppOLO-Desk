@@ -1,4 +1,5 @@
 import React, { useContext, useState } from "react";
+import useCan from "../../../../hooks/useCan";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../../../../firebase";
 import {
@@ -41,6 +42,7 @@ const yesNo = [
 export default function NuevoVisado() {
   const nav = useNavigate();
   const toast = useToast();
+  const can = useCan();
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
@@ -115,6 +117,11 @@ export default function NuevoVisado() {
   const showTramiteDetalle = form.tipoTramite === "MENOR_3M";
 
   const onSubmit = async (e) => {
+    if (!can("segVisadosCrear")) {
+      e?.preventDefault?.();
+      toast.warning("No tenés permiso para crear visados (Seguridad · Nuevo visado).");
+      return;
+    }
     e?.preventDefault?.();
     if (authLoading) return;
     if (saving) return;

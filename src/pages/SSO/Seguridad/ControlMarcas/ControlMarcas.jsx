@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import useCan from "../../../../hooks/useCan";
 import { useNavigate } from "react-router-dom";
 import {
   collection,
@@ -95,6 +96,7 @@ export default function ControlMarcas() {
   const uiToast = useToast();
   const inputRef = useRef(null);
   const authCtx = useContext(AuthCtx);
+  const can = useCan();
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
 
@@ -280,6 +282,10 @@ export default function ControlMarcas() {
 
   const registrarMarca = async (e) => {
     e?.preventDefault?.();
+    if (!can("segMarcas")) {
+      showToast("warn", "No tenés permiso para registrar marcas (Seguridad · Registrar marcas).");
+      return;
+    }
     if (!cedulaLimpia) {
       showToast("warn", "Ingresa un número de cédula.");
       return;

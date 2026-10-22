@@ -15,10 +15,12 @@ import {
   Topbar,
 } from "../../components/ui";
 import usePinnedModules from "../../hooks/usePinnedModules";
+import useCan from "../../hooks/useCan";
 
 export default function Despacho() {
   const nav = useNavigate();
   const { isPinned, togglePin } = usePinnedModules("despacho");
+  const can = useCan();
 
   const go = (path) => nav(path);
 
@@ -40,8 +42,8 @@ export default function Despacho() {
         icon: FileSpreadsheet,
         tag: "Reporte",
       },
-    ],
-    []
+    ].filter((m) => m.key !== "reporte" || can("despachoReporte")),
+    [can]
   );
 
   return (

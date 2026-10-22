@@ -1,3 +1,5 @@
+import { PERMISSION_CATALOG } from "./permissionCatalog";
+
 export const ROLE_OPTIONS = [
   {
     key: "dev",
@@ -182,50 +184,37 @@ export const PERMISSION_OPTIONS = [
   },
 ];
 
+// Claves por botón del catálogo (src/config/permissionCatalog.js) que no son
+// módulos de arriba: se agregan acá para que normalizePermissionMap las conserve
+// y tengan etiqueta en todas las pantallas.
+const GROUP_ALIAS = { "Administración": "Administracion" };
+for (const mod of PERMISSION_CATALOG) {
+  for (const a of mod.actions) {
+    if (PERMISSION_OPTIONS.some((p) => p.key === a.key)) continue;
+    PERMISSION_OPTIONS.push({
+      key: a.key,
+      label: `${mod.label} · ${a.label}`,
+      group: GROUP_ALIAS[mod.group] || mod.group,
+      description: a.desc || a.label,
+    });
+  }
+}
+
 export const PERMISSION_KEYS = PERMISSION_OPTIONS.map((perm) => perm.key);
 
 /**
- * Matriz de permisos por acción (lo que muestra Administración → Usuarios).
- * - fullKey: permiso que da TODAS las acciones del módulo (compatibilidad: quien ya
- *   lo tenía conserva todo).
- * - actions: permisos por acción; cualquier acción implica poder ver el módulo.
+ * Matriz de permisos por acción (lo que muestra Administración → Usuarios):
+ * los módulos del catálogo que tienen acciones.
+ * - fullKey: permiso que da TODAS las acciones del módulo (compatibilidad).
+ * - actions: permisos por botón.
  * Los permisos que no están en la matriz se muestran como interruptores simples.
  */
-export const PERMISSION_MATRIX = [
-  {
-    key: "ots",
-    label: "Órdenes de trabajo (Mantenimiento)",
-    fullKey: "mantenimiento",
-    actions: [
-      { key: "otsVer", label: "Ver" },
-      { key: "otsCrear", label: "Crear" },
-      { key: "otsGestionar", label: "Gestionar" },
-      { key: "otsFinalizar", label: "Finalizar" },
-      { key: "otsEliminar", label: "Eliminar" },
-      { key: "otsProgramado", label: "Programado" },
-    ],
-  },
-  {
-    key: "mrp",
-    label: "MRP Tarimas",
-    fullKey: null,
-    actions: [
-      { key: "mrpTarimas", label: "Ver" },
-      { key: "mrpInsumos", label: "Insumos" },
-      { key: "mrpAjustes", label: "Ajustes" },
-      { key: "mrpTraslados", label: "Traslados" },
-    ],
-  },
-  {
-    key: "boletas",
-    label: "Boletas de salida",
-    fullKey: null,
-    actions: [
-      { key: "boletasSalida", label: "Crear / consultar" },
-      { key: "boletasValidar", label: "Validar" },
-    ],
-  },
-];
+export const PERMISSION_MATRIX = PERMISSION_CATALOG.filter((m) => m.actions.length > 0).map((m) => ({
+  key: m.key,
+  label: m.label,
+  fullKey: m.fullKey,
+  actions: m.actions.map((a) => ({ key: a.key, label: a.label })),
+}));
 
 export const MATRIX_PERMISSION_KEYS = new Set(
   PERMISSION_MATRIX.flatMap((m) => [m.fullKey, ...m.actions.map((a) => a.key)]).filter(Boolean)

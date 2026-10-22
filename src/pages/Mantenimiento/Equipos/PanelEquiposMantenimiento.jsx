@@ -1,4 +1,5 @@
 // PanelEquiposMantenimiento.jsx
+import useCan from "../../../hooks/useCan";
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -43,6 +44,7 @@ function getEquipoIcon(familia) {
 export default function PanelEquiposMantenimiento() {
     const nav = useNavigate();
     const authCtx = useContext(AuthCtx);
+  const can = useCan();
     const profile = authCtx?.profile || {};
     const authLoading = authCtx?.loading;
 
@@ -204,6 +206,10 @@ export default function PanelEquiposMantenimiento() {
     };
 
     const saveEquipo = async () => {
+        if (!can("equiposCrear")) {
+            setAddError("No tenés permiso para agregar equipos (Equipos · Agregar equipo).");
+            return;
+        }
         const tenantId = safe(profile?.tenantId);
         const company = safe(profile?.company);
         const uid = safe(auth.currentUser?.uid);

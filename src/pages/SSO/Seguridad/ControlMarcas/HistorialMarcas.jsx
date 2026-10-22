@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import useCan from "../../../../hooks/useCan";
 import { useNavigate } from "react-router-dom";
 import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
 import { ArrowLeft, FileSpreadsheet, History, Search } from "lucide-react";
@@ -244,6 +245,7 @@ async function fetchMarcasDeDias(dayKeys) {
 export default function HistorialMarcas() {
   const nav = useNavigate();
   const toast = useToast();
+  const can = useCan();
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
@@ -754,7 +756,7 @@ export default function HistorialMarcas() {
 
   const busy = loading || exporting;
   const showGroupHeaders = usuarioModo !== "usuario";
-  const puedeExportar =
+  const puedeExportar = can("segExportar") &&
     busquedaHecha && !loading && !exporting && !fechaError && !filtroPendiente;
 
   const renderMarcas = () => {

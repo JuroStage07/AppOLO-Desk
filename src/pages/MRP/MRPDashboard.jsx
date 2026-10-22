@@ -9,6 +9,7 @@
 //
 // REGLA DE NEGOCIO: `merma` es ubicación operativa y cuenta en el total global;
 // los `descartes` (ajustes negativos) NO son inventario y se reportan aparte.
+import useCan from "../../hooks/useCan";
 import { useMemo, useState } from "react";
 import {
   Boxes,
@@ -187,6 +188,7 @@ function MetricInline({ icon: Icon, label, value, accent }) {
 export default function MRPDashboard() {
   const { warehouseId, warehouse, company, bodegaNombre } = useMrpWorkspace();
   const toast = useToast();
+  const canExport = useCan()("mrpExportar");
   // Captura del instante de montaje (fuera del render) para la ventana de 7 días.
   const [mountedAt] = useState(() => Date.now());
   const [ubic, setUbic] = useState(null); // { location, label }
@@ -285,6 +287,10 @@ export default function MRPDashboard() {
   // Exporta el panorama del dashboard (KPIs, distribución, top y últimos
   // movimientos) a un Excel profesional con logo AppOLO Desk.
   const handleExport = async () => {
+    if (!canExport) {
+      toast.warning("No tenés permiso para exportar (MRP · Exportar Excel).");
+      return;
+    }
     if (exporting) return;
     setExporting(true);
     try {
@@ -394,7 +400,7 @@ export default function MRPDashboard() {
             {warehouse?.name ? (
               <Badge tone="accent">{warehouse.name}</Badge>
             ) : null}
-            {!loading && !error ? (
+            {!loading && !error && canExport ? (
               <GhostButton
                 icon={FileSpreadsheet}
                 onClick={handleExport}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import useCan from "../../../hooks/useCan";
 import { QrCode, ShieldCheck, XOctagon, Image as ImageIcon } from "lucide-react";
 import {
   Sheet,
@@ -42,6 +43,7 @@ export default function DetalleBoletaSheet({
   onChanged,
 }) {
   const toast = useToast();
+  const can = useCan();
   const [motivoOpen, setMotivoOpen] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [saving, setSaving] = useState(false);
@@ -85,6 +87,10 @@ export default function DetalleBoletaSheet({
   }, [open, boleta?.id]);
 
   async function handleRechazar() {
+    if (!can("boletasRechazar")) {
+      toast.warning("No tenés permiso: Boletas · Rechazar boleta.");
+      return;
+    }
     if (motivo.trim().length < MOTIVO_RECHAZO_MIN) {
       toast.info(`El motivo debe tener al menos ${MOTIVO_RECHAZO_MIN} caracteres.`);
       return;
@@ -191,7 +197,7 @@ export default function DetalleBoletaSheet({
           </PrimaryButton>
         ) : null}
 
-        {esPendiente && !motivoOpen ? (
+        {esPendiente && !motivoOpen && can("boletasRechazar") ? (
           <SecondaryButton
             icon={XOctagon}
             onClick={() => setMotivoOpen(true)}

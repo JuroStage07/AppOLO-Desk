@@ -1391,3 +1391,73 @@ exports.adminCreateUser = onCall({ region: "us-central1" }, async (req) => {
     emailError,
   };
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Roles de permisos (matriz permisos × roles, ver permRolesCore.js).
+// El permiso efectivo se materializa en profiles/{uid}.permisos, que es lo que
+// leen firestore.rules, Desk y la app móvil: ninguna de ellas cambia su forma
+// de leer permisos.
+// ─────────────────────────────────────────────────────────────────────────────
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { planProfileSync, computeEffective, hashPermisos, sameBoolMap, boolMap } = require("./permRolesCore");
+
+/** Recalcula el permiso efectivo de un perfil cuando cambia (rol, excepciones o permisos a mano). */
+exports.permRolesProfileSync = onDocumentWritten(
+  { document: "profiles/{uid}", region: "us-central1" },
+  async (event) => {
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    if (!after || !after.permRoleId) return; // modo legado: no se toca
+    const before = event.data?.before?.exists ? event.data.before.data() : null;
+
+    const db = getFirestore();
+    const roleSnap = await db.doc(`permission_roles/${after.permRoleId}`).get();
+    if (!roleSnap.exists) {
+      console.warn(`permRolesProfileSync: rol ${after.permRoleId} no existe (perfil ${event.params.uid}); no se cambia nada.`);
+      return;
+    }
+    const plan = planProfileSync({ before, after, rolePermisos: roleSnap.data().permisos || {} });
+    if (!plan) return;
+    await event.data.after.ref.update({
+      permisos: plan.permisos,
+      permisosOverrides: plan.permisosOverrides,
+      permisosSync: { hash: plan.hash, roleId: after.permRoleId, at: FieldValue.serverTimestamp() },
+    });
+  }
+);
+
+/** Cuando cambia un rol, propaga el nuevo efectivo a todos sus usuarios (conservando excepciones). */
+exports.permRolesRoleSync = onDocumentWritten(
+  { document: "permission_roles/{roleId}", region: "us-central1" },
+  async (event) => {
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    const before = event.data?.before?.exists ? event.data.before.data() : null;
+    if (!after) return; // rol borrado: los perfiles conservan su último efectivo
+    if (before && sameBoolMap(before.permisos, after.permisos)) return; // solo cambió nombre/descripción
+
+    const roleId = event.params.roleId;
+    const db = getFirestore();
+    const snap = await db.collection("profiles").where("permRoleId", "==", roleId).get();
+    let batch = db.batch();
+    let pending = 0;
+    let changed = 0;
+    for (const doc of snap.docs) {
+      const d = doc.data();
+      const permisos = computeEffective(after.permisos || {}, boolMap(d.permisosOverrides));
+      const hash = hashPermisos(permisos);
+      if (sameBoolMap(permisos, d.permisos) && d.permisosSync?.hash === hash) continue;
+      batch.update(doc.ref, {
+        permisos,
+        permisosSync: { hash, roleId, at: FieldValue.serverTimestamp() },
+      });
+      pending += 1;
+      changed += 1;
+      if (pending >= 400) {
+        await batch.commit();
+        batch = db.batch();
+        pending = 0;
+      }
+    }
+    if (pending) await batch.commit();
+    console.log(`permRolesRoleSync: rol ${roleId} → ${changed}/${snap.size} perfiles actualizados.`);
+  }
+);

@@ -1,4 +1,5 @@
 // screens/aperturas/AperturaDetalle.jsx
+import useCan from "../../../../hooks/useCan";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { doc, updateDoc, deleteDoc, serverTimestamp, addDoc, collection } from "firebase/firestore";
@@ -445,6 +446,7 @@ export default function AperturaDetalle() {
   const confirm = useConfirm();
   const { id } = useParams(); // /seguridad/aperturas/detalle/:id
   const authCtx = useContext(AuthCtx);
+  const can = useCan();
   const { profile = {}, epaAdmin, user: ctxUser } = authCtx || {};
   const user = ctxUser ?? auth.currentUser;
 
@@ -595,6 +597,10 @@ export default function AperturaDetalle() {
 
   /* ===================== Actions (Firestore) ===================== */
   const iniciarApertura = async () => {
+    if (!can("segAperturaGestionar")) {
+      toast.warning("No tenés permiso: Seguridad · Iniciar / finalizar apertura.");
+      return;
+    }
     if (!apertura?.id) return;
     if (apertura?.tiempoIniciada) {
       toast.warning("Esta apertura ya fue iniciada.");
@@ -744,6 +750,10 @@ export default function AperturaDetalle() {
   };
 
   const openReject = () => {
+    if (!can("segAperturaRechazar")) {
+      toast.warning("No tenés permiso: Seguridad · Rechazar apertura.");
+      return;
+    }
     setRejectMotivo(null);
     setRejectOtroTxt("");
     setRejectOpen(true);
@@ -846,6 +856,10 @@ export default function AperturaDetalle() {
   };
 
   const downloadCurrentPhoto = async () => {
+    if (!can("segExportar")) {
+      toast.warning("No tenés permiso: Seguridad · Descargar fotos.");
+      return;
+    }
     const url = photoViewerCurrentUrl;
     if (!url) return;
     const base = `registro-fotografico-${photoViewerSafeIndex + 1}`;
@@ -888,6 +902,10 @@ export default function AperturaDetalle() {
   };
 
   const downloadFacturaPhoto = async () => {
+    if (!can("segExportar")) {
+      toast.warning("No tenés permiso: Seguridad · Descargar fotos.");
+      return;
+    }
     const url = fotoFacturaUrl;
     if (!url) return;
     const base = "factura";
@@ -919,6 +937,10 @@ export default function AperturaDetalle() {
   };
 
   const downloadAllRfPhotos = async () => {
+    if (!can("segExportar")) {
+      toast.warning("No tenés permiso: Seguridad · Descargar fotos.");
+      return;
+    }
     if (!rfUrls.length || rfDownloadAllBusy || !apertura) return;
     const folderName = sanitizeFolderNameForZip(apertura.nombre || apertura.id);
     setRfDownloadAllBusy(true);

@@ -1,4 +1,5 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import useCan from "../../../hooks/useCan";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -308,6 +309,7 @@ function groupByEmployee(records) {
 }
 
 export default function OvertimeManagerApprovals() {
+  const canExport = useCan()("heExportar");
   const nav = useNavigate();
   const { user: authUser, role } = useContext(AuthCtx);
   const user = authUser || auth.currentUser;
@@ -443,6 +445,7 @@ export default function OvertimeManagerApprovals() {
       : "Todos";
 
   const handleExport = async () => {
+    if (!canExport) return;
     setExporting(true);
     setError("");
     try {
@@ -656,7 +659,7 @@ export default function OvertimeManagerApprovals() {
               size="sm"
               icon={FileDown}
               loading={exporting}
-              disabled={exporting || loading || filteredRecords.length === 0}
+              disabled={!canExport || exporting || loading || filteredRecords.length === 0}
               onClick={handleExport}
             >
               Descargar Excel

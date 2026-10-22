@@ -12,6 +12,7 @@ import {
   UserCheck,
   Users,
   X,
+  Grid3x3,
 } from "lucide-react";
 import {
   Badge,
@@ -270,6 +271,17 @@ export default function AdministracionHub() {
         roles: ["dev"],
         allowedRoles: ["administrativo", "dev"],
         anyPerms: ["gestionUsuarios"],
+        adminOverride: false,
+      },
+      {
+        key: "permisos",
+        title: "Matriz de permisos",
+        desc: "Roles de permisos y permisos por botón para Desk y la app móvil",
+        path: "/administracion/permisos",
+        icon: Grid3x3,
+        tag: "Solo dev",
+        roles: ["dev"],
+        allowedRoles: ["dev"],
         adminOverride: false,
       },
       {

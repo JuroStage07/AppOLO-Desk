@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from "react";
+import useCan from "../../hooks/useCan";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, AlertTriangle, Loader2, Save, Scale, X, Hash, ChevronDown, CheckCircle2 } from "lucide-react";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -25,6 +26,7 @@ const WARN_BORDER = "rgba(217,119,6,0.35)";
 export default function RegistrarTarimas() {
   const nav = useNavigate();
   const toast = useToast();
+  const can = useCan();
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
 
@@ -102,6 +104,10 @@ export default function RegistrarTarimas() {
   };
 
   const guardar = async () => {
+    if (!can("pesajeRegistrar")) {
+      toast.warning("No tenés permiso: Pesaje · Registrar pesaje.");
+      return;
+    }
     const e = {};
     if (!numero.trim()) e.numero = "Ingresá un número.";
     const pesoNum = Number(peso);

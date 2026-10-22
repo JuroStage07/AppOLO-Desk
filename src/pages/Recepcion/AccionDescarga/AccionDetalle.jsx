@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../../firebase";
 import { AuthCtx } from "../../../auth/AuthProvider";
+import useCan from "../../../hooks/useCan";
 import { isInUserScope } from "../../../utils/dataScope";
 import { Brand, Topbar, useToast, useConfirm } from "../../../components/ui";
 import { ACCENT, ACCENT_SOFT, SLATE } from "../../../styles/theme";
@@ -191,12 +192,12 @@ export default function AccionDetalle() {
   const confirm = useConfirm();
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
-  const role = authCtx?.role || null;
 
   // Flag de control: solo perfiles admin (administrativo) y dev pueden ver y
   // ejecutar las acciones de la descarga (iniciar / finalizar / etc.). El resto
   // de los perfiles ve el detalle en modo solo lectura.
-  const canControlDescarga = role === "administrativo" || role === "dev";
+  const can = useCan();
+  const canControlDescarga = can("recepcionDescargaDesk");
 
   // Ruta esperada: /recepcion/accion-descarga/:accionId
   const accionId = params?.accionId || null;

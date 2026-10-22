@@ -53,6 +53,7 @@ import {
 import { AuthCtx } from "../../../auth/AuthProvider";
 import { canAccessByRoleOrPermission } from "../../../config/permissions";
 import useIsMobile from "../../../hooks/useIsMobile";
+import useCan from "../../../hooks/useCan";
 import { useDespachoData } from "./hooks/useDespachoData";
 import { useDespachoDetail } from "./hooks/useDespachoDetail";
 import { filterDespachos, clearFilters } from "./lib/despachoFilters";
@@ -141,6 +142,7 @@ export default function DespachoBoardPage() {
   const hasAccess = hasPermission && hasScope;
 
   const nav = useNavigate();
+  const can = useCan();
 
   // Responsividad kanban ↔ acordeón sobre el mismo estado cargado (2.8).
   const isMobile = useIsMobile(MOBILE_MAX_WIDTH);
@@ -334,12 +336,12 @@ export default function DespachoBoardPage() {
           onClick={() => nav("/despacho")}
         />
         <Topbar.Right>
-          {hasAccess ? (
+          {hasAccess && can("despachoCargaRealtime") ? (
             <PrimaryButton icon={Boxes} onClick={() => setCargasOpen(true)}>
               Carga realtime
             </PrimaryButton>
           ) : null}
-          {hasAccess ? (
+          {hasAccess && can("despachoReporte") ? (
             <SecondaryButton icon={FileSpreadsheet} onClick={() => nav("/despacho/reporte")}>
               Reporte
             </SecondaryButton>
@@ -383,6 +385,7 @@ export default function DespachoBoardPage() {
         loading={detail.loading}
         error={detail.error}
         onReloadHistorial={detail.reload}
+        enableExport={can("despachoExportar")}
       />
 
       {/* Modal de cargas en tiempo real (grid de contenedor por despacho). */}

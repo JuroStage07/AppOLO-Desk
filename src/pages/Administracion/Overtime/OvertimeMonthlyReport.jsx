@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import useCan from "../../../hooks/useCan";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -135,6 +136,7 @@ function groupByEmployeeAndMB(records) {
 }
 
 export default function OvertimeMonthlyReport() {
+  const canExport = useCan()("heExportar");
   const nav = useNavigate();
 
   const [records, setRecords] = useState([]);
@@ -201,6 +203,7 @@ export default function OvertimeMonthlyReport() {
       : "Todos";
 
   const handleExport = async () => {
+    if (!canExport) return;
     setExporting(true);
     setError("");
     try {
@@ -309,7 +312,7 @@ export default function OvertimeMonthlyReport() {
               size="sm"
               icon={FileDown}
               loading={exporting}
-              disabled={exporting || loading || rows.length === 0}
+              disabled={!canExport || exporting || loading || rows.length === 0}
               onClick={handleExport}
             >
               Descargar Excel

@@ -1,6 +1,7 @@
 // MRP Tarimas — Panel Inventario. Dos vistas por URL: Artículos (pivote por
 // ubicación) e Insumos (stock plano). Ambas tablas usan MrpDataTable (filtros
 // Excel + reorden por arrastre + primera columna fija).
+import useCan from "../../hooks/useCan";
 import React, { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Package, Plus, Minus, ArrowLeftRight, FlaskConical, Store } from "lucide-react";
@@ -441,6 +442,8 @@ function ArticulosInventario() {
 // sin ubicaciones). Se fija por tenant/company (no depende del almacén). Permite
 // ajustar el stock (Ingreso/Salida); el ajuste queda en el Registro de eventos.
 function InsumosInventario() {
+  // «MRP · Consumir / entrada-salida de insumos» (por defecto, quien ve insumos).
+  const canMovInsumos = useCan()("mrpInsumosMovimientos");
   const { insumos, loading, error, refetch, adjust, adjusting, consume, consuming } =
     useMrpInsumos({ includeInactive: false });
 
@@ -591,8 +594,8 @@ function InsumosInventario() {
             minWidth={640}
             exportTitle="Inventario de insumos"
             exportFileName="inventario_insumos"
-            actionsLabel="Acciones"
-            renderActions={(i) => (
+            actionsLabel={canMovInsumos ? "Acciones" : undefined}
+            renderActions={canMovInsumos ? (i) => (
               <div style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
                 <GhostButton
                   size="sm"
@@ -611,7 +614,7 @@ function InsumosInventario() {
                   Ajustar
                 </GhostButton>
               </div>
-            )}
+            ) : undefined}
           />
         </Card>
       )}

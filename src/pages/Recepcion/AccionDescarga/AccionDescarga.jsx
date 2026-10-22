@@ -51,6 +51,7 @@ import {
 } from "firebase/firestore";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { AuthCtx } from "../../../auth/AuthProvider";
+import useCan from "../../../hooks/useCan";
 import { auth, db } from "../../../firebase";
 import { filterByUserScope } from "../../../utils/dataScope";
 import imgAccionDescarga from "../../../assets/accionDescarga.png";
@@ -252,7 +253,9 @@ export default function AccionDescarga() {
   const authCtx = useContext(AuthCtx);
   const profile = authCtx?.profile || {};
   const authLoading = authCtx?.loading;
-  const isDev = authCtx?.role === "dev";
+  const can = useCan();
+  // Eliminar acciones de descarga: «Recepción · Eliminar» (por defecto solo dev).
+  const isDev = can("recepcionEliminar");
   const toast = useToast();
 
   const [hovered, setHovered] = useState(null);

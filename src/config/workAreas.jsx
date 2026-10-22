@@ -245,6 +245,7 @@ const RAW_AREAS = [
     adminOnly: true,
     modules: [
       { label: "Usuarios", path: "/administracion/usuarios", roles: ["dev"], allowedRoles: ["administrativo", "dev"], anyPerms: ["gestionUsuarios"], adminOverride: false },
+      { label: "Matriz de permisos", path: "/administracion/permisos", roles: ["dev"], allowedRoles: ["dev"], adminOverride: false },
       {
         label: "Horas Extra",
         path: "/horas-extra",
