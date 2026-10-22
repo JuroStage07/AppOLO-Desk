@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Lock, Package, Truck } from "lucide-react";
+import { ArrowLeft, FileSpreadsheet, Lock, Package, Truck } from "lucide-react";
 import {
   Badge,
   Brand,
@@ -31,6 +31,14 @@ export default function Despacho() {
         path: "/despacho/in-progress",
         icon: Package,
         tag: "Operación",
+      },
+      {
+        key: "reporte",
+        title: "Reporte de despachos",
+        desc: "Tabla completa por periodo: tarimas sencillas, dobles y total por despacho y por tienda. Descarga en Excel.",
+        path: "/despacho/reporte",
+        icon: FileSpreadsheet,
+        tag: "Reporte",
       },
     ],
     []

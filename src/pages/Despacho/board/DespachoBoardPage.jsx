@@ -29,7 +29,7 @@
 
 import React, { useContext, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Boxes, Inbox, LayoutGrid, Lock, SearchX, SlidersHorizontal, Truck } from "lucide-react";
+import { ArrowLeft, Boxes, FileSpreadsheet, Inbox, LayoutGrid, Lock, SearchX, SlidersHorizontal, Truck } from "lucide-react";
 import {
   Shell,
   Topbar,
@@ -338,6 +338,11 @@ export default function DespachoBoardPage() {
             <PrimaryButton icon={Boxes} onClick={() => setCargasOpen(true)}>
               Carga realtime
             </PrimaryButton>
+          ) : null}
+          {hasAccess ? (
+            <SecondaryButton icon={FileSpreadsheet} onClick={() => nav("/despacho/reporte")}>
+              Reporte
+            </SecondaryButton>
           ) : null}
           <GhostButton icon={ArrowLeft} onClick={() => nav("/despacho")}>
             Volver

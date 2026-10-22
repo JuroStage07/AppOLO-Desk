@@ -22,6 +22,7 @@ import DocumentacionPage from "./pages/Documentacion/DocumentacionPage";
 //Despacho
 import Despacho from "./pages/Despacho/Despacho";
 import DespachoBoardPage from "./pages/Despacho/board/DespachoBoardPage";
+import DespachoReportePage from "./pages/Despacho/reporte/DespachoReportePage";
 
 //SaludOcupacional
 import SSOHub from "./pages/SSO/Seguridad/S.S.OHub";
@@ -220,6 +221,14 @@ export default function App() {
             element={
               <PrivateRoute>
                 <DespachoBoardPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/despacho/reporte"
+            element={
+              <PrivateRoute>
+                <DespachoReportePage />
               </PrivateRoute>
             }
           />

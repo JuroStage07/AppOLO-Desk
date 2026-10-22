@@ -71,6 +71,7 @@ const RAW_AREAS = [
     blockedDesc: "Acceso al módulo deshabilitado temporalmente.",
     modules: [
       { label: "En progreso", path: "/despacho/in-progress" },
+      { label: "Reporte de despachos", path: "/despacho/reporte" },
     ],
   },
   {
