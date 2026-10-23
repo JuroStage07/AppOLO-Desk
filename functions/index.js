@@ -1461,3 +1461,64 @@ exports.permRolesRoleSync = onDocumentWritten(
     console.log(`permRolesRoleSync: rol ${roleId} → ${changed}/${snap.size} perfiles actualizados.`);
   }
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Estado de reservas SRO desde las descargas de AppOLO (ver sroSyncCore.js).
+// La app móvil ya llama a SRO; esto repite el cambio desde el servidor por si
+// esa llamada falló, y un barrido corrige lo que haya quedado desfasado.
+// ─────────────────────────────────────────────────────────────────────────────
+const { targetCodeFor, createSroClient, syncAcciones } = require("./sroSyncCore");
+
+function sroClientFromEnv() {
+  const url = safe(process.env.SRO_SUPABASE_URL);
+  const anonKey = safe(process.env.SRO_SUPABASE_ANON_KEY);
+  const email = safe(process.env.SRO_USER_EMAIL);
+  const password = safe(process.env.SRO_USER_PASSWORD);
+  if (!url || !anonKey || !email || !password) return null;
+  return createSroClient({ url, anonKey, email, password });
+}
+
+function logSroResults(tag, results) {
+  for (const r of results) {
+    if (r.result === "actualizada") console.log(`${tag}: reserva ${r.reservaId} ${r.from} → ${r.to} (descarga ${r.accionId})`);
+    else if (r.result === "error") console.warn(`${tag}: reserva ${r.reservaId} ${r.from} → ${r.to} falló (${r.http}) ${r.error}`);
+    else if (r.result === "no_existe") console.warn(`${tag}: reserva ${r.reservaId} no existe en SRO (descarga ${r.accionId})`);
+  }
+}
+
+/** Al iniciar / finalizar una descarga con reserva, asegura el estado en SRO. */
+exports.sroSyncAccionDescarga = onDocumentWritten(
+  { document: "accion_descarga/{accionId}", region: "us-central1" },
+  async (event) => {
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    if (!after?.reservaId) return;
+    const before = event.data?.before?.exists ? event.data.before.data() : null;
+    const target = targetCodeFor(after);
+    if (!target || (before && targetCodeFor(before) === target && before.reservaId === after.reservaId)) return;
+
+    const client = sroClientFromEnv();
+    if (!client) return console.warn("sroSyncAccionDescarga: faltan SRO_* en el entorno; no se sincroniza.");
+    try {
+      logSroResults("sroSyncAccionDescarga", await syncAcciones(client, [{ id: event.params.accionId, ...after }]));
+    } catch (e) {
+      // Sin reintento automático: el barrido de cada 10 minutos lo vuelve a intentar.
+      console.error(`sroSyncAccionDescarga: ${event.params.accionId}`, e?.message || e);
+    }
+  }
+);
+
+/** Cada 10 minutos: descargas de los últimos 3 días cuya reserva SRO quedó atrás. */
+exports.sroSyncBarrido = onSchedule(
+  { schedule: "every 10 minutes", region: "us-central1", timeZone: "America/Costa_Rica" },
+  async () => {
+    const client = sroClientFromEnv();
+    if (!client) return console.warn("sroSyncBarrido: faltan SRO_* en el entorno; no se sincroniza.");
+    const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const snap = await getFirestore().collection("accion_descarga").where("creadoAt", ">=", since).get();
+    const acciones = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((a) => targetCodeFor(a));
+    const results = await syncAcciones(client, acciones);
+    logSroResults("sroSyncBarrido", results);
+    const n = (k) => results.filter((r) => r.result === k).length;
+    console.log(`sroSyncBarrido: ${acciones.length} descargas, ${n("actualizada")} actualizadas, ${n("error")} con error, ${n("al_dia")} al día.`);
+  }
+);
