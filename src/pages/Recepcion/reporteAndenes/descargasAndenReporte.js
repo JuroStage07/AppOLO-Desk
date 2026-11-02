@@ -123,7 +123,8 @@ function finish({ proveedorSet, ...r }) {
   return {
     ...r,
     proveedores: proveedorSet.size,
-    promedioMin: r.finalizadas ? r.tiempoMs / r.finalizadas / 60000 : 0,
+    // Promedio por descarga finalizada, en ms (se muestra en horas, h:mm).
+    promedioMs: r.finalizadas ? r.tiempoMs / r.finalizadas : 0,
     // Rendimiento: solo descargas finalizadas (las únicas con tiempo medido).
     bultosHora: horas > 0 ? r.bultosFinalizadas / horas : 0,
   };
@@ -131,7 +132,7 @@ function finish({ proveedorSet, ...r }) {
 
 /**
  * Agrupa por andén (ascendente; "Sin andén" al final).
- * @returns {Array<{ anden: number|null, descargas, finalizadas, enProceso, pendientes, bultos, tiempoMs, proveedores, promedioMin, bultosHora }>}
+ * @returns {Array<{ anden: number|null, descargas, finalizadas, enProceso, pendientes, bultos, tiempoMs, proveedores, promedioMs, bultosHora }>}
  */
 export function resumenPorAnden(rows) {
   const map = new Map();

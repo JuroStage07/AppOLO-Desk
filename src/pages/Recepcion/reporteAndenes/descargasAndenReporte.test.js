@@ -16,9 +16,9 @@ describe("reporte de descargas por andén", () => {
   it("'02' y '2' son el mismo andén; sin andén al final", () => {
     const r = resumenPorAnden(rows);
     expect(r.map((x) => x.anden)).toEqual([2, 30, null]);
-    expect(r[0]).toMatchObject({ descargas: 3, finalizadas: 2, pendientes: 1, bultos: 1149, bultosFinalizadas: 150, tiempoMs: 5400000, proveedores: 2, promedioMin: 45 });
+    expect(r[0]).toMatchObject({ descargas: 3, finalizadas: 2, pendientes: 1, bultos: 1149, bultosFinalizadas: 150, tiempoMs: 5400000, proveedores: 2, promedioMs: 2700000 });
     expect(r[0].bultosHora).toBeCloseTo(100);
-    expect(r[1]).toMatchObject({ descargas: 1, enProceso: 1, finalizadas: 0, promedioMin: 0 });
+    expect(r[1]).toMatchObject({ descargas: 1, enProceso: 1, finalizadas: 0, promedioMs: 0 });
     expect(r[2]).toMatchObject({ descargas: 1, pendientes: 1 });
   });
 

@@ -293,7 +293,7 @@ export default function ReporteAndenesPage() {
               <KpiCard label="Bultos" value={fmtInt(resumen.bultos)} icon={Package} accent />
               <KpiCard label="Andenes" value={fmtInt(resumen.andenes)} hint="Con descargas" icon={Warehouse} />
               <KpiCard label="Tiempo de descarga" value={fmtDuracion(resumen.tiempoMs)} hint="h:mm, finalizadas" icon={Clock} />
-              <KpiCard label="Promedio por descarga" value={`${fmtDec(resumen.promedioMin)} min`} icon={Clock} />
+              <KpiCard label="Promedio por descarga" value={fmtDuracion(resumen.promedioMs)} hint="h:mm" icon={Clock} />
               <KpiCard label="Bultos por hora" value={fmtDec(resumen.bultosHora)} hint="Finalizadas" icon={Gauge} />
             </KpiGrid>
 
@@ -318,7 +318,7 @@ export default function ReporteAndenesPage() {
                         <th style={styles.thRight}>Pendientes</th>
                         <th style={styles.thRight}>Bultos</th>
                         <th style={styles.thRight}>Tiempo (h:mm)</th>
-                        <th style={styles.thRight}>Promedio (min)</th>
+                        <th style={styles.thRight}>Promedio (h:mm)</th>
                         <th style={styles.thRight}>Bultos/hora</th>
                         <th style={styles.thRight}>Proveedores</th>
                         <th style={styles.thRight}>% descargas</th>
@@ -334,7 +334,7 @@ export default function ReporteAndenesPage() {
                           <td style={styles.tdRight}>{fmtInt(a.pendientes)}</td>
                           <td style={styles.tdRight}>{fmtInt(a.bultos)}</td>
                           <td style={styles.tdRight}>{fmtDuracion(a.tiempoMs)}</td>
-                          <td style={styles.tdRight}>{fmtDec(a.promedioMin)}</td>
+                          <td style={styles.tdRight}>{fmtDuracion(a.promedioMs)}</td>
                           <td style={styles.tdRight}>{fmtDec(a.bultosHora)}</td>
                           <td style={styles.tdRight}>{fmtInt(a.proveedores)}</td>
                           <td style={styles.tdRight}>
@@ -350,7 +350,7 @@ export default function ReporteAndenesPage() {
                         <td style={styles.tdTotalRight}>{fmtInt(resumen.pendientes)}</td>
                         <td style={styles.tdTotalRight}>{fmtInt(resumen.bultos)}</td>
                         <td style={styles.tdTotalRight}>{fmtDuracion(resumen.tiempoMs)}</td>
-                        <td style={styles.tdTotalRight}>{fmtDec(resumen.promedioMin)}</td>
+                        <td style={styles.tdTotalRight}>{fmtDuracion(resumen.promedioMs)}</td>
                         <td style={styles.tdTotalRight}>{fmtDec(resumen.bultosHora)}</td>
                         <td style={styles.tdTotalRight}>{fmtInt(resumen.proveedores)}</td>
                         <td style={styles.tdTotalRight}>100%</td>

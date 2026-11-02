@@ -22,6 +22,8 @@ const FONT = "Arial";
 const thin = (argb) => ({ style: "thin", color: { argb } });
 const hair = { style: "hair", color: { argb: LINE } };
 const BOX_HAIR = { top: hair, bottom: hair, left: hair, right: hair };
+const HORAS = "[h]:mm"; // tiempos en horas (fracción de día en Excel)
+const MS_DIA = 86400000;
 
 /** exceljs escribe en UTC: se pasa la hora local "como UTC" para que Excel la muestre igual. */
 function excelDate(value, { dateOnly = false } = {}) {
@@ -105,8 +107,8 @@ const DETALLE_COLS = [
   { header: "Bultos", width: 10, numFmt: "#,##0", align: "right" }, // H
   { header: "Inicio", width: 17, numFmt: "dd/mm/yyyy hh:mm", align: "center" }, // I
   { header: "Fin", width: 17, numFmt: "dd/mm/yyyy hh:mm", align: "center" }, // J
-  { header: "Duración (min)", width: 11, numFmt: "#,##0.0", align: "right" }, // K
-  { header: "Pausas (min)", width: 10, numFmt: "#,##0.0", align: "right" }, // L
+  { header: "Duración (h:mm)", width: 11, numFmt: HORAS, align: "right" }, // K
+  { header: "Pausas (h:mm)", width: 10, numFmt: HORAS, align: "right" }, // L
   { header: "Descargó", width: 22 }, // M
   { header: "Registró", width: 22 }, // N
   { header: "Bodega", width: 14 }, // O
@@ -159,8 +161,8 @@ export async function downloadReporteDescargasAnden({ descargas, meta }) {
       Number(a.cantidadBultos) || 0,
       excelDate(a.startedAt),
       excelDate(a.completedAt),
-      dur ? dur / 60000 : "",
-      Number(a.pausedTotalMs) ? Number(a.pausedTotalMs) / 60000 : 0,
+      dur ? dur / MS_DIA : "",
+      Number(a.pausedTotalMs) ? Number(a.pausedTotalMs) / MS_DIA : 0,
       a.starter || "",
       a.creadoPorNombre || "",
       a.bodegaNombre || a.bodegaId || "",
@@ -184,12 +186,12 @@ export async function downloadReporteDescargasAnden({ descargas, meta }) {
   }
   styleTotalRow(tot, DETALLE_COLS.length);
   for (const ci of [4, 8]) tot.getCell(ci).numFmt = "#,##0";
-  for (const ci of [11, 12]) tot.getCell(ci).numFmt = "#,##0.0";
+  for (const ci of [11, 12]) tot.getCell(ci).numFmt = HORAS;
   wsDet.autoFilter = { from: { row: 1, column: 1 }, to: { row: last, column: DETALLE_COLS.length } };
 
   // ── Por andén ─────────────────────────────────────────────────────────
   const andenes = resumenPorAnden(rows);
-  const COLS = ["Andén", "Descargas", "Finalizadas", "Bultos", "Minutos de descarga", "Promedio (min)", "Bultos por hora", "% de descargas"];
+  const COLS = ["Andén", "Descargas", "Finalizadas", "Bultos", "Tiempo de descarga (h:mm)", "Promedio por descarga (h:mm)", "Bultos por hora", "% de descargas"];
   wsAnden.columns = [{ width: 14 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 14 }, { width: 13 }, { width: 13 }, { width: 13 }];
   titleBand(wsAnden, "Descargas por andén", `Periodo: ${periodo}`, COLS.length);
   const aHead = wsAnden.getRow(4);
@@ -209,11 +211,12 @@ export async function downloadReporteDescargasAnden({ descargas, meta }) {
     row.getCell(4).value = { formula: `SUMIFS(${rng("H")},${rng("C")},${crit})`, result: x.bultos };
     row.getCell(5).value = { formula: `SUMIFS(${rng("K")},${rng("C")},${crit},${rng("G")},${fin})` };
     row.getCell(6).value = { formula: `IFERROR(E${r}/C${r},0)` };
-    row.getCell(7).value = { formula: `IFERROR(SUMIFS(${rng("H")},${rng("C")},${crit},${rng("G")},${fin})/(E${r}/60),0)` };
+    row.getCell(7).value = { formula: `IFERROR(SUMIFS(${rng("H")},${rng("C")},${crit},${rng("G")},${fin})/(E${r}*24),0)` };
     row.getCell(8).value = { formula: `IFERROR(B${r}/B$${aLast + 1},0)` };
     styleDataCell(row.getCell(1), { zebra: z, align: "center", bold: true });
-    for (const ci of [2, 3, 4, 5]) styleDataCell(row.getCell(ci), { zebra: z, align: "right", numFmt: "#,##0", bold: ci === 2 });
-    styleDataCell(row.getCell(6), { zebra: z, align: "right", numFmt: "0.0" });
+    for (const ci of [2, 3, 4]) styleDataCell(row.getCell(ci), { zebra: z, align: "right", numFmt: "#,##0", bold: ci === 2 });
+    styleDataCell(row.getCell(5), { zebra: z, align: "right", numFmt: HORAS });
+    styleDataCell(row.getCell(6), { zebra: z, align: "right", numFmt: HORAS });
     styleDataCell(row.getCell(7), { zebra: z, align: "right", numFmt: "#,##0.0" });
     styleDataCell(row.getCell(8), { zebra: z, align: "right", numFmt: "0.0%" });
   });
@@ -224,11 +227,12 @@ export async function downloadReporteDescargasAnden({ descargas, meta }) {
     aTot.getCell(ci).value = { formula: `SUM(${col}${aFirst}:${col}${aLast})` };
   }
   aTot.getCell(6).value = { formula: `IFERROR(E${T}/C${T},0)` };
-  aTot.getCell(7).value = { formula: `IFERROR(SUMIFS(${rng("H")},${rng("G")},${fin})/(E${T}/60),0)` };
+  aTot.getCell(7).value = { formula: `IFERROR(SUMIFS(${rng("H")},${rng("G")},${fin})/(E${T}*24),0)` };
   aTot.getCell(8).value = { formula: `IFERROR(B${T}/B${T},0)` };
   styleTotalRow(aTot, COLS.length);
-  for (const ci of [2, 3, 4, 5]) aTot.getCell(ci).numFmt = "#,##0";
-  aTot.getCell(6).numFmt = "0.0";
+  for (const ci of [2, 3, 4]) aTot.getCell(ci).numFmt = "#,##0";
+  aTot.getCell(5).numFmt = HORAS;
+  aTot.getCell(6).numFmt = HORAS;
   aTot.getCell(7).numFmt = "#,##0.0";
   aTot.getCell(8).numFmt = "0.0%";
   wsAnden.views = [{ state: "frozen", ySplit: 4, showGridLines: false }];
@@ -263,9 +267,9 @@ export async function downloadReporteDescargasAnden({ descargas, meta }) {
     ["Descargas", `COUNTA(${rng("D")})`, "#,##0"],
     ["Descargas finalizadas", `COUNTIFS(${rng("G")},${fin})`, "#,##0"],
     ["Bultos", `SUM(${rng("H")})`, "#,##0"],
-    ["Minutos de descarga (finalizadas)", `SUM(${rng("K")})`, "#,##0"],
-    ["Promedio por descarga (min)", `IFERROR(SUM(${rng("K")})/COUNTIFS(${rng("G")},${fin}),0)`, "0.0"],
-    ["Bultos por hora (finalizadas)", `IFERROR(SUMIFS(${rng("H")},${rng("G")},${fin})/(SUM(${rng("K")})/60),0)`, "#,##0.0"],
+    ["Tiempo de descarga, finalizadas (h:mm)", `SUM(${rng("K")})`, HORAS],
+    ["Promedio por descarga (h:mm)", `IFERROR(SUM(${rng("K")})/COUNTIFS(${rng("G")},${fin}),0)`, HORAS],
+    ["Bultos por hora (finalizadas)", `IFERROR(SUMIFS(${rng("H")},${rng("G")},${fin})/(SUM(${rng("K")})*24),0)`, "#,##0.0"],
     ["Andenes con descargas", `COUNTA('Por andén'!$A$${aFirst}:$A$${aLast})`, "#,##0"],
   ];
   kpis.forEach(([label, formula, fmt], i) => {
