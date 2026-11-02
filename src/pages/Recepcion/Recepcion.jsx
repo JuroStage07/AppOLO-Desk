@@ -8,6 +8,7 @@ import {
   PackageCheck,
   PackageOpen,
   Truck,
+  Warehouse,
 } from "lucide-react";
 import {
   Badge,
@@ -75,6 +76,17 @@ export default function Recepcion() {
         tone: "accent",
         icon: PackageCheck,
         tag: "Dashboard",
+        show: true,
+      },
+      {
+        key: "reporte-andenes",
+        title: "Reporte por andén",
+        desc: "Descargas, bultos y tiempos por andén o rangos de andenes",
+        path: "/recepcion/reporte-andenes",
+        anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"],
+        tone: "accent",
+        icon: Warehouse,
+        tag: "Reporte",
         show: true,
       },
       {

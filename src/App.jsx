@@ -55,6 +55,7 @@ import AccionDescarga from "./pages/Recepcion/AccionDescarga/AccionDescarga";
 import AccionDetalle from "./pages/Recepcion/AccionDescarga/AccionDetalle";
 import MetricasDescarga from "./pages/Recepcion/MetricasDescarga";
 import MetricasRecepcion from "./pages/Recepcion/MetricasRecepcion";
+import ReporteAndenesPage from "./pages/Recepcion/reporteAndenes/ReporteAndenesPage";
 
 import OvertimeApprovals from "./pages/Administracion/Overtime/OvertimeApprovals";
 import OvertimeManagerApprovals from "./pages/Administracion/Overtime/OvertimeManagerApprovals";
@@ -601,6 +602,15 @@ export default function App() {
             element={
               <PrivateRoute>
                 <MetricasRecepcion />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/recepcion/reporte-andenes"
+            element={
+              <PrivateRoute>
+                <ReporteAndenesPage />
               </PrivateRoute>
             }
           />

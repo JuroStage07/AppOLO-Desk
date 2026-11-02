@@ -3,6 +3,7 @@
 // Hojas:
 //   • Resumen     — encabezado de marca, metadatos y KPIs (fórmulas sobre «Despachos»).
 //   • Por tienda  — despachos y tarimas por tienda (COUNTIFS / SUMIFS) + total.
+//   • Por andén   — despachos y tarimas por andén (número de la puerta) + total.
 //   • Por día     — despachos y tarimas por día (COUNTIFS / SUMIFS) + total.
 //   • Despachos   — una fila por despacho con todos los campos, autofiltro,
 //                   paneles congelados y fila de totales con SUBTOTAL (respeta
@@ -10,7 +11,8 @@
 // Los totales son fórmulas: si alguien edita o filtra, se recalculan.
 
 import { labelFor } from "../board/lib/mapaEstados.js";
-import { resumenPorDia, resumenPorTienda, tiendaKey } from "./despachoReporte.js";
+import { andenKey, andenLabel } from "../../../utils/andenes.js";
+import { resumenPorAnden, resumenPorDia, resumenPorTienda, tiendaKey } from "./despachoReporte.js";
 
 const BRAND = "FF089F8A";
 const BRAND_DARK = "FF067A6B";
@@ -139,6 +141,8 @@ const DETALLE_COLS = [
   { header: "Traslado MRP", width: 14 },
   { header: "Motivo de estado", width: 24 },
   { header: "Notas", width: 40 },
+  // Al final para no mover las letras que usan las fórmulas de las otras hojas.
+  { header: "Andén", width: 8, numFmt: "0", align: "center" },
 ];
 
 /**
@@ -167,9 +171,10 @@ export async function downloadReporteDespachos({ despachos, choferes, catalogo, 
   const rng = (col) => `Despachos!$${col}$${first}:$${col}$${last}`;
   const periodo = meta.desde === meta.hasta ? meta.desde : `${meta.desde} al ${meta.hasta}`;
 
-  // Orden de hojas: Resumen, Por tienda, Por día, Despachos.
+  // Orden de hojas: Resumen, Por tienda, Por andén, Por día, Despachos.
   const wsRes = wb.addWorksheet("Resumen", { views: [{ showGridLines: false }] });
   const wsTienda = wb.addWorksheet("Por tienda", { views: [{ showGridLines: false }] });
+  const wsAnden = wb.addWorksheet("Por andén", { views: [{ showGridLines: false }] });
   const wsDia = wb.addWorksheet("Por día", { views: [{ showGridLines: false }] });
   const wsDet = wb.addWorksheet("Despachos", { views: [{ state: "frozen", ySplit: 1, xSplit: 3 }] });
 
@@ -210,6 +215,7 @@ export async function downloadReporteDespachos({ despachos, choferes, catalogo, 
       d.mrp_traslado || "",
       d.estado_motivo || "",
       d.notas || "",
+      andenKey(d.puerta) ?? "",
     ];
     const row = wsDet.getRow(r);
     values.forEach((v, ci) => {
@@ -276,6 +282,50 @@ export async function downloadReporteDespachos({ despachos, choferes, catalogo, 
   tTot.getCell(6).numFmt = "0.0";
   tTot.getCell(7).numFmt = "0.0%";
   wsTienda.views = [{ state: "frozen", ySplit: 4, showGridLines: false }];
+
+  // ── Por andén ─────────────────────────────────────────────────────────
+  // Columna Z de «Despachos» = número de andén ("" si el despacho no tiene puerta).
+  const andenes = resumenPorAnden(rows);
+  wsAnden.columns = [{ width: 14 }, { width: 12 }, { width: 14 }, { width: 13 }, { width: 13 }, { width: 16 }, { width: 14 }];
+  titleBand(wsAnden, "Tarimas por andén", `Periodo: ${periodo}`, 7);
+  const aHead = wsAnden.getRow(4);
+  ["Andén", "Despachos", "Tarimas sencillas", "Tarimas dobles", "Total tarimas", "Promedio por despacho", "% del total"].forEach(
+    (h, i) => (aHead.getCell(i + 1).value = h)
+  );
+  styleHeaderRow(aHead, 7);
+  const aFirst = 5;
+  const aLast = aFirst + Math.max(andenes.length, 1) - 1;
+  andenes.forEach((a, i) => {
+    const r = aFirst + i;
+    const row = wsAnden.getRow(r);
+    const z = i % 2 === 1;
+    // Criterio: el número de andén, o "=" (vacío) para los despachos sin puerta.
+    const crit = a.anden === null ? '"="' : String(a.anden);
+    row.getCell(1).value = andenLabel(a.anden);
+    row.getCell(2).value = { formula: `COUNTIFS(${rng("Z")},${crit})`, result: a.despachos };
+    row.getCell(3).value = { formula: `SUMIFS(${rng("F")},${rng("Z")},${crit})`, result: a.sencillas };
+    row.getCell(4).value = { formula: `SUMIFS(${rng("G")},${rng("Z")},${crit})`, result: a.dobles };
+    row.getCell(5).value = { formula: `C${r}+D${r}`, result: a.total };
+    row.getCell(6).value = { formula: `IFERROR(E${r}/B${r},0)`, result: a.promedio };
+    row.getCell(7).value = { formula: `IFERROR(E${r}/E${aLast + 1},0)` };
+    styleDataCell(row.getCell(1), { zebra: z, align: "center", bold: true });
+    for (const ci of [2, 3, 4]) styleDataCell(row.getCell(ci), { zebra: z, align: "right", numFmt: "#,##0" });
+    styleDataCell(row.getCell(5), { zebra: z, align: "right", numFmt: "#,##0", bold: true });
+    styleDataCell(row.getCell(6), { zebra: z, align: "right", numFmt: "0.0" });
+    styleDataCell(row.getCell(7), { zebra: z, align: "right", numFmt: "0.0%" });
+  });
+  const aTot = wsAnden.getRow(aLast + 1);
+  aTot.getCell(1).value = "TOTAL";
+  for (const [ci, col] of [[2, "B"], [3, "C"], [4, "D"], [5, "E"]]) {
+    aTot.getCell(ci).value = { formula: `SUM(${col}${aFirst}:${col}${aLast})` };
+  }
+  aTot.getCell(6).value = { formula: `IFERROR(E${aLast + 1}/B${aLast + 1},0)` };
+  aTot.getCell(7).value = { formula: `IFERROR(E${aLast + 1}/E${aLast + 1},0)` };
+  styleTotalRow(aTot, 7);
+  for (const ci of [2, 3, 4, 5]) aTot.getCell(ci).numFmt = "#,##0";
+  aTot.getCell(6).numFmt = "0.0";
+  aTot.getCell(7).numFmt = "0.0%";
+  wsAnden.views = [{ state: "frozen", ySplit: 4, showGridLines: false }];
 
   // ── Por día ───────────────────────────────────────────────────────────
   const dias = resumenPorDia(rows);

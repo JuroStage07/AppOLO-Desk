@@ -36,12 +36,15 @@ import {
 } from "../../../components/ui";
 import { AuthCtx } from "../../../auth/AuthProvider";
 import useCan from "../../../hooks/useCan";
+import AndenFilter from "../../../components/AndenFilter";
+import { andenKey, andenLabel, formatAndenes, parseAndenes } from "../../../utils/andenes";
 import { buildMapaEstados, labelFor } from "../board/lib/mapaEstados";
 import {
   fetchReporteDespachos,
   filtrarReporte,
   rangoRapido,
   resumenGeneral,
+  resumenPorAnden,
   resumenPorTienda,
   tiendaKey,
   totalTarimas,
@@ -83,6 +86,8 @@ export default function DespachoReportePage() {
   const [estados, setEstados] = useState([]);
   const [tiendas, setTiendas] = useState([]);
   const [texto, setTexto] = useState("");
+  const [andenTexto, setAndenTexto] = useState("");
+  const andenSel = useMemo(() => parseAndenes(andenTexto), [andenTexto]);
 
   const [data, setData] = useState({ despachos: [], choferes: new Map(), catalogo: [] });
   const [loading, setLoading] = useState(false);
@@ -124,12 +129,15 @@ export default function DespachoReportePage() {
     [data.despachos]
   );
 
+  const andenesDisponibles = useMemo(() => data.despachos.map((d) => andenKey(d.puerta)), [data.despachos]);
+
   const filtrados = useMemo(
-    () => filtrarReporte(data.despachos, { estados, tiendas, texto }),
-    [data.despachos, estados, tiendas, texto]
+    () => filtrarReporte(data.despachos, { estados, tiendas, texto, andenes: andenSel.error ? undefined : andenSel.andenes }),
+    [data.despachos, estados, tiendas, texto, andenSel]
   );
   const resumen = useMemo(() => resumenGeneral(filtrados), [filtrados]);
   const porTienda = useMemo(() => resumenPorTienda(filtrados), [filtrados]);
+  const porAnden = useMemo(() => resumenPorAnden(filtrados), [filtrados]);
 
   const toggle = (list, setList, value) =>
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
@@ -138,9 +146,10 @@ export default function DespachoReportePage() {
     const parts = [];
     if (estados.length) parts.push(`Estados: ${estados.map((e) => labelFor(e, data.catalogo)).join(", ")}`);
     if (tiendas.length) parts.push(`Tiendas: ${tiendas.join(", ")}`);
+    if (!andenSel.error && andenSel.andenes.size) parts.push(`Andenes: ${formatAndenes(andenSel.andenes)}`);
     if (texto.trim()) parts.push(`Búsqueda: "${texto.trim()}"`);
     return parts.join(" · ");
-  }, [estados, tiendas, texto, data.catalogo]);
+  }, [estados, tiendas, texto, andenSel, data.catalogo]);
 
   const bodegaNombre = profile?.bodegaNombre || data.despachos[0]?.bodega_nombre || bodegaId || "";
 
@@ -177,6 +186,7 @@ export default function DespachoReportePage() {
     setEstados([]);
     setTiendas([]);
     setTexto("");
+    setAndenTexto("");
   };
 
   let body;
@@ -239,6 +249,8 @@ export default function DespachoReportePage() {
 
           <SearchInput value={texto} onChange={setTexto} placeholder="Buscar por referencia, tienda, placa, marchamo, DUA..." />
 
+          <AndenFilter id="rep-andenes" disponibles={andenesDisponibles} texto={andenTexto} onChange={setAndenTexto} />
+
           {tiendasDisponibles.length > 0 ? (
             <div style={styles.filterGroup}>
               <span style={styles.filterLabel}>Tienda</span>
@@ -274,7 +286,7 @@ export default function DespachoReportePage() {
               <SecondaryButton size="sm" icon={RefreshCw} onClick={load} disabled={loading || rangoInvalido}>
                 Actualizar
               </SecondaryButton>
-              {estados.length || tiendas.length || texto ? (
+              {estados.length || tiendas.length || texto || andenTexto ? (
                 <SecondaryButton size="sm" onClick={limpiarFiltros}>
                   Limpiar filtros
                 </SecondaryButton>
@@ -354,6 +366,51 @@ export default function DespachoReportePage() {
                   </table>
                 </TableScroll>
 
+                {/* Resumen por andén */}
+                <SectionTitle title="Tarimas por andén" hint="El andén es el número de la puerta del despacho." />
+                <TableScroll minWidth={620}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={styles.th}>Andén</th>
+                        <th style={styles.thRight}>Despachos</th>
+                        <th style={styles.thRight}>Sencillas</th>
+                        <th style={styles.thRight}>Dobles</th>
+                        <th style={styles.thRight}>Total tarimas</th>
+                        <th style={styles.thRight}>Promedio</th>
+                        <th style={styles.thRight}>Tiendas</th>
+                        <th style={styles.thRight}>% del total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {porAnden.map((a) => (
+                        <tr key={String(a.anden)} style={styles.tr}>
+                          <td style={styles.tdStrong}>{andenLabel(a.anden)}</td>
+                          <td style={styles.tdRight}>{fmtInt(a.despachos)}</td>
+                          <td style={styles.tdRight}>{fmtInt(a.sencillas)}</td>
+                          <td style={styles.tdRight}>{fmtInt(a.dobles)}</td>
+                          <td style={styles.tdRightStrong}>{fmtInt(a.total)}</td>
+                          <td style={styles.tdRight}>{fmtDec(a.promedio)}</td>
+                          <td style={styles.tdRight}>{fmtInt(a.tiendas)}</td>
+                          <td style={styles.tdRight}>
+                            {resumen.total ? `${((a.total / resumen.total) * 100).toFixed(1)}%` : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr style={styles.totalRow}>
+                        <td style={styles.tdTotal}>Total</td>
+                        <td style={styles.tdTotalRight}>{fmtInt(resumen.despachos)}</td>
+                        <td style={styles.tdTotalRight}>{fmtInt(resumen.sencillas)}</td>
+                        <td style={styles.tdTotalRight}>{fmtInt(resumen.dobles)}</td>
+                        <td style={styles.tdTotalRight}>{fmtInt(resumen.total)}</td>
+                        <td style={styles.tdTotalRight}>{fmtDec(resumen.promedio)}</td>
+                        <td style={styles.tdTotalRight}>{fmtInt(resumen.tiendas)}</td>
+                        <td style={styles.tdTotalRight}>100%</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </TableScroll>
+
                 {/* Detalle */}
                 <SectionTitle
                   title="Detalle de despachos"
@@ -377,7 +434,7 @@ export default function DespachoReportePage() {
                         <th style={styles.thRight}>Total</th>
                         <th style={styles.th}>Placa</th>
                         <th style={styles.th}>Marchamo</th>
-                        <th style={styles.th}>Puerta</th>
+                        <th style={styles.th}>Andén</th>
                         <th style={styles.th}>Chofer</th>
                         <th style={styles.th}>DUA</th>
                         <th style={styles.thRight}>Fotos</th>
@@ -402,7 +459,7 @@ export default function DespachoReportePage() {
                             <td style={styles.tdRightStrong}>{fmtInt(totalTarimas(d))}</td>
                             <td style={styles.td}>{d.placa || d.placa_contenedor || "—"}</td>
                             <td style={styles.td}>{d.marchamo || "—"}</td>
-                            <td style={styles.td}>{d.puerta || "—"}</td>
+                            <td style={styles.td}>{andenKey(d.puerta) === null ? "—" : andenLabel(andenKey(d.puerta))}</td>
                             <td style={styles.td}>{chofer?.nombre || "—"}</td>
                             <td style={styles.td}>{d.con_dua === "Sí" || d.con_dua === true ? d.numero_dua || "Sí" : "No"}</td>
                             <td style={styles.tdRight}>{fmtInt(d.fotos_count)}</td>
@@ -446,7 +503,7 @@ export default function DespachoReportePage() {
           <Hero
             kicker="Despacho"
             title="Reporte de despachos"
-            subtitle="Todos los despachos del periodo con sus tarimas sencillas, dobles y total, por tienda. Descargable en Excel."
+            subtitle="Todos los despachos del periodo con sus tarimas sencillas, dobles y total, por tienda y por andén. Descargable en Excel."
             badge={<Badge icon={FileSpreadsheet}>{bodegaNombre || "Bodega activa"}</Badge>}
           />
           {body}

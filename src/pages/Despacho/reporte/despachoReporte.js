@@ -9,6 +9,7 @@
 // consumo automático del MRP en functions/mrpDespachoConsumption.js).
 
 import { supabase } from "../../../supabase";
+import { andenKey, compareAnden, matchAnden } from "../../../utils/andenes";
 
 const PAGE = 1000;
 const ESTADO_ELIMINADO = "eliminado";
@@ -133,15 +134,17 @@ export function tiendaKey(d) {
 /**
  * Filtros en memoria del reporte (sobre el rango ya cargado).
  * @param {object[]} despachos
- * @param {{ estados?: string[], tiendas?: string[], texto?: string }} filtros
+ * @param {{ estados?: string[], tiendas?: string[], texto?: string, andenes?: Set<number> }} filtros
+ *   andenes: números de andén (la `puerta` "Puerta 14" es el andén 14); vacío = todos.
  */
-export function filtrarReporte(despachos, { estados = [], tiendas = [], texto = "" } = {}) {
+export function filtrarReporte(despachos, { estados = [], tiendas = [], texto = "", andenes } = {}) {
   const q = String(texto || "").trim().toLowerCase();
   const estSet = new Set(estados);
   const tiendaSet = new Set(tiendas);
   return (despachos || []).filter((d) => {
     if (estSet.size && !estSet.has(d.estado)) return false;
     if (tiendaSet.size && !tiendaSet.has(tiendaKey(d))) return false;
+    if (!matchAnden(d.puerta, andenes)) return false;
     if (!q) return true;
     return [d.referencia, d.tienda, d.placa, d.placa_contenedor, d.marchamo, d.puerta, d.transportista, d.numero_dua, d.notas]
       .filter(Boolean)
@@ -188,6 +191,28 @@ export function resumenPorTienda(despachos) {
   return [...map.values()]
     .map((r) => ({ ...r, promedio: r.despachos ? r.total / r.despachos : 0 }))
     .sort((a, b) => b.total - a.total || a.tienda.localeCompare(b.tienda, "es", { numeric: true }));
+}
+
+/**
+ * Agrupa por andén (número de la `puerta`), ascendente; "Sin andén" al final.
+ * @returns {Array<{ anden: number|null, despachos: number, sencillas: number, dobles: number, total: number, promedio: number, tiendas: number, ultimo: string|null }>}
+ */
+export function resumenPorAnden(despachos) {
+  const map = new Map();
+  for (const d of despachos || []) {
+    const k = andenKey(d.puerta);
+    const cur = map.get(k) || { anden: k, despachos: 0, sencillas: 0, dobles: 0, total: 0, tiendaSet: new Set(), ultimo: null };
+    cur.despachos += 1;
+    cur.sencillas += num(d.tarimas_s);
+    cur.dobles += num(d.tarimas_d);
+    cur.total += totalTarimas(d);
+    cur.tiendaSet.add(tiendaKey(d));
+    if (d.fecha && (!cur.ultimo || d.fecha > cur.ultimo)) cur.ultimo = d.fecha;
+    map.set(k, cur);
+  }
+  return [...map.values()]
+    .map(({ tiendaSet, ...r }) => ({ ...r, tiendas: tiendaSet.size, promedio: r.despachos ? r.total / r.despachos : 0 }))
+    .sort((a, b) => compareAnden(a.anden, b.anden));
 }
 
 /**

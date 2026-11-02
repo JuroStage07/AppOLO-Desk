@@ -35,6 +35,7 @@ export const ROUTE_ACCESS_RULES = [
   { path: "/pesado", exact: true, anyPerms: ["pesajeTarimas"] },
   { path: "/recepcion/accion-descarga", anyPerms: ["recepcion", "canRecepcionCofersa", "despachosEPA"] },
   { path: "/recepcion/metricas", exact: true, anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"] },
+  { path: "/recepcion/reporte-andenes", exact: true, anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"] },
   { path: "/recepcion", exact: true, anyPerms: ["recepcion", "recepcionReportes", "canRecepcionCofersa", "despachosEPA"] },
   // Equipos: solo el permiso de acceso total. OTs: cualquier permiso por acción
   // (las acciones concretas las controla cada pantalla con useOtAccess).

@@ -142,6 +142,7 @@ const RAW_AREAS = [
       { label: "Acción descarga", path: "/recepcion/accion-descarga", anyPerms: ["recepcion", "canRecepcionCofersa", "despachosEPA"] },
       { label: "Reportes de Descarga", path: "/recepcion/metricas", anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"] },
       { label: "Reportes de Recepción", path: "/recepcion/metricas-recepcion", anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"] },
+      { label: "Reporte por andén", path: "/recepcion/reporte-andenes", anyPerms: ["recepcionReportes", "canRecepcionCofersa", "despachosEPA"] },
     ],
   },
   {
