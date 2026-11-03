@@ -143,6 +143,7 @@ const DETALLE_COLS = [
   { header: "Notas", width: 40 },
   // Al final para no mover las letras que usan las fórmulas de las otras hojas.
   { header: "Andén", width: 8, numFmt: "0", align: "center" },
+  { header: "Origen", width: 30 },
 ];
 
 /**
@@ -216,6 +217,7 @@ export async function downloadReporteDespachos({ despachos, choferes, catalogo, 
       d.estado_motivo || "",
       d.notas || "",
       andenKey(d.puerta) ?? "",
+      d.origen === "historial" ? (d.tarimas_estimadas ? "Sistema anterior (tarimas estimadas)" : "Sistema anterior") : "AppOLO",
     ];
     const row = wsDet.getRow(r);
     values.forEach((v, ci) => {
@@ -403,7 +405,7 @@ export async function downloadReporteDespachos({ despachos, choferes, catalogo, 
   const nota = wsRes.getRow(r);
   wsRes.mergeCells(r, 1, r, 4);
   nota.getCell(1).value =
-    "Total tarimas = sencillas + dobles. Los totales son fórmulas sobre la hoja «Despachos»; la fila TOTAL de esa hoja respeta el filtro que apliques en Excel.";
+    "Total tarimas = sencillas + dobles. Los totales son fórmulas sobre la hoja «Despachos»; la fila TOTAL de esa hoja respeta el filtro que apliques en Excel. Origen «Sistema anterior» = despachos antes del 13/08/2026 (sin chofer ni placa de contenedor). «Tarimas estimadas» = antes de feb-2026 no se registraban las tarimas; se calculan desde el acomodo del camión (≈1 % de margen).";
   nota.getCell(1).font = { name: FONT, size: 9, italic: true, color: { argb: MUTED } };
   nota.getCell(1).alignment = { wrapText: true };
   nota.height = 30;

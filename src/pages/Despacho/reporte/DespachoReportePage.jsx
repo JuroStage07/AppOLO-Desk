@@ -89,7 +89,12 @@ export default function DespachoReportePage() {
   const [andenTexto, setAndenTexto] = useState("");
   const andenSel = useMemo(() => parseAndenes(andenTexto), [andenTexto]);
 
-  const [data, setData] = useState({ despachos: [], choferes: new Map(), catalogo: [] });
+  const [data, setData] = useState({
+    despachos: [],
+    choferes: new Map(),
+    catalogo: [],
+    historial: { incluido: false, cantidad: 0, estimados: 0, error: "" },
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -295,6 +300,22 @@ export default function DespachoReportePage() {
           </div>
         </Card>
 
+        {!error && !loading && data.historial?.error ? (
+          <div style={styles.notaWarn} role="status">
+            {data.historial.error === "sin-permiso"
+              ? "No se incluyeron los despachos anteriores al 13/08/2026 (sistema anterior): tu usuario necesita el permiso «Despacho» para leerlos."
+              : "No se pudieron cargar los despachos anteriores al 13/08/2026 (sistema anterior). Intentá «Actualizar»."}
+          </div>
+        ) : null}
+        {!error && !loading && data.historial?.cantidad > 0 ? (
+          <div style={styles.notaInfo} role="status">
+            Incluye {fmtInt(data.historial.cantidad)} despachos del sistema anterior (antes del 13/08/2026), sin chofer ni placa de contenedor.
+            {data.historial.estimados > 0
+              ? ` En ${fmtInt(data.historial.estimados)} de ellos (antes de feb-2026) las tarimas no se registraban: se estiman desde el acomodo del camión (≈1 % de margen).`
+              : ""}
+          </div>
+        ) : null}
+
         {error ? (
           <ErrorState
             title="No se pudo cargar el reporte"
@@ -446,7 +467,12 @@ export default function DespachoReportePage() {
                         return (
                           <tr key={d.id} style={styles.tr}>
                             <td style={styles.tdNowrap}>{fmtFechaHora(d.fecha)}</td>
-                            <td style={styles.tdStrong}>{d.referencia || "—"}</td>
+                            <td style={styles.tdStrong}>
+                              {d.referencia || "—"}
+                              {d.origen === "historial" ? (
+                                <span style={styles.tagHistorial}>{d.tarimas_estimadas ? "Historial · tarimas estimadas" : "Historial"}</span>
+                              ) : null}
+                            </td>
                             <td style={styles.td}>{tiendaKey(d)}</td>
                             <td style={styles.td}>
                               <span style={styles.estado}>
@@ -545,6 +571,32 @@ const styles = {
   },
   footerBtns: { display: "flex", gap: theme.SPACE_2, flexWrap: "wrap" },
   counter: { color: theme.SLATE, fontWeight: theme.FW_BOLD, fontSize: theme.FS_SM },
+  notaInfo: {
+    padding: `${theme.SPACE_2}px ${theme.SPACE_3}px`,
+    borderRadius: theme.RADIUS_MD,
+    background: theme.ACCENT_SOFT,
+    color: theme.TEXT,
+    fontSize: theme.FS_SM,
+    fontWeight: theme.FW_BOLD,
+  },
+  notaWarn: {
+    padding: `${theme.SPACE_2}px ${theme.SPACE_3}px`,
+    borderRadius: theme.RADIUS_MD,
+    background: theme.WARN_BG,
+    border: `1px solid ${theme.WARN_BORDER}`,
+    color: theme.TEXT,
+    fontSize: theme.FS_SM,
+    fontWeight: theme.FW_BOLD,
+  },
+  tagHistorial: {
+    marginLeft: 6,
+    padding: "1px 6px",
+    borderRadius: theme.RADIUS_PILL,
+    background: theme.SURFACE_INSET,
+    color: theme.SLATE,
+    fontSize: theme.FS_XS,
+    fontWeight: theme.FW_BOLD,
+  },
   dot: { width: 8, height: 8, borderRadius: theme.RADIUS_PILL, display: "inline-block", marginRight: 6, flexShrink: 0 },
   estado: { display: "inline-flex", alignItems: "center", whiteSpace: "nowrap" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
