@@ -20,6 +20,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   CONTRACT_VERSION,
   DIAS_ABIERTOS,
+  ESTADO_ESPERA_CHOFER,
   catalogoPuertas,
   dayRangeUtc,
   historialPorDespacho,
@@ -122,9 +123,10 @@ Deno.serve(async (req) => {
     if (!mapa) return json({ error: "El almacén de SRO no tiene bodega de AppOLO asociada." }, 404, origin);
     const bodegaId = mapa.bodega_id as string;
 
-    // Despachos del día + abiertos de los últimos DIAS_ABIERTOS días.
+    // Despachos del día + abiertos de los últimos DIAS_ABIERTOS días + todos los
+    // "chofer pendiente" (patio de espera de salida en SRO, cualquier día).
     const desde = new Date(range.start.getTime() - DIAS_ABIERTOS * 86400000);
-    const [desp, estados, puertas] = await Promise.all([
+    const [desp, espera, estados, puertas] = await Promise.all([
       db
         .from("despacho_dev_despachos")
         .select(DESPACHO_COLS)
@@ -134,6 +136,15 @@ Deno.serve(async (req) => {
         .lt("fecha", range.end.toISOString())
         .order("fecha", { ascending: true })
         .limit(2000),
+      db
+        .from("despacho_dev_despachos")
+        .select(DESPACHO_COLS)
+        .eq("bodega_id", bodegaId)
+        .is("deleted_at", null)
+        .eq("estado", ESTADO_ESPERA_CHOFER)
+        .lt("fecha", range.end.toISOString())
+        .order("fecha", { ascending: true })
+        .limit(5000),
       db.from("despacho_dev_estados").select("codigo,nombre"),
       db
         .from("despacho_dev_despachos")
@@ -145,36 +156,44 @@ Deno.serve(async (req) => {
         .limit(5000),
     ]);
     if (desp.error) throw desp.error;
+    if (espera.error) throw espera.error;
     if (estados.error) throw estados.error;
     if (puertas.error) throw puertas.error;
 
-    const seleccion = seleccionarDespachos(desp.data ?? [], range.start, range.end);
+    const seleccion = seleccionarDespachos([...(desp.data ?? []), ...(espera.data ?? [])], range.start, range.end);
     const ids = seleccion.map((d) => String(d.id));
     const choferIds = [...new Set(seleccion.map((d) => d.chofer_id).filter(Boolean).map(String))];
 
+    // `.in(...)` en lotes: con cientos de ids la URL de PostgREST se pasa de largo.
+    const enLotes = async <T,>(lista: string[], q: (lote: string[]) => PromiseLike<{ data: T[] | null; error: unknown }>) => {
+      const out: T[] = [];
+      for (let i = 0; i < lista.length; i += 100) {
+        const { data, error } = await q(lista.slice(i, i + 100));
+        if (error) throw error;
+        out.push(...(data ?? []));
+      }
+      return out;
+    };
     const [layout, actividad, choferes] = await Promise.all([
-      ids.length ? db.from("despacho_dev_layout").select("despacho_id,slots").in("despacho_id", ids) : { data: [], error: null },
-      ids.length
-        ? db
-            .from("despacho_dev_actividad")
-            .select("entidad_id,tipo,created_at")
-            .eq("entidad", "despacho")
-            .like("tipo", "despacho_%")
-            .in("entidad_id", ids)
-        : { data: [], error: null },
+      enLotes(ids, (l) => db.from("despacho_dev_layout").select("despacho_id,slots").in("despacho_id", l)),
+      enLotes(ids, (l) =>
+        db
+          .from("despacho_dev_actividad")
+          .select("entidad_id,tipo,created_at")
+          .eq("entidad", "despacho")
+          .like("tipo", "despacho_%")
+          .in("entidad_id", l)
+      ),
       // Solo el nombre: nunca cédula ni documentos.
-      choferIds.length ? db.from("despacho_dev_choferes").select("id,nombre").in("id", choferIds) : { data: [], error: null },
+      enLotes(choferIds, (l) => db.from("despacho_dev_choferes").select("id,nombre").in("id", l)),
     ]);
-    if (layout.error) throw layout.error;
-    if (actividad.error) throw actividad.error;
-    if (choferes.error) throw choferes.error;
 
     const codigos = new Set((estados.data ?? []).map((e) => String(e.codigo)));
     const ctx = {
       estadoNombre: new Map((estados.data ?? []).map((e) => [String(e.codigo), String(e.nombre)])),
-      choferNombre: new Map((choferes.data ?? []).map((c) => [String(c.id), String(c.nombre ?? "")])),
-      layout: new Map((layout.data ?? []).map((l) => [String(l.despacho_id), l.slots])),
-      historial: historialPorDespacho(actividad.data ?? [], codigos),
+      choferNombre: new Map(choferes.map((c: any) => [String(c.id), String(c.nombre ?? "")])),
+      layout: new Map(layout.map((l: any) => [String(l.despacho_id), l.slots])),
+      historial: historialPorDespacho(actividad as any[], codigos),
     };
 
     return json(

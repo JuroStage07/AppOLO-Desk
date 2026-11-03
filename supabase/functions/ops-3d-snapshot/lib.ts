@@ -153,21 +153,30 @@ const toMs = (v: unknown) => {
   return Number.isFinite(t) ? t : null;
 };
 
+/** Estado que SRO muestra en el patio de espera de salida, sin importar el día. */
+export const ESTADO_ESPERA_CHOFER = "chofer_pendiente";
+
 /**
- * Despachos que van en la foto: todos los del día (por `fecha`) y, de días
- * anteriores, solo los que siguen abiertos de verdad: estado no cerrado y la
- * carga sin finalizar antes de hoy. En la práctica los despachos casi nunca
- * llegan a "despachado": quedan en "chofer_pendiente" con `finalized_at` y el
- * camión ya se fue (al 03/11/2026 había 93 así en 14 días). Nunca los eliminados.
+ * Despachos que van en la foto (nunca los eliminados):
+ *   - todos los del día (por `fecha`);
+ *   - todos los "chofer_pendiente", de cualquier día: SRO los lleva a su patio de
+ *     espera de salida para ver lo atrasado tal cual (al 03/11/2026 eran 462);
+ *   - de días anteriores, los que siguen cargando: estado no cerrado y carga sin
+ *     finalizar antes de hoy. Los demás finalizados de días anteriores quedan fuera.
  */
 export function seleccionarDespachos(rows: Row[], start: Date, end: Date): Row[] {
   const s = start.getTime();
   const e = end.getTime();
+  const vistos = new Set<string>();
   return (rows || []).filter((d) => {
+    const id = String(d.id);
+    if (vistos.has(id)) return false;
+    vistos.add(id);
     if (d.deleted_at || d.estado === "eliminado") return false;
     const f = toMs(d.fecha);
     if (f === null || f >= e) return false;
     if (f >= s) return true; // del día
+    if (d.estado === ESTADO_ESPERA_CHOFER) return true; // patio de espera, cualquier día
     if (ESTADOS_CERRADOS.has(String(d.estado ?? ""))) return false;
     const fin = toMs(d.finalized_at);
     return fin === null || fin >= s; // carga sin finalizar, o finalizada hoy

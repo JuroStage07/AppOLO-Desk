@@ -45,19 +45,20 @@ describe("ops-3d-snapshot · lib", () => {
     ]);
   });
 
-  it("selección: todos los del día; de antes solo los que no terminaron de cargar; nunca eliminados", () => {
+  it("selección: los del día, todos los chofer_pendiente, de antes solo los que siguen cargando; nunca eliminados", () => {
     const { start, end } = dayRangeUtc("2026-11-03", "America/Costa_Rica");
     const rows = [
       { id: "hoy", estado: "despachado", fecha: "2026-11-03T15:00:00Z" },
       { id: "ayer-cargando", estado: "en proceso", fecha: "2026-11-02T15:00:00Z" },
-      { id: "ayer-sin-chofer-fin-hoy", estado: "chofer_pendiente", fecha: "2026-11-02T15:00:00Z", finalized_at: "2026-11-03T08:00:00Z" },
-      { id: "ayer-sin-chofer-fin-ayer", estado: "chofer_pendiente", fecha: "2026-11-02T15:00:00Z", finalized_at: "2026-11-02T20:00:00Z" },
+      { id: "ayer-cargado-fin-ayer", estado: "completo", fecha: "2026-11-02T15:00:00Z", finalized_at: "2026-11-02T20:00:00Z" },
+      { id: "sin-chofer-agosto", estado: "chofer_pendiente", fecha: "2026-08-14T15:00:00Z", finalized_at: "2026-08-14T20:00:00Z" },
       { id: "ayer-cerrado", estado: "despachado", fecha: "2026-11-02T15:00:00Z" },
       { id: "legacy", estado: "finalizado", fecha: "2026-11-01T15:00:00Z" },
-      { id: "borrado", estado: "en proceso", fecha: "2026-11-03T15:00:00Z", deleted_at: "x" },
+      { id: "borrado", estado: "chofer_pendiente", fecha: "2026-11-01T15:00:00Z", deleted_at: "x" },
       { id: "manana", estado: "creado", fecha: "2026-11-04T15:00:00Z" },
+      { id: "hoy", estado: "despachado", fecha: "2026-11-03T15:00:00Z" }, // duplicado de las dos consultas
     ];
-    expect(seleccionarDespachos(rows, start, end).map((r) => r.id)).toEqual(["hoy", "ayer-cargando", "ayer-sin-chofer-fin-hoy"]);
+    expect(seleccionarDespachos(rows, start, end).map((r) => r.id)).toEqual(["hoy", "ayer-cargando", "sin-chofer-agosto"]);
   });
 
   it("puertas y acomodo", () => {
