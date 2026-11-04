@@ -8,8 +8,9 @@
 //
 // Seguridad:
 //   - Se despliega con verify_jwt = false: el token que llega es de SRO, no de
-//     AppOLO. Se valida contra SRO (GET /auth/v1/user) y se exige rol "Full Access"
-//     leyendo user_org_roles en SRO con el mismo token (RLS de SRO).
+//     AppOLO. Lo valida el módulo común ../_shared/sroAuth.ts: sesión de SRO,
+//     org del almacén y el permiso `proceso3d.view` de la Matriz de Permisos de
+//     SRO (RPC has_org_permission), todo con el JWT del usuario.
 //   - Solo lectura. Lee con service role pero devuelve únicamente lo del contrato
 //     (sin cédulas, fotos, firmas ni notas).
 //
@@ -29,14 +30,14 @@ import {
   seleccionarDespachos,
   todayIn,
 } from "./lib.ts";
+import { autorizarSro } from "../_shared/sroAuth.ts";
 
-const SRO_URL = (Deno.env.get("SRO_URL") ?? "").replace(/\/+$/, "");
-const SRO_ANON_KEY = Deno.env.get("SRO_ANON_KEY") ?? "";
+const SRO = { sroUrl: Deno.env.get("SRO_URL") ?? "", anonKey: Deno.env.get("SRO_ANON_KEY") ?? "" };
+const PERMISO = "proceso3d.view";
 const ALLOWED = (Deno.env.get("OPS3D_ALLOWED_ORIGINS") ?? "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
-const ROL_REQUERIDO = "full access";
 
 const DESPACHO_COLS =
   "id,bodega_id,bodega_nombre,estado,puerta,placa,placa_contenedor,chofer_id,transportista,tienda,referencia,tipo,tarimas_s,tarimas_d,fecha,created_at,updated_at,finalized_at,deleted_at";
@@ -57,27 +58,6 @@ function json(body: unknown, status: number, origin: string | null) {
     status,
     headers: { ...corsHeaders(origin), "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
-}
-
-/** Valida el token de SRO y exige rol Full Access. Devuelve el id de usuario o un error HTTP. */
-async function autorizarSro(token: string): Promise<{ userId: string } | { status: number; error: string }> {
-  if (!SRO_URL || !SRO_ANON_KEY) return { status: 500, error: "Función sin configurar (SRO_URL / SRO_ANON_KEY)." };
-  const h = { apikey: SRO_ANON_KEY, Authorization: `Bearer ${token}` };
-
-  const uRes = await fetch(`${SRO_URL}/auth/v1/user`, { headers: h });
-  if (!uRes.ok) return { status: 401, error: "Sesión de SRO inválida o vencida." };
-  const user = await uRes.json().catch(() => null);
-  const userId = user?.id;
-  if (!userId) return { status: 401, error: "Sesión de SRO inválida." };
-
-  const rRes = await fetch(
-    `${SRO_URL}/rest/v1/user_org_roles?select=roles(name)&user_id=eq.${encodeURIComponent(userId)}`,
-    { headers: h }
-  );
-  if (!rRes.ok) return { status: 403, error: "No se pudo verificar el rol en SRO." };
-  const roles = (await rRes.json().catch(() => [])) as Array<{ roles?: { name?: string } | null }>;
-  const ok = roles.some((r) => String(r?.roles?.name ?? "").trim().toLowerCase().replace(/_/g, " ") === ROL_REQUERIDO);
-  return ok ? { userId } : { status: 403, error: "Se requiere el rol Full Access en SRO." };
 }
 
 Deno.serve(async (req) => {
@@ -106,7 +86,7 @@ Deno.serve(async (req) => {
     }
     if (!/^[0-9a-f-]{36}$/i.test(sroWarehouseId)) return json({ error: "sro_warehouse_id inválido." }, 400, origin);
 
-    const auth = await autorizarSro(token);
+    const auth = await autorizarSro(SRO, token, sroWarehouseId, PERMISO);
     if ("status" in auth) return json({ error: auth.error }, auth.status, origin);
 
     const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
