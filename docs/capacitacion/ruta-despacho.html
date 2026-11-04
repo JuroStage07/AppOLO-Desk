@@ -1,0 +1,1008 @@
+<title>Ruta del Despacho CLIRO</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: patio de CLIRO como mapa de señalización vial; pasos numerados (es una secuencia real) que mueven el camión, luego casetilla y boleta. */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --ink: #17201e;
+  --muted: #5b6764;
+  --line: #d9dfdd;
+  --asphalt: #3b4442;
+  --asphalt-2: #4a5451;
+  --accent: #089f8a;        /* verde OLO */
+  --accent-ink: #ffffff;
+  --accent-soft: #e2f4f1;
+  --caution: #e8a317;       /* amarillo de patio */
+  --caution-soft: #fdf3dc;
+  --danger: #c8412f;
+  --danger-soft: #fbe6e2;
+  --ok: #1f8a4c;
+  --ok-soft: #e1f3e8;
+  --paper: #fffdf7;
+  --paper-line: #e6dfcc;
+  --marking: #f4f1e6;
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+  --font-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121615; --surface: #1b2120; --ink: #e8eeec; --muted: #9aa8a4; --line: #2e3836;
+    --asphalt: #262d2b; --asphalt-2: #313a37; --accent: #2bc3ab; --accent-ink: #062b25; --accent-soft: #143430;
+    --caution: #f0b43a; --caution-soft: #3a2f14; --danger: #ef6a56; --danger-soft: #3d1f1a;
+    --ok: #4cc785; --ok-soft: #173426; --paper: #f7f3e6; --paper-line: #d8cfb5; --marking: #cfcbbd;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121615; --surface: #1b2120; --ink: #e8eeec; --muted: #9aa8a4; --line: #2e3836;
+  --asphalt: #262d2b; --asphalt-2: #313a37; --accent: #2bc3ab; --accent-ink: #062b25; --accent-soft: #143430;
+  --caution: #f0b43a; --caution-soft: #3a2f14; --danger: #ef6a56; --danger-soft: #3d1f1a;
+  --ok: #4cc785; --ok-soft: #173426; --paper: #f7f3e6; --paper-line: #d8cfb5; --marking: #cfcbbd;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 40px; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: 0.01em; }
+h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; }
+h2 { font-size: clamp(1.5rem, 3.5vw, 2.1rem); font-weight: 800; }
+h3 { font-size: 1.25rem; font-weight: 700; }
+p { margin: 0; }
+.eyebrow { font-family: var(--font-display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.85rem; color: var(--accent); }
+.lead { color: var(--muted); max-width: 65ch; font-size: 1.08rem; }
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--caution); outline-offset: 2px; }
+
+/* ── Encabezado ─────────────────────────────────────────────── */
+header.top { display: grid; gap: 12px; }
+.estados { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 0.9rem; border: 1.5px solid currentColor; white-space: nowrap; }
+.chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.c-creado { color: var(--muted); }
+.c-proceso { color: #2f6fb3; }
+.c-completo { color: var(--accent); }
+.c-validacion { color: #7a4fb8; }
+.c-despachado { color: var(--ok); }
+.c-pendiente { color: var(--caution); background: var(--caution-soft); }
+.c-rechazado { color: var(--danger); background: var(--danger-soft); }
+.arrow { color: var(--muted); font-weight: 700; }
+
+/* ── Mapa ───────────────────────────────────────────────────── */
+.mapa-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.mapa-scroll { overflow-x: auto; background: var(--asphalt); }
+.mapa-scroll svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.lbl { font-family: var(--font-display); font-weight: 700; fill: var(--marking); font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase; }
+.lbl-sm { font-family: var(--font-display); font-weight: 700; fill: var(--marking); font-size: 12px; letter-spacing: 0.05em; }
+.door { fill: var(--asphalt-2); stroke: var(--marking); stroke-width: 1.5; }
+.door.activa { fill: var(--accent); stroke: var(--accent); }
+.door-txt { font-family: var(--font-display); font-weight: 800; font-size: 13px; fill: var(--marking); }
+.door.activa + .door-txt { fill: var(--accent-ink); }
+#truck { transition: transform 1.2s cubic-bezier(.5,0,.25,1); }
+#barrera { transition: transform 0.8s ease; transform-origin: 839px 236px; transform-box: view-box; }
+.forklift { transition: transform 1s ease, opacity .4s; }
+.pallet { transition: opacity .3s; }
+.marker { transition: opacity .4s; }
+@media (prefers-reduced-motion: reduce) {
+  #truck, #barrera, .forklift { transition: none; }
+}
+
+.pasos { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+@media (max-width: 760px) { .pasos { grid-template-columns: 1fr; } }
+.lista { list-style: none; margin: 0; padding: 12px; display: grid; gap: 6px; border-right: 1px solid var(--line); align-content: start; }
+@media (max-width: 760px) { .lista { border-right: 0; border-bottom: 1px solid var(--line); grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.lista button { width: 100%; text-align: left; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; padding: 10px; border-radius: 10px; border: 1px solid transparent; background: transparent; color: var(--ink); }
+.lista button:hover { background: var(--bg); }
+.lista button[aria-current="step"] { background: var(--accent-soft); border-color: var(--accent); }
+.num { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 1.05rem; background: var(--bg); border: 2px solid var(--line); }
+.lista button[aria-current="step"] .num { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.lista .t { font-weight: 700; line-height: 1.2; min-width: 0; }
+
+.detalle { padding: 22px 24px; display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 20px 28px; align-items: start; min-width: 0; }
+@media (max-width: 980px) { .detalle { grid-template-columns: 1fr; } }
+.texto { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.telefono { display: grid; gap: 10px; justify-items: center; }
+.marco { width: 100%; max-width: 270px; background: #0f1413; border-radius: 30px; padding: 10px; box-shadow: 0 18px 40px rgba(0,0,0,.22); }
+.pantalla { border-radius: 22px; overflow: hidden; background: #fff; aspect-ratio: 540 / 1045; }
+.pantalla img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.cap { font-size: 0.9rem; color: var(--muted); text-align: center; max-width: 270px; min-height: 2.6em; }
+.cap b { color: var(--ink); }
+.miniaturas { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.miniaturas button { width: 40px; height: 64px; padding: 0; border-radius: 6px; overflow: hidden; border: 2px solid var(--line); background: #fff; }
+.miniaturas button[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.miniaturas img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.app-nota { font-size: 0.85rem; color: var(--muted); }
+.detalle-top { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.donde { font-size: 0.95rem; color: var(--muted); }
+.donde b { color: var(--ink); }
+.que { display: grid; gap: 8px; margin: 0; padding-left: 20px; }
+.que li::marker { color: var(--accent); font-weight: 700; }
+.aviso { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 12px 14px; border-radius: 10px; background: var(--caution-soft); border-left: 4px solid var(--caution); }
+.aviso.mal { background: var(--danger-soft); border-left-color: var(--danger); }
+.aviso.bien { background: var(--ok-soft); border-left-color: var(--ok); }
+.aviso svg { width: 24px; height: 24px; }
+.nav { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn { border-radius: 10px; padding: 10px 18px; font-weight: 700; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); }
+.btn:hover { border-color: var(--accent); }
+.btn.primario { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ── Casetilla + boleta ─────────────────────────────────────── */
+.dos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 860px) { .dos { grid-template-columns: 1fr; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 22px; display: grid; gap: 16px; min-width: 0; }
+.cabina { display: flex; align-items: center; gap: 12px; }
+.cabina svg { width: 44px; height: 44px; flex: none; }
+.llego { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 480px) { .llego { grid-template-columns: 1fr; } }
+.dato-real { background: var(--bg); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.dato-real small { display: block; color: var(--muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.dato-real b { font-family: var(--font-mono); font-size: 0.98rem; overflow-wrap: anywhere; }
+.dato-real.difiere b { color: var(--danger); }
+.preg { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.preg:last-of-type { border-bottom: 0; }
+.preg p { font-weight: 600; }
+.preg small { color: var(--muted); display: block; font-weight: 400; }
+.sino { display: flex; gap: 6px; }
+.sino button { min-width: 52px; padding: 7px 10px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 700; }
+.sino button[aria-pressed="true"][data-v="si"] { background: var(--ok); border-color: var(--ok); color: #fff; }
+.sino button[aria-pressed="true"][data-v="no"] { background: var(--danger); border-color: var(--danger); color: #fff; }
+.firma-box { display: grid; gap: 8px; }
+.firma-box canvas { width: 100%; height: 130px; background: var(--paper); border: 2px dashed var(--paper-line); border-radius: 10px; touch-action: none; }
+.firma-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 0.9rem; }
+.resultado { padding: 14px; border-radius: 10px; font-weight: 700; display: none; }
+.resultado.ok { display: block; background: var(--ok-soft); color: var(--ok); }
+.resultado.mal { display: block; background: var(--danger-soft); color: var(--danger); }
+.cedula { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: linear-gradient(135deg, #dfeefe, #f4f8fd); color: #13304f; border: 1px solid #b9d3ef; }
+.cedula .foto { width: 64px; height: 76px; border-radius: 6px; background: #9fb6cc; display: grid; place-items: end center; overflow: hidden; }
+.cedula small { display: block; font-size: 0.75rem; color: #3f5a76; }
+.cedula b { font-family: var(--font-mono); }
+.sino button:disabled { opacity: .4; cursor: not-allowed; }
+.ojo { margin-top: 6px; padding: 6px 12px; font-size: 0.9rem; }
+.toggle { display: flex; gap: 8px; flex-wrap: wrap; }
+.toggle button { padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 600; font-size: 0.9rem; }
+.toggle button[aria-pressed="true"] { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+
+/* Boleta: hoja impresa */
+.boleta { background: var(--paper); color: #1f1c14; border-radius: 6px; padding: 22px 22px 26px; box-shadow: 0 1px 0 var(--paper-line), 0 14px 30px rgba(0,0,0,.12); position: relative; overflow: hidden; font-size: 0.95rem; }
+.boleta::before { content: ""; position: absolute; inset: 0 0 auto; height: 8px; background: repeating-linear-gradient(90deg, #089f8a 0 22px, #f2b51a 22px 44px); }
+.b-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; margin-top: 6px; }
+.b-marca { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; letter-spacing: 0.04em; color: #0b5e52; }
+.b-num { font-family: var(--font-mono); font-weight: 700; font-size: 1.25rem; text-align: right; }
+.b-num small { display: block; font-family: var(--font-body); font-size: 0.75rem; font-weight: 600; color: #6c6552; text-transform: uppercase; letter-spacing: 0.08em; }
+.b-sec { margin-top: 14px; border-top: 1px dashed #c9bf9f; padding-top: 10px; }
+.b-sec h4 { margin: 0 0 6px; font-family: var(--font-display); font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; color: #6c6552; }
+.b-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
+.b-grid div { min-width: 0; }
+.b-grid span { display: block; font-size: 0.75rem; color: #6c6552; }
+.b-grid b { font-family: var(--font-mono); font-weight: 500; overflow-wrap: anywhere; }
+.b-check { display: grid; gap: 4px; }
+.b-check div { display: flex; justify-content: space-between; gap: 10px; }
+.b-check b { font-family: var(--font-mono); }
+.b-firma { height: 70px; border-bottom: 1.5px solid #1f1c14; display: flex; align-items: flex-end; }
+.b-firma img { max-height: 66px; max-width: 100%; }
+.sello { position: absolute; right: 18px; bottom: 70px; transform: rotate(-12deg); border: 4px solid; border-radius: 8px; padding: 4px 14px; font-family: var(--font-display); font-weight: 800; font-size: 1.6rem; letter-spacing: 0.1em; opacity: 0; transition: opacity .4s; pointer-events: none; }
+.sello.on { opacity: .85; }
+.sello.ok { color: #1f8a4c; }
+.sello.mal { color: #c8412f; }
+.sello.pend { color: #7a4fb8; }
+
+/* Navegación interna */
+.indice { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--line); }
+.indice nav { display: flex; gap: 8px; flex-wrap: wrap; }
+.indice a { text-decoration: none; color: var(--ink); font-weight: 700; font-size: 0.92rem; padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); }
+.indice a:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Manual */
+.manual { display: grid; gap: 22px; }
+.prueba { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .prueba { grid-template-columns: 1fr; } }
+.prueba > div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.prueba b { font-family: var(--font-display); font-size: 1.15rem; }
+.ok-txt { color: var(--ok); font-weight: 700; }
+.man-sec { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 22px; display: grid; gap: 18px; }
+.man-sec > header { display: grid; gap: 6px; }
+.man-row { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 24px; align-items: start; padding-top: 18px; border-top: 1px solid var(--line); }
+.man-sec > header + .man-row { border-top: 0; padding-top: 0; }
+@media (max-width: 720px) { .man-row { grid-template-columns: 1fr; justify-items: center; } .man-row .man-txt { justify-self: stretch; } }
+.man-row .marco { max-width: 230px; border-radius: 26px; padding: 8px; }
+.man-row .pantalla { border-radius: 19px; }
+.man-txt { display: grid; gap: 10px; min-width: 0; }
+.man-txt h4 { margin: 0; font-family: var(--font-display); font-size: 1.2rem; }
+.botones { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.botones li { display: grid; grid-template-columns: minmax(110px, auto) minmax(0, 1fr); gap: 10px; align-items: baseline; }
+@media (max-width: 480px) { .botones li { grid-template-columns: 1fr; gap: 4px; } }
+.boton { display: inline-block; font-weight: 700; font-size: 0.88rem; padding: 3px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); white-space: nowrap; justify-self: start; }
+.boton.rojo { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+.boton.gris { background: var(--bg); color: var(--ink); border-color: var(--line); }
+.msg { font-family: var(--font-mono); font-size: 0.85rem; background: var(--bg); border-radius: 6px; padding: 2px 6px; }
+.qr-practica { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; background: var(--accent-soft); border-radius: 12px; padding: 16px; }
+@media (max-width: 520px) { .qr-practica { grid-template-columns: 1fr; justify-items: center; } }
+#qr-bs43 { background: #fff; padding: 10px; border-radius: 8px; width: 156px; height: 156px; }
+#qr-bs43 img, #qr-bs43 canvas { width: 136px !important; height: 136px !important; }
+.tabla-wrap { overflow-x: auto; }
+table.errores { width: 100%; border-collapse: collapse; min-width: 640px; font-size: 0.95rem; }
+table.errores th { text-align: left; font-family: var(--font-display); font-size: 0.9rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--line); }
+table.errores td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.check { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.check li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.check .est { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 0.8rem; }
+.est.si { background: var(--ok); } .est.ojo { background: var(--caution); color: #1b1b1b; } .est.no { background: var(--danger); }
+
+/* Reglas */
+.reglas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 760px) { .reglas { grid-template-columns: 1fr; } }
+.regla { background: var(--surface); border: 1px solid var(--line); border-top: 5px solid var(--accent); border-radius: 12px; padding: 18px; display: grid; gap: 8px; }
+.regla.amarilla { border-top-color: var(--caution); }
+.regla.roja { border-top-color: var(--danger); }
+.nota { color: var(--muted); font-size: 0.9rem; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <span class="eyebrow">Capacitación · Despacho EPA · CLIRO</span>
+    <h1>Ruta de un despacho, del rack a la casetilla</h1>
+    <p class="lead">Un despacho termina cuando el camión sale por la casetilla con su <b>boleta de salida validada</b>. Para que exista la boleta, el despacho necesita <b>chofer asignado</b>. Recorra los pasos en el mapa y practique la validación en la casetilla.</p>
+    <div class="estados" aria-label="Estados del despacho en orden">
+      <span class="chip c-creado">Creado</span><span class="arrow">→</span>
+      <span class="chip c-proceso">En proceso</span><span class="arrow">→</span>
+      <span class="chip c-completo">Completo</span><span class="arrow">→</span>
+      <span class="chip c-validacion">Pendiente de validación</span><span class="arrow">→</span>
+      <span class="chip c-despachado">Despachado</span>
+    </div>
+    <div class="estados" aria-label="Estados que indican un problema">
+      <span class="chip c-pendiente">Chofer pendiente</span><span class="nota">= se finalizó sin chofer. No hay boleta.</span>
+      <span class="chip c-rechazado">Rechazado</span><span class="nota">= la casetilla encontró algo que no coincide.</span>
+    </div>
+  </header>
+
+  <div class="indice">
+    <nav aria-label="Secciones de la página">
+      <a href="#ruta">Ruta del despacho</a>
+      <a href="#manual">Manual de casetilla</a>
+      <a href="#t-caseta">Simulador</a>
+      <a href="#errores">Si algo falla</a>
+      <a href="#arranque">Arranque</a>
+    </nav>
+  </div>
+
+  <!-- ── Mapa ── -->
+  <section class="mapa-card" id="ruta" aria-labelledby="t-mapa">
+    <div class="mapa-scroll">
+      <svg viewBox="0 0 1000 400" role="img" aria-labelledby="t-mapa">
+        <title id="t-mapa">Mapa del patio de CLIRO: bodega con racks, andenes de despacho P11 a P16, patio, casetilla y salida</title>
+        <!-- Bodega -->
+        <rect x="0" y="0" width="300" height="400" fill="var(--asphalt-2)"/>
+        <text x="24" y="34" class="lbl">Bodega</text>
+        <g fill="none" stroke="var(--marking)" stroke-width="1.5" opacity=".75">
+          <rect x="24" y="60" width="64" height="300" rx="2"/><rect x="104" y="60" width="64" height="300" rx="2"/>
+        </g>
+        <g fill="var(--marking)" opacity=".5">
+          <rect x="30" y="70" width="52" height="20"/><rect x="30" y="100" width="52" height="20"/><rect x="30" y="160" width="52" height="20"/><rect x="30" y="220" width="52" height="20"/><rect x="30" y="300" width="52" height="20"/>
+          <rect x="110" y="70" width="52" height="20"/><rect x="110" y="130" width="52" height="20"/><rect x="110" y="190" width="52" height="20"/><rect x="110" y="250" width="52" height="20"/><rect x="110" y="330" width="52" height="20"/>
+        </g>
+        <text x="40" y="384" class="lbl-sm">RACKS</text>
+        <!-- Zona de preparación -->
+        <rect x="190" y="150" width="96" height="110" rx="6" fill="none" stroke="var(--caution)" stroke-width="2" stroke-dasharray="6 5"/>
+        <text x="196" y="144" class="lbl-sm" style="fill:var(--caution)">PREPARACIÓN</text>
+        <g id="tarimas">
+          <rect class="pallet" x="202" y="168" width="22" height="16" fill="var(--caution)"/>
+          <rect class="pallet" x="232" y="168" width="22" height="16" fill="var(--caution)"/>
+          <rect class="pallet" x="202" y="196" width="22" height="16" fill="var(--caution)"/>
+          <rect class="pallet" x="232" y="196" width="44" height="16" fill="var(--caution)"/>
+          <rect class="pallet" x="202" y="224" width="22" height="16" fill="var(--caution)"/>
+        </g>
+        <!-- Montacargas -->
+        <g id="montacargas" class="forklift">
+          <rect x="140" y="270" width="26" height="18" rx="3" fill="var(--caution)"/>
+          <rect x="166" y="266" width="4" height="26" fill="var(--marking)"/>
+          <circle cx="146" cy="291" r="4" fill="var(--ink)"/><circle cx="160" cy="291" r="4" fill="var(--ink)"/>
+        </g>
+        <!-- Muro con andenes -->
+        <rect x="300" y="0" width="12" height="400" fill="var(--marking)" opacity=".85"/>
+        <text x="322" y="34" class="lbl">Andenes de despacho</text>
+        <g id="andenes"></g>
+        <!-- Patio -->
+        <text x="560" y="34" class="lbl">Patio</text>
+        <g stroke="var(--marking)" stroke-width="2" stroke-dasharray="18 14" opacity=".5">
+          <line x1="440" y1="300" x2="1000" y2="300"/>
+        </g>
+        <!-- Casetilla -->
+        <rect x="852" y="160" width="64" height="48" rx="4" fill="var(--surface)" stroke="var(--marking)" stroke-width="1.5"/>
+        <rect x="860" y="168" width="48" height="16" rx="2" fill="var(--accent-soft)"/>
+        <text x="846" y="150" class="lbl">Casetilla</text>
+        <rect x="834" y="228" width="10" height="10" fill="var(--marking)"/>
+        <g id="barrera"><rect x="836" y="236" width="6" height="88" fill="var(--danger)"/><rect x="836" y="256" width="6" height="12" fill="var(--marking)"/><rect x="836" y="290" width="6" height="12" fill="var(--marking)"/></g>
+        <!-- Salida -->
+        <text x="912" y="384" class="lbl-sm">SALIDA →</text>
+        <!-- Persona chofer -->
+        <g id="chofer" class="marker" opacity="0">
+          <circle cx="0" cy="0" r="7" fill="var(--marking)"/><rect x="-6" y="9" width="12" height="18" rx="5" fill="var(--marking)"/>
+          <text x="-20" y="44" class="lbl-sm">CHOFER</text>
+        </g>
+        <!-- Boleta -->
+        <g id="hoja" class="marker" opacity="0">
+          <rect x="0" y="0" width="30" height="38" rx="2" fill="var(--paper)"/>
+          <rect x="5" y="8" width="20" height="3" fill="var(--accent)"/><rect x="5" y="16" width="20" height="2" fill="#bdb49b"/><rect x="5" y="22" width="14" height="2" fill="#bdb49b"/>
+          <text x="-14" y="56" class="lbl-sm">BOLETA</text>
+        </g>
+        <!-- Camión (cabezal + contenedor), mirando a la izquierda -->
+        <g id="truck">
+          <rect x="0" y="0" width="128" height="44" rx="3" fill="var(--accent)"/>
+          <text x="20" y="28" style="font-family:var(--font-mono);font-size:13px;font-weight:700;fill:var(--accent-ink)">34591</text>
+          <rect x="132" y="6" width="36" height="38" rx="5" fill="var(--marking)"/>
+          <rect x="150" y="12" width="14" height="12" rx="2" fill="var(--asphalt)"/>
+          <circle cx="24" cy="48" r="7" fill="var(--ink)"/><circle cx="44" cy="48" r="7" fill="var(--ink)"/><circle cx="104" cy="48" r="7" fill="var(--ink)"/><circle cx="154" cy="48" r="7" fill="var(--ink)"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="pasos">
+      <ol class="lista" id="lista"></ol>
+      <div class="detalle" id="detalle" aria-live="polite"></div>
+    </div>
+  </section>
+
+
+  <!-- ── Manual de casetilla ── -->
+  <section class="manual" id="manual" aria-labelledby="t-manual">
+    <header style="display:grid;gap:10px">
+      <span class="eyebrow">Manual de usuario · Seguridad / casetilla</span>
+      <h2 id="t-manual">Registro de salida, botón por botón</h2>
+      <p class="lead">Para el oficial de casetilla. Se necesita el permiso <b>Boletas · Validar boleta</b> (hoy lo tiene <b>pcseguridad</b>). Todas las pantallas son de la app real; los nombres y cédulas están tapados.</p>
+    </header>
+
+    <div class="prueba" aria-label="Prueba hecha el 04/11/2026">
+      <div><span class="ok-txt">Validación: funciona</span><b>BS-000043</b><span>Ojito, 3 preguntas, constancia, firma y confirmación. La boleta y el despacho quedaron <b>Despachado</b>, con firma guardada e historial. 04/11/2026, 9:07.</span></div>
+      <div><span class="ok-txt">Rechazo: funciona</span><b>BS-000046</b><span>Respuesta "No", motivo y confirmación. La boleta y el despacho quedaron <b>Rechazado</b> con el motivo. 04/11/2026, 9:14.</span></div>
+      <div><span class="ok-txt">Escáner QR: abre</span><b>Cámara y lectura</b><span>El botón abre la cámara con el marco de lectura. Practique con el QR de prueba de esta página.</span></div>
+    </div>
+    <p class="nota">La prueba se hizo con boletas de prueba de agosto y septiembre (chofer de prueba) y la firma dice "PRUEBA". No se firmó a nombre de ningún chofer real.</p>
+
+    <div class="man-sec">
+      <header><span class="eyebrow">1 · Entrar</span><h3>Pantalla Registro de salida</h3></header>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/12-registro-salida.jpg" alt="Pantalla Registro de salida" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Desde el inicio de la app, tarjeta Registro de salida</h4>
+        <ul class="botones">
+          <li><span class="boton ">Escanear QR</span><span>Ícono arriba a la derecha. Abre la cámara para leer el QR que trae el chofer y abre su boleta.</span></li>
+          <li><span class="boton gris">Generar boleta de salida</span><span>Boleta <b>manual</b>, para un vehículo que sale sin despacho (punto 6).</span></li>
+          <li><span class="boton gris">Boletas de salida</span><span>Lista de todas las boletas. Es la pantalla de trabajo de casetilla.</span></li>
+        </ul></div>
+      </div>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-01-lista.jpg" alt="Lista de boletas de salida" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Lista de boletas</h4>
+        <ul class="botones">
+          <li><span class="boton gris">Buscar</span><span>Por número de boleta (BS-…), referencia del despacho, nombre del chofer o placa.</span></li>
+          <li><span class="boton gris">Estado</span><span><b>Pendiente de validación</b> = camiones por salir. Despachado, Rechazado y Anulada son historial.</span></li>
+          <li><span class="boton gris">Fecha</span><span>Todas, Hoy, 7 días o 30 días.</span></li>
+          <li><span class="boton gris">Orden</span><span>Recientes, Antiguas, o por número.</span></li>
+          <li><span class="boton gris">Tarjeta</span><span>Número, estado, referencia, chofer, placa del camión y contenedor. Tóquela para abrir la boleta.</span></li>
+        </ul>
+        <p class="nota">Rutina: deje el filtro en <b>Pendiente de validación</b> y <b>Hoy</b>.</p></div>
+      </div>
+    </div>
+
+    <div class="man-sec">
+      <header><span class="eyebrow">2 · Revisar</span><h3>Detalle de la boleta</h3></header>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-02-detalle.jpg" alt="Detalle de una boleta pendiente" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Lo que se compara con el camión</h4>
+        <ul class="botones">
+          <li><span class="boton gris">Ver QR</span><span>Muestra el QR de la boleta para enviarlo al chofer (punto 3).</span></li>
+          <li><span class="boton gris">Datos del despacho</span><span>Referencia, tienda, marchamo, puerta, tarimas sencillas y dobles, fecha.</span></li>
+          <li><span class="boton gris">Datos del chofer</span><span>Nombre y cédula. El <b>ojito</b> abre la foto de la cédula.</span></li>
+          <li><span class="boton gris">Camión y contenedor</span><span>Placa del camión, placa del contenedor y transportista.</span></li>
+          <li><span class="boton gris">Historial</span><span>Quién creó, cargó, finalizó y asignó el chofer, con la hora.</span></li>
+          <li><span class="boton rojo">Rechazar</span><span>Si algo no coincide (punto 5).</span></li>
+          <li><span class="boton ">Validar datos</span><span>Empieza la validación de salida (punto 4).</span></li>
+        </ul></div>
+      </div>
+    </div>
+
+    <div class="man-sec">
+      <header><span class="eyebrow">3 · QR</span><h3>Cómo se usa el QR</h3></header>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-03-qr.jpg" alt="Pantalla del QR de la boleta" loading="lazy"></div></div>
+        <div class="man-txt"><h4>El QR de la boleta</h4>
+        <p>El QR solo contiene el <b>número de la boleta</b> (por ejemplo BS-000043). Sirve para encontrarla en un segundo, sin buscar a mano.</p>
+        <ul class="botones">
+          <li><span class="boton ">Enviar por WhatsApp</span><span>Manda el QR al celular del chofer (usa el celular registrado en Choferes).</span></li>
+          <li><span class="boton gris">Enviar por correo</span><span>Lo manda a un correo.</span></li>
+          <li><span class="boton gris">Continuar</span><span>Cierra la pantalla del QR.</span></li>
+        </ul></div>
+      </div>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-04-escaner.jpg" alt="Escáner de QR abierto" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Escanear en casetilla</h4>
+        <ol class="que">
+          <li>Tocar el ícono <b>Escanear QR</b> (arriba a la derecha en Registro de salida o en la lista de boletas).</li>
+          <li>Aceptar el permiso de cámara la primera vez.</li>
+          <li>Apuntar al QR del celular del chofer, dentro del marco verde.</li>
+          <li>La app abre la boleta. Si no es de esta bodega avisa: <span class="msg">No se encontró ninguna boleta con el número … en esta bodega.</span></li>
+        </ol>
+        <div class="qr-practica">
+          <div id="qr-bs43" aria-label="Código QR de práctica BS-000043"></div>
+          <p><b>Practique aquí.</b> Escanee este QR con la app: abre la boleta de prueba <b>BS-000043</b>, que ya está despachada, así que no se cambia nada.</p>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="man-sec">
+      <header><span class="eyebrow">4 · Validar</span><h3>Dejar salir el camión</h3></header>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-05-validar.jpg" alt="Validar datos sin responder" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Paso A · Ver la cédula</h4>
+        <p>Tocar el <b>ojito</b> y comparar la foto con la persona. Hasta hacerlo, el <b>Sí</b> de identidad no se puede marcar: <span class="msg">Presioná el ojito para ver la foto de la cédula y compararla antes de confirmar la identidad.</span></p></div>
+      </div>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-06-respuestas.jpg" alt="Las tres preguntas respondidas en Sí" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Paso B · Tres preguntas</h4>
+        <ul class="botones">
+          <li><span class="boton ">Identidad</span><span>¿La persona es la de la cédula?</span></li>
+          <li><span class="boton ">Placa camión</span><span>¿La placa del camión es la de la boleta?</span></li>
+          <li><span class="boton ">Placa contenedor</span><span>¿El contenedor es el de la boleta?</span></li>
+          <li><span class="boton gris">Continuar</span><span>Se activa solo con las tres en Sí.</span></li>
+        </ul></div>
+      </div>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-07-constancia.jpg" alt="Constancia de salida" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Paso C · Constancia del chofer</h4>
+        <p>La app muestra la <b>Constancia de salida</b>: el chofer declara que la unidad sale sin daños ocasionados por la empresa. Léasela, que el chofer marque <b>Estoy de acuerdo</b> y toque <b>Firmar</b>.</p></div>
+      </div>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-08-firma.jpg" alt="Panel de firma" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Paso D · Firma del chofer</h4>
+        <ul class="botones">
+          <li><span class="boton gris">Firma</span><span>Firma <b>el chofer</b> con el dedo, dentro del marco. Nunca la firma el oficial.</span></li>
+          <li><span class="boton gris">Limpiar</span><span>Borra para volver a firmar.</span></li>
+          <li><span class="boton ">Guardar firma</span><span>Guarda la firma y vuelve a la constancia.</span></li>
+        </ul></div>
+      </div>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-09-confirmar.jpg" alt="Confirmar validación" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Paso E · Confirmar</h4>
+        <p>Tocar <b>Confirmar validación</b> y en el aviso <b>CONFIRMAR</b>: <span class="msg">¿Confirmás la validación? El despacho quedará como Despachado.</span></p></div>
+      </div>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-10-validada.jpg" alt="Boleta validada" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Paso F · Listo</h4>
+        <p>Mensaje <span class="msg">✅ Boleta validada · El despacho quedó Despachado.</span> Ahora sí se levanta la barrera.</p></div>
+      </div>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-10c-historial.jpg" alt="Boleta despachada con firma e historial" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Queda registrado</h4>
+        <p>La boleta queda en <b>Despachado</b>, con la firma, las respuestas, la hora y quién validó. El despacho también pasa a Despachado.</p></div>
+      </div>
+    </div>
+
+    <div class="man-sec">
+      <header><span class="eyebrow">5 · Rechazar</span><h3>Si algo no coincide</h3></header>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-12-no-coincide.jpg" alt="Respuesta No bloquea la validación" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Paso A · Responder No</h4>
+        <p>Con una respuesta en <b>No</b>, la app bloquea la validación y lo dice: <span class="msg">No se puede validar esta boleta · El chofer no es el de la boleta.</span> Si fue un error, cambie la respuesta a Sí.</p></div>
+      </div>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-13-motivo.jpg" alt="Motivo del rechazo" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Paso B · Motivo</h4>
+        <p>Tocar <b>Rechazar boleta</b>. El motivo viene escrito según la pregunta y se puede ampliar. Mínimo 10 caracteres.</p></div>
+      </div>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-14-rechazada.jpg" alt="Boleta rechazada" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Paso C · Confirmar</h4>
+        <p>Confirmar con <b>RECHAZAR</b>: <span class="msg">La boleta y el despacho quedaron como Rechazado.</span> El camión <b>no sale</b>.</p></div>
+      </div>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-15-detalle-rechazada.jpg" alt="Detalle de boleta rechazada" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Después del rechazo</h4>
+        <p>La boleta queda en rojo con la hora del rechazo y el motivo. Avise al supervisor de despacho. Por ahora el despacho rechazado <b>no se puede reabrir desde la app</b>: pídalo a <b>Aplicaciones OLO</b> para corregir chofer o placa y generar una boleta nueva.</p></div>
+      </div>
+    </div>
+
+    <div class="man-sec">
+      <header><span class="eyebrow">6 · Boleta manual</span><h3>Vehículo que sale sin despacho</h3></header>
+      
+      <div class="man-row">
+        <div class="marco"><div class="pantalla"><img src="img/manual-16-boleta-manual.jpg" alt="Formulario de boleta manual" loading="lazy"></div></div>
+        <div class="man-txt"><h4>Generar boleta de salida</h4>
+        <p>Para un vehículo que sale sin un despacho de AppOLO (por ejemplo vacío o con otra carga).</p>
+        <ul class="botones">
+          <li><span class="boton gris">Buscar chofer</span><span>Escriba la cédula y toque buscar: si ya existe, carga sus datos.</span></li>
+          <li><span class="boton gris">Datos</span><span>Nombre, compañía, tipo de vehículo (camión, plataforma o furgón) y placa.</span></li>
+          <li><span class="boton gris">Cargado / Vacío</span><span>Estado de la unidad al salir.</span></li>
+          <li><span class="boton gris">Foto de la cédula</span><span>Tomar o elegir la foto.</span></li>
+          <li><span class="boton ">Generar boleta</span><span>Crea la boleta con su número. Después se valida igual que las demás (punto 4).</span></li>
+        </ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Si algo falla ── -->
+  <section class="man-sec" id="errores" aria-labelledby="t-errores">
+    <header><span class="eyebrow">Si algo falla</span><h2 id="t-errores">Mensajes de la app y qué hacer</h2></header>
+    <div class="tabla-wrap">
+      <table class="errores">
+        <thead><tr><th>Qué pasa o qué dice la app</th><th>Qué significa</th><th>Qué hacer</th></tr></thead>
+        <tbody>
+          <tr><td>El camión llegó pero su boleta no aparece en Pendiente de validación.</td><td>El despacho se finalizó sin chofer: está en <b>Chofer pendiente</b> y no tiene boleta.</td><td>No dejar salir. Llamar a despacho para que asigne el chofer: la boleta se genera en ese momento.</td></tr>
+          <tr><td><span class="msg">No se encontró ninguna boleta con el número … en esta bodega.</span></td><td>El QR es de otra bodega o el número no existe.</td><td>Buscar a mano por placa o referencia. Si no aparece, no dejar salir y avisar a despacho.</td></tr>
+          <tr><td><span class="msg">Permiso requerido</span> o la cámara se ve negra.</td><td>La app no tiene permiso de cámara.</td><td>Aceptar el permiso. Si se negó: Ajustes del teléfono → Aplicaciones → AppOLO → Permisos → Cámara. Cerrar el escáner y abrirlo de nuevo.</td></tr>
+          <tr><td>El <b>Sí</b> de identidad no se puede tocar.</td><td>Falta ver la foto de la cédula.</td><td>Tocar el ojito, comparar y volver.</td></tr>
+          <tr><td><span class="msg">Sin documento · El chofer no tiene documento de identidad asociado.</span></td><td>El chofer no tiene foto de cédula registrada.</td><td>No se puede comparar la identidad. Despacho debe completar la foto en <b>Choferes</b>; mientras tanto, rechazar con ese motivo.</td></tr>
+          <tr><td><span class="msg">Checklist incompleto · Respondé todas las preguntas antes de continuar.</span></td><td>Falta responder alguna pregunta.</td><td>Responder las tres.</td></tr>
+          <tr><td><span class="msg">Firma vacía</span> o <span class="msg">Falta la firma</span></td><td>No hay firma guardada.</td><td>Que el chofer firme y tocar <b>Guardar firma</b>.</td></tr>
+          <tr><td>El botón <b>Firmar</b> está gris.</td><td>Falta marcar <b>Estoy de acuerdo</b>.</td><td>Que el chofer lea la constancia y marque la casilla.</td></tr>
+          <tr><td>El chofer o una placa no son los de la boleta.</td><td>No es el camión o la persona autorizada.</td><td><b>Rechazar</b> con el motivo y no dejar salir. Avisar al supervisor.</td></tr>
+          <tr><td><span class="msg">La boleta no está pendiente de validación…</span></td><td>Otra persona ya la validó o la rechazó.</td><td>Volver a la lista y revisar su estado.</td></tr>
+          <tr><td><span class="msg">Tu sesión no tiene scope…</span> o <span class="msg">No tienes acceso a este recurso.</span></td><td>El usuario no tiene bodega asignada o es de otra bodega.</td><td>Cerrar sesión y entrar de nuevo. Si sigue, avisar a Aplicaciones OLO.</td></tr>
+          <tr><td>Aviso de que falta el permiso <b>Boletas · Validar boleta</b>.</td><td>El usuario no tiene permiso para validar.</td><td>Pedirlo al administrador (Desk → Administración → Permisos).</td></tr>
+          <tr><td>Sin internet, o la confirmación se queda cargando.</td><td>Validar necesita conexión.</td><td>No dar la salida por hecha hasta ver <span class="msg">✅ Boleta validada</span>. Esperar señal y repetir.</td></tr>
+          <tr><td>Se rechazó o validó una boleta por error.</td><td>No se puede deshacer desde la app.</td><td>Avisar a Aplicaciones OLO con el número de boleta.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Arranque ── -->
+  <section class="man-sec" id="arranque" aria-labelledby="t-arranque">
+    <header><span class="eyebrow">Arranque · 04/11/2026</span><h2 id="t-arranque">Lista para dejarlo funcionando</h2></header>
+    <ul class="check">
+      <li><span class="est si" aria-label="Listo">✓</span><span><b>Flujo probado en producción:</b> validación (BS-000043), rechazo (BS-000046) y escáner QR.</span></li>
+      <li><span class="est si" aria-label="Listo">✓</span><span><b>Despachos pegados limpiados:</b> 463 en "Chofer pendiente" cerrados como regularización.</span></li>
+      <li><span class="est si" aria-label="Listo">✓</span><span><b>Usuario de casetilla:</b> pcseguridad tiene permiso para validar y su bodega es CLIRO.</span></li>
+      <li><span class="est ojo" aria-label="Pendiente">!</span><span><b>Choferes con foto de cédula:</b> 7 de 15. Completar los demás en Choferes antes de que lleguen a casetilla.</span></li>
+      <li><span class="est ojo" aria-label="Pendiente">!</span><span><b>Boletas viejas sin validar:</b> 9 de agosto y septiembre. Cerrarlas para que la lista empiece limpia.</span></li>
+      <li><span class="est ojo" aria-label="Pendiente">!</span><span><b>Operación:</b> asignar el chofer <b>antes</b> de finalizar cada despacho.</span></li>
+      <li><span class="est no" aria-label="Falta">✕</span><span><b>Reabrir un despacho rechazado:</b> la app todavía no tiene el botón; por ahora lo hace Aplicaciones OLO.</span></li>
+    </ul>
+  </section>
+
+  <!-- ── Casetilla y boleta ── -->
+  <section class="dos" aria-labelledby="t-caseta">
+    <div class="panel">
+      <div class="cabina">
+        <svg viewBox="0 0 44 44" aria-hidden="true"><rect x="4" y="12" width="36" height="28" rx="3" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><rect x="10" y="18" width="24" height="10" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/><path d="M2 12 L22 3 L42 12" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/></svg>
+        <div>
+          <span class="eyebrow">Paso 6 · Simulador</span>
+          <h2 id="t-caseta">Casetilla: validar la salida</h2>
+        </div>
+      </div>
+      <p class="lead">El oficial abre <b>Registro de salida</b> en la app, busca la boleta y compara lo que dice la boleta con lo que tiene enfrente. Primero vea la foto de la cédula, responda las tres preguntas y pida la firma del chofer.</p>
+
+      <div class="toggle" role="group" aria-label="Escenario de práctica">
+        <button id="esc-ok" aria-pressed="true">Todo coincide</button>
+        <button id="esc-mal" aria-pressed="false">Llegó otro camión</button>
+      </div>
+
+      <div>
+        <h3 style="margin-bottom:8px">Lo que tiene enfrente</h3>
+        <div class="llego">
+          <div class="dato-real" id="r-chofer"><small>Chofer (cédula)</small><b>1-0845-0321</b></div>
+          <div class="dato-real" id="r-camion"><small>Placa del camión</small><b>C-148203</b></div>
+          <div class="dato-real" id="r-cont"><small>Placa del contenedor</small><b>34591</b></div>
+        </div>
+      </div>
+
+      <div id="preguntas"></div>
+
+      <div class="firma-box">
+        <label for="firma"><b>Firma del chofer</b></label>
+        <canvas id="firma" width="600" height="130" aria-label="Recuadro para firmar con el dedo o el mouse"></canvas>
+        <div class="firma-row"><span id="firma-hint">Firme dentro del recuadro.</span><button class="btn" id="borrar">Borrar firma</button></div>
+      </div>
+
+      <div class="nav">
+        <button class="btn primario" id="validar" disabled>Validar boleta</button>
+        <button class="btn" id="rechazar" hidden>Rechazar boleta</button>
+        <button class="btn" id="reiniciar">Volver a practicar</button>
+      </div>
+      <div class="resultado" id="resultado" role="status"></div>
+    </div>
+
+    <div class="panel">
+      <span class="eyebrow">Así se ve</span>
+      <h2>Boleta de salida</h2>
+      <p class="nota">Se genera sola cuando el despacho tiene chofer y se finaliza. El número es consecutivo y nunca se repite. Datos de ejemplo.</p>
+      <article class="boleta" aria-label="Boleta de salida de ejemplo">
+        <div class="b-head">
+          <div><div class="b-marca">OLO · BOLETA DE SALIDA</div><div style="font-size:.8rem;color:#6c6552">CLIRO · Despacho EPA</div></div>
+          <div class="b-num"><small>Número</small>BS-000511</div>
+        </div>
+        <div class="b-sec">
+          <h4>Despacho</h4>
+          <div class="b-grid">
+            <div><span>Referencia</span><b>EPA-20261104-0930-T3</b></div>
+            <div><span>Tienda</span><b>T3</b></div>
+            <div><span>Puerta</span><b>Puerta 13</b></div>
+            <div><span>Marchamo</span><b>MR-208144</b></div>
+            <div><span>Tarimas S / D</span><b>18 / 2</b></div>
+            <div><span>Fecha</span><b>04/11/2026 09:30</b></div>
+          </div>
+        </div>
+        <div class="b-sec">
+          <h4>Chofer y vehículo</h4>
+          <div class="b-grid">
+            <div><span>Nombre</span><b>Chofer de ejemplo</b></div>
+            <div><span>Cédula</span><b>1-0845-0321</b></div>
+            <div><span>Placa del camión</span><b>C-148203</b></div>
+            <div><span>Placa del contenedor</span><b>34591</b></div>
+            <div><span>Transportista</span><b>OLO</b></div>
+            <div><span>Destino</span><b>Tienda T3</b></div>
+          </div>
+        </div>
+        <div class="b-sec">
+          <h4>Checklist de casetilla</h4>
+          <div class="b-check" id="b-check"></div>
+        </div>
+        <div class="b-sec">
+          <h4>Firma del chofer</h4>
+          <div class="b-firma" id="b-firma"><span class="nota" style="color:#8a836e">Pendiente</span></div>
+          <div style="font-size:.8rem;color:#6c6552;margin-top:6px" id="b-validado">Validada por: —</div>
+        </div>
+        <div class="sello pend on" id="sello">PENDIENTE</div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ── Reglas ── -->
+  <section aria-labelledby="t-reglas" style="display:grid;gap:16px">
+    <h2 id="t-reglas">Tres reglas para que el despacho no se quede pegado</h2>
+    <div class="reglas">
+      <div class="regla"><h3>Chofer antes de finalizar</h3><p>Asigne el chofer en el despacho <b>antes</b> de tocar Finalizar. Así sale la boleta y el camión puede pasar por la casetilla.</p></div>
+      <div class="regla amarilla"><h3>Chofer con cédula</h3><p>El chofer debe estar en el catálogo con <b>foto de la cédula</b>. Si no está, la app no deja asignarlo: regístrelo en <b>Choferes</b>.</p></div>
+      <div class="regla roja"><h3>Si algo no coincide, se rechaza</h3><p>Si el chofer o una placa no son los de la boleta, la casetilla <b>rechaza</b> con motivo. Nunca se valida "para salir del paso".</p></div>
+    </div>
+    <p class="nota">Del 13/08 al 03/11/2026 quedaron 463 despachos en "Chofer pendiente" porque se finalizaban sin chofer. Se regularizaron el 04/11/2026; desde hoy cada despacho debe cerrarse con su boleta.</p>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(() => {
+  try {
+    const qrEl = document.getElementById("qr-bs43");
+    if (qrEl && window.QRCode) new QRCode(qrEl, { text: "BS-000043", width: 136, height: 136, correctLevel: QRCode.CorrectLevel.M });
+  } catch (e) { /* sin QR la página sigue funcionando */ }
+
+  const ANDENES = [11, 12, 13, 14, 15, 16];
+  const ANDEN_ACTIVO = 13;
+  const yAnden = (n) => 70 + (n - 11) * 48;
+
+  // Andenes en el muro
+  const gA = document.getElementById("andenes");
+  ANDENES.forEach((n) => {
+    const y = yAnden(n);
+    gA.insertAdjacentHTML("beforeend",
+      `<rect class="door${n === ANDEN_ACTIVO ? " activa" : ""}" x="304" y="${y}" width="44" height="34" rx="3"/>` +
+      `<text class="door-txt" x="314" y="${y + 22}">P${n}</text>`);
+  });
+
+  const yT = yAnden(ANDEN_ACTIVO) - 4; // camión pegado a P13
+  const POS = {
+    anden: `translate(352px, ${yT}px)`,
+    caseta: `translate(656px, 252px)`, // se detiene antes de la barrera
+    salida: `translate(1010px, 252px)`,
+  };
+
+  const PASOS = [
+    {
+      t: "Crear el despacho",
+      estado: ["c-creado", "Creado"],
+      donde: "App AppOLO · <b>Despachos → Nuevo despacho</b>",
+      que: ["Elegir la tienda y la puerta (andén) donde está el contenedor, por ejemplo P13.", "Anotar la placa del contenedor y el marchamo.", "Queda una referencia como EPA-20261104-0930-T3."],
+      aviso: null,
+      camion: "anden", carga: 0, chofer: false, hoja: false, barrera: false,
+      pantallas: [["01-inicio","En el inicio, entrar a <b>(New)Despacho</b>."],["02-despacho-hub","Tocar <b>Despachos EPA</b>."],["03-lista-despachos","Tocar <b>+ Nuevo</b>."],["08-nuevo-despacho","Llenar tienda, <b>placa del contenedor</b>, <b>marchamo</b> y <b>puerta</b>."],["09-nuevo-despacho-chofer","El chofer se puede elegir aquí mismo. Después, <b>Guardar</b>."]],
+    },
+    {
+      t: "Cargar el contenedor",
+      estado: ["c-proceso", "En proceso"],
+      donde: "App AppOLO · <b>detalle del despacho → Fotos y acomodo</b>",
+      que: ["El montacargas trae las tarimas del rack a preparación y al contenedor.", "Tomar foto de cada tarima y escanear su QR.", "Acomodarla en el plano del contenedor: sencilla (S) o doble (D)."],
+      aviso: null,
+      camion: "anden", carga: 1, chofer: false, hoja: false, barrera: false,
+      pantallas: [["04-detalle","En el despacho: <b>Tomar fotos</b> de cada tarima."],["05-ver-carga","<b>Ver carga</b> muestra el acomodo del contenedor (24 espacios)."]],
+    },
+    {
+      t: "Asignar el chofer",
+      estado: ["c-proceso", "En proceso"],
+      donde: "App AppOLO · <b>detalle del despacho → Chofer</b>",
+      que: ["Llega el chofer que se va a llevar el camión.", "Buscarlo en el catálogo y asignarlo al despacho.", "Si no aparece, registrarlo en <b>Choferes</b> con su cédula y foto de la cédula."],
+      aviso: ["", "Este es el paso que se estaba saltando. Sin chofer no se genera la boleta."],
+      camion: "anden", carga: 2, chofer: true, hoja: false, barrera: false,
+      pantallas: [["04-detalle","Tocar <b>Asignar chofer</b>."],["06-asignar-chofer","Elegir el chofer. Los marcados <b>Pendiente · sin documento</b> no se pueden asignar."],["18-choferes","Si no está o le falta documento: <b>Choferes</b>."],["19-nuevo-chofer","<b>Nuevo chofer</b>: nombre, cédula, placa del camión y compañía."],["19b-nuevo-chofer","Sin <b>foto de la cédula</b>, el chofer queda Pendiente y no se puede asignar."]],
+    },
+    {
+      t: "Finalizar la carga",
+      estado: ["c-validacion", "Pendiente de validación"],
+      donde: "App AppOLO · <b>detalle del despacho → Finalizar</b>",
+      que: ["Con el chofer asignado, tocar Finalizar.", "El despacho pasa a <b>Completo</b> y la app genera la <b>boleta de salida</b> con su número (BS-000511).", "Queda en <b>Pendiente de validación</b>: la boleta espera a la casetilla."],
+      aviso: ["mal", "Si se finaliza <b>sin chofer</b>, el despacho queda en <b>Chofer pendiente</b> y no hay boleta. Se corrige asignando el chofer: ahí sale la boleta."],
+      camion: "anden", carga: 2, chofer: true, hoja: true, barrera: false,
+      pantallas: [["07-menu","Menú <b>⋮</b> del despacho → <b>Finalizar</b>."],["11-detalle-pendiente-validacion","Con chofer, queda en <b>Pendiente de validación</b> y ya tiene boleta."]],
+    },
+    {
+      t: "Ir a la casetilla",
+      estado: ["c-validacion", "Pendiente de validación"],
+      donde: "Patio → <b>Casetilla</b>",
+      que: ["El chofer saca el camión del andén y se detiene en la casetilla.", "La barrera sigue abajo hasta que el oficial valide la boleta."],
+      aviso: null,
+      camion: "caseta", carga: 2, chofer: false, hoja: true, barrera: false,
+      pantallas: [["12-registro-salida","En el inicio, <b>Registro de salida</b> → <b>Boletas de salida</b>."],["14-boletas-pendientes","Filtrar <b>Pendiente de validación</b> y abrir la boleta del camión."]],
+    },
+    {
+      t: "Validar en casetilla",
+      estado: ["c-validacion", "Pendiente de validación"],
+      donde: "App AppOLO · <b>Registro de salida → Boletas de salida → Validar datos</b>",
+      que: ["Tocar el <b>ojito</b> para ver la foto de la cédula y compararla con la persona. Hasta hacerlo, el Sí de identidad no se puede marcar.", "Revisar la placa del camión y la del contenedor contra la boleta.", "Si todo coincide: Sí en las tres preguntas, <b>Continuar</b> y firma del chofer.", "Si algo no coincide: <b>Rechazar salida</b> con el motivo."],
+      aviso: ["bien", "Practique este paso en el simulador de abajo."],
+      camion: "caseta", carga: 2, chofer: false, hoja: true, barrera: false,
+      pantallas: [["15-boleta-detalle-1","La boleta muestra despacho, chofer, camión y contenedor."],["16-boleta-detalle-2","Abajo: <b>Rechazar</b> o <b>Validar datos</b>."],["17-validar-boleta","Tocar el <b>ojito</b> para ver la cédula; después responder las 3 preguntas y <b>Continuar</b> a la firma."]],
+    },
+    {
+      t: "Salida del camión",
+      estado: ["c-despachado", "Despachado"],
+      donde: "Casetilla → <b>Salida</b>",
+      que: ["Con la boleta validada, el despacho queda <b>Despachado</b>.", "Se levanta la barrera y el camión sale.", "La boleta queda guardada con firma, checklist y quién la validó."],
+      aviso: ["bien", "Despacho cerrado. Ya no aparece como pendiente."],
+      camion: "salida", carga: 2, chofer: false, hoja: false, barrera: true,
+      pantallas: [["10-finalizados","El despacho pasa a <b>Finalizados</b>; la boleta queda <b>Despachado</b>."]],
+    },
+  ];
+
+  const ICON = {
+    "": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z" fill="var(--caution)"/><rect x="11" y="9" width="2" height="6" fill="#1b1b1b"/><rect x="11" y="17" width="2" height="2" fill="#1b1b1b"/></svg>',
+    mal: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--danger)"/><path d="M8 8l8 8M16 8l-8 8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>',
+    bien: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--ok)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  };
+
+  const lista = document.getElementById("lista");
+  const detalle = document.getElementById("detalle");
+  const truck = document.getElementById("truck");
+  const barrera = document.getElementById("barrera");
+  const montacargas = document.getElementById("montacargas");
+  const pallets = [...document.querySelectorAll("#tarimas .pallet")];
+  const chofer = document.getElementById("chofer");
+  const hoja = document.getElementById("hoja");
+  let actual = 0;
+
+  PASOS.forEach((p, i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<button id="paso-${i + 1}"><span class="num">${i + 1}</span><span class="t">${p.t}</span></button>`;
+    li.querySelector("button").addEventListener("click", () => ir(i));
+    lista.appendChild(li);
+  });
+
+  function ir(i) {
+    actual = Math.max(0, Math.min(PASOS.length - 1, i));
+    const p = PASOS[actual];
+    lista.querySelectorAll("button").forEach((b, k) => { if (k === actual) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current"); });
+
+    truck.style.transform = POS[p.camion];
+    barrera.style.transform = p.barrera ? "rotate(-90deg)" : "rotate(0deg)";
+    // Carga: 0 = tarimas en preparación, 1 = montacargas cargando, 2 = contenedor lleno.
+    montacargas.style.transform = p.carga === 1 ? "translate(110px, -30px)" : "translate(0,0)";
+    pallets.forEach((el, k) => (el.style.opacity = p.carga === 2 ? 0 : p.carga === 1 && k < 2 ? 0.35 : 1));
+    chofer.setAttribute("transform", `translate(${p.camion === "anden" ? 560 : 760}, ${yT + 70})`);
+    chofer.style.opacity = p.chofer ? 1 : 0;
+    hoja.setAttribute("transform", `translate(${p.camion === "anden" ? 600 : 930}, ${p.camion === "anden" ? yT - 40 : 160})`);
+    hoja.style.opacity = p.hoja ? 1 : 0;
+
+    const aviso = p.aviso
+      ? `<div class="aviso ${p.aviso[0]}">${ICON[p.aviso[0]]}<p>${p.aviso[1]}</p></div>`
+      : "";
+    const pant = p.pantallas || [];
+    const telefono = pant.length ? `
+      <figure class="telefono" style="margin:0">
+        <div class="marco"><div class="pantalla"><img id="pant-img" src="img/${pant[0][0]}.jpg" alt="Pantalla de la app: ${pant[0][1].replace(/<[^>]+>/g, "")}" loading="lazy"></div></div>
+        <figcaption class="cap" id="pant-cap">${pant[0][1]}</figcaption>
+        ${pant.length > 1 ? `<div class="miniaturas" role="group" aria-label="Pantallas de este paso">${pant.map((x, k) => `<button id="mini-${actual}-${k}" aria-pressed="${k === 0}" aria-label="Pantalla ${k + 1} de ${pant.length}"><img src="img/${x[0]}.jpg" alt="" loading="lazy"></button>`).join("")}</div>` : ""}
+      </figure>` : "";
+    detalle.innerHTML = `<div class="texto">
+      <div class="detalle-top">
+        <h3>${actual + 1}. ${p.t}</h3>
+        <span class="chip ${p.estado[0]}">${p.estado[1]}</span>
+      </div>
+      <p class="donde">Dónde: ${p.donde}</p>
+      <ul class="que">${p.que.map((q) => `<li>${q}</li>`).join("")}</ul>
+      ${aviso}
+      <div class="nav">
+        <button class="btn" id="ant" ${actual === 0 ? "disabled" : ""}>Paso anterior</button>
+        <button class="btn primario" id="sig">${actual === PASOS.length - 1 ? "Ver desde el inicio" : "Siguiente paso"}</button>
+      </div>
+      <p class="app-nota">Pantallas reales de la app (AppOLO 9.3.5). Los nombres y cédulas de choferes están tapados.</p>
+      </div>${telefono}`;
+    detalle.querySelectorAll(".miniaturas button").forEach((b, k) =>
+      b.addEventListener("click", () => {
+        const img = detalle.querySelector("#pant-img");
+        img.src = `img/${pant[k][0]}.jpg`;
+        img.alt = "Pantalla de la app: " + pant[k][1].replace(/<[^>]+>/g, "");
+        detalle.querySelector("#pant-cap").innerHTML = pant[k][1];
+        detalle.querySelectorAll(".miniaturas button").forEach((x, j) => x.setAttribute("aria-pressed", String(j === k)));
+      })
+    );
+    detalle.querySelector("#ant").addEventListener("click", () => ir(actual - 1));
+    detalle.querySelector("#sig").addEventListener("click", () => ir(actual === PASOS.length - 1 ? 0 : actual + 1));
+  }
+  ir(0);
+
+  // ── Simulador de casetilla ───────────────────────────────────────────
+  const PREGUNTAS = [
+    { key: "identidad", texto: "¿La identidad del chofer es correcta?", dato: "Boleta: cédula 1-0845-0321", motivo: "El chofer no es el de la boleta.", ojo: true },
+    { key: "placaCamion", texto: "¿La placa del camión es correcta?", dato: "Boleta: C-148203", motivo: "La placa del camión no es la de la boleta." },
+    { key: "placaContenedor", texto: "¿La placa del contenedor es correcta?", dato: "Boleta: 34591", motivo: "La placa del contenedor no es la de la boleta." },
+  ];
+  const resp = {};
+  let firmado = false;
+  let cedulaVista = false;
+  const preguntasEl = document.getElementById("preguntas");
+  const btnValidar = document.getElementById("validar");
+  const btnRechazar = document.getElementById("rechazar");
+  const resultado = document.getElementById("resultado");
+  const sello = document.getElementById("sello");
+  const bCheck = document.getElementById("b-check");
+  const bFirma = document.getElementById("b-firma");
+  const bValidado = document.getElementById("b-validado");
+
+  PREGUNTAS.forEach((p) => {
+    const div = document.createElement("div");
+    div.className = "preg";
+    div.innerHTML = `<div style="min-width:0"><p>${p.texto}<small>${p.dato}</small></p>${p.ojo ? `
+        <button class="btn ojo" id="ver-cedula">Ver foto de la cédula</button>
+        <div class="cedula" id="cedula-card" hidden>
+          <div class="foto" aria-hidden="true"><svg viewBox="0 0 64 76" width="64" height="76"><circle cx="32" cy="28" r="14" fill="#e9eef4"/><rect x="10" y="46" width="44" height="34" rx="16" fill="#e9eef4"/></svg></div>
+          <div><small>República de Costa Rica · Ejemplo</small><b>1-0845-0321</b><small>Chofer de ejemplo</small></div>
+        </div>` : ""}</div>
+      <div class="sino" role="group" aria-label="${p.texto}">
+        <button id="${p.key}-si" data-v="si" aria-pressed="false"${p.ojo ? " disabled title=\"Primero vea la foto de la cédula\"" : ""}>Sí</button>
+        <button id="${p.key}-no" data-v="no" aria-pressed="false">No</button>
+      </div>`;
+    div.querySelectorAll(".sino button").forEach((b) =>
+      b.addEventListener("click", () => {
+        resp[p.key] = b.dataset.v;
+        div.querySelectorAll(".sino button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+        refrescar();
+      })
+    );
+    if (p.ojo) {
+      div.querySelector("#ver-cedula").addEventListener("click", () => {
+        cedulaVista = true;
+        div.querySelector("#cedula-card").hidden = false;
+        const si = div.querySelector("#identidad-si");
+        si.disabled = false;
+        si.removeAttribute("title");
+      });
+    }
+    preguntasEl.appendChild(div);
+  });
+
+  function pintarChecklist(final) {
+    bCheck.innerHTML = PREGUNTAS.map((p) => {
+      const v = resp[p.key];
+      const txt = v === "si" ? "Sí" : v === "no" ? "No" : "—";
+      return `<div><span>${p.texto.replace("¿", "").replace("?", "")}</span><b>${final || v === "no" ? txt : "—"}</b></div>`;
+    }).join("");
+  }
+
+  function setSello(clase, texto) {
+    sello.className = `sello ${clase} on`;
+    sello.textContent = texto;
+  }
+
+  function refrescar() {
+    const noes = PREGUNTAS.filter((p) => resp[p.key] === "no");
+    const todasSi = PREGUNTAS.every((p) => resp[p.key] === "si");
+    btnValidar.disabled = !(todasSi && firmado);
+    btnRechazar.hidden = noes.length === 0;
+    btnValidar.hidden = noes.length > 0;
+    resultado.className = "resultado";
+    resultado.textContent = "";
+    pintarChecklist(false);
+    setSello("pend", "PENDIENTE");
+    document.getElementById("firma-hint").textContent = firmado ? "Firma capturada." : "Firme dentro del recuadro.";
+  }
+
+  btnValidar.addEventListener("click", () => {
+    pintarChecklist(true);
+    bFirma.innerHTML = `<img alt="Firma del chofer" src="${canvas.toDataURL("image/png")}">`;
+    bValidado.textContent = "Validada por: Oficial de casetilla · 04/11/2026 10:42";
+    setSello("ok", "DESPACHADO");
+    resultado.className = "resultado ok";
+    resultado.textContent = "Boleta validada. El despacho queda Despachado y se levanta la barrera.";
+    btnValidar.disabled = true;
+    ir(PASOS.length - 1);
+  });
+
+  btnRechazar.addEventListener("click", () => {
+    const motivo = PREGUNTAS.filter((p) => resp[p.key] === "no").map((p) => p.motivo).join(" ");
+    pintarChecklist(true);
+    bValidado.textContent = "Rechazada · Motivo: " + motivo;
+    setSello("mal", "RECHAZADA");
+    resultado.className = "resultado mal";
+    resultado.textContent = "Boleta rechazada: " + motivo + " El camión no sale; se revisa con el supervisor.";
+    btnRechazar.hidden = true;
+  });
+
+  // Escenarios
+  const escOk = document.getElementById("esc-ok");
+  const escMal = document.getElementById("esc-mal");
+  function escenario(mal) {
+    escOk.setAttribute("aria-pressed", String(!mal));
+    escMal.setAttribute("aria-pressed", String(mal));
+    const camion = document.getElementById("r-camion");
+    camion.classList.toggle("difiere", mal);
+    camion.querySelector("b").textContent = mal ? "C-152977" : "C-148203";
+    reiniciar();
+  }
+  escOk.addEventListener("click", () => escenario(false));
+  escMal.addEventListener("click", () => escenario(true));
+
+  // Firma
+  const canvas = document.getElementById("firma");
+  const ctx = canvas.getContext("2d");
+  let dibujando = false;
+  function ajustarCanvas() {
+    const r = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(r.width * dpr));
+    canvas.height = Math.max(1, Math.round(r.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#1f1c14";
+  }
+  const punto = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  canvas.addEventListener("pointerdown", (e) => { dibujando = true; canvas.setPointerCapture(e.pointerId); ctx.beginPath(); ctx.moveTo(...punto(e)); });
+  canvas.addEventListener("pointermove", (e) => { if (!dibujando) return; ctx.lineTo(...punto(e)); ctx.stroke(); if (!firmado) { firmado = true; refrescar(); } });
+  canvas.addEventListener("pointerup", () => (dibujando = false));
+  canvas.addEventListener("pointercancel", () => (dibujando = false));
+  function borrarFirma() { ctx.clearRect(0, 0, canvas.width, canvas.height); firmado = false; }
+  document.getElementById("borrar").addEventListener("click", () => { borrarFirma(); refrescar(); });
+
+  function reiniciar() {
+    PREGUNTAS.forEach((p) => { delete resp[p.key]; });
+    preguntasEl.querySelectorAll(".sino button").forEach((b) => b.setAttribute("aria-pressed", "false"));
+    cedulaVista = false;
+    const card = document.getElementById("cedula-card");
+    if (card) card.hidden = true;
+    const siId = document.getElementById("identidad-si");
+    if (siId) { siId.disabled = true; siId.title = "Primero vea la foto de la cédula"; }
+    borrarFirma();
+    bFirma.innerHTML = '<span class="nota" style="color:#8a836e">Pendiente</span>';
+    bValidado.textContent = "Validada por: —";
+    refrescar();
+  }
+  document.getElementById("reiniciar").addEventListener("click", reiniciar);
+
+  ajustarCanvas();
+  window.addEventListener("resize", () => { const vacio = !firmado; ajustarCanvas(); if (vacio) borrarFirma(); });
+  refrescar();
+})();
+</script>
