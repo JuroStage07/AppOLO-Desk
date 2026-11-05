@@ -14,7 +14,7 @@ function bucketFalso({ falla = false } = {}) {
     async createSignedUrl(path, _exp, opts) {
       firmadas.push(path);
       if (falla) return { data: null, error: new Error("storage caído") };
-      return { data: { signedUrl: `https://sb.example/sign/${path}?w=${opts?.transform?.width ?? "orig"}&token=x` }, error: null };
+      return { data: { signedUrl: `https://sb.example/sign/${path}?w=${opts?.transform?.width ?? "orig"}&r=${opts?.transform?.resize ?? "-"}&token=x` }, error: null };
     },
     async createSignedUrls(paths) {
       paths.forEach((p) => firmadas.push(p));
@@ -44,11 +44,11 @@ describe("fotos firmadas", () => {
     expect(seleccionarFotos(muchas, A, 12)).toHaveLength(12);
   });
 
-  it("firma a 1280 px con URLs https y mantiene taken_at y tarima", async () => {
+  it("firma a 1280 px sin recortar (resize contain), https, con taken_at y tarima", async () => {
     const { b } = bucketFalso();
     const r = await firmarFotos(b, [fila(5, { tarima: "D" }), fila(4, { tarima: "x" })]);
     expect(r).toHaveLength(2);
-    expect(r.every((f) => f.url.startsWith("https://") && f.url.includes("w=1280"))).toBe(true);
+    expect(r.every((f) => f.url.startsWith("https://") && f.url.includes("w=1280&r=contain"))).toBe(true);
     expect(r[0]).toMatchObject({ taken_at: "2026-11-05T02:05:00Z", tarima: "D" });
     expect(r[1].tarima).toBe(null);
   });

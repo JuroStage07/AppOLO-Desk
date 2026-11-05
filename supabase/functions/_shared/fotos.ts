@@ -9,11 +9,16 @@
 //     despacho o recepción) y no contener /choferes/ ni /boletas/.
 //   - URLs firmadas https, 3600 s. Con transformación de imágenes se firman a
 //     ~1280 px de ancho (las originales pesan ~2,3 MB); sin ella, el original en lote.
+//     Siempre con resize "contain": con solo `width`, Storage usa "cover", conserva
+//     el alto original y recorta los lados (una foto 3000×4000 salía 1280×4000).
 //   - Si la firma falla se devuelve [] (quien llama responde 200 sin fotos).
 
 export const FOTOS_EXPIRA_S = 3600;
 export const FOTOS_MAX = 60;
 export const FOTOS_ANCHO = 1280;
+
+/** Transformación para firmar a `ancho` px sin recortar (mantiene la proporción). */
+export const transformAncho = (ancho: number) => ({ width: ancho, quality: 75, resize: "contain" as const });
 
 export type FilaFoto = {
   storage_path: string;
@@ -49,7 +54,7 @@ export type StorageBucket = {
   createSignedUrl(
     path: string,
     expiresIn: number,
-    opts?: { transform?: { width?: number; quality?: number } }
+    opts?: { transform?: { width?: number; quality?: number; resize?: "cover" | "contain" | "fill" } }
   ): Promise<{ data: { signedUrl: string } | null; error: unknown }>;
   createSignedUrls(
     paths: string[],
@@ -75,7 +80,7 @@ export async function firmarFotos(
       const res = await Promise.all(
         filas.map((f) =>
           bucket
-            .createSignedUrl(f.storage_path, expiraS, { transform: { width: ancho, quality: 75 } })
+            .createSignedUrl(f.storage_path, expiraS, { transform: transformAncho(ancho) })
             .catch((error) => ({ data: null, error }))
         )
       );
