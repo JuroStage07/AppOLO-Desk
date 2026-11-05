@@ -19,6 +19,11 @@
 // carga de ese despacho, verificando que sea de la bodega del almacén
 // (../_shared/fotos.ts).
 //
+// Chofer y boleta: `?sro_warehouse_id=…&chofer_despacho=<id>` devuelve el chofer
+// registrado (con foto de cédula y celular, nunca el pin) y la boleta de salida
+// (checklist y firma) de ese despacho. Decisión del usuario: lo ve quien tiene
+// proceso3d.view (../_shared/choferBoleta.ts).
+//
 // Secrets: SRO_URL, SRO_ANON_KEY (públicos de SRO); opcional OPS3D_ALLOWED_ORIGINS
 // (orígenes separados por coma; vacío = cualquiera, la auth va por Bearer) y
 // OPS3D_FOTOS_ANCHO (ancho de las fotos firmadas; 0 = original; por defecto 1280).
@@ -38,6 +43,7 @@ import {
 } from "./lib.ts";
 import { autorizarSro } from "../_shared/sroAuth.ts";
 import { FOTOS_ANCHO, fotosDeDespacho, type StorageBucket } from "../_shared/fotos.ts";
+import { choferYBoletaDeDespacho, type FilaBoleta, type FilaChofer } from "../_shared/choferBoleta.ts";
 
 const SRO = { sroUrl: Deno.env.get("SRO_URL") ?? "", anonKey: Deno.env.get("SRO_ANON_KEY") ?? "" };
 const PERMISO = "proceso3d.view";
@@ -146,6 +152,55 @@ Deno.serve(async (req) => {
         fotosDespacho,
         bodegaId,
         { ancho: FOTOS_ANCHO_EFECTIVO }
+      );
+      return json(r.body, r.status, origin, r.status === 200 ? "private, max-age=300" : "no-store");
+    }
+
+    // ── Chofer y boleta a pedido de un despacho ────────────────────────────
+    const choferDespacho = url.searchParams.get("chofer_despacho");
+    if (choferDespacho !== null) {
+      if (!UUID.test(choferDespacho)) return json({ error: "chofer_despacho inválido." }, 400, origin);
+      const r = await choferYBoletaDeDespacho(
+        {
+          despacho: async (id, bodega) => {
+            const { data, error } = await db
+              .from("despacho_dev_despachos")
+              .select("tenant_id,company,bodega_id,chofer_id,estado")
+              .eq("id", id)
+              .eq("bodega_id", bodega)
+              .is("deleted_at", null)
+              .maybeSingle();
+            if (error) throw error;
+            return data && data.estado !== "eliminado" ? data : null;
+          },
+          chofer: async (id) => {
+            // Columnas explícitas: nunca el pin.
+            const { data, error } = await db
+              .from("despacho_dev_choferes")
+              .select("id,bodega_id,nombre,cedula,compania,placa_camion,tipo_vehiculo,celular,cedula_foto_path")
+              .eq("id", id)
+              .maybeSingle();
+            if (error) throw error;
+            return (data as FilaChofer | null) ?? null;
+          },
+          boletas: async (id) => {
+            const { data, error } = await db
+              .from("despacho_dev_boletas")
+              .select("id,estado,checklist,firma_path,validated_by,validated_at,created_at,placa_contenedor,deleted_at")
+              .eq("despacho_id", id)
+              .is("deleted_at", null);
+            if (error) throw error;
+            return (data as FilaBoleta[] | null) ?? [];
+          },
+          nombreUsuario: async (uid) => {
+            const { data } = await db.from("app_perfiles").select("display_name").eq("id", uid).maybeSingle();
+            return (data?.display_name as string | undefined) || null;
+          },
+          bucket: db.storage.from(BUCKET_FOTOS) as unknown as StorageBucket,
+        },
+        choferDespacho,
+        bodegaId,
+        { anchoCedula: FOTOS_ANCHO_EFECTIVO }
       );
       return json(r.body, r.status, origin, r.status === 200 ? "private, max-age=300" : "no-store");
     }
