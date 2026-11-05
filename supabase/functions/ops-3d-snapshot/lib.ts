@@ -140,6 +140,9 @@ export function mapDispatch(
     tipo: (d.tipo as string) ?? null,
     tarimas_s: Number(d.tarimas_s) || 0,
     tarimas_d: Number(d.tarimas_d) || 0,
+    // Solo el conteo: las fotos se piden aparte (?fotos_despacho=<id>) para no
+    // firmar cientos de URLs en cada snapshot.
+    fotos_count: Number(d.fotos_count) || 0,
     layout: layoutTipos(ctx.layout.get(id)),
     created_at: (d.created_at as string) ?? null,
     updated_at: (d.updated_at as string) ?? null,

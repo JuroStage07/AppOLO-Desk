@@ -12,10 +12,16 @@
 //     org del almacén y el permiso `proceso3d.view` de la Matriz de Permisos de
 //     SRO (RPC has_org_permission), todo con el JWT del usuario.
 //   - Solo lectura. Lee con service role pero devuelve únicamente lo del contrato
-//     (sin cédulas, fotos, firmas ni notas).
+//     (sin cédulas, firmas ni notas).
+//
+// Fotos: el snapshot trae solo `fotos_count`. Las fotos se piden aparte con
+// `?sro_warehouse_id=…&fotos_despacho=<id>`: URLs firmadas (1 h) de las fotos de
+// carga de ese despacho, verificando que sea de la bodega del almacén
+// (../_shared/fotos.ts).
 //
 // Secrets: SRO_URL, SRO_ANON_KEY (públicos de SRO); opcional OPS3D_ALLOWED_ORIGINS
-// (orígenes separados por coma; vacío = cualquiera, la auth va por Bearer).
+// (orígenes separados por coma; vacío = cualquiera, la auth va por Bearer) y
+// OPS3D_FOTOS_ANCHO (ancho de las fotos firmadas; 0 = original; por defecto 1280).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
@@ -31,16 +37,21 @@ import {
   todayIn,
 } from "./lib.ts";
 import { autorizarSro } from "../_shared/sroAuth.ts";
+import { FOTOS_ANCHO, fotosDeDespacho, type StorageBucket } from "../_shared/fotos.ts";
 
 const SRO = { sroUrl: Deno.env.get("SRO_URL") ?? "", anonKey: Deno.env.get("SRO_ANON_KEY") ?? "" };
 const PERMISO = "proceso3d.view";
+const BUCKET_FOTOS = "despacho-dev-fotos";
+const anchoEnv = Number(Deno.env.get("OPS3D_FOTOS_ANCHO") ?? FOTOS_ANCHO);
+const FOTOS_ANCHO_EFECTIVO = Number.isFinite(anchoEnv) && anchoEnv > 0 ? anchoEnv : null;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ALLOWED = (Deno.env.get("OPS3D_ALLOWED_ORIGINS") ?? "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
 const DESPACHO_COLS =
-  "id,bodega_id,bodega_nombre,estado,puerta,placa,placa_contenedor,chofer_id,transportista,tienda,referencia,tipo,tarimas_s,tarimas_d,fecha,created_at,updated_at,finalized_at,deleted_at";
+  "id,bodega_id,bodega_nombre,estado,puerta,placa,placa_contenedor,chofer_id,transportista,tienda,referencia,tipo,tarimas_s,tarimas_d,fotos_count,fecha,created_at,updated_at,finalized_at,deleted_at";
 
 function corsHeaders(origin: string | null): Record<string, string> {
   const allow = !ALLOWED.length ? "*" : origin && ALLOWED.includes(origin) ? origin : ALLOWED[0];
@@ -53,10 +64,10 @@ function corsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-function json(body: unknown, status: number, origin: string | null) {
+function json(body: unknown, status: number, origin: string | null, cache = "no-store") {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders(origin), "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: { ...corsHeaders(origin), "Content-Type": "application/json", "Cache-Control": cache },
   });
 }
 
@@ -102,6 +113,42 @@ Deno.serve(async (req) => {
     if (mapaErr) throw mapaErr;
     if (!mapa) return json({ error: "El almacén de SRO no tiene bodega de AppOLO asociada." }, 404, origin);
     const bodegaId = mapa.bodega_id as string;
+
+    // ── Fotos a pedido de un despacho ──────────────────────────────────────
+    const fotosDespacho = url.searchParams.get("fotos_despacho");
+    if (fotosDespacho !== null) {
+      if (!UUID.test(fotosDespacho)) return json({ error: "fotos_despacho inválido." }, 400, origin);
+      const r = await fotosDeDespacho(
+        {
+          despacho: async (id, bodega) => {
+            const { data, error } = await db
+              .from("despacho_dev_despachos")
+              .select("tenant_id,company,bodega_id,estado")
+              .eq("id", id)
+              .eq("bodega_id", bodega)
+              .is("deleted_at", null)
+              .maybeSingle();
+            if (error) throw error;
+            return data && data.estado !== "eliminado" ? data : null;
+          },
+          fotos: async (id, limite) => {
+            const { data, error } = await db
+              .from("despacho_dev_fotos")
+              .select("storage_path,taken_at,created_at,tarima")
+              .eq("despacho_id", id)
+              .order("taken_at", { ascending: false, nullsFirst: false })
+              .limit(limite);
+            if (error) throw error;
+            return data ?? [];
+          },
+          bucket: db.storage.from(BUCKET_FOTOS) as unknown as StorageBucket,
+        },
+        fotosDespacho,
+        bodegaId,
+        { ancho: FOTOS_ANCHO_EFECTIVO }
+      );
+      return json(r.body, r.status, origin, r.status === 200 ? "private, max-age=300" : "no-store");
+    }
 
     // Despachos del día + abiertos de los últimos DIAS_ABIERTOS días + todos los
     // "chofer pendiente" (patio de espera de salida en SRO, cualquier día).

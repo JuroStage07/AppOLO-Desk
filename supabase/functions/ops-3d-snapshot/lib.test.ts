@@ -69,7 +69,7 @@ describe("ops-3d-snapshot · lib", () => {
 
   it("despacho en la forma del contrato, sin datos personales extra", () => {
     const d = mapDispatch(
-      { id: "x", estado: "en proceso", puerta: "Puerta 15", placa: "C-1", chofer_id: "c1", tarimas_s: "18", tarimas_d: 2, fecha: "f", notas: "secreto" },
+      { id: "x", estado: "en proceso", puerta: "Puerta 15", placa: "C-1", chofer_id: "c1", tarimas_s: "18", tarimas_d: 2, fecha: "f", notas: "secreto", fotos_count: null },
       {
         estadoNombre: new Map([["en proceso", "En proceso"]]),
         choferNombre: new Map([["c1", "J. Mora"]]),
@@ -77,7 +77,8 @@ describe("ops-3d-snapshot · lib", () => {
         historial: new Map(),
       }
     );
-    expect(d).toMatchObject({ estado_nombre: "En proceso", chofer: "J. Mora", tarimas_s: 18, tarimas_d: 2, layout: ["S"], history: [] });
+    expect(d).toMatchObject({ estado_nombre: "En proceso", chofer: "J. Mora", tarimas_s: 18, tarimas_d: 2, fotos_count: 0, layout: ["S"], history: [] });
+    expect(d).not.toHaveProperty("fotos");
     expect(d).not.toHaveProperty("notas");
     expect(d).not.toHaveProperty("cedula");
   });
