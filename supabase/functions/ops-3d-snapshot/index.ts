@@ -24,6 +24,10 @@
 // (checklist y firma) de ese despacho. Decisión del usuario: lo ve quien tiene
 // proceso3d.view (../_shared/choferBoleta.ts).
 //
+// Personal en sitio: `?sro_warehouse_id=…&personal=1` devuelve el personal marcado
+// hoy en el reloj BIT2 (solo OLO; otro almacén → { disponible: false }). Exige el
+// permiso `proceso3d.personal.view`; sin cédulas ni horas extra (./personal.ts).
+//
 // Secrets: SRO_URL, SRO_ANON_KEY (públicos de SRO); opcional OPS3D_ALLOWED_ORIGINS
 // (orígenes separados por coma; vacío = cualquiera, la auth va por Bearer) y
 // OPS3D_FOTOS_ANCHO (ancho de las fotos firmadas; 0 = original; por defecto 1280).
@@ -44,6 +48,7 @@ import {
 import { autorizarSro } from "../_shared/sroAuth.ts";
 import { FOTOS_ANCHO, fotosDeDespacho, type StorageBucket } from "../_shared/fotos.ts";
 import { choferYBoletaDeDespacho, type FilaBoleta, type FilaChofer } from "../_shared/choferBoleta.ts";
+import { respuestaPersonal, type FilaPersonal, type FilaSync } from "./personal.ts";
 
 const SRO = { sroUrl: Deno.env.get("SRO_URL") ?? "", anonKey: Deno.env.get("SRO_ANON_KEY") ?? "" };
 const PERMISO = "proceso3d.view";
@@ -103,12 +108,50 @@ Deno.serve(async (req) => {
     }
     if (!/^[0-9a-f-]{36}$/i.test(sroWarehouseId)) return json({ error: "sro_warehouse_id inválido." }, 400, origin);
 
-    const auth = await autorizarSro(SRO, token, sroWarehouseId, PERMISO);
-    if ("status" in auth) return json({ error: auth.error }, auth.status, origin);
-
     const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
       auth: { persistSession: false },
     });
+
+    // ── Personal en sitio (reloj BIT2), con su propio permiso ──────────────
+    if (url.searchParams.get("personal") === "1") {
+      const r = await respuestaPersonal({
+        autorizar: (permiso) => autorizarSro(SRO, token, sroWarehouseId, permiso),
+        bodega: async () => {
+          const { data, error } = await db
+            .from("ops3d_bodega_sro")
+            .select("bodega_id")
+            .eq("sro_warehouse_id", sroWarehouseId)
+            .eq("activo", true)
+            .maybeSingle();
+          if (error) throw error;
+          return (data?.bodega_id as string | undefined) ?? null;
+        },
+        filas: async (bodega, fecha) => {
+          // Columnas explícitas: la tabla no tiene cédula, pero así no se cuela nada nuevo.
+          const { data, error } = await db
+            .from("ops3d_personal_dia")
+            .select("fecha,id_employee,nombre,puesto,departamento,escala,coordinador,gerente,marcas,horario_entrada,horario_salida")
+            .eq("bodega_id", bodega)
+            .eq("fecha", fecha)
+            .limit(2000);
+          if (error) throw error;
+          return (data as FilaPersonal[] | null) ?? [];
+        },
+        sync: async (bodega) => {
+          const { data, error } = await db
+            .from("ops3d_personal_sync")
+            .select("ultima_sync,marcas_hasta")
+            .eq("bodega_id", bodega)
+            .maybeSingle();
+          if (error) throw error;
+          return (data as FilaSync) ?? null;
+        },
+      });
+      return json(r.body, r.status, origin);
+    }
+
+    const auth = await autorizarSro(SRO, token, sroWarehouseId, PERMISO);
+    if ("status" in auth) return json({ error: auth.error }, auth.status, origin);
 
     const { data: mapa, error: mapaErr } = await db
       .from("ops3d_bodega_sro")
